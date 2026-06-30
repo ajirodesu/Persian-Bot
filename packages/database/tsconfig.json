@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    /* rootDir must be set explicitly to ".." (= packages/) because adapter .ts files
+       transitively import @cat-bot/* which resolves into ../cat-bot/src/, making the
+       true common source ancestor packages/ rather than just database/. Without this,
+       TypeScript computes rootDir as ".." automatically and emits TS5011. */
+    "rootDir": "..",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "ignoreDeprecations": "6.0",
+    "target": "esnext",
+    "lib": ["esnext"],
+    "types": ["node"],
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    /* Path Mapping */
+    "baseUrl": ".",
+    "paths": {
+      /* @/ resolves to database's own src first; falls back to cat-bot/src so that
+         cat-bot files pulled in via rootDirs can resolve their own @/ imports without TS2307. */
+      "@/*": ["./src/*", "../cat-bot/src/*"],
+      /* @cat-bot/* lets adapter repo files (imported transitively by src/index.ts)
+         resolve @cat-bot/engine/… and @cat-bot/server/… without TS2307.
+         Mirrors the identical mapping in cat-bot/tsconfig.json and the adapter tsconfigs. */
+      "@cat-bot/*": ["../cat-bot/src/*"]
+    },
+    /* rootDirs replaces rootDir so tsc accepts files in ../adapters/ src without TS6059.
+       src/index.ts imports adapter repos via relative paths; with rootDir: "./src" tsc
+       rejects any file outside ./src. rootDirs declares all source trees as a merged
+       virtual root — the same pattern cat-bot/tsconfig.json already uses for the
+       inverse direction (cat-bot importing from ../database/adapters/…). */
+    "rootDirs": [
+      "./src",
+      "./adapters/json/src",
+      "./adapters/mongodb/src",
+      "./adapters/prisma-sqlite/src",
+      "./adapters/prisma-sqlite/src/generated/prisma"
+    ]
+  },
+  "include": ["src"]
+}

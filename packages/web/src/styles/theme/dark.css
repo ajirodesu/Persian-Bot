@@ -1,0 +1,162 @@
+/* ============================================================
+   DARK THEME VARIABLES — Replit Edition
+
+   Palette strategy:
+   • Surfaces: deep navy-black (Replit IDE dark) — reads as
+     "professional developer tool"
+   • Primary: Replit orange (#F08730) — warm, vibrant, on-brand
+   • Secondary: muted amber for supporting actions
+   • Tertiary: electric blue for code/data accents
+   • Elevation via surface container steps, each a shade lighter
+     in the navy register
+   ============================================================ */
+
+:root {
+  /* ==================== PRIMARY (Replit orange) ==================== */
+  --dark-color-primary: 240 135 60;
+  --dark-color-on-primary: 26 12 0;
+  --dark-color-primary-container: 138 61 0;
+  --dark-color-on-primary-container: 255 207 160;
+
+  /* ==================== SECONDARY (muted amber) ==================== */
+  --dark-color-secondary: 201 168 124;
+  --dark-color-on-secondary: 58 32 16;
+  --dark-color-secondary-container: 106 60 20;
+  --dark-color-on-secondary-container: 248 222 184;
+
+  /* ==================== TERTIARY (code blue) ==================== */
+  --dark-color-tertiary: 121 192 255;
+  --dark-color-on-tertiary: 0 27 62;
+  --dark-color-tertiary-container: 0 54 117;
+  --dark-color-on-tertiary-container: 202 232 255;
+
+  /* ==================== SURFACE SYSTEM ==================== */
+  /* Deep navy-black — Replit IDE background register */
+  --dark-color-surface: 13 17 23;
+  --dark-color-on-surface: 230 237 243;
+  --dark-color-surface-variant: 61 68 81;
+  --dark-color-on-surface-variant: 139 148 158;
+  --dark-color-surface-container-lowest: 9 12 16;
+  --dark-color-surface-container-low: 22 27 34;
+  --dark-color-surface-container: 28 33 40;
+  --dark-color-surface-container-high: 34 39 46;
+  --dark-color-surface-container-highest: 45 51 59;
+  --dark-color-surface-bright: 139 148 158;
+  --dark-color-surface-dim: 9 12 16;
+
+  /* ==================== INVERSE ==================== */
+  --dark-color-inverse-surface: 230 237 243;
+  --dark-color-inverse-on-surface: 13 17 23;
+  --dark-color-inverse-primary: 168 77 0;
+
+  /* ==================== OUTLINE ==================== */
+  --dark-color-outline: 110 118 129;
+  --dark-color-outline-variant: 48 54 61;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --dark-color-scrim: 0 0 0;
+  --dark-color-shadow: 0 0 0;
+
+  /* ==================== ERROR ==================== */
+  --dark-color-error: 248 81 73;
+  --dark-color-on-error: 68 6 8;
+  --dark-color-error-container: 130 20 22;
+  --dark-color-on-error-container: 255 218 220;
+
+  /* ==================== SUCCESS ==================== */
+  --dark-color-success: 56 211 121;
+  --dark-color-on-success: 2 48 22;
+  --dark-color-success-container: 8 88 44;
+  --dark-color-on-success-container: 214 252 230;
+
+  /* ==================== WARNING ==================== */
+  --dark-color-warning: 255 192 0;
+  --dark-color-on-warning: 66 24 0;
+  --dark-color-warning-container: 140 56 0;
+  --dark-color-on-warning-container: 252 240 192;
+
+  /* ==================== INFO ==================== */
+  --dark-color-info: 88 166 255;
+  --dark-color-on-info: 4 48 74;
+  --dark-color-info-container: 4 78 112;
+  --dark-color-on-info-container: 218 244 255;
+
+  /* ==================== GRADIENTS ==================== */
+  --dark-color-gradient-primary:   linear-gradient(135deg, rgb(240 135 60) 0%, rgb(200 90 20) 100%);
+  --dark-color-gradient-secondary: linear-gradient(135deg, rgb(160 120 72) 0%, rgb(240 135 60) 100%);
+  --dark-color-gradient-tertiary:  linear-gradient(135deg, rgb(88 166 255) 0%, rgb(121 192 255) 100%);
+  --dark-color-gradient-error:     linear-gradient(135deg, rgb(130 20 22) 0%, rgb(110 40 10) 100%);
+  --dark-color-gradient-success:   linear-gradient(135deg, rgb(8 96 48) 0%, rgb(10 100 84) 100%);
+  --dark-color-gradient-warning:   linear-gradient(135deg, rgb(130 56 0) 0%, rgb(112 80 10) 100%);
+  --dark-color-gradient-info:      linear-gradient(135deg, rgb(16 96 152) 0%, rgb(8 100 120) 100%);
+}
+
+/* Reference layer — unconditional; dark is the sole theme */
+:root {
+  --color-primary: var(--dark-color-primary);
+  --color-on-primary: var(--dark-color-on-primary);
+  --color-primary-container: var(--dark-color-primary-container);
+  --color-on-primary-container: var(--dark-color-on-primary-container);
+
+  --color-secondary: var(--dark-color-secondary);
+  --color-on-secondary: var(--dark-color-on-secondary);
+  --color-secondary-container: var(--dark-color-secondary-container);
+  --color-on-secondary-container: var(--dark-color-on-secondary-container);
+
+  --color-tertiary: var(--dark-color-tertiary);
+  --color-on-tertiary: var(--dark-color-on-tertiary);
+  --color-tertiary-container: var(--dark-color-tertiary-container);
+  --color-on-tertiary-container: var(--dark-color-on-tertiary-container);
+
+  --color-surface: var(--dark-color-surface);
+  --color-on-surface: var(--dark-color-on-surface);
+  --color-surface-variant: var(--dark-color-surface-variant);
+  --color-on-surface-variant: var(--dark-color-on-surface-variant);
+  --color-surface-container-lowest: var(--dark-color-surface-container-lowest);
+  --color-surface-container-low: var(--dark-color-surface-container-low);
+  --color-surface-container: var(--dark-color-surface-container);
+  --color-surface-container-high: var(--dark-color-surface-container-high);
+  --color-surface-container-highest: var(--dark-color-surface-container-highest);
+  --color-surface-bright: var(--dark-color-surface-bright);
+  --color-surface-dim: var(--dark-color-surface-dim);
+
+  --color-inverse-surface: var(--dark-color-inverse-surface);
+  --color-inverse-on-surface: var(--dark-color-inverse-on-surface);
+  --color-inverse-primary: var(--dark-color-inverse-primary);
+
+  --color-outline: var(--dark-color-outline);
+  --color-outline-variant: var(--dark-color-outline-variant);
+
+  --color-scrim: var(--dark-color-scrim);
+  --color-shadow: var(--dark-color-shadow);
+
+  --color-error: var(--dark-color-error);
+  --color-on-error: var(--dark-color-on-error);
+  --color-error-container: var(--dark-color-error-container);
+  --color-on-error-container: var(--dark-color-on-error-container);
+
+  --color-success: var(--dark-color-success);
+  --color-on-success: var(--dark-color-on-success);
+  --color-success-container: var(--dark-color-success-container);
+  --color-on-success-container: var(--dark-color-on-success-container);
+
+  --color-warning: var(--dark-color-warning);
+  --color-on-warning: var(--dark-color-on-warning);
+  --color-warning-container: var(--dark-color-warning-container);
+  --color-on-warning-container: var(--dark-color-on-warning-container);
+
+  --color-info: var(--dark-color-info);
+  --color-on-info: var(--dark-color-on-info);
+  --color-info-container: var(--dark-color-info-container);
+  --color-on-info-container: var(--dark-color-on-info-container);
+
+  --color-gradient-primary: var(--dark-color-gradient-primary);
+  --color-gradient-secondary: var(--dark-color-gradient-secondary);
+  --color-gradient-tertiary: var(--dark-color-gradient-tertiary);
+  --color-gradient-error: var(--dark-color-gradient-error);
+  --color-gradient-success: var(--dark-color-gradient-success);
+  --color-gradient-warning: var(--dark-color-gradient-warning);
+  --color-gradient-info: var(--dark-color-gradient-info);
+
+  color-scheme: dark;
+}

@@ -1,0 +1,1 @@
+- [Chat Room Bot Fix](chat-room-bot-fix.md) — webchat NativeContext must omit userId/sessionId or isCommandEnabled rejects every command

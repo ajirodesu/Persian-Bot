@@ -1,0 +1,85 @@
+/* ============================================================
+   CUSTOM UTILITY CLASSES
+   
+   Extends Tailwind's utility layer with scrollbar control
+   classes. These complement the global scrollbar normalization
+   in base.css by offering explicit opt-in/opt-out per element.
+   
+   Three scrollbar states:
+   - .scrollbar         → Explicit styled scrollbar (backward compat)
+   - .scrollbar-default → Reset to browser native scrollbar
+   - .scrollbar-hidden  → Hide scrollbar, preserve scroll function
+   ============================================================ */
+
+@layer utilities {
+  /**
+   * Explicit scrollbar class - for backward compatibility.
+   * Global base styles already apply to all non-html elements,
+   * so this class is only needed when a parent has reset to default.
+   */
+  .scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar::-webkit-scrollbar-track {
+    background: rgb(var(--color-surface) / 0.5);
+    border-radius: 4px;
+  }
+
+  .scrollbar::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-outline-variant) / 0.5);
+    border-radius: 4px;
+  }
+
+  .scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-outline) / 0.7);
+  }
+
+  /**
+   * Reset scrollbar to browser default.
+   * Use when an element needs the native OS scrollbar —
+   * for example, when embedding third-party widgets that
+   * rely on the default scrollbar width for layout calculations.
+   */
+  .scrollbar-default {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
+  .scrollbar-default::-webkit-scrollbar {
+    width: auto;
+    height: auto;
+  }
+
+  .scrollbar-default::-webkit-scrollbar-track {
+    background: initial;
+    border-radius: initial;
+  }
+
+  .scrollbar-default::-webkit-scrollbar-thumb {
+    background: initial;
+    border-radius: initial;
+  }
+
+  .scrollbar-default::-webkit-scrollbar-thumb:hover {
+    background: initial;
+  }
+
+  /**
+   * Hide scrollbar while preserving scroll functionality.
+   * Use for custom scroll containers where scroll position is
+   * communicated through other UI (dots, arrows, progress bars).
+   */
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari/WebKit */
+  }
+}

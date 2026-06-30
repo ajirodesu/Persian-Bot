@@ -1,0 +1,55 @@
+/**
+ * Global Styles Entry Point
+ *
+ * Composition order:
+ *   fonts    → Inter from Google Fonts (premium system typography)
+ *   theme/   → Per-theme CSS custom property values (color roles)
+ *   tokens   → Design system tokens: typography, spacing, motion, layout, shadows
+ *   base     → HTML element defaults and scrollbar normalization via @layer base
+ *   utilities → Custom utility classes via @layer utilities
+ *   animations → @keyframes library referenced by Tailwind animate-* classes
+ *
+ * @tailwind directives appear after imports so PostCSS-import inlines all
+ * @layer declarations before Tailwind resolves layer injection order.
+ *
+ * WCAG 2.1 AA Compliant
+ */
+
+/* -----------------------------------------------------------
+  0. Web Fonts
+  Inter: a clean, high-legibility sans-serif optimised for
+  screen rendering. Used as the brand and plain typeface.
+  ----------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+/* -----------------------------------------------------------
+  1. Theme Color Variables
+  ----------------------------------------------------------- */
+@import './theme/dark.css';
+
+/* -----------------------------------------------------------
+  2. Design Token Variables
+  ----------------------------------------------------------- */
+@import './tokens.css';
+
+/* -----------------------------------------------------------
+  3. Base Layer
+  ----------------------------------------------------------- */
+@import './base.css';
+
+/* -----------------------------------------------------------
+  4. Utility Classes
+  ----------------------------------------------------------- */
+@import './utilities.css';
+
+/* -----------------------------------------------------------
+  5. Keyframe Animations
+  ----------------------------------------------------------- */
+@import './animations.css';
+
+/* -----------------------------------------------------------
+  Tailwind Directives
+  ----------------------------------------------------------- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

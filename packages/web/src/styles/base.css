@@ -1,0 +1,174 @@
+/* ============================================================
+   BASE LAYER
+   
+   HTML element defaults, body/root configuration, and scrollbar
+   normalization. Dark is the sole supported theme.
+   ============================================================ */
+
+@layer base {
+  :root {
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      Arial,
+      sans-serif;
+    font-weight: 400;
+    line-height: 1.6;
+    letter-spacing: 0em;
+    color-scheme: dark;
+    /* Inter optical sizing for crisp rendering */
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'cv01', 'cv02';
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-size: 100%;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    color: rgb(var(--color-on-surface) / 1);
+    background-color: rgb(var(--color-surface) / 1);
+  }
+
+  /* -----------------------------------------------------------
+    Global Custom Scrollbar Styles
+    ----------------------------------------------------------- */
+  *:not(html) {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-outline-variant) / 0.6) transparent;
+  }
+
+  *:not(html)::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *:not(html)::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+  }
+
+  *:not(html)::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-outline-variant) / 0.6);
+    border-radius: 3px;
+  }
+
+  *:not(html)::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-outline) / 0.8);
+  }
+
+  h1 {
+    font-size: var(--typography-display-large-font-size);
+    line-height: var(--typography-display-large-line-height);
+    font-weight: var(--typography-display-large-font-weight);
+    letter-spacing: var(--typography-display-large-letter-spacing);
+  }
+
+  h2 {
+    font-size: var(--typography-display-medium-font-size);
+    line-height: var(--typography-display-medium-line-height);
+    font-weight: var(--typography-display-medium-font-weight);
+    letter-spacing: var(--typography-display-medium-letter-spacing);
+  }
+
+  h3 {
+    font-size: var(--typography-headline-large-font-size);
+    line-height: var(--typography-headline-large-line-height);
+    font-weight: var(--typography-headline-large-font-weight);
+    letter-spacing: var(--typography-headline-large-letter-spacing);
+  }
+
+  h4 {
+    font-size: var(--typography-headline-medium-font-size);
+    line-height: var(--typography-headline-medium-line-height);
+    font-weight: var(--typography-headline-medium-font-weight);
+    letter-spacing: var(--typography-headline-medium-letter-spacing);
+  }
+
+  h5 {
+    font-size: var(--typography-headline-small-font-size);
+    line-height: var(--typography-headline-small-line-height);
+    font-weight: var(--typography-headline-small-font-weight);
+    letter-spacing: var(--typography-headline-small-letter-spacing);
+  }
+
+  h6 {
+    font-size: var(--typography-title-large-font-size);
+    line-height: var(--typography-title-large-line-height);
+    font-weight: var(--typography-title-large-font-weight);
+    letter-spacing: var(--typography-title-large-letter-spacing);
+  }
+
+  p {
+    font-size: var(--typography-body-medium-font-size);
+    line-height: var(--typography-body-medium-line-height);
+  }
+
+  nav a:hover {
+    text-decoration: none;
+  }
+
+  code {
+    font-family:
+      ui-monospace, 'SF Mono', 'Cascadia Code', 'Cascadia Mono',
+      'Segoe UI Mono', Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+    font-size: 0.875em;
+    background-color: rgb(var(--color-surface-container-highest) / 1);
+    color: rgb(var(--color-primary) / 0.9);
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.3rem;
+    letter-spacing: 0;
+    border: 1px solid rgb(var(--color-outline-variant) / 0.5);
+  }
+
+  pre {
+    font-family: var(--font-family-mono);
+    font-size: var(--typography-body-small-font-size);
+    line-height: 1.6;
+    background-color: rgb(var(--color-surface-container-highest) / 1);
+    padding: var(--spacing-md);
+    border-radius: 0.75rem;
+    overflow-x: auto;
+    border: 1px solid rgb(var(--color-outline-variant) / 0.5);
+  }
+
+  pre code {
+    background-color: transparent;
+    padding: 0;
+    font-size: inherit;
+    border: none;
+  }
+
+  ::selection {
+    background-color: rgb(var(--color-primary) / 0.25);
+    color: rgb(var(--color-on-surface) / 1);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--color-primary) / 0.9);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

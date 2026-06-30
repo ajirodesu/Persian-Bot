@@ -1,0 +1,134 @@
+/**
+ * Shared type definitions for the controller layer.
+ *
+ * Centralised here so every dispatcher, handler, and utility shares the same
+ * contract — prevents subtle type drift when new entry points are added.
+ */
+
+import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
+import {
+  createThreadContext,
+  createChatContext,
+  createBotContext,
+  createUserContext,
+} from '@/engine/adapters/models/context.model.js';
+import type { StateContext } from '@/engine/adapters/models/context.model.js';
+import type { SessionLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
+import type { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
+import type { CollectionManager } from '@/engine/lib/db-collection.lib.js';
+import type { ButtonContext } from '@/engine/adapters/models/interfaces/index.js';
+import type { CurrenciesContext } from '@/engine/lib/currencies.lib.js';
+
+/** A command module loaded from src/modules/commands/ */
+export type CommandModule = Record<string, unknown>;
+
+/** A map of command name → command module */
+export type CommandMap = Map<string, CommandModule>;
+
+/** A map of event type → array of event handler modules */
+export type EventModuleMap = Map<string, Array<CommandModule>>;
+
+/** Parsed result of a prefix-stripped command line. */
+export interface ParsedCommand {
+  name: string;
+  args: string[];
+}
+
+/** Minimal native context passed alongside every event */
+export interface NativeContext {
+  platform: string;
+  /** Top-level user directory from session/{userId}/ — identifies the credential namespace. */
+  userId?: string;
+  /** Session directory from session/{userId}/{platform}/{sessionId}/ — identifies the account. */
+  sessionId?: string;
+  [key: string]: unknown;
+}
+
+/** Base context object injected into every command/event handler */
+export interface BaseCtx {
+  api: UnifiedApi;
+  event: Record<string, unknown>;
+  commands: CommandMap;
+  prefix?: string;
+  thread: ReturnType<typeof createThreadContext>;
+  chat: ReturnType<typeof createChatContext>;
+  bot: ReturnType<typeof createBotContext>;
+  user: ReturnType<typeof createUserContext>;
+  native: NativeContext;
+  logger: SessionLogger;
+
+  /**
+   * Timestamp captured at the exact moment the context was built in the factory.
+   * Used to measure internal controller pipeline latency.
+   */
+  startTime: number;
+
+  // WHY: Provides uniform database queries across all command modules natively inside ctx
+  db: {
+    /**
+     * Bot session data store. Automatically scoped to the current bot instance (userId:platform:sessionId).
+     * Unlike `users` and `threads`, this is accessed directly without an intermediate `.collection()` lookup.
+     *
+     * @example
+     * await ctx.db.bot.createCollection('config');
+     * const conf = await ctx.db.bot.getCollection('config');
+     */
+    bot: CollectionManager;
+    users: {
+      getName: (userId: string) => Promise<string>;
+      /** Returns a CollectionManager bound to the calling user's bot_users_session row. */
+      collection: (botUserId: string) => CollectionManager;
+      /** Returns all bot_users_session records for the current bot session. */
+      getAll: () => Promise<
+        Array<{ botUserId: string; data: Record<string, unknown> }>
+      >;
+    };
+    threads: {
+      getName: (threadId: string) => Promise<string>;
+      /** Returns a CollectionManager bound to the calling thread's bot_threads_session row. */
+      collection: (botThreadId: string) => CollectionManager;
+      /** Returns all group thread IDs for the current bot session (isGroup=true only). */
+      getGroupIds: () => Promise<string[]>;
+    };
+  };
+}
+
+/**
+ * Universal Context — a single unified type for all handler functions
+ * (`onCommand`, `onChat`, `onReply`, `onReact`, `onEvent`).
+ *
+ * Contains all properties from BaseCtx plus the properties dynamically injected
+ * by the various dispatchers depending on the event lifecycle.
+ */
+export interface AppCtx extends BaseCtx {
+  /** Arguments parsed from the command (available in onCommand). */
+  args: string[];
+  /** Parsed command options (available in onCommand). */
+  options: OptionsMap;
+  /** The parsed command metadata (available in onCommand). */
+  parsed: ParsedCommand;
+  /** The state context for registering pending flows (available in onCommand, onReply, onReact). */
+  state: StateContext['state'];
+  /** The button context for scoped button ID generation and persistence. */
+  button: ButtonContext['button'];
+  /** The active session data for the current flow (available in onReply, onReact). */
+  session: { id: string; context: Record<string, unknown> };
+  /** The reaction emoji (available in onReact). */
+  emoji: string;
+  /** The target message ID (available in onReact). */
+  messageID: string;
+  /**
+   * Sends a formatted usage guide for the current command as a reply.
+   *
+   * Reads `config.guide` (array of arg patterns) or falls back to `config.usage`
+   * (legacy string) and `config.description`, then replies with a formatted block.
+   *
+   * Call inside `onCommand` when a required argument is missing or the user
+   * passes an invalid value:
+   *
+   *   if (!args[0]) return usage();
+   */
+  usage: () => Promise<void>;
+  /** Economy API for reading and modifying a user's coin balance (getMoney / increaseMoney / decreaseMoney). */
+  currencies: CurrenciesContext;
+}
