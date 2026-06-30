@@ -8,7 +8,6 @@ import {
 } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 
@@ -24,10 +23,6 @@ export const meta: CommandMeta = {
   usage: '<add|list|remove> [uid]',
   cooldown: 5,
   hasPrefix: true,
-  platform: [
-    Platforms.Discord,
-    Platforms.Telegram,
-  ],
   options: [
     {
       type: OptionType.string,

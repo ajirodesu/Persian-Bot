@@ -1,6 +1,5 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 
@@ -16,10 +15,6 @@ export const meta: CommandMeta = {
   usage: '',
   cooldown: 5,
   hasPrefix: true,
-  platform: [
-    Platforms.Discord,
-    Platforms.Telegram,
-  ],
 };
 
 export const onCommand = async ({ chat, event }: AppCtx): Promise<void> => {
