@@ -86,7 +86,7 @@ export default function AccountVerificationPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Account Verification · Persian</title>
+          <title>Account Verification · Cat-Bot</title>
         </Helmet>
         <div className="w-full max-w-[400px]">
           <Alert
@@ -103,7 +103,7 @@ export default function AccountVerificationPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Account Verification · Persian</title>
+          <title>Account Verification · Cat-Bot</title>
         </Helmet>
         <p className="text-body-sm text-on-surface-variant animate-pulse">
           Checking account status…
@@ -116,7 +116,7 @@ export default function AccountVerificationPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Account Verification · Persian</title>
+          <title>Account Verification · Cat-Bot</title>
         </Helmet>
         <div
           className="w-full max-w-[400px] flex flex-col gap-5"
@@ -150,7 +150,7 @@ export default function AccountVerificationPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Account Verification · Persian</title>
+          <title>Account Verification · Cat-Bot</title>
         </Helmet>
         <div
           className="w-full max-w-[400px] flex flex-col gap-5"
@@ -181,7 +181,7 @@ export default function AccountVerificationPage() {
   return (
     <div className={wrapperClass}>
       <Helmet>
-        <title>Account Verification · Persian</title>
+        <title>Account Verification · Cat-Bot</title>
       </Helmet>
 
       <div

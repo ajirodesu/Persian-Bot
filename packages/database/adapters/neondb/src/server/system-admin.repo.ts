@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { pool } from '../client.js';
-import type { GetAdminUserListResponseDto } from '@persian/server/dtos/admin.dto.js';
+import type { GetAdminUserListResponseDto } from '@cat-bot/server/dtos/admin.dto.js';
 
 export interface SystemAdminItem {
   id: string;

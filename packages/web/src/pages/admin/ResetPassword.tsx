@@ -134,7 +134,7 @@ export default function AdminResetPasswordPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-container-high px-4 py-12">
         <Helmet>
-          <title>Admin Reset Password · Persian</title>
+          <title>Admin Reset Password · Cat-Bot</title>
         </Helmet>
         <Alert
           color="warning"
@@ -149,7 +149,7 @@ export default function AdminResetPasswordPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-container-high px-4 py-12">
         <Helmet>
-          <title>Validating... · Persian</title>
+          <title>Validating... · Cat-Bot</title>
         </Helmet>
         <p className="text-on-surface-variant">Validating secure token...</p>
       </div>
@@ -213,7 +213,7 @@ export default function AdminResetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-container-high px-4 py-12">
       <Helmet>
-        <title>Admin Reset Password · Persian</title>
+        <title>Admin Reset Password · Cat-Bot</title>
       </Helmet>
 
       <div className="w-full max-w-sm flex flex-col gap-6">

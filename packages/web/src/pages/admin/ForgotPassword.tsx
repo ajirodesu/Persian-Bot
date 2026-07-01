@@ -69,7 +69,7 @@ export default function AdminForgotPasswordPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Admin Recovery · Persian</title>
+          <title>Admin Recovery · Cat-Bot</title>
         </Helmet>
         <div className="w-full max-w-[380px]">
           <Alert
@@ -85,7 +85,7 @@ export default function AdminForgotPasswordPage() {
   return (
     <div className={wrapperClass}>
       <Helmet>
-        <title>Admin Recovery · Persian</title>
+        <title>Admin Recovery · Cat-Bot</title>
       </Helmet>
 
       {/* Subtle background */}
@@ -199,7 +199,7 @@ export default function AdminForgotPasswordPage() {
         )}
 
         <p className="text-center text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
-          Persian Admin Portal
+          Cat-Bot Admin Portal
         </p>
       </div>
     </div>

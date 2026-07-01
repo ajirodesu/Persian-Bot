@@ -99,7 +99,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-6 max-w-2xl pb-12">
       <Helmet>
-        <title>Settings · Persian</title>
+        <title>Settings · Cat-Bot</title>
       </Helmet>
 
       {/* Page header */}

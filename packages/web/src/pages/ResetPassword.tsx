@@ -126,7 +126,7 @@ export default function ResetPasswordPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Set New Password · Persian</title>
+          <title>Set New Password · Cat-Bot</title>
         </Helmet>
         <div className="w-full max-w-[400px]">
           <Alert
@@ -143,7 +143,7 @@ export default function ResetPasswordPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Validating… · Persian</title>
+          <title>Validating… · Cat-Bot</title>
         </Helmet>
         <p className="text-body-sm text-on-surface-variant animate-pulse">
           Validating your reset link…
@@ -156,7 +156,7 @@ export default function ResetPasswordPage() {
     return (
       <div className={wrapperClass}>
         <Helmet>
-          <title>Invalid Link · Persian</title>
+          <title>Invalid Link · Cat-Bot</title>
         </Helmet>
         <div
           className="w-full max-w-[400px] flex flex-col gap-5"
@@ -212,7 +212,7 @@ export default function ResetPasswordPage() {
   return (
     <div className={wrapperClass}>
       <Helmet>
-        <title>Set New Password · Persian</title>
+        <title>Set New Password · Cat-Bot</title>
       </Helmet>
 
       <div

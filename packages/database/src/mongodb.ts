@@ -15,7 +15,7 @@ export {
   findSessionCommands,
   setCommandEnabled,
   isCommandEnabled,
-} from '../adapters/mongodb/src/persian/bot-session-commands.repo.js';
+} from '../adapters/mongodb/src/cat-bot/bot-session-commands.repo.js';
 
 // --- BOT SESSION EVENTS ---
 export {
@@ -23,7 +23,7 @@ export {
   findSessionEvents,
   setEventEnabled,
   isEventEnabled,
-} from '../adapters/mongodb/src/persian/bot-session-events.repo.js';
+} from '../adapters/mongodb/src/cat-bot/bot-session-events.repo.js';
 
 // --- CREDENTIALS ---
 export {
@@ -46,7 +46,7 @@ export {
   listBotPremiums,
   getBotSessionData,
   setBotSessionData,
-} from '../adapters/mongodb/src/persian/credentials.repo.js';
+} from '../adapters/mongodb/src/cat-bot/credentials.repo.js';
 
 // --- THREADS ---
 export {
@@ -72,7 +72,7 @@ export {
   getAllDiscordServerIds,
   discordServerExists,
   discordServerSessionExists,
-} from '../adapters/mongodb/src/persian/threads.repo.js';
+} from '../adapters/mongodb/src/cat-bot/threads.repo.js';
 
 // --- USERS ---
 export {
@@ -87,7 +87,7 @@ export {
   setUserSessionData,
   getAllUserSessionData,
   getUserSessionUpdatedAt,
-} from '../adapters/mongodb/src/persian/users.repo.js';
+} from '../adapters/mongodb/src/cat-bot/users.repo.js';
 
 // --- BANNED ---
 export {
@@ -97,7 +97,7 @@ export {
   banThread,
   unbanThread,
   isThreadBanned,
-} from '../adapters/mongodb/src/persian/banned.repo.js';
+} from '../adapters/mongodb/src/cat-bot/banned.repo.js';
 
 // --- SERVER ---
 export { botRepo } from '../adapters/mongodb/src/server/bot.repo.js';

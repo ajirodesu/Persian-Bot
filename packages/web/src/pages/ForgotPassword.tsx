@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16">
         <Helmet>
-          <title>Forgot Password · Persian</title>
+          <title>Forgot Password · Cat-Bot</title>
         </Helmet>
         <div className="w-full max-w-[400px]">
           <Alert
@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16">
       <Helmet>
-        <title>Forgot Password · Persian</title>
+        <title>Forgot Password · Cat-Bot</title>
       </Helmet>
 
       <div

@@ -22,9 +22,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      /* @persian/* mirrors the alias in json and prisma-sqlite adapters so repo files
-         can cross-import @persian/engine/... and @persian/server/... without TS2307. */
-      "@persian/*": ["../../../persian/src/*"]
+      /* @cat-bot/* mirrors the alias in json and prisma-sqlite adapters so repo files
+         can cross-import @cat-bot/engine/... and @cat-bot/server/... without TS2307. */
+      "@cat-bot/*": ["../../../cat-bot/src/*"]
     }
   },
   "include": ["src"]

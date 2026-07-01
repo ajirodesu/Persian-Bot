@@ -4,16 +4,16 @@ import {
   PLATFORM_TO_ID,
   ID_TO_PLATFORM,
   Platforms,
-} from '@persian/engine/modules/platform/platform.constants.js';
+} from '@cat-bot/engine/modules/platform/platform.constants.js';
 import type {
   CreateBotRequestDto,
   CreateBotResponseDto,
   GetBotListResponseDto,
   GetBotDetailResponseDto,
   UpdateBotRequestDto,
-} from '@persian/server/dtos/bot.dto.js';
-import type { GetAdminBotListResponseDto } from '@persian/server/dtos/admin.dto.js';
-import { encrypt, decrypt } from '@persian/engine/utils/crypto.util.js';
+} from '@cat-bot/server/dtos/bot.dto.js';
+import type { GetAdminBotListResponseDto } from '@cat-bot/server/dtos/admin.dto.js';
+import { encrypt, decrypt } from '@cat-bot/engine/utils/crypto.util.js';
 
 // NOTE: MongoDB transactions require a replica set. Atlas M0/M2/M5 free-tier clusters do
 // NOT support replica-set transactions. Operations here are intentionally non-transactional

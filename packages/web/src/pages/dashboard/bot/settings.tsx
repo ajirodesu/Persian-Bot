@@ -320,7 +320,7 @@ export default function BotSettingsPage() {
             <Input
               value={form.botNickname}
               onChange={(e) => handleTopField('botNickname', e.target.value)}
-              placeholder="e.g. Persian"
+              placeholder="e.g. Cat Bot"
             />
           </Field.Root>
 

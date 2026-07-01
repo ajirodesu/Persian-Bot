@@ -76,7 +76,7 @@ export default function Layout() {
             as={Link}
             to="/"
             variant="unstyled"
-            aria-label="Persian home"
+            aria-label="Cat-Bot home"
             className="flex items-center gap-2 text-title-lg font-semibold text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
           >
             <Logo className={H_LOGO_ICON} />
@@ -90,7 +90,7 @@ export default function Layout() {
               H_BRAND_TEXT,
             )}
           >
-            Persian
+            Cat-Bot
           </Link>
 
           {/* Mobile: brand — absolutely centred */}
@@ -102,7 +102,7 @@ export default function Layout() {
                 H_BRAND_TEXT,
               )}
             >
-              Persian
+              Cat-Bot
             </Link>
           </div>
 
@@ -220,7 +220,7 @@ export default function Layout() {
           <div className="flex items-center gap-2">
             <Logo className="h-4 w-4 text-primary/70" />
             <span className="text-label-sm text-on-surface-variant/60 font-medium tracking-tight">
-              Persian
+              Cat-Bot
             </span>
           </div>
           <p className="text-label-sm text-on-surface-variant/50">

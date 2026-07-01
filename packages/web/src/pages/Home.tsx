@@ -85,7 +85,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col">
       <Helmet>
-        <title>Persian</title>
+        <title>Cat-Bot</title>
       </Helmet>
 
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
@@ -141,7 +141,7 @@ export default function HomePage() {
                       'fade-in-down 500ms 200ms var(--easing-emphasized-decelerate) both',
                   }}
                 >
-                  Persian is a unified chatbot framework that runs across
+                  Cat-Bot is a unified chatbot framework that runs across
                   Discord and Telegram — all from a single codebase. Manage
                   multiple independent bot sessions from one powerful dashboard.
                 </p>
@@ -229,7 +229,7 @@ export default function HomePage() {
                     <span className="h-3 w-3 rounded-full bg-[#27C93F]" />
                   </div>
                   <span className="ml-1 font-mono text-label-sm text-on-surface-variant/70 select-none">
-                    persian — bot manager
+                    cat-bot — bot manager
                   </span>
                 </div>
 

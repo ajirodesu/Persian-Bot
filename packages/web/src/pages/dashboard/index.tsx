@@ -189,7 +189,7 @@ export default function BotManagerPage() {
   return (
     <div className="flex flex-col gap-6">
       <Helmet>
-        <title>Bot Manager · Persian</title>
+        <title>Bot Manager · Cat-Bot</title>
       </Helmet>
 
       {/* ── Page header ─────────────────────────────────────────────────── */}

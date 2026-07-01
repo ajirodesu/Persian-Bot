@@ -78,7 +78,7 @@ export default function AdminBotsPage() {
   return (
     <div className="flex flex-col gap-6">
       <Helmet>
-        <title>Admin Bot Sessions · Persian</title>
+        <title>Admin Bot Sessions · Cat-Bot</title>
       </Helmet>
       <div className="flex items-start justify-between gap-4">
         <div>

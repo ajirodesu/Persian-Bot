@@ -1,7 +1,7 @@
 import type { SVGProps } from 'react'
 
 /**
- * Persian brand mark — fluffy cat face glyph.
+ * Cat-Bot brand mark — fluffy cat face glyph.
  *
  * Drop-in replacement for the previous lucide `Cat` icon used as the
  * site logo. Mirrors the lucide-react icon API (`className`, standard SVG
