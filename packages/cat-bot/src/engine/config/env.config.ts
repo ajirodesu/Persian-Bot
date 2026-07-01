@@ -18,7 +18,7 @@ import 'dotenv/config';
  */
 export type NodeEnv = 'development' | 'production' | 'test';
 
-export type DatabaseType = 'json' | 'mongodb' | 'neondb' | 'prisma-sqlite';
+export type DatabaseType = 'mongodb' | 'neondb';
 
 /**
  * Environment configuration type definition.
@@ -92,14 +92,11 @@ const VALID_LOG_LEVELS = [
 ] as const;
 
 /**
- * Valid database adapter types. 'prisma-sqlite' is the SQLite/Prisma adapter;
- * the other three map directly to their respective packages/database/adapters/ sub-folders.
+ * Valid database adapter types. Each maps to a packages/database/adapters/ sub-folder.
  */
 const VALID_DATABASE_TYPES = [
-  'json',
   'mongodb',
   'neondb',
-  'prisma-sqlite',
 ] as const;
 
 // ============================================================================

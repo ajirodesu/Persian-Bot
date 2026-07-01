@@ -1,20 +1,12 @@
 // Load .env before any process.env access — DATABASE_TYPE must be readable before the adapter is selected.
 import 'dotenv/config';
 
-// Dynamic import defers module resolution entirely to runtime:
-//   DATABASE_TYPE=json  → prisma-sqlite.ts (and @prisma/client) is NEVER evaluated. Safe without Prisma installed.
-//   DATABASE_TYPE unset → json.ts is NEVER evaluated.
-// No `import type` from either barrel — any compile-time type reference to prisma-sqlite.ts
-// would force tsc to chase into the generated Prisma files, crashing when they don't exist.
+// Dynamic import defers module resolution entirely to runtime based on DATABASE_TYPE.
 const dbType = process.env['DATABASE_TYPE'];
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const m = (await (dbType === 'json'
-  ? import('./json.js')
-  : dbType === 'mongodb'
-    ? import('./mongodb.js')
-    : dbType === 'neondb'
-      ? import('./neondb.js')
-      : import('./prisma-sqlite.js'))) as any;
+const m = (await (dbType === 'mongodb'
+  ? import('./mongodb.js')
+  : import('./neondb.js'))) as any;
 
 // --- BOT SESSION COMMANDS ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -152,19 +144,6 @@ export const getUserSessionUpdatedAt = m.getUserSessionUpdatedAt;
 // --- SERVER REPO ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const botRepo = m.botRepo;
-
-// --- DATABASE INSTANCES ---
-// prisma is undefined at runtime when DATABASE_TYPE=json — callers (better-auth.lib.ts)
-// already guard with their own isJson check before using it.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const prisma = m.prisma;
-
-// getDb/saveDb are undefined at runtime when DATABASE_TYPE!=json — only used by
-// better-auth-adapter.lib.ts which is only instantiated when isJson=true.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const getDb = m.getDb;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const saveDb = m.saveDb;
 
 // --- BANNED ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment

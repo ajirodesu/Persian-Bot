@@ -1,17 +1,12 @@
 // Load env.config first — imports dotenv/config so betterAuth() can read BETTER_AUTH_SECRET
 import { env } from '@/engine/config/env.config.js';
 import { betterAuth } from 'better-auth';
-import { prismaAdapter } from 'better-auth/adapters/prisma';
 // MongoDB adapter — bundled via @better-auth/mongo-adapter; only evaluated when DATABASE_TYPE=mongodb.
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 // Import the shared singleton exported from the database workspace package — avoids TS6059
 // rootDir errors while keeping the Prisma client lifecycle owned in one place.
 // mongoClient and getMongoDb are undefined at runtime when DATABASE_TYPE !== 'mongodb'.
-import { prisma, mongoClient, getMongoDb, pool as neonPool } from 'database';
-// JSON file adapter — used when DATABASE_TYPE=json for zero-dependency local development.
-// Shares the same data.json store as the rest of the JSON adapter layer so auth tables
-// and bot tables coexist in a single file without cross-package coupling.
-import { jsonAdapter } from './better-auth-adapter.lib.js';
+import { mongoClient, getMongoDb, pool as neonPool } from 'database';
 // Admin plugin — registers /api/auth/admin/* endpoints gated by user.role === 'admin'.
 import { admin } from 'better-auth/plugins';
 // createAuthMiddleware enables the adminAuth before-hook to inspect the sign-in body
@@ -24,7 +19,6 @@ import {
   COLORS,
 } from '@/server/email-template/index.js';
 
-const isJson = env.DATABASE_TYPE === 'json';
 const isMongo = env.DATABASE_TYPE === 'mongodb';
 // NeonDB: better-auth natively accepts a pg.Pool via Kysely's PostgresDialect —
 // no custom adapter is needed; the pool is passed directly as the database option.
@@ -33,26 +27,19 @@ const isNeon = env.DATABASE_TYPE === 'neondb';
 const isEmailServicesEnabled = env.VITE_EMAIL_SERVICES_ENABLE === 'true';
 
 export const auth = betterAuth({
-  database: isJson
-    ? jsonAdapter()
+  database: isMongo
+    ? // MongoDB driver — mongodbAdapter() receives a Db instance; mongoClient is optional for
+      // transactions (disabled on Atlas M0 free tier which lacks replica-set support).
+      // getMongoDb/mongoClient are typed `any` in the database barrel so the cast is needed
+      // to satisfy strict-mode while keeping the dynamic adapter pattern.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mongodbAdapter((getMongoDb as unknown as () => any)(), {
+        client: mongoClient,
+      })
     : // NeonDB — neonPool is a pg.Pool; better-auth uses KyselyDialect(PostgresDialect) under the hood.
       // Neon is officially supported: https://better-auth.com/ (listed under Community databases).
-
-      isNeon
-      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (neonPool as unknown as any)
-      : // MongoDB driver — mongodbAdapter() receives a Db instance; mongoClient is optional for
-        // transactions (disabled on Atlas M0 free tier which lacks replica-set support).
-        // getMongoDb/mongoClient are typed `any` in the database barrel so the cast is needed
-        // to satisfy strict-mode while keeping the dynamic adapter pattern.
-
-        isMongo
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          mongodbAdapter((getMongoDb as unknown as () => any)(), {
-            client: mongoClient,
-          })
-        : // SQLite driver — matches the adapter-better-sqlite3 configured in packages/database/client.ts
-          prismaAdapter(prisma, { provider: 'sqlite' }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (neonPool as unknown as any),
   user: {
     changeEmail: {
       enabled: isEmailServicesEnabled,
@@ -195,17 +182,13 @@ export const auth = betterAuth({
 // Signing out of one portal never touches the other's cookie or session row.
 export const adminAuth = betterAuth({
   basePath: '/api/admin-auth',
-  database: isJson
-    ? jsonAdapter()
-    : isNeon
-      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (neonPool as unknown as any)
-      : isMongo
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          mongodbAdapter((getMongoDb as unknown as () => any)(), {
-            client: mongoClient,
-          })
-        : prismaAdapter(prisma, { provider: 'sqlite' }),
+  database: isMongo
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mongodbAdapter((getMongoDb as unknown as () => any)(), {
+        client: mongoClient,
+      })
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (neonPool as unknown as any),
   user: {
     changeEmail: {
       enabled: isEmailServicesEnabled,

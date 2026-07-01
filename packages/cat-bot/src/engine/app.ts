@@ -67,7 +67,7 @@ import type { SessionConfigs } from '@/engine/modules/session/session-loader.uti
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
-// dbReady is the NeonDB schema-init promise; undefined for json/mongodb/prisma-sqlite adapters.
+// dbReady is the NeonDB schema-init promise; undefined for mongodb adapter.
 import { dbReady } from 'database';
 
 // ============================================================================
@@ -302,7 +302,7 @@ async function main(): Promise<void> {
   logger.info(`Environment: ${env.NODE_ENV}`);
 
   // Ensure NeonDB schema DDL has completed before any session/credential queries land.
-  // For json/mongodb/prisma-sqlite adapters, dbReady is undefined — await on undefined
+  // For the mongodb adapter, dbReady is undefined — await on undefined
   // resolves immediately, so this guard is a zero-cost no-op for non-neondb adapters.
   if (dbReady !== undefined) {
     await dbReady;

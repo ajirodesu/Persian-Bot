@@ -154,7 +154,7 @@ function deriveUsername(fullName: string): string {
 // This is what lets /balance, /daily, and any other command's session data
 // (bot_users_session.data) survive process restarts exactly like it does for
 // Discord/Telegram — the row lives in the configured DATABASE_TYPE adapter
-// (json/prisma-sqlite/mongodb/neondb), not in this file's in-memory Map.
+// (mongodb/neondb), not in this file's in-memory Map.
 const WEBCHAT_SESSION_ID = 'webchat';
 
 /** One stable thread per account (their private chat with the bot) regardless

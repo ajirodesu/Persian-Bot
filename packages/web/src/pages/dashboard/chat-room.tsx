@@ -18,8 +18,10 @@ import {
   useEffect,
   useRef,
   useCallback,
+  memo,
   type KeyboardEvent as ReactKeyboardEvent,
   type ChangeEvent,
+  type TouchEvent as ReactTouchEvent,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -876,7 +878,7 @@ function AttachmentView({ att }: { att: ChatAttachment }) {
 
 // ── Bot Button ────────────────────────────────────────────────────────────────
 
-function BotButtonRow({
+const BotButtonRow = memo(function BotButtonRow({
   buttons,
   onButtonClick,
   messageId,
@@ -911,46 +913,54 @@ function BotButtonRow({
       ))}
     </div>
   )
-}
+})
 
 // ── Reply Quote inside bubble ─────────────────────────────────────────────────
 
-function ReplyQuote({
+const ReplyQuote = memo(function ReplyQuote({
   messages,
   replyToId,
   botNickname,
   displayName,
+  onClick,
 }: {
   messages: ChatMessage[]
   replyToId: string
   botNickname: string
   displayName: string
+  onClick?: () => void
 }) {
   const original = messages.find((m) => m.id === replyToId)
   if (!original) return null
   return (
-    <div className="flex gap-2 mb-2 px-2.5 py-2 rounded-xl bg-black/20 border-l-2 border-primary/60">
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold text-primary/90 mb-0.5 uppercase tracking-widest">
-          {original.type === 'bot' ? botNickname : displayName}
-        </p>
-        <p className="text-xs text-on-surface/60 truncate leading-snug">
-          {original.text.slice(0, 72) || '📎 Attachment'}
-        </p>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col gap-0.5 mb-1.5 pl-2 border-l-[3px] border-current/50 min-w-0 w-full max-w-full overflow-hidden text-left cursor-pointer active:opacity-70 transition-opacity"
+    >
+      <p className="text-[12.5px] font-bold leading-tight truncate w-full max-w-full">
+        {original.type === 'bot' ? botNickname : displayName}
+      </p>
+      <p className="text-[12.5px] opacity-70 truncate leading-tight w-full max-w-full">
+        {original.text ? original.text.split('\n')[0] : '📎 Attachment'}
+      </p>
+    </button>
   )
-}
+})
 
 // ── Message Bubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({
+const SWIPE_REPLY_THRESHOLD = 56
+const SWIPE_REPLY_MAX = 72
+
+const MessageBubble = memo(function MessageBubble({
   msg,
   messages,
   onReply,
   onDelete,
   onButtonClick,
   onImageOpen,
+  onQuoteClick,
   botNickname,
   displayName,
 }: {
@@ -960,11 +970,71 @@ function MessageBubble({
   onDelete: (id: string) => void
   onButtonClick: (buttonId: string, messageId: string) => void
   onImageOpen: (images: ChatAttachment[], index: number) => void
+  onQuoteClick: (messageId: string) => void
   botNickname: string
   displayName: string
 }) {
   const [hovered, setHovered] = useState(false)
+  const [swipeReplyVisible, setSwipeReplyVisible] = useState(false)
   const isBot = msg.type === 'bot'
+
+  // ── Swipe-to-reply (touch) ─────────────────────────────────────────────
+  // Purely DOM-driven while dragging (no re-render per frame) for a smooth,
+  // efficient gesture; React state only flips the reply-affordance icon and
+  // fires onReply once the gesture completes past the threshold.
+  const bubbleColRef = useRef<HTMLDivElement>(null)
+  const touchStart = useRef({ x: 0, y: 0 })
+  const dragDistance = useRef(0)
+  const isHorizontalSwipe = useRef<boolean | null>(null)
+  const isDragging = useRef(false)
+
+  const handleTouchStart = useCallback((e: ReactTouchEvent) => {
+    if (e.touches.length !== 1) return
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    dragDistance.current = 0
+    isHorizontalSwipe.current = null
+    isDragging.current = true
+  }, [])
+
+  const handleTouchMove = useCallback((e: ReactTouchEvent) => {
+    if (!isDragging.current) return
+    const touch = e.touches[0]
+    const dx = touch.clientX - touchStart.current.x
+    const dy = touch.clientY - touchStart.current.y
+
+    if (isHorizontalSwipe.current === null) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
+      isHorizontalSwipe.current = Math.abs(dx) > Math.abs(dy)
+      if (!isHorizontalSwipe.current) return
+    }
+    if (!isHorizontalSwipe.current) return
+
+    e.preventDefault()
+    // Bot bubbles sit on the left (swipe right to reply), user bubbles sit
+    // on the right (swipe left to reply) — `dir` normalizes both to a
+    // positive "reveal" progress value.
+    const dir = isBot ? 1 : -1
+    const clamped = Math.max(0, Math.min(SWIPE_REPLY_MAX, dx * dir))
+    dragDistance.current = clamped
+    if (bubbleColRef.current) {
+      bubbleColRef.current.style.transform = `translateX(${clamped * dir}px)`
+    }
+    setSwipeReplyVisible(clamped > 14)
+  }, [isBot])
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isDragging.current) return
+    isDragging.current = false
+    const triggered = isHorizontalSwipe.current && dragDistance.current >= SWIPE_REPLY_THRESHOLD
+    if (bubbleColRef.current) {
+      bubbleColRef.current.style.transition = 'transform 180ms ease'
+      bubbleColRef.current.style.transform = 'translateX(0px)'
+      const el = bubbleColRef.current
+      setTimeout(() => { el.style.transition = '' }, 200)
+    }
+    setSwipeReplyVisible(false)
+    if (triggered) onReply({ id: msg.id, text: msg.text, type: msg.type })
+  }, [isBot, msg.id, msg.text, msg.type, onReply])
   const hasButtons = (msg.buttons?.length ?? 0) > 0
   const hasText = !!msg.text?.trim()
   const imageAttachments = (msg.attachments ?? []).filter(
@@ -989,45 +1059,72 @@ function MessageBubble({
   const ActionButtons = (
     <div
       className={cn(
-        'flex items-center gap-0.5 transition-all duration-150 shrink-0 self-center',
-        hovered ? 'opacity-100' : 'opacity-0 pointer-events-none',
-        isBot ? 'ml-1 order-last' : 'mr-1 order-first',
+        'flex items-center gap-0.5 shrink-0 self-center transition-all duration-200',
+        hovered
+          ? 'opacity-100 translate-y-0 pointer-events-auto'
+          : 'opacity-0 translate-y-1 pointer-events-none',
+        isBot ? 'ml-1.5 order-last' : 'mr-1.5 order-first',
       )}
     >
-      <button
-        type="button"
-        aria-label="Reply"
-        onClick={() => onReply({ id: msg.id, text: msg.text, type: msg.type })}
-        className="p-1.5 rounded-full bg-surface-container border border-outline-variant/50 text-on-surface-variant hover:text-primary hover:border-primary/50 transition-colors shadow-sm"
-      >
-        <Reply className="h-3 w-3" />
-      </button>
-      <button
-        type="button"
-        aria-label="Delete"
-        onClick={() => onDelete(msg.id)}
-        className="p-1.5 rounded-full bg-surface-container border border-outline-variant/50 text-on-surface-variant hover:text-error hover:border-error/50 transition-colors shadow-sm"
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
+      {/* Pill container — floats next to the bubble */}
+      <div className="flex items-center rounded-xl bg-surface-container/95 backdrop-blur-sm border border-outline-variant/20 shadow-elevation-2 overflow-hidden">
+        <button
+          type="button"
+          aria-label="Reply"
+          title="Reply"
+          onClick={() => onReply({ id: msg.id, text: msg.text, type: msg.type })}
+          className="flex items-center justify-center h-7 w-7 text-on-surface-variant hover:text-primary hover:bg-primary/10 active:scale-90 transition-all duration-150"
+        >
+          <Reply className="h-3.5 w-3.5" />
+        </button>
+        <div className="w-px h-4 bg-outline-variant/30 shrink-0" />
+        <button
+          type="button"
+          aria-label="Delete"
+          title="Delete"
+          onClick={() => onDelete(msg.id)}
+          className="flex items-center justify-center h-7 w-7 text-on-surface-variant hover:text-error hover:bg-error/10 active:scale-90 transition-all duration-150"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   )
 
   return (
     <div
       className={cn(
-        'flex w-full items-end gap-1 px-3 py-1',
+        'relative flex w-full items-end gap-1 px-3 py-1',
         isBot ? 'justify-start' : 'justify-end',
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
+      {/* Swipe-to-reply affordance — fades in behind the bubble as it's
+          dragged, mirroring the Telegram/WhatsApp mobile gesture */}
+      <div
+        className={cn(
+          'absolute inset-y-0 flex items-center pointer-events-none transition-opacity duration-150',
+          isBot ? 'left-2' : 'right-2',
+          swipeReplyVisible ? 'opacity-70' : 'opacity-0',
+        )}
+      >
+        <div className="h-7 w-7 rounded-full bg-on-surface/10 flex items-center justify-center">
+          <Reply className="h-3.5 w-3.5 text-on-surface-variant" />
+        </div>
+      </div>
+
       {/* Bubble column — media bubbles get a *definite* width (not just a
           cap) so image/video/audio all render at exactly the bubble's max
           size, consistently, instead of shrink-wrapping to their own
           natural content size. Text-only bubbles keep the normal
           shrink-to-fit behavior. */}
       <div
+        ref={bubbleColRef}
         className={cn(
           'flex flex-col relative max-w-[72%]',
           hasMedia && 'w-full',
@@ -1035,11 +1132,6 @@ function MessageBubble({
         )}
         style={{ minWidth: 0 }}
       >
-        {/* Reply quote */}
-        {msg.replyTo && (
-          <ReplyQuote messages={messages} replyToId={msg.replyTo} botNickname={botNickname} displayName={displayName} />
-        )}
-
         {/* Bubble body — outer shell clips to rounded corners so flush media
             fuses seamlessly with no independent border/radius of its own */}
         <div
@@ -1052,11 +1144,21 @@ function MessageBubble({
             'shadow-md',
           )}
         >
-          {(hasText || hasPills) && (
+          {(hasText || hasPills || msg.replyTo) && (
             <div
               className="px-3.5 py-2.5"
               style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
             >
+              {msg.replyTo && (
+                <ReplyQuote
+                  messages={messages}
+                  replyToId={msg.replyTo}
+                  botNickname={botNickname}
+                  displayName={displayName}
+                  onClick={() => onQuoteClick(msg.replyTo!)}
+                />
+              )}
+
               {hasPills && (
                 <div className={cn('flex flex-col gap-2', hasText && 'mb-2')}>
                   {pillAttachments.map((att, i) => (
@@ -1126,7 +1228,7 @@ function MessageBubble({
       {ActionButtons}
     </div>
   )
-}
+})
 
 // ── Three-dot Menu ────────────────────────────────────────────────────────────
 
@@ -1170,40 +1272,80 @@ function DotsMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1.5 z-[150] min-w-[192px] rounded-2xl border border-outline-variant/60 bg-surface-container shadow-elevation-3 py-1.5 overflow-hidden"
-          style={{ animation: 'cr-fadeIn 120ms ease both' }}
+          className="absolute right-0 top-full mt-2 z-[150] w-[248px] rounded-2xl border border-outline-variant/50 bg-surface-container shadow-elevation-3 overflow-hidden"
+          style={{ animation: 'cr-fadeIn 140ms ease both' }}
         >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setOpen(false); onEditNickname() }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-on-surface/8 transition-colors"
-          >
-            <Tag className="h-4 w-4 shrink-0 text-on-surface-variant" />
-            Edit Bot Nickname
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setOpen(false); onEditPrefix() }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-on-surface/8 transition-colors"
-          >
-            <Hash className="h-4 w-4 shrink-0 text-on-surface-variant" />
-            Edit Prefix
-          </button>
-          <div className="mx-3 my-1 border-t border-outline-variant/40" />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setOpen(false); onClearChat() }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-error/8 transition-colors"
-          >
-            <Trash2 className="h-4 w-4 shrink-0" />
-            Clear Chat
-          </button>
+          <div className="px-4 pt-3.5 pb-2.5 border-b border-outline-variant/30">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/55">
+              Chat Room Settings
+            </p>
+          </div>
+
+          <div className="py-1.5">
+            <DotsMenuItem
+              icon={Tag}
+              label="Edit Bot Nickname"
+              onClick={() => { setOpen(false); onEditNickname() }}
+            />
+            <DotsMenuItem
+              icon={Hash}
+              label="Edit Prefix"
+              onClick={() => { setOpen(false); onEditPrefix() }}
+            />
+          </div>
+
+          <div className="h-px bg-outline-variant/30 mx-3" />
+
+          <div className="py-1.5">
+            <DotsMenuItem
+              icon={Trash2}
+              label="Clear Chat"
+              danger
+              onClick={() => { setOpen(false); onClearChat() }}
+            />
+          </div>
         </div>
       )}
     </div>
+  )
+}
+
+/** Single row inside the Chat Room settings dropdown — icon in a soft
+ *  rounded chip, label, consistent hover/active affordance. */
+function DotsMenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  danger,
+}: {
+  icon: typeof Tag
+  label: string
+  onClick: () => void
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-xl text-sm font-medium transition-colors',
+        'w-[calc(100%-8px)]',
+        danger
+          ? 'text-error hover:bg-error/10'
+          : 'text-on-surface hover:bg-on-surface/8',
+      )}
+    >
+      <span
+        className={cn(
+          'flex items-center justify-center h-7 w-7 rounded-lg shrink-0',
+          danger ? 'bg-error/10' : 'bg-primary/10',
+        )}
+      >
+        <Icon className={cn('h-3.5 w-3.5', danger ? 'text-error' : 'text-primary')} />
+      </span>
+      {label}
+    </button>
   )
 }
 
@@ -1743,10 +1885,18 @@ export default function ChatRoomPage() {
 
   const socket = getSocket()
 
-  // ── Persist messages whenever they change ───────────────────────────────────
+  // ── Persist messages (debounced — avoids thrashing localStorage on fast
+  //    bot streams where dozens of edits arrive in quick succession) ──────────
 
+  const storageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    saveMessagesToStorage(messages)
+    if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
+    storageTimerRef.current = setTimeout(() => {
+      saveMessagesToStorage(messages)
+    }, 300)
+    return () => {
+      if (storageTimerRef.current) clearTimeout(storageTimerRef.current)
+    }
   }, [messages])
 
   // ── Socket events ───────────────────────────────────────────────────────────
@@ -1848,26 +1998,43 @@ export default function ChatRoomPage() {
   }, [socket, sessionId])
 
   // ── Auto-scroll ─────────────────────────────────────────────────────────────
+  // Only auto-scroll when the user is already near the bottom — prevents
+  // forcibly jumping away while the user is reading older messages.
+
+  const isNearBottomRef = useRef(true)
 
   const scrollToBottom = useCallback((smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' })
   }, [])
 
   useEffect(() => {
-    scrollToBottom()
+    if (isNearBottomRef.current) {
+      scrollToBottom()
+    }
   }, [messages, scrollToBottom])
 
-  // ── Scroll-to-bottom pill visibility ────────────────────────────────────────
+  // ── Scroll-to-bottom pill visibility + near-bottom tracking ─────────────────
 
   useEffect(() => {
     const el = scrollAreaRef.current
     if (!el) return
+    let hideTimer: ReturnType<typeof setTimeout> | null = null
     const handler = () => {
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+      isNearBottomRef.current = dist < 150
       setShowScrollBtn(dist > 120)
+
+      // Scrollbar only appears while actively scrolling, then fades out
+      // after a short idle period instead of staying visible permanently.
+      el.classList.add('is-scrolling')
+      if (hideTimer) clearTimeout(hideTimer)
+      hideTimer = setTimeout(() => el.classList.remove('is-scrolling'), 700)
     }
     el.addEventListener('scroll', handler, { passive: true })
-    return () => el.removeEventListener('scroll', handler)
+    return () => {
+      el.removeEventListener('scroll', handler)
+      if (hideTimer) clearTimeout(hideTimer)
+    }
   }, [])
 
   // ── Dismiss attach picker on outside click ───────────────────────────────────
@@ -1978,6 +2145,9 @@ export default function ChatRoomPage() {
     setPendingAttachments([])
     setReplyTarget(null)
 
+    // Always scroll to bottom when the user sends — even if they were reading up
+    isNearBottomRef.current = true
+
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
     }
@@ -1995,6 +2165,16 @@ export default function ChatRoomPage() {
     (id: string) => socket.emit('chatroom:delete_message', { id }),
     [socket],
   )
+
+  // Jump to the original message when a reply quote inside a bubble is
+  // tapped/clicked, with a brief highlight flash so it's easy to spot.
+  const handleQuoteClick = useCallback((messageId: string) => {
+    const el = scrollAreaRef.current?.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('cr-highlight-flash')
+    setTimeout(() => el.classList.remove('cr-highlight-flash'), 900)
+  }, [])
 
   const handleClearChat = useCallback(() => socket.emit('chatroom:clear'), [socket])
 
@@ -2055,7 +2235,7 @@ export default function ChatRoomPage() {
         <header
           className={cn(
             'flex items-center gap-3 px-3 shrink-0',
-            'bg-[var(--chatroom-header)] border-b border-outline-variant/30 shadow-sm',
+            'bg-[var(--chatroom-header)] border-b border-outline-variant/70',
             H_HEIGHT,
           )}
         >
@@ -2113,8 +2293,7 @@ export default function ChatRoomPage() {
         <div className="flex-1 min-h-0 relative">
           <div
             ref={scrollAreaRef}
-            className="h-full overflow-y-auto overflow-x-hidden"
-            style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.07) transparent' }}
+            className="cr-scroll h-full overflow-y-auto overflow-x-hidden"
           >
             {!hasStarted ? (
               <div className="flex flex-col h-full">
@@ -2135,7 +2314,7 @@ export default function ChatRoomPage() {
                   const showSpacing = !prevMsg || prevMsg.type !== msg.type
 
                   return (
-                    <div key={msg.id} className={showSpacing ? 'mt-3' : ''}>
+                    <div key={msg.id} data-message-id={msg.id} className={cn(showSpacing && 'mt-3', 'rounded-2xl transition-colors duration-300')}>
                       {showDate && (
                         <div className="flex items-center gap-3 my-4 px-4">
                           <div className="flex-1 h-px bg-outline-variant/20" />
@@ -2152,6 +2331,7 @@ export default function ChatRoomPage() {
                         onDelete={handleDeleteMessage}
                         onButtonClick={handleButtonClick}
                         onImageOpen={handleImageOpen}
+                        onQuoteClick={handleQuoteClick}
                         botNickname={botNickname}
                         displayName={displayName}
                       />
@@ -2169,7 +2349,10 @@ export default function ChatRoomPage() {
             <button
               type="button"
               aria-label="Scroll to bottom"
-              onClick={() => scrollToBottom()}
+              onClick={() => {
+                isNearBottomRef.current = true
+                scrollToBottom()
+              }}
               className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant/50 shadow-elevation-2 text-on-surface-variant hover:text-on-surface transition-colors text-xs font-medium"
             >
               <ChevronDown className="h-3.5 w-3.5" />
@@ -2252,7 +2435,7 @@ export default function ChatRoomPage() {
               />
 
               {/* Bottom action row: attach (left) ↔ send (right) */}
-              <div className="flex items-center justify-between px-2 pb-1.5 pt-0">
+              <div className="flex items-center justify-between px-2 pb-2 pt-1.5">
                 {/* Attachment button — + icon like Replit agent */}
                 <div id="attach-picker-root" className="relative">
                   <button
@@ -2261,13 +2444,13 @@ export default function ChatRoomPage() {
                     aria-expanded={showAttachPicker}
                     onClick={() => setShowAttachPicker((p) => !p)}
                     className={cn(
-                      'flex items-center justify-center h-6 w-6 rounded-xl transition-colors',
+                      'flex items-center justify-center h-8 w-8 rounded-full transition-colors',
                       showAttachPicker
                         ? 'bg-primary/15 text-primary'
                         : 'text-on-surface-variant/50 hover:text-on-surface-variant hover:bg-on-surface/8',
                     )}
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-4 w-4" />
                   </button>
                   {showAttachPicker && (
                     <AttachmentPicker
@@ -2284,13 +2467,13 @@ export default function ChatRoomPage() {
                   onClick={sendMessage}
                   disabled={!canSend}
                   className={cn(
-                    'flex items-center justify-center h-6 w-6 rounded-xl transition-all',
+                    'flex items-center justify-center h-8 w-8 rounded-full transition-all',
                     canSend
                       ? 'bg-primary text-on-primary shadow-sm hover:opacity-90 active:scale-95'
                       : 'bg-on-surface/8 text-on-surface-variant/30 cursor-not-allowed',
                   )}
                 >
-                  <ArrowUp className="h-3.5 w-3.5" />
+                  <ArrowUp className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -2359,6 +2542,30 @@ export default function ChatRoomPage() {
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
         .cr-fadein-fast { animation: cr-fadeInFast 0.12s ease-out; }
+
+        /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
+        .cr-highlight-flash { background-color: rgba(255,130,40,0.16); }
+
+        /* ── Auto-hiding scroll bar — thumb only appears while actively
+               scrolling, then fades out, instead of sitting on screen
+               permanently. Applied to the message list scroll container. */
+        .cr-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: transparent transparent;
+        }
+        .cr-scroll.is-scrolling {
+          scrollbar-color: rgba(255,255,255,0.22) transparent;
+        }
+        .cr-scroll::-webkit-scrollbar { width: 6px; }
+        .cr-scroll::-webkit-scrollbar-track { background: transparent; }
+        .cr-scroll::-webkit-scrollbar-thumb {
+          background: transparent;
+          border-radius: 999px;
+          transition: background-color 200ms ease;
+        }
+        .cr-scroll.is-scrolling::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.22);
+        }
 
         /* ── Audio player: seek bar ─────────────────────────────────────── */
         .cr-audio-range {
