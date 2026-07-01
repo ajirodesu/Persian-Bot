@@ -1016,7 +1016,7 @@ function MessageBubble({
   return (
     <div
       className={cn(
-        'flex w-full items-end gap-1 px-3 py-2',
+        'flex w-full items-end gap-1 px-3 py-1',
         isBot ? 'justify-start' : 'justify-end',
       )}
       onMouseEnter={() => setHovered(true)}
@@ -2135,7 +2135,7 @@ export default function ChatRoomPage() {
                   const showSpacing = !prevMsg || prevMsg.type !== msg.type
 
                   return (
-                    <div key={msg.id} className={showSpacing ? 'mt-5' : ''}>
+                    <div key={msg.id} className={showSpacing ? 'mt-3' : ''}>
                       {showDate && (
                         <div className="flex items-center gap-3 my-4 px-4">
                           <div className="flex-1 h-px bg-outline-variant/20" />
