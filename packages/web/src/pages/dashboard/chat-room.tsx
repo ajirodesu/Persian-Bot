@@ -45,8 +45,6 @@ import {
   Image as ImageIcon,
   Play,
   Pause,
-  Volume2,
-  VolumeX,
   Download,
   Music2,
   Maximize2,
@@ -363,8 +361,8 @@ function MarkdownText({ text, style }: { text: string; style?: string }) {
  * High-quality, fully custom audio player used for every bot/user audio
  * attachment — replaces the bare-bones native <audio controls> element with
  * a proper transport: play/pause, scrubbable progress bar with hover
- * preview, live time readout, volume control, loading state, and a
- * one-tap download action.
+ * preview, live time readout, loading state, and a one-tap download
+ * action.
  */
 function AudioPlayer({
   url,
@@ -385,9 +383,6 @@ function AudioPlayer({
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [isScrubbing, setIsScrubbing] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [volume, setVolume] = useState(1)
-  const [showVolume, setShowVolume] = useState(false)
 
   useEffect(() => {
     const audio = audioRef.current
@@ -449,23 +444,6 @@ function AudioPlayer({
     if (audio) audio.currentTime = value
   }, [])
 
-  const toggleMute = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    audio.muted = !audio.muted
-    setIsMuted(audio.muted)
-  }, [])
-
-  const handleVolumeChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current
-    const v = Number(e.target.value)
-    setVolume(v)
-    if (!audio) return
-    audio.volume = v
-    audio.muted = v === 0
-    setIsMuted(v === 0)
-  }, [])
-
   const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
 
   return (
@@ -476,7 +454,6 @@ function AudioPlayer({
           ? 'w-full px-3.5 py-3'
           : 'pl-1.5 pr-3 py-2 rounded-2xl bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]',
       )}
-      onMouseLeave={() => setShowVolume(false)}
     >
       <audio ref={audioRef} preload="metadata">
         <source src={url} type={mime} />
@@ -536,36 +513,7 @@ function AudioPlayer({
         </div>
       </div>
 
-      <div
-        className="relative flex flex-col items-center shrink-0"
-        onMouseEnter={() => setShowVolume(true)}
-      >
-        {showVolume && (
-          <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 flex items-center justify-center h-16 py-2 px-1.5 rounded-full bg-[#161a22] border border-white/10 shadow-lg cr-fadein-fast">
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={isMuted ? 0 : volume}
-              onChange={handleVolumeChange}
-              aria-label="Volume"
-              className="cr-audio-volume"
-            />
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={toggleMute}
-          aria-label={isMuted ? 'Unmute' : 'Mute'}
-          className="p-1.5 rounded-full text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors"
-        >
-          {isMuted || volume === 0 ? (
-            <VolumeX className="h-3.5 w-3.5" />
-          ) : (
-            <Volume2 className="h-3.5 w-3.5" />
-          )}
-        </button>
+      <div className="relative flex flex-col items-center shrink-0">
         <a
           href={url}
           download={fileName}
@@ -2593,40 +2541,6 @@ export default function ChatRoomPage() {
           background: transparent;
           cursor: pointer;
         }
-
-        /* ── Audio player: vertical volume slider ───────────────────────── */
-        .cr-audio-volume {
-          -webkit-appearance: none;
-          appearance: none;
-          writing-mode: vertical-lr;
-          direction: rtl;
-          width: 4px;
-          height: 100%;
-          background: rgba(255,255,255,0.15);
-          border-radius: 999px;
-          outline: none;
-        }
-        .cr-audio-volume::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 11px;
-          height: 11px;
-          border-radius: 50%;
-          background: var(--md-sys-color-primary, #ff8228);
-          border: 2px solid #161a22;
-          cursor: pointer;
-          margin-left: -3.5px;
-        }
-        .cr-audio-volume::-moz-range-thumb {
-          width: 11px;
-          height: 11px;
-          border-radius: 50%;
-          background: var(--md-sys-color-primary, #ff8228);
-          border: 2px solid #161a22;
-          cursor: pointer;
-        }
-        .cr-audio-volume::-webkit-slider-runnable-track { background: transparent; }
-        .cr-audio-volume::-moz-range-progress { background: var(--md-sys-color-primary, #ff8228); }
 
         .cr-audio-player audio { display: none; }
 
