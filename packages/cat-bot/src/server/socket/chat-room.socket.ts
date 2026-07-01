@@ -13,6 +13,7 @@
  * chatroom:clear. A max-session cap prevents unbounded memory growth.
  */
 
+import type { Readable } from 'stream';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import type {
@@ -63,6 +64,8 @@ export interface ChatAttachment {
   type: 'image' | 'video' | 'audio' | 'file';
   url?: string;
   name?: string;
+  /** Explicit MIME type — used by the <audio> renderer to pick the right decoder. */
+  mime?: string;
 }
 
 interface StoredSession {
@@ -290,28 +293,127 @@ class WebChatApi extends UnifiedApi {
     return msg.message ?? msg.body ?? '';
   }
 
-  private resolveAttachments(
+  /**
+   * Derives the `ChatAttachment` type from a filename extension.
+   * Covers every mainstream audio container/codec so the webchat renderer picks
+   * the right element (<audio> vs <video> vs generic file pill) regardless of
+   * which command produced the file.
+   */
+  private static extToType(name: string): ChatAttachment['type'] {
+    const ext = name.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif', 'heic', 'heif', 'ico', 'tiff', 'tif'].includes(ext)) return 'image';
+    if (['mp4', 'mov', 'avi', 'webm', 'mkv', 'flv', 'wmv', 'm4v', 'mpeg', 'mpg', '3gpp', '3g2'].includes(ext)) return 'video';
+    if ([
+      // Lossy / compressed
+      'mp3', 'aac', 'ogg', 'oga', 'opus', 'weba', 'wma', 'amr', 'ra', 'rm', 'spx',
+      // Lossless
+      'wav', 'flac', 'aiff', 'aif', 'alac', 'ape', 'au', 'dsd',
+      // Container / other
+      'm4a', 'm4b', 'mka', 'mid', 'midi', 'caf', 'dts', 'mp2', 'ac3', 'eac3',
+    ].includes(ext)) return 'audio';
+    return 'file';
+  }
+
+  /**
+   * Maps an audio file extension to the correct MIME type for data: URLs.
+   * The browser's <audio> element uses the MIME type to pick a decoder.
+   */
+  private static extToMime(ext: string): string {
+    const map: Record<string, string> = {
+      mp3: 'audio/mpeg', mp2: 'audio/mpeg',
+      aac: 'audio/aac', ac3: 'audio/ac3', eac3: 'audio/eac3',
+      ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg',
+      wav: 'audio/wav',
+      flac: 'audio/flac',
+      weba: 'audio/webm',
+      wma: 'audio/x-ms-wma',
+      amr: 'audio/amr',
+      ra: 'audio/x-realaudio', rm: 'audio/x-realaudio',
+      spx: 'audio/x-speex',
+      aiff: 'audio/x-aiff', aif: 'audio/x-aiff',
+      au: 'audio/basic',
+      m4a: 'audio/mp4', m4b: 'audio/mp4', alac: 'audio/mp4',
+      mka: 'audio/x-matroska',
+      mid: 'audio/midi', midi: 'audio/midi',
+      caf: 'audio/x-caf',
+      dts: 'audio/vnd.dts',
+      ape: 'audio/x-ape',
+      // image
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+      bmp: 'image/bmp', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif',
+      ico: 'image/x-icon', tiff: 'image/tiff', tif: 'image/tiff',
+      // video
+      mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo',
+      webm: 'video/webm', mkv: 'video/x-matroska', flv: 'video/x-flv',
+      wmv: 'video/x-ms-wmv', m4v: 'video/mp4', mpeg: 'video/mpeg', mpg: 'video/mpeg',
+    };
+    return map[ext] ?? 'application/octet-stream';
+  }
+
+  /** Drains a Readable into a Buffer. */
+  private static async streamToBuffer(stream: Readable): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer | string) =>
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+      );
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+  }
+
+  /**
+   * Resolves all attachments from options into wire-safe ChatAttachment entries.
+   *
+   * Handles both delivery paths:
+   *   • attachment[]      — NamedStreamAttachment (Buffer or Readable) from commands like
+   *                         /play and /say. Converted to base64 data: URLs so socket.io
+   *                         can carry them without a separate HTTP download step.
+   *   • attachment_url[]  — NamedUrlAttachment (remote URL). Passed through as-is; the
+   *                         frontend fetches the resource directly from the URL.
+   *
+   * Extension detection covers every mainstream audio format so the <audio> element
+   * renders correctly regardless of codec or container.
+   */
+  private async resolveAttachments(
     options: ReplyMessageOptions | EditMessageOptions | SendPayload,
-  ): ChatAttachment[] {
+  ): Promise<ChatAttachment[]> {
     const attachments: ChatAttachment[] = [];
-    const urlArr =
-      'attachment_url' in options ? options.attachment_url : undefined;
+
+    // ── Stream / Buffer attachments (/play, /say, etc.) ──────────────────────
+    const streamArr = 'attachment' in options ? options.attachment : undefined;
+    if (Array.isArray(streamArr) && streamArr.length > 0) {
+      for (const item of streamArr as Array<{ name: string; stream: Readable | Buffer }>) {
+        const name = item.name ?? 'audio';
+        const ext = name.split('.').pop()?.toLowerCase() ?? '';
+        const mime = WebChatApi.extToMime(ext) || 'application/octet-stream';
+        const type = WebChatApi.extToType(name);
+        try {
+          const buf = Buffer.isBuffer(item.stream)
+            ? item.stream
+            : await WebChatApi.streamToBuffer(item.stream as Readable);
+          const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+          attachments.push({ type, url: dataUrl, name, mime });
+        } catch (err) {
+          logger.warn('[chat-room] Failed to encode stream attachment', { name, err });
+        }
+      }
+    }
+
+    // ── URL attachments (attachment_url[]) ────────────────────────────────────
+    const urlArr = 'attachment_url' in options ? options.attachment_url : undefined;
     if (Array.isArray(urlArr)) {
       for (const item of urlArr) {
         const name = item.name ?? '';
         const url = item.url ?? '';
+        const type = WebChatApi.extToType(name);
         const ext = name.split('.').pop()?.toLowerCase() ?? '';
-        const type: ChatAttachment['type'] =
-          ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)
-            ? 'image'
-            : ['mp4', 'mov', 'avi', 'webm'].includes(ext)
-              ? 'video'
-              : ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)
-                ? 'audio'
-                : 'file';
-        attachments.push({ type, url, name });
+        const mime = WebChatApi.extToMime(ext);
+        attachments.push({ type, url, name, mime });
       }
     }
+
     return attachments;
   }
 
@@ -365,7 +467,7 @@ class WebChatApi extends UnifiedApi {
   ): Promise<string | undefined> {
     const text = this.resolveText(msg);
     const attachments =
-      typeof msg !== 'string' ? this.resolveAttachments(msg) : [];
+      typeof msg !== 'string' ? await this.resolveAttachments(msg) : [];
     const built = this.buildMsg(text, { attachments });
     this.storeAndEmit(built);
     return built.id;
@@ -382,7 +484,7 @@ class WebChatApi extends UnifiedApi {
     const style =
       options.style === MessageStyle.MARKDOWN ? 'markdown' : undefined;
     const buttons = this.resolveButtons(options.button);
-    const attachments = this.resolveAttachments(options);
+    const attachments = await this.resolveAttachments(options);
     const built = this.buildMsg(text, {
       ...(style !== undefined && { style }),
       ...(buttons !== undefined && { buttons }),
@@ -413,7 +515,7 @@ class WebChatApi extends UnifiedApi {
       );
       if (options.style === MessageStyle.MARKDOWN) style = 'markdown';
       buttons = this.resolveButtons(options.button);
-      attachments = this.resolveAttachments(options);
+      attachments = await this.resolveAttachments(options);
       if (options.message_id_to_edit) {
         targetId = options.message_id_to_edit;
       }
@@ -511,7 +613,12 @@ class WebChatApi extends UnifiedApi {
       isGroup: false,
       memberCount: 2,
       participantIDs: session.userId ? [session.userId] : [],
-      adminIDs: [],
+      // The webchat chat room is the user's own private 1:1 thread — they are
+      // always the admin of their own conversation. Populating adminIDs here
+      // seeds the thread admin cache (threads.repo isThreadAdmin) so Role.THREAD_ADMIN
+      // commands work correctly. Without this the cache always resolves to false
+      // and every THREAD_ADMIN-gated command is silently denied.
+      adminIDs: session.userId ? [session.userId] : [],
       avatarUrl: null,
       serverID: null,
     };

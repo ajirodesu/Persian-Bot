@@ -62,10 +62,14 @@ export function bufferToStream(
  */
 export function getMediaTypeFromPath(pathOrUrl = ''): MediaType {
   const ext = pathOrUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
-  if (['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(ext)) return 'photo';
+  if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'avif', 'heic', 'heif', 'ico', 'tiff', 'tif'].includes(ext)) return 'photo';
   if (ext === 'gif') return 'gif';
-  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
-  if (['mp3', 'ogg', 'wav', 'aac', 'opus', 'm4a'].includes(ext)) return 'audio';
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', 'mpeg', 'mpg', '3gp', '3g2'].includes(ext)) return 'video';
+  if ([
+    'mp3', 'aac', 'ogg', 'oga', 'opus', 'weba', 'wma', 'amr', 'ra', 'rm', 'spx', 'mp2', 'ac3', 'eac3',
+    'wav', 'flac', 'aiff', 'aif', 'alac', 'ape', 'au', 'dsd',
+    'm4a', 'm4b', 'mka', 'mid', 'midi', 'caf', 'dts',
+  ].includes(ext)) return 'audio';
   return 'file';
 }
 

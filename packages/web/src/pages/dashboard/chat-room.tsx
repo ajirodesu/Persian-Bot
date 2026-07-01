@@ -41,6 +41,15 @@ import {
   DollarSign,
   Tag,
   Image as ImageIcon,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Download,
+  Music2,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { getSocket } from '@/lib/socket.lib'
 import { cn } from '@/utils/cn.util'
@@ -63,7 +72,16 @@ interface ChatAttachment {
   name?: string
   localUrl?: string
   file?: File
+  /** Explicit MIME type sent by the server — used by <audio> to pick the right decoder. */
+  mime?: string
 }
+
+/** All audio file extensions the bot can send. */
+const AUDIO_EXTS = new Set([
+  'mp3', 'aac', 'ogg', 'oga', 'opus', 'weba', 'wma', 'amr', 'ra', 'rm', 'spx', 'mp2', 'ac3', 'eac3',
+  'wav', 'flac', 'aiff', 'aif', 'alac', 'ape', 'au', 'dsd',
+  'm4a', 'm4b', 'mka', 'mid', 'midi', 'caf', 'dts',
+])
 
 interface ChatMessage {
   id: string
@@ -152,6 +170,14 @@ function formatTime(ts: number): string {
   return `${h % 12 || 12}:${m} ${ampm}`
 }
 
+/** Formats a duration in seconds as "m:ss" for the audio player transport. */
+function formatAudioTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
 function formatDateLabel(ts: number): string {
   const d = new Date(ts)
   const today = new Date()
@@ -163,6 +189,107 @@ function formatDateLabel(ts: number): string {
 }
 
 // ── Markdown Renderer ─────────────────────────────────────────────────────────
+
+/**
+ * Strips trailing punctuation / unbalanced closing brackets that were likely
+ * part of the surrounding sentence rather than the URL itself (e.g. the
+ * period at the end of "Check out https://example.com." or the closing
+ * paren in "(see https://example.com)"). Returns the cleaned URL plus
+ * whatever was trimmed off, so the caller can re-append it after the tag.
+ */
+function trimTrailingPunctuation(raw: string): { url: string; trail: string } {
+  let url = raw
+  let trail = ''
+  const CLOSERS: Record<string, string> = { ')': '(', ']': '[', '}': '{' }
+  // eslint-disable-next-line no-constant-condition
+  while (url.length > 0) {
+    const last = url[url.length - 1]
+    if (last in CLOSERS) {
+      const opener = CLOSERS[last]
+      const opens = (url.match(new RegExp(`\\${opener}`, 'g')) || []).length
+      const closes = (url.match(new RegExp(`\\${last}`, 'g')) || []).length
+      if (closes > opens) {
+        trail = last + trail
+        url = url.slice(0, -1)
+        continue
+      }
+      break
+    }
+    if (/[.,!?;:'"]/.test(last)) {
+      trail = last + trail
+      url = url.slice(0, -1)
+      continue
+    }
+    break
+  }
+  return { url, trail }
+}
+
+/**
+ * Converts bare URLs, www.-prefixed domains, and email addresses in
+ * already-HTML-escaped text into clickable <a> tags. Runs AFTER markdown
+ * [text](url) links have already been converted (so those href="..." values
+ * are never double-processed) and skips any URL that immediately follows
+ * href=" or src=" to avoid corrupting existing tags.
+ *
+ * Handles links of any length — no truncation, no character cap — and every
+ * common scheme: http, https, ftp, ftps, www.-only domains (no scheme),
+ * mailto-able email addresses, and tel: numbers. Trailing sentence
+ * punctuation and unbalanced closing brackets are trimmed off the link so
+ * "Visit https://example.com." doesn't swallow the final period.
+ */
+function autoLinkUrls(html: string): string {
+  let out = html
+
+  // 1) Full-scheme URLs: http(s)://, ftp(s)://
+  out = out.replace(
+    /(?<!["'=])\b((?:https?|ftps?):\/\/[^\s<>"']+)/g,
+    (_match, rawUrl: string) => {
+      const { url, trail } = trimTrailingPunctuation(rawUrl)
+      if (!url) return _match
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chatmd-link">${url}</a>${trail}`
+    },
+  )
+
+  // 2) Bare "www." domains with no scheme (e.g. "www.example.com/path")
+  out = out.replace(
+    /(?<!["'=/])\b(www\.[^\s<>"']+\.[a-z]{2,}[^\s<>"']*)/gi,
+    (_match, rawUrl: string) => {
+      const { url, trail } = trimTrailingPunctuation(rawUrl)
+      if (!url) return _match
+      return `<a href="https://${url}" target="_blank" rel="noopener noreferrer" class="chatmd-link">${url}</a>${trail}`
+    },
+  )
+
+  // 3) tel: links already prefixed explicitly by the sender
+  out = out.replace(
+    /(?<!["'=])\btel:([+\d][\d()\-.\s]{5,}\d)/gi,
+    '<a href="tel:$1" class="chatmd-link">tel:$1</a>',
+  )
+
+  // 4) Bare email addresses → mailto:
+  out = out.replace(
+    /(?<!["'=:/])\b([\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})\b(?!["'])/gi,
+    '<a href="mailto:$1" class="chatmd-link">$1</a>',
+  )
+
+  return out
+}
+
+/**
+ * Escapes HTML special characters and auto-links bare URLs.
+ * Used for plain-text (non-markdown) messages so raw user/bot text
+ * never renders as HTML but links are still clickable.
+ */
+function linkifyPlain(text: string): string {
+  if (!text) return ''
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+  return autoLinkUrls(escaped).replace(/\n/g, '<br>')
+}
 
 function renderMarkdown(text: string): string {
   if (!text) return ''
@@ -192,6 +319,8 @@ function renderMarkdown(text: string): string {
     /\[([^\]]+)\]\(([^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="chatmd-link">$1</a>',
   )
+  // Auto-link bare URLs that weren't already wrapped by the [text](url) step above
+  html = autoLinkUrls(html)
   html = html.replace(/^### (.+)$/gm, '<span class="chatmd-h3">$1</span>')
   html = html.replace(/^## (.+)$/gm, '<span class="chatmd-h2">$1</span>')
   html = html.replace(/^# (.+)$/gm, '<span class="chatmd-h1">$1</span>')
@@ -211,7 +340,12 @@ function renderMarkdown(text: string): string {
 function MarkdownText({ text, style }: { text: string; style?: string }) {
   if (!text) return null
   if (style !== 'markdown') {
-    return <span className="whitespace-pre-wrap break-words">{text}</span>
+    return (
+      <span
+        className="whitespace-pre-wrap break-words"
+        dangerouslySetInnerHTML={{ __html: linkifyPlain(text) }}
+      />
+    )
   }
   return (
     <span
@@ -221,19 +355,415 @@ function MarkdownText({ text, style }: { text: string; style?: string }) {
   )
 }
 
+// ── Audio Player ──────────────────────────────────────────────────────────────
+
+/**
+ * High-quality, fully custom audio player used for every bot/user audio
+ * attachment — replaces the bare-bones native <audio controls> element with
+ * a proper transport: play/pause, scrubbable progress bar with hover
+ * preview, live time readout, volume control, loading state, and a
+ * one-tap download action.
+ */
+function AudioPlayer({
+  url,
+  mime,
+  fileName,
+}: {
+  url: string
+  mime: string
+  fileName: string
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [duration, setDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [isScrubbing, setIsScrubbing] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [volume, setVolume] = useState(1)
+  const [showVolume, setShowVolume] = useState(false)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const onLoadedMetadata = () => {
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+      setIsLoading(false)
+    }
+    const onTimeUpdate = () => {
+      if (!isScrubbing) setCurrentTime(audio.currentTime)
+    }
+    const onEnded = () => {
+      setIsPlaying(false)
+      setCurrentTime(0)
+    }
+    const onPlay = () => setIsPlaying(true)
+    const onPause = () => setIsPlaying(false)
+    const onWaiting = () => setIsLoading(true)
+    const onCanPlay = () => setIsLoading(false)
+
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('ended', onEnded)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('waiting', onWaiting)
+    audio.addEventListener('canplay', onCanPlay)
+    audio.addEventListener('canplaythrough', onCanPlay)
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata)
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('waiting', onWaiting)
+      audio.removeEventListener('canplay', onCanPlay)
+      audio.removeEventListener('canplaythrough', onCanPlay)
+    }
+  }, [isScrubbing])
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.paused) {
+      void audio.play().catch(() => {
+        /* autoplay/decoding failure — UI simply stays paused */
+      })
+    } else {
+      audio.pause()
+    }
+  }, [])
+
+  const handleSeek = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    const value = Number(e.target.value)
+    setCurrentTime(value)
+    if (audio) audio.currentTime = value
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.muted = !audio.muted
+    setIsMuted(audio.muted)
+  }, [])
+
+  const handleVolumeChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    const v = Number(e.target.value)
+    setVolume(v)
+    if (!audio) return
+    audio.volume = v
+    audio.muted = v === 0
+    setIsMuted(v === 0)
+  }, [])
+
+  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
+
+  return (
+    <div
+      className="cr-audio-player flex items-center gap-3 pl-1.5 pr-3 py-2 rounded-2xl bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]"
+      onMouseLeave={() => setShowVolume(false)}
+    >
+      <audio ref={audioRef} preload="metadata">
+        <source src={url} type={mime} />
+      </audio>
+
+      <button
+        type="button"
+        onClick={togglePlay}
+        disabled={isLoading}
+        aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+        className="shrink-0 flex items-center justify-center h-9 w-9 rounded-full bg-primary text-on-primary shadow-md hover:brightness-110 active:scale-95 transition-all disabled:opacity-60 disabled:active:scale-100"
+      >
+        {isLoading ? (
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+        ) : isPlaying ? (
+          <Pause className="h-4 w-4 fill-current" />
+        ) : (
+          <Play className="h-4 w-4 fill-current ml-0.5" />
+        )}
+      </button>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Music2 className="h-3 w-3 opacity-45 shrink-0" />
+          <span className="text-[11px] font-medium truncate opacity-80">{fileName}</span>
+        </div>
+
+        <div className="relative flex items-center h-3 group/seek">
+          <div className="absolute inset-x-0 h-[3px] rounded-full bg-white/15 overflow-hidden pointer-events-none">
+            <div
+              className="h-full bg-primary rounded-full"
+              style={{ width: `${progressPct}%`, transition: isScrubbing ? 'none' : 'width 0.1s linear' }}
+            />
+          </div>
+          <div
+            className="absolute h-2.5 w-2.5 rounded-full bg-primary shadow -translate-x-1/2 opacity-0 group-hover/seek:opacity-100 transition-opacity pointer-events-none"
+            style={{ left: `${progressPct}%` }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.01}
+            value={Math.min(currentTime, duration || 0)}
+            onChange={handleSeek}
+            onPointerDown={() => setIsScrubbing(true)}
+            onPointerUp={() => setIsScrubbing(false)}
+            disabled={isLoading || duration === 0}
+            aria-label={`Seek — ${formatAudioTime(currentTime)} of ${formatAudioTime(duration)}`}
+            className="cr-audio-range absolute inset-0 w-full m-0 cursor-pointer disabled:cursor-default"
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] tabular-nums opacity-45 leading-none">
+          <span>{formatAudioTime(currentTime)}</span>
+          <span>{formatAudioTime(duration)}</span>
+        </div>
+      </div>
+
+      <div
+        className="relative flex flex-col items-center shrink-0"
+        onMouseEnter={() => setShowVolume(true)}
+      >
+        {showVolume && (
+          <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 flex items-center justify-center h-16 py-2 px-1.5 rounded-full bg-[#161a22] border border-white/10 shadow-lg cr-fadein-fast">
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={isMuted ? 0 : volume}
+              onChange={handleVolumeChange}
+              aria-label="Volume"
+              className="cr-audio-volume"
+            />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={isMuted ? 'Unmute' : 'Mute'}
+          className="p-1.5 rounded-full text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors"
+        >
+          {isMuted || volume === 0 ? (
+            <VolumeX className="h-3.5 w-3.5" />
+          ) : (
+            <Volume2 className="h-3.5 w-3.5" />
+          )}
+        </button>
+        <a
+          href={url}
+          download={fileName}
+          aria-label={`Download ${fileName}`}
+          className="p-1.5 rounded-full text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// ── Image Lightbox ────────────────────────────────────────────────────────────
+
+/** Renders the currently active lightbox image with its own load/zoom state — mounted fresh (via a `key` on index) each time the active image changes, so state resets naturally instead of via an effect. */
+function LightboxImage({ url, fileName }: { url: string; fileName: string }) {
+  const [isLoading, setIsLoading] = useState(true)
+  const [isZoomed, setIsZoomed] = useState(false)
+
+  return (
+    <>
+      {isLoading && (
+        <span className="absolute h-8 w-8 rounded-full border-[3px] border-white/25 border-t-white animate-spin" />
+      )}
+      <img
+        src={url}
+        alt={fileName}
+        onLoad={() => setIsLoading(false)}
+        onClick={() => setIsZoomed((z) => !z)}
+        draggable={false}
+        className={cn(
+          'rounded-lg select-none transition-transform duration-200 ease-out',
+          isZoomed
+            ? 'max-w-none max-h-none scale-[1.9] cursor-zoom-out'
+            : 'max-w-[94vw] max-h-[86vh] object-contain cursor-zoom-in',
+          isLoading && 'opacity-0',
+        )}
+      />
+    </>
+  )
+}
+
+/**
+ * Fullscreen photo viewer for chat image attachments. Supports click-to-zoom,
+ * download, keyboard navigation (Esc to close, ←/→ to switch), and a
+ * filmstrip + prev/next controls when the triggering message has more than
+ * one image attached.
+ */
+function ImageLightbox({
+  images,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  images: ChatAttachment[]
+  index: number
+  onIndexChange: (i: number) => void
+  onClose: () => void
+}) {
+  const current = images[index]
+  const url = current?.localUrl ?? current?.url ?? ''
+  const fileName = current?.name ?? 'image'
+  const hasMultiple = images.length > 1
+
+  const goPrev = useCallback(() => {
+    onIndexChange((index - 1 + images.length) % images.length)
+  }, [index, images.length, onIndexChange])
+
+  const goNext = useCallback(() => {
+    onIndexChange((index + 1) % images.length)
+  }, [index, images.length, onIndexChange])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft' && hasMultiple) goPrev()
+      else if (e.key === 'ArrowRight' && hasMultiple) goNext()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, goPrev, goNext, hasMultiple])
+
+  // Lock background scroll while the lightbox is open
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [])
+
+  if (!current || !url) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/92 backdrop-blur-md"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      style={{ animation: 'cr-fadeInFast 140ms ease both' }}
+    >
+      {/* Top bar */}
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-black/70 to-transparent z-10">
+        <div className="flex items-center gap-2 min-w-0">
+          <ImageIcon className="h-4 w-4 text-white/70 shrink-0" />
+          <span className="text-sm text-white/90 font-medium truncate max-w-[46vw]">{fileName}</span>
+          {hasMultiple && (
+            <span className="text-xs text-white/50 tabular-nums shrink-0">{index + 1} / {images.length}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <a
+            href={url}
+            download={fileName}
+            aria-label="Download image"
+            className="p-2 rounded-full text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download className="h-[18px] w-[18px]" />
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-2 rounded-full text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Prev / next */}
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goPrev() }}
+            aria-label="Previous image"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white border border-white/10 transition-colors z-10"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goNext() }}
+            aria-label="Next image"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white border border-white/10 transition-colors z-10"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </>
+      )}
+
+      {/* Image */}
+      <div
+        className="relative max-w-[94vw] max-h-[86vh] flex items-center justify-center overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <LightboxImage key={index} url={url} fileName={fileName} />
+      </div>
+
+      {/* Filmstrip for multi-image messages */}
+      {hasMultiple && (
+        <div
+          className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-1.5 px-4 py-3 bg-gradient-to-t from-black/70 to-transparent overflow-x-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {images.map((img, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onIndexChange(i)}
+              aria-label={`View image ${i + 1}`}
+              className={cn(
+                'h-10 w-10 rounded-lg overflow-hidden border-2 transition-all shrink-0',
+                i === index ? 'border-primary opacity-100 scale-105' : 'border-transparent opacity-50 hover:opacity-80',
+              )}
+            >
+              <img src={img.localUrl ?? img.url} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Attachment View ───────────────────────────────────────────────────────────
 
-function AttachmentView({ att }: { att: ChatAttachment }) {
+function AttachmentView({ att, onOpen }: { att: ChatAttachment; onOpen?: () => void }) {
   const url = att.localUrl ?? att.url
   if (att.type === 'image' && url) {
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`View ${att.name ?? 'image'} fullscreen`}
+        className="group relative block rounded-xl overflow-hidden cursor-zoom-in"
+      >
         <img
           src={url}
           alt={att.name ?? 'image'}
           className="max-w-[220px] max-h-[180px] w-full rounded-xl object-cover border border-white/10"
         />
-      </a>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
+          <span className="flex items-center justify-center h-8 w-8 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all">
+            <Maximize2 className="h-3.5 w-3.5" />
+          </span>
+        </div>
+      </button>
     )
   }
   if (att.type === 'video' && url) {
@@ -242,7 +772,23 @@ function AttachmentView({ att }: { att: ChatAttachment }) {
     )
   }
   if (att.type === 'audio' && url) {
-    return <audio src={url} controls className="max-w-[240px] mt-1" />
+    // Use the explicit MIME type from the server when present so the browser
+    // picks the right decoder for every format (ogg, flac, m4a, wma, etc.).
+    const mime = att.mime ?? ((): string => {
+      const ext = (att.name ?? url ?? '').split('.').pop()?.split('?')[0]?.toLowerCase() ?? ''
+      const map: Record<string, string> = {
+        mp3: 'audio/mpeg', mp2: 'audio/mpeg', aac: 'audio/aac', ac3: 'audio/ac3', eac3: 'audio/eac3',
+        ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac',
+        weba: 'audio/webm', wma: 'audio/x-ms-wma', amr: 'audio/amr', ra: 'audio/x-realaudio',
+        rm: 'audio/x-realaudio', spx: 'audio/x-speex', aiff: 'audio/x-aiff', aif: 'audio/x-aiff',
+        au: 'audio/basic', m4a: 'audio/mp4', m4b: 'audio/mp4', alac: 'audio/mp4',
+        mka: 'audio/x-matroska', mid: 'audio/midi', midi: 'audio/midi',
+        caf: 'audio/x-caf', dts: 'audio/vnd.dts', ape: 'audio/x-ape',
+      }
+      return map[ext] ?? 'audio/mpeg'
+    })()
+    const fileName = att.name ?? 'audio'
+    return <AudioPlayer url={url} mime={mime} fileName={fileName} />
   }
   return (
     <a
@@ -334,6 +880,7 @@ function MessageBubble({
   onReply,
   onDelete,
   onButtonClick,
+  onImageOpen,
   botNickname,
   displayName,
 }: {
@@ -342,6 +889,7 @@ function MessageBubble({
   onReply: (target: ReplyTarget) => void
   onDelete: (id: string) => void
   onButtonClick: (buttonId: string, messageId: string) => void
+  onImageOpen: (images: ChatAttachment[], index: number) => void
   botNickname: string
   displayName: string
 }) {
@@ -350,6 +898,9 @@ function MessageBubble({
   const hasAttachments = (msg.attachments?.length ?? 0) > 0
   const hasButtons = (msg.buttons?.length ?? 0) > 0
   const hasText = !!msg.text?.trim()
+  const imageAttachments = (msg.attachments ?? []).filter(
+    (a) => a.type === 'image' && (a.localUrl ?? a.url),
+  )
 
   const ActionButtons = (
     <div
@@ -413,9 +964,17 @@ function MessageBubble({
         >
           {hasAttachments && (
             <div className="flex flex-col gap-2 mb-2">
-              {msg.attachments!.map((att, i) => (
-                <AttachmentView key={i} att={att} />
-              ))}
+              {msg.attachments!.map((att, i) => {
+                const isImage = att.type === 'image' && (att.localUrl ?? att.url)
+                const imgIndex = isImage ? imageAttachments.indexOf(att) : -1
+                return (
+                  <AttachmentView
+                    key={i}
+                    att={att}
+                    onOpen={imgIndex >= 0 ? () => onImageOpen(imageAttachments, imgIndex) : undefined}
+                  />
+                )
+              })}
             </div>
           )}
 
@@ -860,11 +1419,19 @@ function AttachmentPicker({
       // still renders as a photo bubble even if it came through "File", a
       // drag-drop, or a paste, instead of falling back to a generic file pill.
       const isImage = type === 'image' || f.type.startsWith('image/')
+      const isAudio = f.type.startsWith('audio/') ||
+        AUDIO_EXTS.has(f.name.split('.').pop()?.toLowerCase() ?? '')
+      const isVideo = f.type.startsWith('video/')
+      const attType = isImage ? ('image' as const)
+        : isAudio ? ('audio' as const)
+        : isVideo ? ('video' as const)
+        : type
       return {
-        type: isImage ? ('image' as const) : type,
+        type: attType,
         name: f.name,
         localUrl: URL.createObjectURL(f),
         file: f,
+        ...(f.type ? { mime: f.type } : {}),
       }
     })
     onSelect(attachments)
@@ -1025,6 +1592,11 @@ export default function ChatRoomPage() {
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [lightbox, setLightbox] = useState<{ images: ChatAttachment[]; index: number } | null>(null)
+
+  const handleImageOpen = useCallback((images: ChatAttachment[], index: number) => {
+    setLightbox({ images, index })
+  }, [])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -1460,6 +2032,7 @@ export default function ChatRoomPage() {
                         onReply={setReplyTarget}
                         onDelete={handleDeleteMessage}
                         onButtonClick={handleButtonClick}
+                        onImageOpen={handleImageOpen}
                         botNickname={botNickname}
                         displayName={displayName}
                       />
@@ -1632,6 +2205,14 @@ export default function ChatRoomPage() {
           onClose={() => setShowNicknameModal(false)}
         />
       )}
+      {lightbox && (
+        <ImageLightbox
+          images={lightbox.images}
+          index={lightbox.index}
+          onIndexChange={(i) => setLightbox((prev) => (prev ? { ...prev, index: i } : prev))}
+          onClose={() => setLightbox(null)}
+        />
+      )}
 
       {/* ── Scoped styles ──────────────────────────────────────────────────── */}
       <style>{`
@@ -1653,6 +2234,75 @@ export default function ChatRoomPage() {
           from { opacity: 0; transform: translateY(-6px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
+
+        @keyframes cr-fadeInFast {
+          from { opacity: 0; transform: translateY(4px) scale(0.9); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .cr-fadein-fast { animation: cr-fadeInFast 0.12s ease-out; }
+
+        /* ── Audio player: seek bar ─────────────────────────────────────── */
+        .cr-audio-range {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          height: 12px;
+        }
+        .cr-audio-range::-webkit-slider-runnable-track { background: transparent; height: 12px; }
+        .cr-audio-range::-moz-range-track { background: transparent; height: 12px; }
+        .cr-audio-range::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: transparent;
+          cursor: pointer;
+        }
+        .cr-audio-range::-moz-range-thumb {
+          width: 12px;
+          height: 12px;
+          border: none;
+          border-radius: 50%;
+          background: transparent;
+          cursor: pointer;
+        }
+
+        /* ── Audio player: vertical volume slider ───────────────────────── */
+        .cr-audio-volume {
+          -webkit-appearance: none;
+          appearance: none;
+          writing-mode: vertical-lr;
+          direction: rtl;
+          width: 4px;
+          height: 100%;
+          background: rgba(255,255,255,0.15);
+          border-radius: 999px;
+          outline: none;
+        }
+        .cr-audio-volume::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          background: var(--md-sys-color-primary, #ff8228);
+          border: 2px solid #161a22;
+          cursor: pointer;
+          margin-left: -3.5px;
+        }
+        .cr-audio-volume::-moz-range-thumb {
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          background: var(--md-sys-color-primary, #ff8228);
+          border: 2px solid #161a22;
+          cursor: pointer;
+        }
+        .cr-audio-volume::-webkit-slider-runnable-track { background: transparent; }
+        .cr-audio-volume::-moz-range-progress { background: var(--md-sys-color-primary, #ff8228); }
+
+        .cr-audio-player audio { display: none; }
 
         /* Markdown styles */
         .chatmd strong { font-weight: 700; }
@@ -1687,7 +2337,11 @@ export default function ChatRoomPage() {
           color: #79c0ff;
           text-decoration: underline;
           text-underline-offset: 2px;
+          word-break: break-all;
+          overflow-wrap: anywhere;
         }
+        .chatmd-link:hover { color: #a5d6ff; }
+        .chatmd-link:visited { color: #b39ddb; }
         .chatmd-h1 { display: block; font-size: 1.12em; font-weight: 800; margin: 5px 0 2px; }
         .chatmd-h2 { display: block; font-size: 1.06em; font-weight: 700; margin: 4px 0 1px; }
         .chatmd-h3 { display: block; font-size: 1em; font-weight: 600; margin: 3px 0 1px; }

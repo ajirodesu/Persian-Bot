@@ -11,6 +11,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { isUserBanned } from '@/engine/repos/banned.repo.js';
@@ -70,6 +71,10 @@ export const meta: CommandMeta = {
   usage: '[@mention]',
   cooldown: 5,
   hasPrefix: true,
+  platform: [
+    Platforms.Discord,
+    Platforms.Telegram,
+  ],
   options: [
     {
       type: OptionType.user,
