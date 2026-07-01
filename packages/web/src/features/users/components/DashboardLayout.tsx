@@ -349,7 +349,7 @@ export default function DashboardLayout() {
               as={Link}
               to={ROUTES.DASHBOARD.ROOT}
               variant="unstyled"
-              aria-label="Cat-Bot dashboard"
+              aria-label="Persian dashboard"
               className="flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
             >
               <Logo className={H_LOGO_ICON} />
@@ -363,7 +363,7 @@ export default function DashboardLayout() {
                 H_BRAND_TEXT,
               )}
             >
-              Cat-Bot
+              Persian
             </Link>
 
             {/* Separator */}
@@ -386,7 +386,7 @@ export default function DashboardLayout() {
                 H_BRAND_TEXT,
               )}
             >
-              Cat-Bot
+              Persian
             </Link>
           </div>
 

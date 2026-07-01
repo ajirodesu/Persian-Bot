@@ -1,5 +1,5 @@
 -- ============================================================================
--- NeonDB Schema — Cat-Bot
+-- NeonDB Schema — Persian
 -- Run this file once against your Neon project via the SQL editor or psql.
 -- All statements use IF NOT EXISTS and are safe to re-run.
 --

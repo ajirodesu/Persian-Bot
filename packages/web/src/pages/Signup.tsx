@@ -145,7 +145,7 @@ export default function SignupPage() {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16">
       <Helmet>
-        <title>Sign Up · Cat-Bot</title>
+        <title>Sign Up · Persian</title>
       </Helmet>
 
       <div

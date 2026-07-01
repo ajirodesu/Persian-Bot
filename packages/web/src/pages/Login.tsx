@@ -78,7 +78,7 @@ export default function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16">
       <Helmet>
-        <title>Log In · Cat-Bot</title>
+        <title>Log In · Persian</title>
       </Helmet>
 
       <div

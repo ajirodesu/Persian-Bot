@@ -1,7 +1,7 @@
 /**
  * Web Platform Constants — Single Source of Truth
  *
- * Mirrors cat-bot's platform.constants.ts so the web client and server runtime
+ * Mirrors persian's platform.constants.ts so the web client and server runtime
  * use identical string identifiers.
  */
 

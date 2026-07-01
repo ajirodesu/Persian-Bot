@@ -63,7 +63,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <Helmet>
-        <title>Admin Overview · Cat-Bot</title>
+        <title>Admin Overview · Persian</title>
       </Helmet>
       <div>
         <h1 className="text-headline-md font-semibold text-on-surface">

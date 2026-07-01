@@ -8,14 +8,14 @@ export {
   findSessionCommands,
   setCommandEnabled,
   isCommandEnabled,
-} from './cat-bot/bot-session-commands.repo.js';
+} from './persian/bot-session-commands.repo.js';
 
 export {
   upsertSessionEvents,
   findSessionEvents,
   setEventEnabled,
   isEventEnabled,
-} from './cat-bot/bot-session-events.repo.js';
+} from './persian/bot-session-events.repo.js';
 
 export {
   findDiscordCredentialState,
@@ -35,7 +35,7 @@ export {
   addBotPremium,
   removeBotPremium,
   listBotPremiums,
-} from './cat-bot/credentials.repo.js';
+} from './persian/credentials.repo.js';
 
 export {
   upsertThread,
@@ -62,7 +62,7 @@ export {
   getAllDiscordServerIds,
   discordServerExists,
   discordServerSessionExists,
-} from './cat-bot/threads.repo.js';
+} from './persian/threads.repo.js';
 
 export {
   upsertUser,
@@ -74,7 +74,7 @@ export {
   setUserSessionData,
   getAllUserSessionData,
   getUserSessionUpdatedAt,
-} from './cat-bot/users.repo.js';
+} from './persian/users.repo.js';
 
 export {
   banUser,
@@ -83,7 +83,7 @@ export {
   banThread,
   unbanThread,
   isThreadBanned,
-} from './cat-bot/banned.repo.js';
+} from './persian/banned.repo.js';
 
 export { botRepo } from './server/bot.repo.js';
 

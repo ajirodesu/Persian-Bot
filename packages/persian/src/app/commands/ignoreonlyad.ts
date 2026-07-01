@@ -1,0 +1,164 @@
+/**
+ * ignoreonlyad.ts — Persian port of GoatBot ignoreonlyad by NTKhang
+ *
+ * Manages the session-wide list of commands exempt from the adminonly
+ * restriction. When adminonly is enabled, commands on this list remain
+ * usable by all users regardless of bot-admin status.
+ *
+ * ⚠️ GAP — command existence check:
+ *   GoatBot verified the command name via global.GoatBot.commands.get().
+ *   Persian's documented API provides no equivalent. The check is omitted.
+ *
+ * DB schema (db.bot → 'session_settings'):
+ *   adminOnlyIgnoreList: string[]  — command names exempt from enforcement
+ *   (shared collection with adminonly; other fields managed there)
+ */
+
+import type { AppCtx } from '@/engine/types/controller.types.js';
+import { Role } from '@/engine/constants/role.constants.js';
+import { OptionType } from '@/engine/modules/command/command-option.constants.js';
+import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+
+export const meta: CommandMeta = {
+  name: 'ignoreonlyad',
+  aliases: ['ignoreadonly', 'ignoreonlyadmin', 'ignoreadminonly'] as string[],
+  version: '1.2.0',
+  role: Role.BOT_ADMIN,
+  author: 'NTKhang (Persian port)',
+  description:
+    'Manage commands exempt from the session-wide admin-only restriction.',
+  category: 'Bot Admin',
+  usage: [
+    'add <commandName> — Add a command to the session ignore list',
+    'del <commandName> — Remove a command from the session ignore list',
+    'list — View the current session ignore list',
+  ],
+  cooldown: 5,
+  hasPrefix: true,
+  platform: [
+    Platforms.Discord,
+    Platforms.Telegram,
+  ],
+  options: [
+    {
+      type: OptionType.string,
+      name: 'action',
+      description: 'add, del, or list',
+      required: true,
+    },
+    {
+      type: OptionType.string,
+      name: 'command',
+      description: 'Command name to add or remove from the session ignore list',
+      required: false,
+    },
+  ],
+};
+
+// ── DB helper (shared schema with adminonly) ───────────────────────────────────
+
+async function getBotHandle(db: AppCtx['db']) {
+  const coll = db.bot;
+  if (!(await coll.isCollectionExist('session_settings'))) {
+    await coll.createCollection('session_settings');
+    const h = await coll.getCollection('session_settings');
+    await h.set('adminOnlyEnabled', false);
+    await h.set('adminOnlyHideNoti', false);
+    await h.set('adminOnlyIgnoreList', []);
+    return h;
+  }
+  return coll.getCollection('session_settings');
+}
+
+// ── onCommand ─────────────────────────────────────────────────────────────────
+
+export const onCommand = async ({
+  chat,
+  args,
+  db,
+  usage,
+}: AppCtx): Promise<void> => {
+  const sub = args[0]?.toLowerCase();
+  const handle = await getBotHandle(db);
+
+  // ── add ───────────────────────────────────────────────────────────────────
+  if (sub === 'add') {
+    if (!args[1]) {
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message:
+          '⚠️ Please enter the command name you want to add to the ignore list.',
+      });
+      return;
+    }
+    const commandName = args[1].toLowerCase();
+    const ignoreList =
+      ((await handle.get('adminOnlyIgnoreList')) as string[] | null) ?? [];
+
+    if (ignoreList.includes(commandName)) {
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message: `❌ **${commandName}** is already in the ignore list.`,
+      });
+      return;
+    }
+
+    ignoreList.push(commandName);
+    await handle.set('adminOnlyIgnoreList', ignoreList);
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: `✅ Added **${commandName}** to the admin-only ignore list.`,
+    });
+    return;
+  }
+
+  // ── del / delete / remove / rm / -d ──────────────────────────────────────
+  if (['del', 'delete', 'remove', 'rm', '-d'].includes(sub ?? '')) {
+    if (!args[1]) {
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message:
+          '⚠️ Please enter the command name you want to remove from the ignore list.',
+      });
+      return;
+    }
+    const commandName = args[1].toLowerCase();
+    const ignoreList =
+      ((await handle.get('adminOnlyIgnoreList')) as string[] | null) ?? [];
+    const idx = ignoreList.indexOf(commandName);
+
+    if (idx === -1) {
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message: `❌ **${commandName}** is not in the ignore list.`,
+      });
+      return;
+    }
+
+    ignoreList.splice(idx, 1);
+    await handle.set('adminOnlyIgnoreList', ignoreList);
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: `✅ Removed **${commandName}** from the admin-only ignore list.`,
+    });
+    return;
+  }
+
+  // ── list ──────────────────────────────────────────────────────────────────
+  if (sub === 'list') {
+    const ignoreList =
+      ((await handle.get('adminOnlyIgnoreList')) as string[] | null) ?? [];
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message:
+        ignoreList.length === 0
+          ? '📑 The admin-only ignore list is currently empty.'
+          : `📑 Commands exempt from admin-only (session-wide):\n${ignoreList.join(', ')}`,
+    });
+    return;
+  }
+
+  return usage();
+};

@@ -71,7 +71,7 @@ function SidebarNav({
           )}
         >
           <Logo className={H_LOGO_ICON} />
-          Cat-Bot Admin
+          Persian Admin
         </Link>
       </div>
 

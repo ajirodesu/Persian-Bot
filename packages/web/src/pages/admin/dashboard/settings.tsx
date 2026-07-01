@@ -187,7 +187,7 @@ export default function AdminSettingsPage() {
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto pb-12">
       <Helmet>
-        <title>Admin Settings · Cat-Bot</title>
+        <title>Admin Settings · Persian</title>
       </Helmet>
 
       <div>
@@ -276,7 +276,7 @@ export default function AdminSettingsPage() {
             <div>
               <Card.Title as="h2">System Administrators</Card.Title>
               <Card.Description>
-                The absolute highest authority role in Cat-Bot. System
+                The absolute highest authority role in Persian. System
                 Administrators bypass all command role restrictions and ban
                 checks.
               </Card.Description>

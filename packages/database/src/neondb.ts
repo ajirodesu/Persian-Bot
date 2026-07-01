@@ -16,7 +16,7 @@ export {
   findSessionCommands,
   setCommandEnabled,
   isCommandEnabled,
-} from '../adapters/neondb/src/cat-bot/bot-session-commands.repo.js';
+} from '../adapters/neondb/src/persian/bot-session-commands.repo.js';
 
 // --- BOT SESSION EVENTS ---
 export {
@@ -24,7 +24,7 @@ export {
   findSessionEvents,
   setEventEnabled,
   isEventEnabled,
-} from '../adapters/neondb/src/cat-bot/bot-session-events.repo.js';
+} from '../adapters/neondb/src/persian/bot-session-events.repo.js';
 
 // --- CREDENTIALS ---
 export {
@@ -47,7 +47,7 @@ export {
   listBotPremiums,
   getBotSessionData,
   setBotSessionData,
-} from '../adapters/neondb/src/cat-bot/credentials.repo.js';
+} from '../adapters/neondb/src/persian/credentials.repo.js';
 
 // --- THREADS ---
 export {
@@ -73,7 +73,7 @@ export {
   getAllDiscordServerIds,
   discordServerExists,
   discordServerSessionExists,
-} from '../adapters/neondb/src/cat-bot/threads.repo.js';
+} from '../adapters/neondb/src/persian/threads.repo.js';
 
 // --- USERS ---
 export {
@@ -88,7 +88,7 @@ export {
   setUserSessionData,
   getAllUserSessionData,
   getUserSessionUpdatedAt,
-} from '../adapters/neondb/src/cat-bot/users.repo.js';
+} from '../adapters/neondb/src/persian/users.repo.js';
 
 // --- BANNED ---
 export {
@@ -98,7 +98,7 @@ export {
   banThread,
   unbanThread,
   isThreadBanned,
-} from '../adapters/neondb/src/cat-bot/banned.repo.js';
+} from '../adapters/neondb/src/persian/banned.repo.js';
 
 // --- SERVER ---
 export { botRepo } from '../adapters/neondb/src/server/bot.repo.js';

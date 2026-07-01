@@ -98,7 +98,7 @@ export default function BotLayout() {
     <div className="flex flex-col gap-6">
       {/* Dynamic title shows which bot is open */}
       <Helmet>
-        <title>{bot.nickname} · Cat-Bot</title>
+        <title>{bot.nickname} · Persian</title>
       </Helmet>
 
       {/* Controlled tabs navigating React Router underneath */}

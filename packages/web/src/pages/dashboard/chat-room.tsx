@@ -102,14 +102,14 @@ interface ReplyTarget {
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 
-const SESSION_ID_KEY  = 'catbot-chatroom-session-id'
-const GET_STARTED_KEY = 'catbot-chatroom-started'
-const PREFIX_KEY      = 'catbot-chatroom-prefix'
-const NICKNAME_KEY    = 'catbot-chatroom-nickname'
-const MESSAGES_KEY    = 'catbot-chatroom-messages'
+const SESSION_ID_KEY  = 'persian-chatroom-session-id'
+const GET_STARTED_KEY = 'persian-chatroom-started'
+const PREFIX_KEY      = 'persian-chatroom-prefix'
+const NICKNAME_KEY    = 'persian-chatroom-nickname'
+const MESSAGES_KEY    = 'persian-chatroom-messages'
 
 const DEFAULT_PREFIX   = '/'
-const DEFAULT_NICKNAME = 'Cat-Bot'
+const DEFAULT_NICKNAME = 'Persian'
 
 function getOrCreateSessionId(): string {
   let id = localStorage.getItem(SESSION_ID_KEY)
@@ -1311,7 +1311,7 @@ function NicknameModal({
               if (e.key === 'Enter') handleSave()
               if (e.key === 'Escape') onClose()
             }}
-            placeholder="e.g. Cat-Bot, Aria, Nexus…"
+            placeholder="e.g. Persian, Aria, Nexus…"
             className="flex-1 bg-transparent text-on-surface text-sm placeholder:text-on-surface-variant/40 focus:outline-none"
           />
           {value && value !== current && (

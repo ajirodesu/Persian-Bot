@@ -275,7 +275,7 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col gap-6">
       <Helmet>
-        <title>Admin Users · Cat-Bot</title>
+        <title>Admin Users · Persian</title>
       </Helmet>
       <div className="flex items-start justify-between gap-4">
         <div>

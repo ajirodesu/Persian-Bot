@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-container-highest px-4 py-12 relative overflow-hidden">
       <Helmet>
-        <title>Admin · Cat-Bot</title>
+        <title>Admin · Persian</title>
       </Helmet>
 
       {/* Subtle background */}
@@ -178,7 +178,7 @@ export default function AdminLoginPage() {
         </div>
 
         <p className="text-center text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
-          Cat-Bot Admin Portal
+          Persian Admin Portal
         </p>
       </div>
     </div>

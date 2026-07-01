@@ -215,7 +215,7 @@ export default function NewBotPage() {
   return (
     <div className="w-full max-w-[520px] mx-auto min-w-0">
       <Helmet>
-        <title>Create New Bot · Cat-Bot</title>
+        <title>Create New Bot · Persian</title>
       </Helmet>
 
       <div className="mb-8">
@@ -239,7 +239,7 @@ export default function NewBotPage() {
               <Field.Root required>
                 <Field.Label>Nickname</Field.Label>
                 <Input
-                  placeholder="e.g. Cat Bot"
+                  placeholder="e.g. Persian"
                   value={form.botNickname}
                   onChange={(e) => setTopField('botNickname', e.target.value)}
                   autoFocus
