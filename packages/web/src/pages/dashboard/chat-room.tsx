@@ -368,10 +368,14 @@ function AudioPlayer({
   url,
   mime,
   fileName,
+  flush,
 }: {
   url: string
   mime: string
   fileName: string
+  /** Render integrated into the bubble — full width, no border, no boxed
+   *  surface of its own — instead of the standalone bordered pill. */
+  flush?: boolean
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -464,7 +468,12 @@ function AudioPlayer({
 
   return (
     <div
-      className="cr-audio-player flex items-center gap-3 pl-1.5 pr-3 py-2 rounded-2xl bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]"
+      className={cn(
+        'cr-audio-player flex items-center gap-3',
+        flush
+          ? 'w-full px-3.5 py-3'
+          : 'pl-1.5 pr-3 py-2 rounded-2xl bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]',
+      )}
       onMouseLeave={() => setShowVolume(false)}
     >
       <audio ref={audioRef} preload="metadata">
@@ -743,53 +752,113 @@ function ImageLightbox({
 
 // ── Attachment View ───────────────────────────────────────────────────────────
 
-function AttachmentView({ att, onOpen }: { att: ChatAttachment; onOpen?: () => void }) {
+/** Resolves a playable audio MIME type — prefers the server-provided MIME,
+ *  falling back to a filename-extension lookup covering the full range of
+ *  formats YTDLnis/yt-dlp and common encoders produce. */
+function resolveAudioMime(att: ChatAttachment, url: string): string {
+  if (att.mime) return att.mime
+  const ext = (att.name ?? url ?? '').split('.').pop()?.split('?')[0]?.toLowerCase() ?? ''
+  const map: Record<string, string> = {
+    mp3: 'audio/mpeg', mp2: 'audio/mpeg', aac: 'audio/aac', ac3: 'audio/ac3', eac3: 'audio/eac3',
+    ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac',
+    weba: 'audio/webm', wma: 'audio/x-ms-wma', amr: 'audio/amr', ra: 'audio/x-realaudio',
+    rm: 'audio/x-realaudio', spx: 'audio/x-speex', aiff: 'audio/x-aiff', aif: 'audio/x-aiff',
+    au: 'audio/basic', m4a: 'audio/mp4', m4b: 'audio/mp4', alac: 'audio/mp4',
+    mka: 'audio/x-matroska', mid: 'audio/midi', midi: 'audio/midi',
+    caf: 'audio/x-caf', dts: 'audio/vnd.dts', ape: 'audio/x-ape',
+  }
+  return map[ext] ?? 'audio/mpeg'
+}
+
+/**
+ * Flush, borderless media renderer for image/video/audio attachments — used
+ * when media is "stuck" directly to the bubble edges (no padding, no
+ * border, no independent border-radius). Corner rounding comes entirely
+ * from the bubble's own `overflow-hidden` clip, so the media appears
+ * seamlessly fused to the bubble rather than floating inside it, and the
+ * bubble itself widens to the media's own width — capped at the same
+ * max-width every message bubble is capped at — so bubble and media are
+ * always exactly the same size. An optional overlay (timestamp + read
+ * receipt) is rendered on the last visual (image/video) item, matching the
+ * pattern used by high-quality chat clients for full-bleed photos.
+ */
+function FlushMedia({
+  att,
+  onOpen,
+  showMeta,
+  isBot,
+  timestamp,
+}: {
+  att: ChatAttachment
+  onOpen?: () => void
+  showMeta?: boolean
+  isBot: boolean
+  timestamp: number
+}) {
   const url = att.localUrl ?? att.url
-  if (att.type === 'image' && url) {
+  if (!url) return null
+
+  const MetaOverlay = showMeta ? (
+    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 backdrop-blur-sm text-white shadow-sm pointer-events-none">
+      <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
+        {formatTime(timestamp)}
+      </span>
+      {!isBot && <CheckCheck className="h-3 w-3 opacity-90" />}
+    </div>
+  ) : null
+
+  if (att.type === 'image') {
     return (
       <button
         type="button"
         onClick={onOpen}
         aria-label={`View ${att.name ?? 'image'} fullscreen`}
-        className="group relative block rounded-xl overflow-hidden cursor-zoom-in"
+        className="group relative block w-full cursor-zoom-in bg-black/10"
       >
         <img
           src={url}
           alt={att.name ?? 'image'}
-          className="max-w-[220px] max-h-[180px] w-full rounded-xl object-cover border border-white/10"
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="block w-full h-auto max-h-[340px] object-cover select-none"
         />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
-          <span className="flex items-center justify-center h-8 w-8 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all">
-            <Maximize2 className="h-3.5 w-3.5" />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors duration-200">
+          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-200">
+            <Maximize2 className="h-4 w-4" />
           </span>
         </div>
+        {MetaOverlay}
       </button>
     )
   }
-  if (att.type === 'video' && url) {
+
+  if (att.type === 'video') {
     return (
-      <video src={url} controls className="max-w-[240px] rounded-xl border border-white/10" />
+      <div className="group relative block w-full bg-black">
+        <video
+          src={url}
+          controls
+          playsInline
+          preload="metadata"
+          controlsList="nodownload noremoteplayback"
+          className="block w-full h-auto max-h-[340px] bg-black"
+        />
+        {MetaOverlay}
+      </div>
     )
   }
-  if (att.type === 'audio' && url) {
-    // Use the explicit MIME type from the server when present so the browser
-    // picks the right decoder for every format (ogg, flac, m4a, wma, etc.).
-    const mime = att.mime ?? ((): string => {
-      const ext = (att.name ?? url ?? '').split('.').pop()?.split('?')[0]?.toLowerCase() ?? ''
-      const map: Record<string, string> = {
-        mp3: 'audio/mpeg', mp2: 'audio/mpeg', aac: 'audio/aac', ac3: 'audio/ac3', eac3: 'audio/eac3',
-        ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac',
-        weba: 'audio/webm', wma: 'audio/x-ms-wma', amr: 'audio/amr', ra: 'audio/x-realaudio',
-        rm: 'audio/x-realaudio', spx: 'audio/x-speex', aiff: 'audio/x-aiff', aif: 'audio/x-aiff',
-        au: 'audio/basic', m4a: 'audio/mp4', m4b: 'audio/mp4', alac: 'audio/mp4',
-        mka: 'audio/x-matroska', mid: 'audio/midi', midi: 'audio/midi',
-        caf: 'audio/x-caf', dts: 'audio/vnd.dts', ape: 'audio/x-ape',
-      }
-      return map[ext] ?? 'audio/mpeg'
-    })()
-    const fileName = att.name ?? 'audio'
-    return <AudioPlayer url={url} mime={mime} fileName={fileName} />
-  }
+
+  // audio — same flush treatment: full bubble width, no border, no boxed
+  // "pill" surface of its own; it reads as part of the bubble, not a
+  // separate element glued inside it.
+  const mime = resolveAudioMime(att, url)
+  const fileName = att.name ?? 'audio'
+  return <AudioPlayer url={url} mime={mime} fileName={fileName} flush />
+}
+
+function AttachmentView({ att }: { att: ChatAttachment }) {
+  const url = att.localUrl ?? att.url
   return (
     <a
       href={url}
@@ -803,6 +872,7 @@ function AttachmentView({ att, onOpen }: { att: ChatAttachment; onOpen?: () => v
     </a>
   )
 }
+
 
 // ── Bot Button ────────────────────────────────────────────────────────────────
 
@@ -895,12 +965,26 @@ function MessageBubble({
 }) {
   const [hovered, setHovered] = useState(false)
   const isBot = msg.type === 'bot'
-  const hasAttachments = (msg.attachments?.length ?? 0) > 0
   const hasButtons = (msg.buttons?.length ?? 0) > 0
   const hasText = !!msg.text?.trim()
   const imageAttachments = (msg.attachments ?? []).filter(
     (a) => a.type === 'image' && (a.localUrl ?? a.url),
   )
+  // Photo/video/audio attachments render "stuck" to the bubble — full-bleed,
+  // no border, sized to exactly match the bubble's own max width. Only
+  // plain files keep the padded pill treatment, since a download link
+  // isn't full-bleed media.
+  const mediaAttachments = (msg.attachments ?? []).filter(
+    (a) => (a.type === 'image' || a.type === 'video' || a.type === 'audio') && (a.localUrl ?? a.url),
+  )
+  const pillAttachments = (msg.attachments ?? []).filter((a) => !mediaAttachments.includes(a))
+  const hasMedia = mediaAttachments.length > 0
+  const hasPills = pillAttachments.length > 0
+  // The timestamp overlay only works on visual media (image/video) since
+  // they provide a canvas to sit on top of; audio has no such surface, so
+  // when audio is the trailing item we fall back to a normal meta row.
+  const lastMediaType = hasMedia ? mediaAttachments[mediaAttachments.length - 1].type : null
+  const trailingIsVisual = lastMediaType === 'image' || lastMediaType === 'video'
 
   const ActionButtons = (
     <div
@@ -932,16 +1016,21 @@ function MessageBubble({
   return (
     <div
       className={cn(
-        'flex w-full items-end gap-1 px-3 py-0.5',
+        'flex w-full items-end gap-1 px-3 py-2',
         isBot ? 'justify-start' : 'justify-end',
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Bubble column */}
+      {/* Bubble column — media bubbles get a *definite* width (not just a
+          cap) so image/video/audio all render at exactly the bubble's max
+          size, consistently, instead of shrink-wrapping to their own
+          natural content size. Text-only bubbles keep the normal
+          shrink-to-fit behavior. */}
       <div
         className={cn(
           'flex flex-col relative max-w-[72%]',
+          hasMedia && 'w-full',
           isBot ? 'items-start order-first' : 'items-end order-last',
         )}
         style={{ minWidth: 0 }}
@@ -951,46 +1040,76 @@ function MessageBubble({
           <ReplyQuote messages={messages} replyToId={msg.replyTo} botNickname={botNickname} displayName={displayName} />
         )}
 
-        {/* Bubble body */}
+        {/* Bubble body — outer shell clips to rounded corners so flush media
+            fuses seamlessly with no independent border/radius of its own */}
         <div
           className={cn(
-            'px-3.5 py-2.5 min-w-[52px]',
+            'flex flex-col overflow-hidden min-w-[52px]',
+            hasMedia && 'w-full',
             isBot
               ? 'bg-[var(--bubble-bot)] text-[var(--bubble-bot-text)] rounded-2xl'
               : 'bg-[var(--bubble-user)] text-[var(--bubble-user-text)] rounded-2xl',
             'shadow-md',
           )}
-          style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
         >
-          {hasAttachments && (
-            <div className="flex flex-col gap-2 mb-2">
-              {msg.attachments!.map((att, i) => {
-                const isImage = att.type === 'image' && (att.localUrl ?? att.url)
-                const imgIndex = isImage ? imageAttachments.indexOf(att) : -1
+          {(hasText || hasPills) && (
+            <div
+              className="px-3.5 py-2.5"
+              style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+            >
+              {hasPills && (
+                <div className={cn('flex flex-col gap-2', hasText && 'mb-2')}>
+                  {pillAttachments.map((att, i) => (
+                    <AttachmentView key={i} att={att} />
+                  ))}
+                </div>
+              )}
+
+              {hasText && (
+                <div className="text-[13.5px] leading-relaxed">
+                  <MarkdownText text={msg.text} style={msg.style} />
+                </div>
+              )}
+
+              {/* Meta row — shown here whenever there's no trailing *visual*
+                  media (image/video), since only those provide a canvas for
+                  an overlaid timestamp; audio-last or media-less bubbles
+                  show the timestamp in the normal flow instead. */}
+              {(!hasMedia || !trailingIsVisual) && (
+                <div className={cn('flex items-center gap-1 mt-1', isBot ? 'justify-start' : 'justify-end')}>
+                  <span className="text-[10px] opacity-40 leading-none select-none tabular-nums">
+                    {formatTime(msg.timestamp)}
+                  </span>
+                  {!isBot && <CheckCheck className="h-3 w-3 opacity-40 shrink-0" />}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Media — shown after text, flush against the bubble edges with
+              no padding and no border of its own. The bubble column above
+              is given a definite width whenever media is present, and
+              every media item here fills that width exactly — so image,
+              video, and audio are always rendered at the same size: the
+              message bubble's max size. */}
+          {hasMedia && (
+            <div className="flex flex-col w-full">
+              {mediaAttachments.map((att, i) => {
+                const imgIndex = att.type === 'image' ? imageAttachments.indexOf(att) : -1
+                const isLast = i === mediaAttachments.length - 1
                 return (
-                  <AttachmentView
+                  <FlushMedia
                     key={i}
                     att={att}
                     onOpen={imgIndex >= 0 ? () => onImageOpen(imageAttachments, imgIndex) : undefined}
+                    showMeta={isLast && att.type !== 'audio'}
+                    isBot={isBot}
+                    timestamp={msg.timestamp}
                   />
                 )
               })}
             </div>
           )}
-
-          {hasText && (
-            <div className="text-[13.5px] leading-relaxed">
-              <MarkdownText text={msg.text} style={msg.style} />
-            </div>
-          )}
-
-          {/* Meta row */}
-          <div className={cn('flex items-center gap-1 mt-1', isBot ? 'justify-start' : 'justify-end')}>
-            <span className="text-[10px] opacity-40 leading-none select-none tabular-nums">
-              {formatTime(msg.timestamp)}
-            </span>
-            {!isBot && <CheckCheck className="h-3 w-3 opacity-40 shrink-0" />}
-          </div>
         </div>
 
         {/* Inline buttons below bubble */}
@@ -2016,7 +2135,7 @@ export default function ChatRoomPage() {
                   const showSpacing = !prevMsg || prevMsg.type !== msg.type
 
                   return (
-                    <div key={msg.id} className={showSpacing ? 'mt-2' : ''}>
+                    <div key={msg.id} className={showSpacing ? 'mt-5' : ''}>
                       {showDate && (
                         <div className="flex items-center gap-3 my-4 px-4">
                           <div className="flex-1 h-px bg-outline-variant/20" />
