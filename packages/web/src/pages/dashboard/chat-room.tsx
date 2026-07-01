@@ -905,7 +905,6 @@ const MessageBubble = memo(function MessageBubble({
   msg,
   messages,
   onReply,
-  onDelete,
   onButtonClick,
   onImageOpen,
   onQuoteClick,
@@ -915,14 +914,12 @@ const MessageBubble = memo(function MessageBubble({
   msg: ChatMessage
   messages: ChatMessage[]
   onReply: (target: ReplyTarget) => void
-  onDelete: (id: string) => void
   onButtonClick: (buttonId: string, messageId: string) => void
   onImageOpen: (images: ChatAttachment[], index: number) => void
   onQuoteClick: (messageId: string) => void
   botNickname: string
   displayName: string
 }) {
-  const [hovered, setHovered] = useState(false)
   const [swipeReplyVisible, setSwipeReplyVisible] = useState(false)
   const isBot = msg.type === 'bot'
 
@@ -1004,49 +1001,12 @@ const MessageBubble = memo(function MessageBubble({
   const lastMediaType = hasMedia ? mediaAttachments[mediaAttachments.length - 1].type : null
   const trailingIsVisual = lastMediaType === 'image' || lastMediaType === 'video'
 
-  const ActionButtons = (
-    <div
-      className={cn(
-        'flex items-center gap-0.5 shrink-0 self-center transition-all duration-200',
-        hovered
-          ? 'opacity-100 translate-y-0 pointer-events-auto'
-          : 'opacity-0 translate-y-1 pointer-events-none',
-        isBot ? 'ml-1.5 order-last' : 'mr-1.5 order-first',
-      )}
-    >
-      {/* Pill container — floats next to the bubble */}
-      <div className="flex items-center rounded-xl bg-surface-container/95 backdrop-blur-sm border border-outline-variant/20 shadow-elevation-2 overflow-hidden">
-        <button
-          type="button"
-          aria-label="Reply"
-          title="Reply"
-          onClick={() => onReply({ id: msg.id, text: msg.text, type: msg.type })}
-          className="flex items-center justify-center h-7 w-7 text-on-surface-variant hover:text-primary hover:bg-primary/10 active:scale-90 transition-all duration-150"
-        >
-          <Reply className="h-3.5 w-3.5" />
-        </button>
-        <div className="w-px h-4 bg-outline-variant/30 shrink-0" />
-        <button
-          type="button"
-          aria-label="Delete"
-          title="Delete"
-          onClick={() => onDelete(msg.id)}
-          className="flex items-center justify-center h-7 w-7 text-on-surface-variant hover:text-error hover:bg-error/10 active:scale-90 transition-all duration-150"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  )
-
   return (
     <div
       className={cn(
         'relative flex w-full items-end gap-1 px-3 py-1',
         isBot ? 'justify-start' : 'justify-end',
       )}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -1171,9 +1131,6 @@ const MessageBubble = memo(function MessageBubble({
           />
         )}
       </div>
-
-      {/* Hover action buttons */}
-      {ActionButtons}
     </div>
   )
 })
@@ -2109,11 +2066,6 @@ export default function ChatRoomPage() {
     [socket, sessionId],
   )
 
-  const handleDeleteMessage = useCallback(
-    (id: string) => socket.emit('chatroom:delete_message', { id }),
-    [socket],
-  )
-
   // Jump to the original message when a reply quote inside a bubble is
   // tapped/clicked, with a brief highlight flash so it's easy to spot.
   const handleQuoteClick = useCallback((messageId: string) => {
@@ -2276,7 +2228,6 @@ export default function ChatRoomPage() {
                         msg={msg}
                         messages={messages}
                         onReply={setReplyTarget}
-                        onDelete={handleDeleteMessage}
                         onButtonClick={handleButtonClick}
                         onImageOpen={handleImageOpen}
                         onQuoteClick={handleQuoteClick}
