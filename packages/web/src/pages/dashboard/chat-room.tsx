@@ -2171,17 +2171,6 @@ export default function ChatRoomPage() {
             </p>
           </div>
 
-          {/* Username chip */}
-          <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-on-surface/5 border border-outline-variant/30 shrink-0">
-            <span className="text-xs font-mono text-on-surface-variant font-medium">@{username}</span>
-          </div>
-
-          {/* Prefix chip */}
-          <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-            <Hash className="h-3 w-3 text-primary" />
-            <span className="text-xs font-mono text-primary font-bold">{prefix}</span>
-          </div>
-
           <DotsMenu
             onClearChat={() => setShowClearModal(true)}
             onEditPrefix={() => setShowPrefixModal(true)}
