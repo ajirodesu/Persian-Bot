@@ -50,13 +50,20 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+import { Helmet } from '@dr.pogodin/react-helmet'
 import { getSocket } from '@/lib/socket.lib'
 import { cn } from '@/utils/cn.util'
 import Logo from '@/components/ui/Logo'
 import IconButton from '@/components/ui/buttons/IconButton'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useDashboardSidebar } from '@/contexts/DashboardSidebarContext'
-import { H_HEIGHT, H_PX, H_BRAND_TEXT, H_CHEVRON } from '@/constants/header.constants'
+import {
+  H_HEIGHT,
+  H_PX,
+  H_BRAND_TEXT,
+  H_CHEVRON,
+  H_ICON_BTN_MOBILE,
+} from '@/constants/header.constants'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1235,23 +1242,24 @@ function ChatSettingsMenu({
         aria-expanded={open}
         onClick={() => setOpen((p) => !p)}
         className={cn(
-          // Mobile: a bare 40px circle (matches the hamburger's IconButton
-          // size="md" footprint). Desktop: the same pill shape, padding,
-          // and hover treatment as the Bot Manager header's UserMenu
-          // trigger, so the two read as one consistent component.
+          // Mobile: a bare 36px circle (matches the hamburger's shrunken
+          // mobile IconButton footprint — see H_ICON_BTN_MOBILE). Desktop:
+          // the same pill shape, padding, and hover treatment as the Bot
+          // Manager header's UserMenu trigger, so the two read as one
+          // consistent component.
           'relative flex items-center gap-1.5 rounded-full transition-colors duration-fast',
-          'h-10 w-10 justify-center',
+          'h-9 w-9 justify-center',
           'md:h-auto md:w-auto md:justify-start md:rounded-lg md:px-2 md:py-1.5',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
         )}
       >
-        <span className="relative h-10 w-10 rounded-full bg-primary-container flex items-center justify-center ring-2 ring-primary/20 shrink-0">
-          <Logo className="h-5 w-5 text-on-primary-container" />
+        <span className="relative h-9 w-9 md:h-10 md:w-10 rounded-full bg-primary-container flex items-center justify-center ring-2 ring-primary/20 shrink-0">
+          <Logo className="h-4 w-4 md:h-5 md:w-5 text-on-primary-container" />
           <span
             className={cn(
-              'absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface transition-colors duration-500',
+              'absolute bottom-0 right-0 h-2.5 w-2.5 md:h-3 md:w-3 rounded-full border-2 border-surface transition-colors duration-500',
               isConnected ? 'bg-emerald-400' : 'bg-on-surface-variant/30',
             )}
           />
@@ -2276,6 +2284,12 @@ export default function ChatRoomPage() {
 
   return (
     <>
+      {/* Browser tab title — same "<page> · Cat-Bot" convention used by
+          every other dashboard page (Bot Manager, Settings, etc). */}
+      <Helmet>
+        <title>Chat Room · Cat-Bot</title>
+      </Helmet>
+
       {/* Fills the dashboard's content column — sidebar stays visible alongside it */}
       <div className="flex flex-col h-full min-h-0 bg-[var(--chatroom-bg)] overflow-hidden">
 
@@ -2299,7 +2313,7 @@ export default function ChatRoomPage() {
             aria-label={mobileOpen ? 'Close navigation' : 'Open navigation menu'}
             variant="text"
             size="md"
-            className="md:hidden"
+            className={cn('md:hidden', H_ICON_BTN_MOBILE)}
             onClick={toggleMobileSidebar}
           />
 

@@ -28,6 +28,7 @@ import {
   H_CHEVRON,
   H_DROPDOWN_ITEM,
   H_DROPDOWN_ICON,
+  H_ICON_BTN_MOBILE,
 } from '@/constants/header.constants'
 
 // ============================================================================
@@ -341,7 +342,7 @@ export default function AdminSidebarLayout() {
             aria-label={mobileOpen ? 'Close navigation' : 'Open navigation menu'}
             variant="text"
             size="md"
-            className="md:hidden"
+            className={cn('md:hidden', H_ICON_BTN_MOBILE)}
             onClick={() => setMobileOpen((p) => !p)}
           />
 

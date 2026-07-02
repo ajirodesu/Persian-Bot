@@ -13,6 +13,7 @@ import {
   H_PX,
   H_LOGO_ICON,
   H_BRAND_TEXT,
+  H_ICON_BTN_MOBILE,
 } from '@/constants/header.constants'
 
 /**
@@ -153,6 +154,7 @@ export default function Layout() {
               }
               variant="text"
               size="md"
+              className={H_ICON_BTN_MOBILE}
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-expanded={mobileOpen}
             />
