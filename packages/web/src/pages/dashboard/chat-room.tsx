@@ -22,11 +22,10 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ChangeEvent,
   type TouchEvent as ReactTouchEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft,
-  MoreVertical,
+  Menu,
   ArrowUp,
   X,
   Trash2,
@@ -53,10 +52,11 @@ import {
 } from 'lucide-react'
 import { getSocket } from '@/lib/socket.lib'
 import { cn } from '@/utils/cn.util'
-import { ROUTES } from '@/constants/routes.constants'
 import Logo from '@/components/ui/Logo'
+import IconButton from '@/components/ui/buttons/IconButton'
 import { useUserAuth } from '@/contexts/UserAuthContext'
-import { H_HEIGHT } from '@/constants/header.constants'
+import { useDashboardSidebar } from '@/contexts/DashboardSidebarContext'
+import { H_HEIGHT, H_PX, H_BRAND_TEXT, H_CHEVRON } from '@/constants/header.constants'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -302,8 +302,15 @@ function renderMarkdown(text: string): string {
   const codeBlocks: string[] = []
   html = html.replace(/```([\s\S]*?)```/g, (_, code: string) => {
     const idx = codeBlocks.length
+    const trimmed = code.trim()
+    // Base64-encode the (already HTML-escaped) code so it can travel safely
+    // inside an HTML attribute — decoded + un-escaped again on copy click.
+    const encoded = btoa(unescape(encodeURIComponent(trimmed)))
     codeBlocks.push(
-      `<pre class="chatmd-pre"><code class="chatmd-code-block">${code.trim()}</code></pre>`,
+      `<div class="chatmd-pre-wrap">` +
+        `<pre class="chatmd-pre"><code class="chatmd-code-block">${trimmed}</code></pre>` +
+        `<button type="button" class="chatmd-copy-btn" data-code="${encoded}" aria-label="Copy code">Copy</button>` +
+        `</div>`,
     )
     return `\x00CODE${idx}\x00`
   })
@@ -337,6 +344,36 @@ function renderMarkdown(text: string): string {
   return html
 }
 
+/** Reverses the minimal HTML-escaping applied before markdown parsing so the
+ *  clipboard receives the original code text, not entity-escaped HTML. */
+function unescapeHtmlEntities(text: string): string {
+  return text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+}
+
+/** Event-delegated click handler for the "Copy" button embedded in fenced
+ *  code blocks — works because clicks on nodes injected via
+ *  dangerouslySetInnerHTML still bubble up through the real DOM to this
+ *  handler on the enclosing React element. */
+function handleMarkdownClick(e: ReactMouseEvent<HTMLSpanElement>) {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.chatmd-copy-btn')
+  if (!btn) return
+  const encoded = btn.getAttribute('data-code')
+  if (!encoded) return
+  try {
+    const raw = unescapeHtmlEntities(decodeURIComponent(escape(atob(encoded))))
+    void navigator.clipboard.writeText(raw)
+    const original = btn.textContent
+    btn.textContent = 'Copied!'
+    btn.disabled = true
+    setTimeout(() => {
+      btn.textContent = original
+      btn.disabled = false
+    }, 1500)
+  } catch {
+    // Clipboard API unavailable (insecure context, permissions, etc.) — no-op
+  }
+}
+
 function MarkdownText({ text, style }: { text: string; style?: string }) {
   if (!text) return null
   if (style !== 'markdown') {
@@ -350,6 +387,7 @@ function MarkdownText({ text, style }: { text: string; style?: string }) {
   return (
     <span
       className="chatmd break-words"
+      onClick={handleMarkdownClick}
       dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
     />
   )
@@ -1004,7 +1042,7 @@ const MessageBubble = memo(function MessageBubble({
   return (
     <div
       className={cn(
-        'relative flex w-full items-end gap-1 px-3 py-1',
+        'group relative flex w-full items-end gap-1 px-3 py-1',
         isBot ? 'justify-start' : 'justify-end',
       )}
       onTouchStart={handleTouchStart}
@@ -1025,6 +1063,26 @@ const MessageBubble = memo(function MessageBubble({
           <Reply className="h-3.5 w-3.5 text-on-surface-variant" />
         </div>
       </div>
+
+      {/* Desktop hover reply button — appears when the cursor is over the
+          message bubble, replacing the mobile swipe gesture with a direct
+          click affordance. Sits on the side closest to the centre of the
+          screen (right of bot bubbles, left of user bubbles) so it never
+          crowds the viewport edge, and is hidden entirely below the `md`
+          breakpoint since mobile uses the swipe-to-reply gesture instead. */}
+      <button
+        type="button"
+        aria-label="Reply to this message"
+        onClick={() => onReply({ id: msg.id, text: msg.text, type: msg.type })}
+        className={cn(
+          'hidden md:flex items-center justify-center h-7 w-7 rounded-full shrink-0 self-center',
+          'text-on-surface-variant/50 hover:text-on-surface hover:bg-on-surface/10',
+          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150',
+          isBot ? 'order-last' : 'order-first',
+        )}
+      >
+        <Reply className="h-3.5 w-3.5" />
+      </button>
 
       {/* Bubble column — media bubbles get a *definite* width (not just a
           cap) so image/video/audio all render at exactly the bubble's max
@@ -1137,11 +1195,21 @@ const MessageBubble = memo(function MessageBubble({
 
 // ── Three-dot Menu ────────────────────────────────────────────────────────────
 
-function DotsMenu({
+/**
+ * Chat header's right-side control — a bot avatar (with live status dot)
+ * that opens the Chat Room settings panel. On desktop it matches the Bot
+ * Manager header's account-menu trigger exactly: an avatar-plus-chevron
+ * pill that rotates its indicator with the open/closed state. On mobile it
+ * stays the compact icon-only circle (no pill padding, no chevron) so it
+ * keeps parity with the hamburger button's footprint in the tight header.
+ */
+function ChatSettingsMenu({
+  isConnected,
   onClearChat,
   onEditPrefix,
   onEditNickname,
 }: {
+  isConnected: boolean
   onClearChat: () => void
   onEditPrefix: () => void
   onEditNickname: () => void
@@ -1162,16 +1230,41 @@ function DotsMenu({
     <div ref={ref} className="relative shrink-0">
       <button
         type="button"
-        aria-label="Chat options"
+        aria-label="Chat Room settings"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((p) => !p)}
         className={cn(
-          'p-2 rounded-full text-on-surface-variant hover:bg-on-surface/10 transition-colors',
-          open && 'bg-on-surface/10',
+          // Mobile: a bare 40px circle (matches the hamburger's IconButton
+          // size="md" footprint). Desktop: the same pill shape, padding,
+          // and hover treatment as the Bot Manager header's UserMenu
+          // trigger, so the two read as one consistent component.
+          'relative flex items-center gap-1.5 rounded-full transition-colors duration-fast',
+          'h-10 w-10 justify-center',
+          'md:h-auto md:w-auto md:justify-start md:rounded-lg md:px-2 md:py-1.5',
+          'hover:bg-on-surface/[var(--state-hover-opacity)]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+          open && 'bg-on-surface/[var(--state-hover-opacity)]',
         )}
       >
-        <MoreVertical className="h-5 w-5" />
+        <span className="relative h-10 w-10 rounded-full bg-primary-container flex items-center justify-center ring-2 ring-primary/20 shrink-0">
+          <Logo className="h-5 w-5 text-on-primary-container" />
+          <span
+            className={cn(
+              'absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface transition-colors duration-500',
+              isConnected ? 'bg-emerald-400' : 'bg-on-surface-variant/30',
+            )}
+          />
+        </span>
+        {/* Dropdown indicator — desktop only, rotates with menu state,
+            identical treatment to the Bot Manager UserMenu's chevron. */}
+        <ChevronDown
+          className={cn(
+            H_CHEVRON,
+            'hidden md:block text-on-surface-variant transition-transform duration-fast',
+            open && 'rotate-180',
+          )}
+        />
       </button>
 
       {open && (
@@ -1183,6 +1276,13 @@ function DotsMenu({
           <div className="px-4 pt-3.5 pb-2.5 border-b border-outline-variant/30">
             <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/55">
               Chat Room Settings
+            </p>
+            <p className="text-[11px] mt-0.5">
+              {isConnected ? (
+                <span className="text-emerald-400/80 font-medium">Online</span>
+              ) : (
+                <span className="text-on-surface-variant/60">Connecting…</span>
+              )}
             </p>
           </div>
 
@@ -1724,8 +1824,8 @@ function EmptyChatState({ prefix, botNickname }: { prefix: string; botNickname: 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ChatRoomPage() {
-  const navigate = useNavigate()
   const { user } = useUserAuth()
+  const { mobileOpen, toggle: toggleMobileSidebar } = useDashboardSidebar()
 
   // Derive stable identity from the logged-in account. userId is the account's
   // REAL id (Better Auth user.id) — this is what economy commands, button
@@ -1754,11 +1854,34 @@ export default function ChatRoomPage() {
   const [showClearModal, setShowClearModal] = useState(false)
   const [showNicknameModal, setShowNicknameModal] = useState(false)
   const [showAttachPicker, setShowAttachPicker] = useState(false)
+  // True once the composer has wrapped past a single line — switches the
+  // input bar from a compact single-row pill (attach · text · send, all
+  // inline) to a stacked layout (text on top, attach/send pinned to a full-
+  // width row underneath), matching the reference composer design.
+  const [isComposerMultiline, setIsComposerMultiline] = useState(false)
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null)
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const [lightbox, setLightbox] = useState<{ images: ChatAttachment[]; index: number } | null>(null)
+  // Drives the Enter-key behaviour split below: on mobile, Enter/Next must
+  // only insert a newline (sending is Send-button-only); on desktop, Enter
+  // sends and Shift+Enter inserts a newline. Tracks the same `md` (768px)
+  // breakpoint the rest of this page's mobile/desktop split already uses.
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false,
+  )
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handleChange = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches)
+    setIsMobileViewport(mq.matches)
+    mq.addEventListener('change', handleChange)
+    return () => mq.removeEventListener('change', handleChange)
+  }, [])
+  // True from the moment the user sends a message until the bot's reply
+  // (or an edit/delete/error/disconnect) arrives — drives the "typing" bubble.
+  const [awaitingReply, setAwaitingReply] = useState(false)
 
   const handleImageOpen = useCallback((images: ChatAttachment[], index: number) => {
     setLightbox({ images, index })
@@ -1813,7 +1936,10 @@ export default function ChatRoomPage() {
       setIsConnected(true)
       socket.emit('chatroom:join', { sessionId, prefix: prefixRef.current, botNickname: nicknameRef.current, userId: userIdRef.current, userName: displayNameRef.current, username: usernameRef.current, avatarUrl: avatarUrlRef.current, messages: messagesRef.current })
     }
-    const onDisconnect = () => setIsConnected(false)
+    const onDisconnect = () => {
+      setIsConnected(false)
+      setAwaitingReply(false)
+    }
 
     const onHistory = (data: { messages: ChatMessage[]; prefix: string }) => {
       // Merge server history with local — server is the source of truth for new msgs
@@ -1828,6 +1954,7 @@ export default function ChatRoomPage() {
     }
 
     const onBotMessage = (msg: ChatMessage) => {
+      setAwaitingReply(false)
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
     }
 
@@ -1838,6 +1965,7 @@ export default function ChatRoomPage() {
       buttons?: BotButton[][]
       attachments?: ChatAttachment[]
     }) => {
+      setAwaitingReply(false)
       setMessages((prev) =>
         prev.map((m) =>
           m.id === data.id
@@ -1853,14 +1981,17 @@ export default function ChatRoomPage() {
       )
     }
 
-    const onBotDelete = (data: { id: string }) =>
+    const onBotDelete = (data: { id: string }) => {
+      setAwaitingReply(false)
       setMessages((prev) => prev.filter((m) => m.id !== data.id))
+    }
 
     const onMsgDeleted = (data: { id: string }) =>
       setMessages((prev) => prev.filter((m) => m.id !== data.id))
 
     const onCleared = () => {
       setMessages([])
+      setAwaitingReply(false)
       localStorage.removeItem(MESSAGES_KEY)
     }
 
@@ -1869,7 +2000,7 @@ export default function ChatRoomPage() {
       localStorage.setItem(PREFIX_KEY, data.prefix)
     }
 
-    const onError = () => { /* no-op */ }
+    const onError = () => { setAwaitingReply(false) }
 
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
@@ -1916,7 +2047,7 @@ export default function ChatRoomPage() {
     if (isNearBottomRef.current) {
       scrollToBottom()
     }
-  }, [messages, scrollToBottom])
+  }, [messages, awaitingReply, scrollToBottom])
 
   // ── Scroll-to-bottom pill visibility + near-bottom tracking ─────────────────
 
@@ -2008,6 +2139,7 @@ export default function ChatRoomPage() {
       ...(replyTarget ? { replyTo: replyTarget.id } : {}),
     }
     setMessages((prev) => [...prev, userMsg])
+    setAwaitingReply(true)
 
     const attachmentsSnapshot = pendingAttachments
     const replyTargetSnapshot = replyTarget
@@ -2056,11 +2188,19 @@ export default function ChatRoomPage() {
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
     }
+    setIsComposerMultiline(false)
     inputRef.current?.focus()
   }, [inputText, pendingAttachments, replyTarget, isConnected, socket, sessionId, resolveAttachmentsForSend])
 
+  useEffect(() => {
+    if (!awaitingReply) return
+    const timer = setTimeout(() => setAwaitingReply(false), 45_000)
+    return () => clearTimeout(timer)
+  }, [awaitingReply])
+
   const handleButtonClick = useCallback(
     (buttonId: string, messageId: string) => {
+      setAwaitingReply(true)
       socket.emit('chatroom:button_click', { buttonId, messageId, sessionId })
     },
     [socket, sessionId],
@@ -2076,7 +2216,10 @@ export default function ChatRoomPage() {
     setTimeout(() => el.classList.remove('cr-highlight-flash'), 900)
   }, [])
 
-  const handleClearChat = useCallback(() => socket.emit('chatroom:clear'), [socket])
+  const handleClearChat = useCallback(() => {
+    setAwaitingReply(false)
+    socket.emit('chatroom:clear')
+  }, [socket])
 
   const handleSavePrefix = useCallback(
     (p: string) => {
@@ -2094,14 +2237,6 @@ export default function ChatRoomPage() {
     socket.emit('chatroom:join', { sessionId, botNickname: name, userId: userIdRef.current, userName: displayNameRef.current, username: usernameRef.current, avatarUrl: avatarUrlRef.current })
   }, [socket, sessionId])
 
-  /**
-   * Exit the chat room — navigate back to dashboard.
-   * Messages and session are intentionally preserved for next visit.
-   */
-  const handleExit = useCallback(() => {
-    navigate(ROUTES.DASHBOARD.ROOT)
-  }, [navigate])
-
   const handleStart = () => {
     localStorage.setItem(GET_STARTED_KEY, 'true')
     setHasStarted(true)
@@ -2109,17 +2244,30 @@ export default function ChatRoomPage() {
   }
 
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    // Mobile: Enter/Next always inserts a newline (the textarea's native
+    // behaviour) — sending is exclusively the dedicated Send button's job.
+    if (isMobileViewport) return
+
+    // Desktop: standard chat-app behaviour — Enter sends, Shift+Enter
+    // inserts a newline.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
     }
   }
 
+  // Single-line textarea content height, in px, at the composer's base font
+  // size/line-height/padding — anything taller means the text has wrapped.
+  const SINGLE_LINE_THRESHOLD = 46
+
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setInputText(e.target.value)
+    const value = e.target.value
+    setInputText(value)
     const el = e.target
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    const nextHeight = Math.min(el.scrollHeight, 200)
+    el.style.height = `${nextHeight}px`
+    setIsComposerMultiline(value.length > 0 && el.scrollHeight > SINGLE_LINE_THRESHOLD)
   }
 
   const canSend = isConnected && (!!inputText.trim() || pendingAttachments.length > 0)
@@ -2128,54 +2276,66 @@ export default function ChatRoomPage() {
 
   return (
     <>
-      {/* Full-screen overlay covers dashboard */}
-      <div className="fixed inset-0 z-[100] flex flex-col bg-[var(--chatroom-bg)] overflow-hidden">
+      {/* Fills the dashboard's content column — sidebar stays visible alongside it */}
+      <div className="flex flex-col h-full min-h-0 bg-[var(--chatroom-bg)] overflow-hidden">
 
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        {/* ── Header ─────────────────────────────────────────────────────────────
+              Single unified header for this page (the shared dashboard content
+              header is skipped for this route — see DashboardLayout). Same
+              surface, blur, border, height and hamburger treatment as every
+              other dashboard page header — only the centre/right content
+              differs: [hamburger, mobile-only] · [nickname, centred] · [profile icon]. */}
         <header
           className={cn(
-            'flex items-center gap-3 px-3 shrink-0',
-            'bg-[var(--chatroom-header)] border-b border-outline-variant/70',
+            'relative flex items-center shrink-0 z-sticky',
+            'bg-surface/90 backdrop-blur-xl border-b border-outline-variant/70',
             H_HEIGHT,
+            H_PX,
           )}
         >
-          <button
-            type="button"
-            aria-label="Exit chat room"
-            onClick={handleExit}
-            className="p-2 -ml-1 rounded-full text-on-surface-variant hover:bg-on-surface/10 transition-colors shrink-0"
+          {/* Mobile hamburger — opens the same sidebar drawer DashboardLayout owns */}
+          <IconButton
+            icon={mobileOpen ? <X /> : <Menu />}
+            aria-label={mobileOpen ? 'Close navigation' : 'Open navigation menu'}
+            variant="text"
+            size="md"
+            className="md:hidden"
+            onClick={toggleMobileSidebar}
+          />
+
+          {/* Nickname — left-aligned on desktop (matches the title placement
+              convention used by every other dashboard page header), still
+              absolutely centred on mobile where there's no room next to the
+              hamburger for a left-aligned title without crowding it. */}
+          <p
+            className={cn(
+              H_BRAND_TEXT,
+              'hidden md:inline-flex text-on-surface select-none truncate',
+            )}
           >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
+            {botNickname}
+          </p>
 
-          {/* Bot avatar with online dot */}
-          <div className="relative shrink-0">
-            <div className="h-9 w-9 rounded-full bg-primary-container flex items-center justify-center ring-2 ring-primary/20">
-              <Logo className="h-5 w-5 text-on-primary-container" />
-            </div>
-            <div className={cn(
-              'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[var(--chatroom-header)] transition-colors duration-500',
-              isConnected ? 'bg-emerald-400' : 'bg-on-surface-variant/30',
-            )} />
-          </div>
-
-          {/* Name + status */}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-on-surface leading-tight">{botNickname}</p>
-            <p className="text-[11px] leading-tight">
-              {!isConnected ? (
-                <span className="text-on-surface-variant/60">Connecting…</span>
-              ) : (
-                <span className="text-emerald-400/80 font-medium">Online</span>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-16 md:hidden">
+            <p
+              className={cn(
+                H_BRAND_TEXT,
+                'text-on-surface select-none truncate',
               )}
+            >
+              {botNickname}
             </p>
           </div>
 
-          <DotsMenu
-            onClearChat={() => setShowClearModal(true)}
-            onEditPrefix={() => setShowPrefixModal(true)}
-            onEditNickname={() => setShowNicknameModal(true)}
-          />
+          {/* Profile icon — opens Chat Room settings (nickname, prefix, clear chat) */}
+          <div className="ml-auto">
+            <ChatSettingsMenu
+              isConnected={isConnected}
+              onClearChat={() => setShowClearModal(true)}
+              onEditPrefix={() => setShowPrefixModal(true)}
+              onEditNickname={() => setShowNicknameModal(true)}
+            />
+          </div>
         </header>
 
         {/* ── Message area ─────────────────────────────────────────────────── */}
@@ -2193,7 +2353,7 @@ export default function ChatRoomPage() {
                 <EmptyChatState prefix={prefix} botNickname={botNickname} />
               </div>
             ) : (
-              <div className="flex flex-col py-3">
+              <div className="mx-auto w-full max-w-[48rem] flex flex-col py-3 px-3 md:px-6">
                 {messages.map((msg, i) => {
                   const prevMsg = i > 0 ? messages[i - 1] : null
                   const showDate =
@@ -2232,144 +2392,189 @@ export default function ChatRoomPage() {
             )}
           </div>
 
-          {/* Scroll-to-bottom pill */}
+          {/* Scroll-to-bottom pill — centred above the composer, matching
+              the floating centred affordance used by ChatGPT/Claude-style
+              chat UIs instead of sitting off to one side. */}
           {showScrollBtn && (
             <button
               type="button"
-              aria-label="Scroll to bottom"
+              aria-label="Scroll to latest messages"
               onClick={() => {
                 isNearBottomRef.current = true
                 scrollToBottom()
               }}
-              className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant/50 shadow-elevation-2 text-on-surface-variant hover:text-on-surface transition-colors text-xs font-medium"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/50 shadow-elevation-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
             >
-              <ChevronDown className="h-3.5 w-3.5" />
-              Latest
+              <ChevronDown className="h-5 w-5" />
             </button>
           )}
         </div>
 
         {/* ── Input area ───────────────────────────────────────────────────── */}
         {hasStarted && (
-          <div className="shrink-0 px-3 py-1.5 bg-[var(--chatroom-bg)]">
-            {/* Reply preview */}
-            {replyTarget && (
-              <ReplyPreviewBar
-                target={replyTarget}
-                onDismiss={() => setReplyTarget(null)}
-                botNickname={botNickname}
-                displayName={displayName}
-              />
-            )}
-
-            {/* Replit-agent style input container */}
-            <div
-              className={cn(
-                'relative rounded-2xl border transition-all',
-                'bg-[var(--input-bg)] border-[var(--input-border)]',
-                'focus-within:border-[var(--input-border-focus)] focus-within:shadow-[0_0_0_2px_var(--input-ring)]',
-              )}
-            >
-              {/* Pending attachments row — images shown in the message bar */}
-              {pendingAttachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 px-3 pt-2.5 pb-1">
-                  {pendingAttachments.map((att, i) => (
-                    <div key={i} className="relative group/att">
-                      {att.type === 'image' && att.localUrl ? (
-                        <img
-                          src={att.localUrl}
-                          alt={att.name}
-                          className="h-16 w-16 rounded-xl object-cover border border-white/10 shadow-sm"
-                        />
-                      ) : (
-                        <div className="h-16 w-16 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
-                          {<FileText className="h-4 w-4 text-on-surface-variant" />}
-                          <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
-                        aria-label="Remove attachment"
-                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-outline-variant/50 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+          // No background/panel here — this row is pure spacing so the
+          // composer pill below is the *only* visible surface, floating
+          // directly over the message list like ChatGPT's input bar,
+          // identically on mobile and desktop.
+          <div className="cr-input-safe-pb shrink-0 px-3 md:px-6 pt-2 md:pt-4">
+            {/* Capped + centred on desktop — full-bleed pill only makes sense on phones */}
+            <div className="mx-auto w-full max-w-[48rem]">
+              {/* Reply preview */}
+              {replyTarget && (
+                <ReplyPreviewBar
+                  target={replyTarget}
+                  onDismiss={() => setReplyTarget(null)}
+                  botNickname={botNickname}
+                  displayName={displayName}
+                />
               )}
 
-              {/* Auto-resizing textarea */}
-              <textarea
-                ref={inputRef}
-                value={inputText}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  isConnected
-                    ? `Message ${botNickname} or use ${prefix}help`
-                    : 'Connecting…'
-                }
-                rows={1}
-                disabled={!isConnected}
+              {/* ChatGPT-style rounded composer — the message bar itself.
+                  No fill colour of its own: bg-transparent lets the page
+                  background show through, so only the border/ring reads as
+                  the bar's edge, not a separate filled panel. */}
+              <div
                 className={cn(
-                  'w-full bg-transparent text-sm text-on-surface leading-relaxed',
-                  'placeholder:text-on-surface-variant/35 focus:outline-none',
-                  'resize-none overflow-y-auto px-4 pt-2 pb-0.5',
-                  !isConnected && 'opacity-40 cursor-not-allowed',
+                  'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
+                  'bg-transparent ring-1 ring-inset ring-[var(--input-border)]',
+                  'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
                 )}
-                style={{ minHeight: '32px', maxHeight: '200px' }}
-              />
+              >
+                {/* Pending attachments row — images shown in the message bar */}
+                {pendingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
+                    {pendingAttachments.map((att, i) => (
+                      <div key={i} className="relative group/att">
+                        {att.type === 'image' && att.localUrl ? (
+                          <img
+                            src={att.localUrl}
+                            alt={att.name}
+                            className="h-16 w-16 rounded-xl object-cover border border-white/10 shadow-sm"
+                          />
+                        ) : (
+                          <div className="h-16 w-16 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
+                            {<FileText className="h-4 w-4 text-on-surface-variant" />}
+                            <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
+                          aria-label="Remove attachment"
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-outline-variant/50 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-              {/* Bottom action row: attach (left) ↔ send (right) */}
-              <div className="flex items-center justify-between px-2 pb-2 pt-1.5">
-                {/* Attachment button — + icon like Replit agent */}
-                <div id="attach-picker-root" className="relative">
-                  <button
-                    type="button"
-                    aria-label="Attach file"
-                    aria-expanded={showAttachPicker}
-                    onClick={() => setShowAttachPicker((p) => !p)}
-                    className={cn(
-                      'flex items-center justify-center h-8 w-8 rounded-full transition-colors',
-                      showAttachPicker
-                        ? 'bg-primary/15 text-primary'
-                        : 'text-on-surface-variant/50 hover:text-on-surface-variant hover:bg-on-surface/8',
-                    )}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                  {showAttachPicker && (
-                    <AttachmentPicker
-                      onSelect={(files) => setPendingAttachments((prev) => [...prev, ...files])}
-                      onClose={() => setShowAttachPicker(false)}
-                    />
-                  )}
-                </div>
-
-                {/* Send button — arrow up ⬆ like Replit agent */}
-                <button
-                  type="button"
-                  aria-label="Send message"
-                  onClick={sendMessage}
-                  disabled={!canSend}
+                {/* Attach · text · send — three permanent siblings whose only
+                    the CSS arrangement (never their mount identity) changes
+                    between states, so the textarea never remounts and never
+                    loses focus/cursor position mid-type.
+                    - Single line: one row, DOM order = attach → text → send.
+                    - Wrapped (2+ lines): text is forced onto its own full-
+                      width line (`basis-full`), which pushes attach/send onto
+                      a second flex line together; `justify-between` then
+                      pins attach to that line's left edge and send to its
+                      right edge — exactly the reference composer's layout. */}
+                <div
                   className={cn(
-                    'flex items-center justify-center h-8 w-8 rounded-full transition-all',
-                    canSend
-                      ? 'bg-primary text-on-primary shadow-sm hover:opacity-90 active:scale-95'
-                      : 'bg-on-surface/8 text-on-surface-variant/30 cursor-not-allowed',
+                    'flex flex-wrap items-center',
+                    isComposerMultiline
+                      ? 'justify-between gap-x-1 gap-y-1 px-2.5 pt-2 pb-1.5'
+                      : 'gap-1 pl-1 pr-1 py-1',
                   )}
                 >
-                  <ArrowUp className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+                  {/* Attachment button */}
+                  <div
+                    id="attach-picker-root"
+                    className={cn('relative shrink-0', isComposerMultiline && 'order-2')}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Attach file"
+                      aria-expanded={showAttachPicker}
+                      onClick={() => setShowAttachPicker((p) => !p)}
+                      className={cn(
+                        'flex items-center justify-center h-9 w-9 rounded-full transition-colors',
+                        showAttachPicker
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-on-surface-variant/60 hover:text-on-surface-variant hover:bg-on-surface/8',
+                      )}
+                    >
+                      <Plus className="h-[18px] w-[18px]" />
+                    </button>
+                    {showAttachPicker && (
+                      <AttachmentPicker
+                        onSelect={(files) => setPendingAttachments((prev) => [...prev, ...files])}
+                        onClose={() => setShowAttachPicker(false)}
+                      />
+                    )}
+                  </div>
 
-            {/* Shift+Enter hint — hidden on mobile */}
-            <p className="hidden sm:block text-center text-[10px] text-on-surface-variant/30 mt-1 select-none">
-              Enter to send · Shift+Enter for new line
-            </p>
+                  {/* Auto-resizing textarea */}
+                  <textarea
+                    ref={inputRef}
+                    value={inputText}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    // Tells mobile virtual keyboards to render a "return"
+                    // (newline) key instead of "Next"/"Go"/"Send", matching
+                    // the actual behaviour: Enter always inserts a line
+                    // break here, never submits.
+                    enterKeyHint="enter"
+                    placeholder={
+                      isConnected
+                        ? `Message ${botNickname} or use ${prefix}help`
+                        : 'Connecting…'
+                    }
+                    rows={1}
+                    disabled={!isConnected}
+                    className={cn(
+                      // 16px minimum on mobile — anything smaller makes iOS
+                      // Safari auto-zoom the whole page in when the field is
+                      // focused, which is exactly the "page keeps resizing
+                      // itself" instability on mobile. Desktop keeps the
+                      // original 15px.
+                      'cr-input-scroll min-w-0 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
+                      'placeholder:text-on-surface-variant/40 focus:outline-none resize-none overflow-y-auto',
+                      !isConnected && 'opacity-40 cursor-not-allowed',
+                      isComposerMultiline ? 'order-1 basis-full w-full' : 'flex-1 py-2',
+                    )}
+                    style={{ minHeight: '36px', maxHeight: '200px' }}
+                  />
+
+                  {/* Send button */}
+                  <button
+                    type="button"
+                    aria-label="Send message"
+                    onClick={sendMessage}
+                    disabled={!canSend}
+                    className={cn(
+                      'flex items-center justify-center h-9 w-9 rounded-full transition-all shrink-0',
+                      isComposerMultiline && 'order-3',
+                      canSend
+                        ? 'bg-primary text-on-primary shadow-sm hover:opacity-90 active:scale-95'
+                        : 'bg-on-surface/10 text-on-surface-variant/30 cursor-not-allowed',
+                    )}
+                  >
+                    <ArrowUp className="h-[18px] w-[18px]" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Desktop-only composer hint — replaces the old keyboard-
+                  shortcut reminder (Enter/Shift+Enter behaviour is standard
+                  desktop chat convention and no longer needs a caption)
+                  with a pointer toward the AI feature instead: mentioning
+                  the bot's name in a message triggers an AI response. */}
+              <p className="hidden sm:block text-center text-[10px] text-on-surface-variant/30 mt-1.5 select-none">
+                Type {botNickname} to trigger an AI response
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -2455,6 +2660,31 @@ export default function ChatRoomPage() {
           background: rgba(255,255,255,0.22);
         }
 
+        /* ── Composer wrapper — safe-area-aware bottom padding ─────────────
+               Adds the iOS/Android home-indicator inset on top of the
+               normal padding instead of the input bar sitting flush under
+               it, and keeps the same visual spacing on devices/browsers
+               that don't report a safe-area inset (env(...) falls back to
+               0px there, leaving the base value untouched). */
+        .cr-input-safe-pb {
+          padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        }
+        @media (min-width: 768px) {
+          .cr-input-safe-pb {
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+          }
+        }
+
+        /* ── Composer textarea — scrollbar fully hidden ────────────────────
+               The input still scrolls internally once its content exceeds
+               max-height (200px), but no scrollbar track/thumb is ever
+               rendered, on mobile or desktop. */
+        .cr-input-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .cr-input-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
         /* ── Audio player: seek bar ─────────────────────────────────────── */
         .cr-audio-range {
           -webkit-appearance: none;
@@ -2506,6 +2736,33 @@ export default function ChatRoomPage() {
           padding: 10px 14px;
           overflow-x: auto;
         }
+        .chatmd-pre-wrap { position: relative; display: block; }
+        .chatmd-pre-wrap .chatmd-pre { padding-right: 56px; }
+        .chatmd-copy-btn {
+          position: absolute;
+          top: 12px;
+          right: 8px;
+          font-size: 10px;
+          font-weight: 600;
+          line-height: 1;
+          padding: 4px 8px;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.14);
+          color: rgba(255,255,255,0.55);
+          opacity: 0.7;
+          transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
+          cursor: pointer;
+        }
+        .chatmd-pre-wrap:hover .chatmd-copy-btn,
+        .chatmd-copy-btn:focus-visible {
+          opacity: 1;
+        }
+        .chatmd-copy-btn:hover {
+          background: rgba(255,255,255,0.18);
+          color: rgba(255,255,255,0.95);
+        }
+        .chatmd-copy-btn:disabled { cursor: default; color: #4ade80; }
         .chatmd-code-block {
           font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
           font-size: 0.78em;

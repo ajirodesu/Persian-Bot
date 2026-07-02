@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
@@ -7,13 +7,16 @@ import {
   Wifi,
   Menu,
   X,
+  Bot,
+  MessageSquare,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useSnackbar } from '@/contexts/SnackbarContext'
+import { DashboardSidebarProvider } from '@/contexts/DashboardSidebarContext'
 import { cn } from '@/utils/cn.util'
 import IconButton from '@/components/ui/buttons/IconButton'
-import UILink from '@/components/ui/typography/Link'
 import { ROUTES } from '@/constants/routes.constants'
 import { getSocket } from '@/lib/socket.lib'
 import {
@@ -21,9 +24,11 @@ import {
   H_PX,
   H_LOGO_ICON,
   H_BRAND_TEXT,
-  H_NAV_ITEM,
-  H_NAV_ITEM_MOBILE,
-  H_MENU_TRIGGER,
+  H_SIDEBAR_WIDTH,
+  H_SIDEBAR_NAV,
+  H_SIDEBAR_ICON,
+  H_AVATAR,
+  H_AVATAR_TEXT,
   H_CHEVRON,
   H_DROPDOWN_ITEM,
   H_DROPDOWN_ICON,
@@ -33,103 +38,108 @@ import {
 // Constants
 // ============================================================================
 
-interface NavItem {
-  label: string
-  href: string
-}
+const NAV_ITEMS = [
+  { path: ROUTES.DASHBOARD.ROOT, label: 'Bot Manager', icon: Bot },
+  { path: ROUTES.DASHBOARD.CHAT_ROOM, label: 'Chat Room', icon: MessageSquare },
+  { path: ROUTES.DASHBOARD.SETTINGS, label: 'Settings', icon: SettingsIcon },
+] as const
 
-const navItems: NavItem[] = [
-  { label: 'Bot Manager', href: ROUTES.DASHBOARD.ROOT },
-  { label: 'Chat Room', href: ROUTES.DASHBOARD.CHAT_ROOM },
-  { label: 'Settings', href: ROUTES.DASHBOARD.SETTINGS },
-]
+/**
+ * Active-route resolution shared by the sidebar nav.
+ *
+ * Bot Manager sits at the dashboard root ("/dashboard"), so a naive prefix
+ * check (`pathname.startsWith(itemPath)`) makes it light up on *every*
+ * nested route — including ones already owned by another nav item, like
+ * "/dashboard/chat-room" or "/dashboard/settings". That produced two
+ * simultaneously-highlighted sidebar entries. Bot Manager should only be
+ * treated as active for its own nested routes (e.g. bot detail pages),
+ * never for a path that another top-level nav item already claims.
+ */
+function isNavItemActive(itemPath: string, pathname: string): boolean {
+  const isRootRoute = itemPath === ROUTES.DASHBOARD.ROOT
+  const matches = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
 
-// ============================================================================
-// NavLink — desktop horizontal nav item
-// ============================================================================
+  if (!isRootRoute) return matches(itemPath)
 
-function NavLink({ item }: { item: NavItem }) {
-  const location = useLocation()
+  if (pathname === itemPath) return true
 
-  const isRootRoute = item.href === ROUTES.DASHBOARD.ROOT
-  const isSettingsRoute = location.pathname.startsWith(ROUTES.DASHBOARD.SETTINGS)
-
-  const isActive = isRootRoute
-    ? location.pathname === item.href ||
-      (location.pathname.startsWith(`${item.href}/`) && !isSettingsRoute)
-    : location.pathname === item.href ||
-      location.pathname.startsWith(`${item.href}/`)
-
-  return (
-    <UILink
-      as={Link}
-      to={item.href}
-      aria-current={isActive ? 'page' : undefined}
-      variant="unstyled"
-      className={cn(
-        H_NAV_ITEM,
-        'relative font-medium transition-colors duration-fast',
-        isActive
-          ? 'text-primary'
-          : 'text-on-surface-variant hover:text-on-surface',
-      )}
-    >
-      {item.label}
-      {/* Active indicator underline */}
-      {isActive && (
-        <span className="absolute bottom-0 left-1 right-1 h-0.5 rounded-full bg-primary" />
-      )}
-    </UILink>
+  const claimedByAnotherNavItem = NAV_ITEMS.some(
+    (item) => item.path !== itemPath && matches(item.path),
   )
+
+  return matches(itemPath) && !claimedByAnotherNavItem
 }
 
 // ============================================================================
-// MobileNavLink
+// SidebarNav
 // ============================================================================
 
-function MobileNavLink({
-  item,
-  onClick,
+const SidebarNav = memo(function SidebarNav({
+  activePath,
+  onNavClick,
 }: {
-  item: NavItem
-  onClick: () => void
+  activePath: string
+  onNavClick?: () => void
 }) {
-  const location = useLocation()
-
-  const isRootRoute = item.href === ROUTES.DASHBOARD.ROOT
-  const isSettingsRoute = location.pathname.startsWith(ROUTES.DASHBOARD.SETTINGS)
-
-  const isActive = isRootRoute
-    ? location.pathname === item.href ||
-      (location.pathname.startsWith(`${item.href}/`) && !isSettingsRoute)
-    : location.pathname === item.href ||
-      location.pathname.startsWith(`${item.href}/`)
-
   return (
-    <UILink
-      as={Link}
-      to={item.href}
-      onClick={onClick}
-      aria-current={isActive ? 'page' : undefined}
-      variant="unstyled"
-      className={cn(
-        H_NAV_ITEM_MOBILE,
-        'font-medium rounded-xl transition-colors duration-fast',
-        isActive
-          ? 'bg-primary/10 text-primary'
-          : 'text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
-      )}
-    >
-      {item.label}
-    </UILink>
+    <div className="flex flex-col h-full">
+      {/* Sidebar header — aligns with content header */}
+      <div
+        className={cn(
+          'flex items-center border-b border-outline-variant/70 shrink-0',
+          H_HEIGHT,
+          H_PX,
+        )}
+      >
+        <Link
+          to={ROUTES.DASHBOARD.ROOT}
+          onClick={onNavClick}
+          className={cn(
+            'flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md font-semibold tracking-tight',
+            H_BRAND_TEXT,
+          )}
+        >
+          <Logo className={H_LOGO_ICON} />
+          Cat-Bot
+        </Link>
+      </div>
+
+      {/* Primary nav */}
+      <nav
+        className="flex-1 px-2.5 py-3 flex flex-col gap-0.5 overflow-y-auto"
+        aria-label="Dashboard navigation"
+      >
+        {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
+          const isActive = isNavItemActive(path, activePath)
+          return (
+            <Link
+              key={path}
+              to={path}
+              onClick={onNavClick}
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                H_SIDEBAR_NAV,
+                'rounded-xl font-medium transition-colors duration-fast',
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
+              )}
+            >
+              <Icon className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
+              {label}
+            </Link>
+          )
+        })}
+      </nav>
+    </div>
   )
-}
+})
 
 // ============================================================================
-// UserMenu — desktop dropdown
+// UserMenu — content-header avatar dropdown
 // ============================================================================
 
-function UserMenu() {
+const UserMenu = memo(function UserMenu() {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -180,23 +190,27 @@ function UserMenu() {
         onClick={() => setOpen((prev) => !prev)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={`${displayName} — account menu`}
         className={cn(
-          H_MENU_TRIGGER,
-          'text-on-surface transition-colors duration-fast rounded-lg',
+          'flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors duration-fast',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
         )}
       >
-        {/* Avatar circle */}
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-xs font-bold">
+        <span
+          className={cn(
+            'flex items-center justify-center rounded-full shrink-0 bg-primary-container text-on-primary-container select-none font-bold',
+            H_AVATAR,
+            H_AVATAR_TEXT,
+          )}
+        >
           {initials}
         </span>
-        <span className="text-label-md font-medium">{displayName}</span>
         <ChevronDown
           className={cn(
             H_CHEVRON,
-            'text-on-surface-variant transition-transform duration-fast',
+            'text-on-surface-variant transition-transform duration-fast hidden sm:block',
             open && 'rotate-180',
           )}
         />
@@ -207,15 +221,21 @@ function UserMenu() {
           role="menu"
           aria-label="User menu"
           className={cn(
-            'absolute right-0 top-full mt-1.5 z-dropdown min-w-[180px]',
+            'absolute right-0 top-full mt-1.5 z-dropdown min-w-[210px]',
             'rounded-xl border border-outline-variant/80 bg-surface-container-low',
             'shadow-elevation-3 py-1 overflow-hidden',
             '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
           )}
         >
           {/* User info header */}
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-outline-variant/60">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-sm font-bold">
+          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-outline-variant/60">
+            <span
+              className={cn(
+                'flex items-center justify-center rounded-full shrink-0 bg-primary-container text-on-primary-container select-none font-bold',
+                H_AVATAR,
+                H_AVATAR_TEXT,
+              )}
+            >
               {initials}
             </span>
             <div className="min-w-0">
@@ -247,7 +267,7 @@ function UserMenu() {
       )}
     </div>
   )
-}
+})
 
 // ============================================================================
 // DashboardLayout
@@ -255,20 +275,11 @@ function UserMenu() {
 
 export default function DashboardLayout() {
   const { snackbar, setPosition } = useSnackbar()
-  const { user, logout } = useUserAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const isDisconnectedRef = useRef(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [prevPath, setPrevPath] = useState(location.pathname)
-
-  const displayName = user?.name ?? 'User'
-  const initials = displayName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  const activePath = location.pathname
 
   if (location.pathname !== prevPath) {
     setPrevPath(location.pathname)
@@ -282,6 +293,13 @@ export default function DashboardLayout() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
+  }, [mobileOpen])
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
   }, [mobileOpen])
 
   useEffect(() => {
@@ -321,144 +339,127 @@ export default function DashboardLayout() {
     }
   }, [snackbar, setPosition])
 
-  const handleMobileLogout = async () => {
-    setMobileOpen(false)
-    try {
-      await logout()
-    } catch (err) {
-      console.error('Logout failed:', err)
-    }
-    navigate(ROUTES.HOME)
-  }
+  const currentLabel =
+    NAV_ITEMS.find((i) => isNavItemActive(i.path, activePath))?.label ?? 'Dashboard'
+
+  // The chat room manages its own internal scroll (message list) and needs
+  // the content column pinned to the viewport instead of growing the page —
+  // every other dashboard page keeps the normal padded, page-scrolling main.
+  const isChatRoom = activePath.startsWith(ROUTES.DASHBOARD.CHAT_ROOM)
 
   return (
-    <div className="min-h-screen flex flex-col bg-surface-container-high text-on-surface">
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-sticky bg-surface/90 border-b border-outline-variant/70 backdrop-blur-xl">
-        <nav
+    <DashboardSidebarProvider open={mobileOpen} onOpenChange={setMobileOpen}>
+      <div className="min-h-screen flex bg-surface-container-high">
+        {/* Desktop sidebar — permanent, collapses to icon-free hidden state below md */}
+        <aside
           className={cn(
-            'relative max-w-7xl mx-auto flex items-center',
-            H_HEIGHT,
-            H_PX,
+            'hidden md:flex shrink-0 flex-col bg-surface border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden',
+            H_SIDEBAR_WIDTH,
           )}
-          aria-label="Dashboard navigation"
         >
-          {/* Left: logo + brand + nav links */}
-          <div className="flex items-center gap-1 shrink-0">
-            <UILink
-              as={Link}
-              to={ROUTES.DASHBOARD.ROOT}
-              variant="unstyled"
-              aria-label="Cat-Bot dashboard"
-              className="flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
-            >
-              <Logo className={H_LOGO_ICON} />
-            </UILink>
+          <SidebarNav activePath={activePath} />
+        </aside>
 
-            {/* Desktop: brand text */}
-            <Link
-              to={ROUTES.DASHBOARD.ROOT}
-              className={cn(
-                'hidden md:inline-flex text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md font-semibold tracking-tight',
-                H_BRAND_TEXT,
-              )}
-            >
-              Cat-Bot
-            </Link>
-
-            {/* Separator */}
-            <span className="hidden md:block ml-2 mr-1 h-4 w-px bg-outline-variant/60" />
-
-            {/* Desktop nav */}
-            <div className="hidden md:flex items-center">
-              {navItems.map((item) => (
-                <NavLink key={item.href} item={item} />
-              ))}
-            </div>
-          </div>
-
-          {/* Mobile: brand — absolutely centred */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none md:hidden">
-            <Link
-              to={ROUTES.DASHBOARD.ROOT}
-              className={cn(
-                'pointer-events-auto text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md font-semibold tracking-tight',
-                H_BRAND_TEXT,
-              )}
-            >
-              Cat-Bot
-            </Link>
-          </div>
-
-          {/* Right: desktop */}
-          <div className="hidden md:flex items-center gap-2 ml-auto">
-            <UserMenu />
-          </div>
-
-          {/* Right: mobile hamburger */}
-          <div className="flex md:hidden items-center ml-auto">
-            <IconButton
-              icon={mobileOpen ? <X /> : <Menu />}
-              aria-label={
-                mobileOpen ? 'Close navigation menu' : 'Open navigation menu'
-              }
-              variant="text"
-              size="md"
-              onClick={() => setMobileOpen((prev) => !prev)}
-              aria-expanded={mobileOpen}
-            />
-          </div>
-        </nav>
-
-        {/* Mobile drawer */}
+        {/* Mobile scrim */}
         {mobileOpen && (
           <div
-            role="navigation"
-            aria-label="Mobile navigation"
-            className={cn(
-              'md:hidden border-t border-outline-variant/60 bg-surface/95 backdrop-blur-xl',
-              '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
-            )}
-          >
-            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col">
-              {navItems.map((item) => (
-                <MobileNavLink
-                  key={item.href}
-                  item={item}
-                  onClick={() => setMobileOpen(false)}
-                />
-              ))}
+            className="fixed inset-0 z-drawer bg-scrim/50 md:hidden backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+        )}
 
-              <div className="my-2 mx-2 border-t border-outline-variant/50" />
+        {/* Mobile off-canvas drawer */}
+        <aside
+          className={cn(
+            'fixed inset-y-0 left-0 z-modal flex flex-col bg-surface border-r border-outline-variant/70 md:hidden transition-transform duration-normal',
+            H_SIDEBAR_WIDTH,
+            mobileOpen ? 'translate-x-0 shadow-elevation-4' : '-translate-x-full',
+          )}
+          aria-label="Mobile dashboard navigation"
+          aria-modal={mobileOpen}
+        >
+          <SidebarNav
+            activePath={activePath}
+            onNavClick={() => setMobileOpen(false)}
+          />
+        </aside>
 
-              {/* User identity + Logout */}
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container text-label-sm font-bold">
-                  {initials}
-                </span>
-                <p className="text-label-md font-medium text-on-surface truncate flex-1">
-                  {displayName}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleMobileLogout()
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-label-sm font-semibold text-error hover:bg-error/[var(--state-hover-opacity)] transition-colors duration-fast shrink-0"
-                  aria-label="Log out"
+        {/* Main content column */}
+        <div
+          className={cn(
+            'flex-1 flex flex-col min-w-0',
+            // h-dvh (dynamic viewport height) instead of h-screen (100vh) —
+            // 100vh is measured against the *largest* possible mobile
+            // browser viewport and doesn't shrink when the address bar is
+            // visible, which either clips the composer off-screen or leaves
+            // a dead gap as the bar shows/hides while scrolling. dvh tracks
+            // the real, current viewport on every mobile browser that
+            // supports it, keeping the header and input bar stable.
+            isChatRoom && 'h-dvh sticky top-0 overflow-hidden',
+          )}
+        >
+          {/* Content header — the Chat Room renders its own single header
+              (with the mobile hamburger wired to the same drawer via
+              DashboardSidebarContext), so it is intentionally NOT rendered
+              here. Rendering both used to stack two header bars. */}
+          {!isChatRoom && (
+            <div
+              className={cn(
+                'sticky top-0 z-sticky bg-surface/90 backdrop-blur-xl border-b border-outline-variant/70 flex items-center',
+                H_HEIGHT,
+                H_PX,
+              )}
+            >
+              {/* Mobile hamburger */}
+              <IconButton
+                icon={mobileOpen ? <X /> : <Menu />}
+                aria-label={mobileOpen ? 'Close navigation' : 'Open navigation menu'}
+                variant="text"
+                size="md"
+                className="md:hidden"
+                onClick={() => setMobileOpen((p) => !p)}
+              />
+
+              {/* Desktop: page title */}
+              <span
+                className={cn(
+                  H_BRAND_TEXT,
+                  'hidden md:inline-flex text-on-surface select-none font-semibold tracking-tight',
+                )}
+              >
+                {currentLabel}
+              </span>
+
+              {/* Mobile: page title — absolutely centred */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none md:hidden">
+                <span
+                  className={cn(
+                    H_BRAND_TEXT,
+                    'text-on-surface select-none font-semibold tracking-tight',
+                  )}
                 >
-                  <LogOut className="h-3.5 w-3.5 shrink-0" />
-                  Log out
-                </button>
+                  {currentLabel}
+                </span>
+              </div>
+
+              {/* Avatar menu */}
+              <div className="ml-auto">
+                <UserMenu />
               </div>
             </div>
-          </div>
-        )}
-      </header>
+          )}
 
-      <main className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto">
-        <Outlet />
-      </main>
-    </div>
+          <main
+            className={cn(
+              'flex-1',
+              isChatRoom ? 'min-h-0 overflow-hidden' : 'p-4 md:p-6 max-w-7xl w-full mx-auto',
+            )}
+          >
+            <Outlet />
+          </main>
+        </div>
+      </div>
+    </DashboardSidebarProvider>
   )
 }
