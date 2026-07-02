@@ -2444,13 +2444,13 @@ export default function ChatRoomPage() {
               )}
 
               {/* ChatGPT-style rounded composer — the message bar itself.
-                  No fill colour of its own: bg-transparent lets the page
-                  background show through, so only the border/ring reads as
-                  the bar's edge, not a separate filled panel. */}
+                  Filled with the same translucent surface + blur as the
+                  page header (bg-surface/90 backdrop-blur-xl) so the two
+                  bars read as one consistent tone, top and bottom. */}
               <div
                 className={cn(
                   'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
-                  'bg-transparent ring-1 ring-inset ring-[var(--input-border)]',
+                  'bg-surface/90 backdrop-blur-xl ring-1 ring-inset ring-[var(--input-border)]',
                   'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
                 )}
               >
