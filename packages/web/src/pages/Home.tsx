@@ -1,6 +1,6 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Zap, Bot, LayoutDashboard, Globe, ChevronRight } from 'lucide-react'
+import { ArrowRight, Zap, Bot, LayoutDashboard, Globe, ChevronRight, MessageSquare } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { ROUTES } from '@/constants/routes.constants'
 import { useUserAuth } from '@/contexts/UserAuthContext'
@@ -48,6 +48,11 @@ const PLATFORMS = [
     Icon: TelegramIcon,
     bg: 'bg-[#26A5E4]/10 text-[#26A5E4] border border-[#26A5E4]/20',
   },
+  {
+    name: 'Chat Room',
+    Icon: MessageSquare,
+    bg: 'bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20',
+  },
 ] as const
 
 const FEATURES = [
@@ -74,6 +79,12 @@ const FEATURES = [
     title: 'Live Session Control',
     description:
       'Start, stop, and hot-restart any bot session without touching the server or redeploying code.',
+  },
+  {
+    Icon: MessageSquare,
+    title: 'Built-in Chat Room',
+    description:
+      'Chat with your bot directly from the dashboard — a real-time, Telegram-style test console with replies, attachments, and inline keyboards, no external platform required.',
   },
 ] as const
 
@@ -251,10 +262,10 @@ export default function HomePage() {
                         </span>
                         <div>
                           <p className="text-label-md font-semibold text-on-surface">
-                            {p.name} Bot
+                            {p.name === 'Chat Room' ? 'Chat Room' : `${p.name} Bot`}
                           </p>
                           <p className="text-label-sm text-on-surface-variant font-mono opacity-70">
-                            prefix: /
+                            {p.name === 'Chat Room' ? 'built-in test console' : 'prefix: /'}
                           </p>
                         </div>
                       </div>

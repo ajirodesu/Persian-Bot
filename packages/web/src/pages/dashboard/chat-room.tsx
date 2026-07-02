@@ -783,12 +783,18 @@ function FlushMedia({
   showMeta,
   isBot,
   timestamp,
+  disableFullscreen,
 }: {
   att: ChatAttachment
   onOpen?: () => void
   showMeta?: boolean
   isBot: boolean
   timestamp: number
+  /** When true, the image renders flat — no zoom cursor, no hover
+   *  overlay, no fullscreen button. Used for messages that also carry
+   *  interactive buttons, where the photo is illustrative rather than
+   *  an independently-openable attachment. */
+  disableFullscreen?: boolean
 }) {
   const url = att.localUrl ?? att.url
   if (!url) return null
@@ -803,6 +809,22 @@ function FlushMedia({
   ) : null
 
   if (att.type === 'image') {
+    if (disableFullscreen) {
+      return (
+        <div className="relative block w-full bg-black/10">
+          <img
+            src={url}
+            alt={att.name ?? 'image'}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            className="block w-full h-auto max-h-[340px] object-cover select-none"
+          />
+          {MetaOverlay}
+        </div>
+      )
+    }
+
     return (
       <button
         type="button"
@@ -1180,6 +1202,7 @@ const MessageBubble = memo(function MessageBubble({
                     showMeta={isLast && att.type !== 'audio'}
                     isBot={isBot}
                     timestamp={msg.timestamp}
+                    disableFullscreen={hasButtons}
                   />
                 )
               })}
@@ -2568,13 +2591,21 @@ export default function ChatRoomPage() {
                     onClick={sendMessage}
                     disabled={!canSend}
                     className={cn(
-                      'flex items-center justify-center h-9 w-9 rounded-full transition-all shrink-0',
+                      // Same plain, unmarked footprint as the attach (+)
+                      // button — and when active, the exact same soft
+                      // highlight treatment it uses (bg-primary/15 +
+                      // text-primary), so both controls read as one
+                      // consistent visual language.
+                      'flex items-center justify-center h-9 w-9 rounded-full transition-colors shrink-0',
                       isComposerMultiline && 'order-3',
                       canSend
-                        ? 'bg-primary text-on-primary shadow-sm hover:opacity-90 active:scale-95'
-                        : 'bg-on-surface/10 text-on-surface-variant/30 cursor-not-allowed',
+                        ? 'bg-primary/15 text-primary active:scale-95'
+                        : 'text-on-surface-variant/30 cursor-not-allowed',
                     )}
                   >
+                    {/* The arrow is always visible; it only switches from a
+                        faint outline to the "full" active send icon once
+                        there's text (or an attachment) to send. */}
                     <ArrowUp className="h-[18px] w-[18px]" />
                   </button>
                 </div>
