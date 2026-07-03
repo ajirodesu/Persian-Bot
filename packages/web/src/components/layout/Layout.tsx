@@ -8,6 +8,7 @@ import UILink from '@/components/ui/typography/Link'
 import { cn } from '@/utils/cn.util'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { ROUTES } from '@/constants/routes.constants'
+import ScrollToTop from '@/components/ScrollToTop'
 import {
   H_HEIGHT,
   H_PX,
@@ -213,6 +214,7 @@ export default function Layout() {
       </header>
 
       <main className="flex-1">
+        <ScrollToTop />
         <Outlet />
       </main>
 

@@ -784,6 +784,7 @@ function FlushMedia({
   isBot,
   timestamp,
   disableFullscreen,
+  onMediaLoad,
 }: {
   att: ChatAttachment
   onOpen?: () => void
@@ -795,6 +796,9 @@ function FlushMedia({
    *  interactive buttons, where the photo is illustrative rather than
    *  an independently-openable attachment. */
   disableFullscreen?: boolean
+  /** Fired once the image/video has actually loaded and the bubble has
+   *  settled at its final height. */
+  onMediaLoad?: () => void
 }) {
   const url = att.localUrl ?? att.url
   if (!url) return null
@@ -818,6 +822,7 @@ function FlushMedia({
             loading="lazy"
             decoding="async"
             draggable={false}
+            onLoad={onMediaLoad}
             className="block w-full h-auto max-h-[340px] object-cover select-none"
           />
           {MetaOverlay}
@@ -838,6 +843,7 @@ function FlushMedia({
           loading="lazy"
           decoding="async"
           draggable={false}
+          onLoad={onMediaLoad}
           className="block w-full h-auto max-h-[340px] object-cover select-none"
         />
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors duration-200">
@@ -859,6 +865,7 @@ function FlushMedia({
           playsInline
           preload="metadata"
           controlsList="nodownload noremoteplayback"
+          onLoadedData={onMediaLoad}
           className="block w-full h-auto max-h-[340px] bg-black"
         />
         {MetaOverlay}
@@ -975,6 +982,7 @@ const MessageBubble = memo(function MessageBubble({
   onButtonClick,
   onImageOpen,
   onQuoteClick,
+  onMediaLoad,
   botNickname,
   displayName,
 }: {
@@ -984,6 +992,10 @@ const MessageBubble = memo(function MessageBubble({
   onButtonClick: (buttonId: string, messageId: string) => void
   onImageOpen: (images: ChatAttachment[], index: number) => void
   onQuoteClick: (messageId: string) => void
+  /** Fired when an image/video attachment finishes loading, so the
+   *  thread can re-check whether it should follow the bubble's new,
+   *  final height down to the bottom. */
+  onMediaLoad?: () => void
   botNickname: string
   displayName: string
 }) {
@@ -1203,6 +1215,7 @@ const MessageBubble = memo(function MessageBubble({
                     isBot={isBot}
                     timestamp={msg.timestamp}
                     disableFullscreen={hasButtons}
+                    onMediaLoad={onMediaLoad}
                   />
                 )
               })}
@@ -1921,6 +1934,7 @@ export default function ChatRoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const hasLoadedHistoryRef = useRef(false)
   const prefixRef = useRef(prefix)
   prefixRef.current = prefix
   const nicknameRef = useRef(botNickname)
@@ -2076,9 +2090,24 @@ export default function ChatRoomPage() {
 
   useEffect(() => {
     if (isNearBottomRef.current) {
-      scrollToBottom()
+      // First paint of the loaded history should land directly on the
+      // latest message with no visible animation. Every message that
+      // arrives after that (live, from the bot or the user) still
+      // scrolls smoothly so the motion reads as "a new message came in".
+      scrollToBottom(hasLoadedHistoryRef.current)
     }
+    if (messages.length > 0) hasLoadedHistoryRef.current = true
   }, [messages, awaitingReply, scrollToBottom])
+
+  // A message with an image/video attachment mounts before the media
+  // itself has loaded, so its true height (and therefore the real
+  // bottom of the thread) isn't known yet at the moment the message
+  // arrives. Once the media finishes loading and the bubble expands to
+  // its full size, re-run the same near-bottom-gated scroll so the view
+  // still lands on the actual latest message instead of stopping short.
+  const handleMediaLoad = useCallback(() => {
+    if (isNearBottomRef.current) scrollToBottom()
+  }, [scrollToBottom])
 
   // ── Scroll-to-bottom pill visibility + near-bottom tracking ─────────────────
 
@@ -2417,6 +2446,7 @@ export default function ChatRoomPage() {
                         onButtonClick={handleButtonClick}
                         onImageOpen={handleImageOpen}
                         onQuoteClick={handleQuoteClick}
+                        onMediaLoad={handleMediaLoad}
                         botNickname={botNickname}
                         displayName={displayName}
                       />

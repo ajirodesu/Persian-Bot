@@ -12,6 +12,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
+import ScrollToTop from '@/components/ScrollToTop'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import { DashboardSidebarProvider } from '@/contexts/DashboardSidebarContext'
@@ -457,6 +458,7 @@ export default function DashboardLayout() {
               isChatRoom ? 'min-h-0 overflow-hidden' : 'p-4 md:p-6 max-w-7xl w-full mx-auto',
             )}
           >
+            <ScrollToTop />
             <Outlet />
           </main>
         </div>

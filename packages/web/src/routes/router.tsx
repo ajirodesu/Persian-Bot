@@ -13,6 +13,7 @@ import AdminProtectedRoute from '@/guards/AdminProtectedRoute'
 import AdminPublicRoute from '@/guards/AdminPublicRoute'
 import AdminSidebarLayout from '@/features/admin/components/AdminSidebarLayout'
 import { AdminAuthProvider } from '@/contexts/AdminAuthContext'
+import ScrollToTop from '@/components/ScrollToTop'
 
 // Error pages — NOT lazy-loaded; must be available even when the app bundle
 // fails to load or the API is entirely unreachable.
@@ -52,6 +53,7 @@ const AdminSettingsPage = lazy(() => import('@/pages/admin/dashboard/settings'))
 function AdminLayout() {
   return (
     <AdminAuthProvider>
+      <ScrollToTop />
       <Outlet />
     </AdminAuthProvider>
   )
