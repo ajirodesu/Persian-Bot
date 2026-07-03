@@ -211,7 +211,6 @@ function trimTrailingPunctuation(raw: string): { url: string; trail: string } {
   let url = raw
   let trail = ''
   const CLOSERS: Record<string, string> = { ')': '(', ']': '[', '}': '{' }
-  // eslint-disable-next-line no-constant-condition
   while (url.length > 0) {
     const last = url[url.length - 1]
     if (last in CLOSERS) {
@@ -2791,12 +2790,10 @@ const Composer = memo(function Composer({
 const CR_STYLES = `
         :root {
           --chatroom-bg: #0d0f12;
-          --chatroom-header: #111318;
           --bubble-bot: #1e2330;
           --bubble-bot-text: #e2e8f0;
           --bubble-user: #7c3200;
           --bubble-user-text: #fff7ed;
-          --input-bg: #161a22;
           --input-border: rgba(255,255,255,0.1);
           --input-border-focus: rgba(255,130,40,0.45);
           --input-ring: rgba(255,130,40,0.12);
@@ -2812,7 +2809,6 @@ const CR_STYLES = `
           from { opacity: 0; transform: translateY(4px) scale(0.9); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
-        .cr-fadein-fast { animation: cr-fadeInFast 0.12s ease-out; }
 
         /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
         .cr-highlight-flash { background-color: rgba(255,130,40,0.16); }
@@ -3199,7 +3195,6 @@ export default function ChatRoomPage() {
       socket.off('chatroom:prefix_updated', onPrefixUpdated)
       socket.off('chatroom:error', onError)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, sessionId])
 
   // ── Auto-scroll ─────────────────────────────────────────────────────────────
