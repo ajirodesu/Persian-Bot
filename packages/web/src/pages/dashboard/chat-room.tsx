@@ -16,11 +16,14 @@
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   memo,
+  type RefObject,
   type KeyboardEvent as ReactKeyboardEvent,
   type ChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
   type TouchEvent as ReactTouchEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
@@ -298,6 +301,295 @@ function linkifyPlain(text: string): string {
   return autoLinkUrls(escaped).replace(/\n/g, '<br>')
 }
 
+// ── Syntax highlighting (VS Code "Dark+"-style token colors) ──────────────────
+//
+// Lightweight, dependency-free tokenizer used to color fenced code blocks so
+// bot-sent code renders with real syntax highlighting instead of flat text.
+// Operates on text that has ALREADY been HTML-escaped (&, <, > only), so every
+// tokenizer below is careful to treat "&lt;", "&gt;", "&amp;" as opaque,
+// atomic units rather than splitting them mid-entity.
+
+interface LangConfig {
+  keywords: Set<string>
+  lineComment?: string
+  blockComment?: [string, string]
+}
+
+const JS_KEYWORDS = new Set([
+  'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case',
+  'default', 'break', 'continue', 'class', 'extends', 'super', 'new', 'this', 'import', 'export', 'from',
+  'as', 'try', 'catch', 'finally', 'throw', 'typeof', 'instanceof', 'in', 'of', 'async', 'await', 'yield',
+  'static', 'get', 'set', 'void', 'delete', 'null', 'undefined', 'true', 'false', 'interface', 'type',
+  'enum', 'implements', 'public', 'private', 'protected', 'readonly', 'namespace', 'declare', 'abstract',
+  'keyof', 'never', 'unknown', 'any', 'satisfies',
+])
+
+const PY_KEYWORDS = new Set([
+  'def', 'return', 'if', 'elif', 'else', 'for', 'while', 'break', 'continue', 'pass', 'class', 'import',
+  'from', 'as', 'try', 'except', 'finally', 'raise', 'with', 'lambda', 'yield', 'global', 'nonlocal',
+  'assert', 'del', 'in', 'is', 'not', 'and', 'or', 'True', 'False', 'None', 'async', 'await', 'self',
+])
+
+const C_FAMILY_KEYWORDS = new Set([
+  'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'class',
+  'struct', 'enum', 'union', 'public', 'private', 'protected', 'static', 'final', 'void', 'int', 'float',
+  'double', 'char', 'bool', 'long', 'short', 'unsigned', 'signed', 'const', 'new', 'delete', 'this',
+  'super', 'extends', 'implements', 'import', 'package', 'namespace', 'using', 'template', 'typename',
+  'virtual', 'override', 'try', 'catch', 'finally', 'throw', 'true', 'false', 'null', 'nullptr', 'func',
+  'var', 'let', 'fn', 'impl', 'trait', 'mod', 'pub', 'match', 'defer', 'go', 'chan', 'select', 'echo',
+  'end', 'then', 'begin', 'elif', 'fi', 'done', 'function',
+])
+
+const BASH_KEYWORDS = new Set([
+  'if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done', 'case', 'esac', 'function', 'return',
+  'break', 'continue', 'export', 'local', 'readonly', 'shift', 'echo', 'exit', 'in', 'select', 'until',
+  'time', 'test',
+])
+
+const SQL_KEYWORDS = new Set([
+  'select', 'from', 'where', 'insert', 'into', 'values', 'update', 'set', 'delete', 'create', 'table',
+  'alter', 'drop', 'join', 'inner', 'left', 'right', 'outer', 'on', 'group', 'by', 'order', 'having',
+  'limit', 'offset', 'and', 'or', 'not', 'null', 'is', 'in', 'like', 'as', 'distinct', 'union', 'all',
+  'exists', 'case', 'when', 'then', 'else', 'end', 'primary', 'key', 'foreign', 'references', 'default',
+  'unique', 'index', 'view', 'with',
+])
+
+const GENERIC_KEYWORDS = new Set([...JS_KEYWORDS, ...PY_KEYWORDS, ...C_FAMILY_KEYWORDS])
+
+function getLangConfig(lang: string): LangConfig {
+  const l = lang.toLowerCase()
+  if (['js', 'jsx', 'ts', 'tsx', 'javascript', 'typescript', 'mjs', 'cjs'].includes(l)) {
+    return { keywords: JS_KEYWORDS, lineComment: '//', blockComment: ['/*', '*/'] }
+  }
+  if (['py', 'python'].includes(l)) return { keywords: PY_KEYWORDS, lineComment: '#' }
+  if (['rb', 'ruby'].includes(l)) return { keywords: PY_KEYWORDS, lineComment: '#' }
+  if (['sh', 'bash', 'shell', 'zsh'].includes(l)) return { keywords: BASH_KEYWORDS, lineComment: '#' }
+  if (l === 'sql') return { keywords: SQL_KEYWORDS, lineComment: '--' }
+  if (['yml', 'yaml'].includes(l)) return { keywords: new Set(['true', 'false', 'null']), lineComment: '#' }
+  if (['java', 'c', 'cpp', 'c++', 'cs', 'csharp', 'go', 'rust', 'rs', 'php', 'swift', 'kotlin', 'kt', 'dart'].includes(l)) {
+    return { keywords: C_FAMILY_KEYWORDS, lineComment: '//', blockComment: ['/*', '*/'] }
+  }
+  // Unknown/unspecified language — best-effort union of common keywords.
+  return { keywords: GENERIC_KEYWORDS, lineComment: '//', blockComment: ['/*', '*/'] }
+}
+
+/** Consumes one already-escaped HTML entity (e.g. "&lt;") starting at `i`, if
+ *  present, so tokenizers never slice an entity in half. Returns null if `i`
+ *  isn't the start of an entity. */
+function consumeEntity(code: string, i: number): string | null {
+  if (code[i] !== '&') return null
+  const semi = code.indexOf(';', i)
+  if (semi === -1 || semi - i > 6) return null
+  return code.slice(i, semi + 1)
+}
+
+/** General-purpose single-pass tokenizer for C-like / Python / bash / SQL /
+ *  YAML style languages — comments, strings, numbers, keywords, function
+ *  calls (identifier immediately followed by "("), and PascalCase types. */
+function highlightGeneric(code: string, cfg: LangConfig): string {
+  const { keywords, lineComment, blockComment } = cfg
+  let out = ''
+  let i = 0
+  const n = code.length
+  while (i < n) {
+    if (blockComment && code.startsWith(blockComment[0], i)) {
+      const end = code.indexOf(blockComment[1], i + blockComment[0].length)
+      const stop = end === -1 ? n : end + blockComment[1].length
+      out += `<span class="tok-comment">${code.slice(i, stop)}</span>`
+      i = stop
+      continue
+    }
+    if (lineComment && code.startsWith(lineComment, i)) {
+      let end = code.indexOf('\n', i)
+      if (end === -1) end = n
+      out += `<span class="tok-comment">${code.slice(i, end)}</span>`
+      i = end
+      continue
+    }
+    const ch = code[i]
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const quote = ch
+      let j = i + 1
+      while (j < n) {
+        if (code[j] === '\\') { j += 2; continue }
+        if (code[j] === quote) { j++; break }
+        j++
+      }
+      out += `<span class="tok-string">${code.slice(i, j)}</span>`
+      i = j
+      continue
+    }
+    if (/[0-9]/.test(ch)) {
+      let j = i
+      while (j < n && /[0-9a-fA-Fx._]/.test(code[j])) j++
+      out += `<span class="tok-number">${code.slice(i, j)}</span>`
+      i = j
+      continue
+    }
+    if (/[a-zA-Z_$]/.test(ch)) {
+      let j = i
+      while (j < n && /[a-zA-Z0-9_$]/.test(code[j])) j++
+      const word = code.slice(i, j)
+      if (keywords.has(word)) {
+        out += `<span class="tok-keyword">${word}</span>`
+      } else if (code[j] === '(') {
+        out += `<span class="tok-function">${word}</span>`
+      } else if (/^[A-Z]/.test(word) && word.length > 1) {
+        out += `<span class="tok-type">${word}</span>`
+      } else {
+        out += word
+      }
+      i = j
+      continue
+    }
+    const entity = consumeEntity(code, i)
+    if (entity) {
+      out += entity
+      i += entity.length
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
+}
+
+/** JSON — object keys colored separately from string values, plus
+ *  booleans/null/numbers. Single regex pass, safe because JSON has no
+ *  comments or nested-quote ambiguity to worry about. */
+function highlightJSON(code: string): string {
+  return code.replace(
+    /("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+\.?\d*(?:[eE][+-]?\d+)?)/g,
+    (match, str, colon, boolNull, num) => {
+      if (str) {
+        const cls = colon ? 'tok-property' : 'tok-string'
+        return `<span class="${cls}">${str}</span>${colon || ''}`
+      }
+      if (boolNull) return `<span class="tok-keyword">${boolNull}</span>`
+      if (num) return `<span class="tok-number">${num}</span>`
+      return match
+    },
+  )
+}
+
+/** CSS — comments, strings, hex colors, dimensioned numbers, and
+ *  property-vs-selector coloring (a bare word immediately followed by ":"
+ *  is treated as a property name). */
+function highlightCSS(code: string): string {
+  let out = ''
+  let i = 0
+  const n = code.length
+  while (i < n) {
+    if (code.startsWith('/*', i)) {
+      const end = code.indexOf('*/', i + 2)
+      const stop = end === -1 ? n : end + 2
+      out += `<span class="tok-comment">${code.slice(i, stop)}</span>`
+      i = stop
+      continue
+    }
+    const ch = code[i]
+    if (ch === '"' || ch === "'") {
+      let j = i + 1
+      while (j < n && code[j] !== ch) { if (code[j] === '\\') j++; j++ }
+      j = Math.min(j + 1, n)
+      out += `<span class="tok-string">${code.slice(i, j)}</span>`
+      i = j
+      continue
+    }
+    if (ch === '#' && /[0-9a-fA-F]/.test(code[i + 1] || '')) {
+      let j = i + 1
+      while (j < n && /[0-9a-fA-F]/.test(code[j])) j++
+      out += `<span class="tok-number">${code.slice(i, j)}</span>`
+      i = j
+      continue
+    }
+    if (/[0-9]/.test(ch)) {
+      const m = /^[0-9]+\.?[0-9]*(px|em|rem|%|vh|vw|vmin|vmax|deg|s|ms|fr|pt|ex|ch)?/.exec(code.slice(i))
+      const matched = m ? m[0] : ch
+      out += `<span class="tok-number">${matched}</span>`
+      i += matched.length
+      continue
+    }
+    if (/[a-zA-Z-]/.test(ch)) {
+      let j = i
+      while (j < n && /[a-zA-Z0-9-]/.test(code[j])) j++
+      const word = code.slice(i, j)
+      let k = j
+      while (k < n && /\s/.test(code[k])) k++
+      if (code[k] === ':') {
+        out += `<span class="tok-property">${word}</span>`
+      } else {
+        out += `<span class="tok-tag">${word}</span>`
+      }
+      i = j
+      continue
+    }
+    const entity = consumeEntity(code, i)
+    if (entity) {
+      out += entity
+      i += entity.length
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
+}
+
+/** HTML/XML — tags, attribute names/values, and comments. Only scans within
+ *  the bounds of each "&lt;...&gt;" delimited tag, so attribute-value
+ *  quotes never leak into (or get corrupted by) surrounding regex passes. */
+function highlightHtmlTag(tag: string): string {
+  return tag.replace(
+    /(&lt;\/?)([a-zA-Z][a-zA-Z0-9-]*)|([a-zA-Z-]+)(=)("(?:[^"]|&quot;)*"|'[^']*')|(&gt;\/?)/g,
+    (m, open, tagName, attrName, eq, attrVal, close) => {
+      if (open && tagName) return `<span class="tok-punct">${open}</span><span class="tok-tag">${tagName}</span>`
+      if (attrName && eq && attrVal) {
+        return `<span class="tok-attr">${attrName}</span><span class="tok-punct">${eq}</span><span class="tok-string">${attrVal}</span>`
+      }
+      if (close) return `<span class="tok-punct">${close}</span>`
+      return m
+    },
+  )
+}
+
+function highlightHTML(code: string): string {
+  let out = ''
+  let i = 0
+  const n = code.length
+  while (i < n) {
+    if (code.startsWith('&lt;!--', i)) {
+      const end = code.indexOf('--&gt;', i)
+      const stop = end === -1 ? n : end + 6
+      out += `<span class="tok-comment">${code.slice(i, stop)}</span>`
+      i = stop
+      continue
+    }
+    if (code.startsWith('&lt;', i)) {
+      const closeIdx = code.indexOf('&gt;', i)
+      if (closeIdx !== -1) {
+        out += highlightHtmlTag(code.slice(i, closeIdx + 4))
+        i = closeIdx + 4
+        continue
+      }
+    }
+    out += code[i]
+    i++
+  }
+  return out
+}
+
+/** Dispatches to the right tokenizer for the fenced block's declared
+ *  language (falling back to the generic multi-language tokenizer for
+ *  anything unrecognized or unspecified). */
+function highlightCode(code: string, lang: string): string {
+  const l = (lang || '').toLowerCase()
+  if (l === 'json') return highlightJSON(code)
+  if (['css', 'scss', 'less'].includes(l)) return highlightCSS(code)
+  if (['html', 'xml', 'svg'].includes(l)) return highlightHTML(code)
+  return highlightGeneric(code, getLangConfig(l))
+}
+
 function renderMarkdown(text: string): string {
   if (!text) return ''
 
@@ -307,20 +599,31 @@ function renderMarkdown(text: string): string {
     .replace(/>/g, '&gt;')
 
   const codeBlocks: string[] = []
-  html = html.replace(/```([\s\S]*?)```/g, (_, code: string) => {
+  const pushCodeBlock = (code: string, langRaw: string): string => {
     const idx = codeBlocks.length
     const trimmed = code.trim()
+    const lang = langRaw.trim()
+    const highlighted = trimmed ? highlightCode(trimmed, lang) : trimmed
     // Base64-encode the (already HTML-escaped) code so it can travel safely
     // inside an HTML attribute — decoded + un-escaped again on copy click.
     const encoded = btoa(unescape(encodeURIComponent(trimmed)))
+    const langLabel = lang ? `<span class="chatmd-pre-lang">${lang}</span>` : ''
     codeBlocks.push(
       `<div class="chatmd-pre-wrap">` +
-        `<pre class="chatmd-pre"><code class="chatmd-code-block">${trimmed}</code></pre>` +
+        langLabel +
+        `<pre class="chatmd-pre"><code class="chatmd-code-block">${highlighted}</code></pre>` +
         `<button type="button" class="chatmd-copy-btn" data-code="${encoded}" aria-label="Copy code">Copy</button>` +
         `</div>`,
     )
     return `\x00CODE${idx}\x00`
-  })
+  }
+  // Fenced blocks with an explicit language directly after the opening
+  // fence (e.g. "```ts\n...\n```") are highlighted using that language.
+  html = html.replace(/```([a-zA-Z][a-zA-Z0-9_+-]{0,15})\n([\s\S]*?)```/g, (_, langRaw: string, code: string) =>
+    pushCodeBlock(code, langRaw),
+  )
+  // Anything left over is a fenced block with no language directive.
+  html = html.replace(/```([\s\S]*?)```/g, (_, code: string) => pushCodeBlock(code, ''))
 
   html = html.replace(/`([^`\n]+)`/g, '<code class="chatmd-code">$1</code>')
   html = html.replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -1865,7 +2168,610 @@ function EmptyChatState({ prefix, botNickname }: { prefix: string; botNickname: 
   )
 }
 
+// ── Composer ──────────────────────────────────────────────────────────────────
+
+// Single-line textarea content height, in px, at the composer's base font
+// size/line-height/padding — anything taller means the text has wrapped.
+const SINGLE_LINE_THRESHOLD = 46
+
+interface ComposerProps {
+  prefix: string
+  botNickname: string
+  isConnected: boolean
+  isMobileViewport: boolean
+  pendingAttachments: ChatAttachment[]
+  onRemoveAttachment: (index: number) => void
+  showAttachPicker: boolean
+  onToggleAttachPicker: () => void
+  onSelectAttachments: (files: ChatAttachment[]) => void
+  onCloseAttachPicker: () => void
+  onSend: (text: string) => void
+  inputRef: RefObject<HTMLTextAreaElement | null>
+}
+
+/**
+ * Owns the composer's text input entirely on its own — inputText, the
+ * wrapped/single-line layout flag, and the textarea's auto-resize all live
+ * as LOCAL state here instead of on the page component. That means typing a
+ * message only ever re-renders this small subtree, never the message list,
+ * header, or anything else on the page — the biggest lever for keeping the
+ * composer smooth once the chat history gets long.
+ *
+ * The auto-resize itself is batched into a single requestAnimationFrame per
+ * keystroke, so a burst of fast typing can never trigger more than one
+ * forced-layout read/write pair per frame.
+ */
+const Composer = memo(function Composer({
+  prefix,
+  botNickname,
+  isConnected,
+  isMobileViewport,
+  pendingAttachments,
+  onRemoveAttachment,
+  showAttachPicker,
+  onToggleAttachPicker,
+  onSelectAttachments,
+  onCloseAttachPicker,
+  onSend,
+  inputRef,
+}: ComposerProps) {
+  const [inputText, setInputText] = useState('')
+  const [isComposerMultiline, setIsComposerMultiline] = useState(false)
+  // Hidden mirror element used purely to detect wrapping — see the
+  // "Hidden mirror row" block in the JSX below for why this exists.
+  const mirrorRef = useRef<HTMLDivElement>(null)
+  // Caret position to restore after a programmatic (paste) text change —
+  // a controlled textarea doesn't keep the caret in the right spot on its
+  // own once we've bypassed the browser's native paste insertion.
+  const pendingCaretRef = useRef<number | null>(null)
+
+  // Autofocus once — this component only mounts the moment "Get Started" is
+  // clicked (hasStarted flips true), so a mount-time focus replaces the old
+  // manual setTimeout-from-the-page-component approach.
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 50)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Single source of truth for both the visible textarea's height and the
+  // wrap-mode flag, driven off inputText itself rather than off individual
+  // DOM events. This covers typing, paste, and the programmatic clear on
+  // send with one code path instead of three separately-maintained ones —
+  // whatever changed inputText, the box always ends up correctly sized.
+  // useLayoutEffect (not useEffect) so this resolves before the browser
+  // paints, same as the old rAF approach, but without needing to manually
+  // batch/cancel frames since React already coalesces the underlying state
+  // updates into a single commit per keystroke.
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+
+    // Wrap mode: measured off the HIDDEN MIRROR — a fixed-width,
+    // off-screen twin of the single-line row that never changes size, so
+    // this can never be affected by which layout mode is currently on
+    // screen. (Measuring off the visible textarea instead is what caused
+    // the earlier "reverts to single line" flicker: switching modes
+    // changed its width, which changed the very thing being measured.)
+    // This is decided BEFORE the height read below, since the height
+    // read depends on it — see the comment there.
+    if (!inputText) {
+      setIsComposerMultiline(false)
+      if (mirrorRef.current) mirrorRef.current.textContent = ''
+      // Emptied out (backspaced to nothing, cleared on send, etc.) —
+      // snap scrollTop back to 0 too. Without this the box can be left
+      // internally "scrolled" from before, which is invisible since the
+      // scrollbar is CSS-hidden but leaves the caret sitting in the
+      // wrong spot until the user types again.
+      el.scrollTop = 0
+    } else if (mirrorRef.current) {
+      // Trailing newline needs a trailing space or the mirror collapses
+      // the empty final line — same trick textarea-autosize libraries use.
+      mirrorRef.current.textContent = inputText.endsWith('\n') ? inputText + ' ' : inputText
+      setIsComposerMultiline(mirrorRef.current.scrollHeight > SINGLE_LINE_THRESHOLD)
+    }
+
+    // Height: measured off the VISIBLE textarea, at whatever width it
+    // currently has. That width is a function of isComposerMultiline —
+    // single-line mode shares the row with the attach/send buttons
+    // (narrower), wrapped mode goes full-width (wider). Pasting a long
+    // block in one shot can flip that mode in the very same update, but
+    // the DOM hasn't re-rendered at the new width yet when this line
+    // runs — el is still at its PREVIOUS width. Reading scrollHeight now
+    // would lock in a height measured at the wrong width and, since
+    // nothing depends on isComposerMultiline to trigger a re-measure,
+    // it would never correct itself — exactly the leftover "extra
+    // space" bug seen after a one-shot paste that changes modes.
+    // Including isComposerMultiline in this effect's own dependency
+    // array is what fixes it: when the setIsComposerMultiline call
+    // above actually changes the value, React re-runs this effect
+    // again before paint, and this second pass reads scrollHeight at
+    // the now-correct, post-mode-change width. When the mode doesn't
+    // change (the common case — typing, or a paste that doesn't cross
+    // the wrap threshold), the effect runs exactly once as before.
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+
+    // Restore caret after a paste-driven update (see handlePaste) — a
+    // controlled textarea's value updates, but the browser doesn't know
+    // where the caret should land since we bypassed its native insertion.
+    if (pendingCaretRef.current !== null) {
+      el.selectionStart = el.selectionEnd = pendingCaretRef.current
+      pendingCaretRef.current = null
+    }
+  }, [inputText, inputRef, isComposerMultiline])
+
+  const handleInputChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value)
+  }, [])
+
+  // Clipboard sources very often carry formatting artifacts that have
+  // nothing to do with the message itself but still show up as visible
+  // "extra space" once dropped into a whitespace:pre-wrap textarea:
+  //  - a trailing newline (copying a full line from an editor, a chat
+  //    bubble, a spreadsheet cell, etc.) — invisible as text, but it still
+  //    counts toward scrollHeight, so it shows up as unexplained empty
+  //    space at the bottom of the box.
+  //  - trailing spaces/tabs on individual lines (common when pasting from
+  //    PDFs or word processors) — pre-wrap preserves them, which can push
+  //    a line's wrap point out further than the visible text alone would.
+  //  - large paragraph gaps (3+ blank lines in a row) — common when
+  //    copying from web pages/documents — which read as an oversized
+  //    blank gap in the composer.
+  //  - leading whitespace on the very first line, which lands as a stray
+  //    indent before the message even starts.
+  // This is a single regex pass, so it stays cheap even for a very long
+  // paste dropped in all at once. Interior newlines (deliberate paragraph
+  // breaks in the pasted text) are otherwise left untouched.
+  const sanitizePastedText = (raw: string, atStart: boolean): string => {
+    let text = raw
+      .replace(/\r\n?/g, '\n') // normalize CRLF/CR to LF
+      .replace(/[ \t]+$/gm, '') // trim trailing spaces/tabs on every line
+      .replace(/\n{3,}/g, '\n\n') // collapse 3+ blank lines to a single blank line
+      .replace(/[\n ]+$/, '') // strip trailing blank lines/spaces overall
+
+    // Only strip leading blank lines/spaces when pasting at the very start
+    // of the box — mid-text pastes keep whatever whitespace separates the
+    // pasted chunk from what's already there.
+    if (atStart) text = text.replace(/^[\n ]+/, '')
+
+    return text
+  }
+
+  const handlePaste = useCallback(
+    (e: ReactClipboardEvent<HTMLTextAreaElement>) => {
+      const text = e.clipboardData?.getData('text')
+      if (text == null) return // non-text paste (e.g. an image) — let default handling run
+      e.preventDefault()
+
+      const el = e.currentTarget
+      const start = el.selectionStart ?? inputText.length
+      const end = el.selectionEnd ?? inputText.length
+      const cleaned = sanitizePastedText(text, start === 0)
+
+      pendingCaretRef.current = start + cleaned.length
+      setInputText(inputText.slice(0, start) + cleaned + inputText.slice(end))
+    },
+    [inputText],
+  )
+
+  const handleSend = useCallback(() => {
+    const trimmed = inputText.trim()
+    if (!isConnected || (!trimmed && pendingAttachments.length === 0)) return
+    onSend(trimmed)
+    setInputText('')
+    inputRef.current?.focus()
+  }, [inputText, isConnected, pendingAttachments.length, onSend, inputRef])
+
+  const handleKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      // Mobile: Enter/Next always inserts a newline (the textarea's native
+      // behaviour) — sending is exclusively the dedicated Send button's job.
+      if (isMobileViewport) return
+      // Desktop: standard chat-app behaviour — Enter sends, Shift+Enter
+      // inserts a newline.
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSend()
+      }
+    },
+    [isMobileViewport, handleSend],
+  )
+
+  const canSend = isConnected && (!!inputText.trim() || pendingAttachments.length > 0)
+
+  return (
+    <>
+      {/* ChatGPT-style rounded composer — the message bar itself. Filled
+          with the same translucent surface + blur as the page header
+          (bg-surface/90 backdrop-blur-xl) so the two bars read as one
+          consistent tone, top and bottom. */}
+      <div
+        className={cn(
+          'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
+          'bg-surface/90 backdrop-blur-xl ring-[1.5px] ring-inset ring-[var(--input-border)]',
+          'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
+        )}
+      >
+        {/* Pending attachments row — images shown in the message bar */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
+            {pendingAttachments.map((att, i) => (
+              <div key={i} className="relative group/att">
+                {att.type === 'image' && att.localUrl ? (
+                  <img
+                    src={att.localUrl}
+                    alt={att.name}
+                    className="h-16 w-16 rounded-xl object-cover border border-white/10 shadow-sm"
+                  />
+                ) : (
+                  <div className="h-16 w-16 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
+                    {<FileText className="h-4 w-4 text-on-surface-variant" />}
+                    <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachment(i)}
+                  aria-label="Remove attachment"
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-outline-variant/50 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hidden mirror row — exists purely to measure whether the
+            current text would wrap within the single-line row's text
+            column. It uses the EXACT same attach/text/send widths and
+            gaps as the real single-line row below, so its measured
+            width always matches the real one — without hardcoding any
+            pixel math — but it's absolutely positioned, invisible, and
+            never interacted with, so nothing about switching modes can
+            ever change what it measures. That's what breaks the
+            feedback loop that caused the earlier "reverts to single
+            line" bug: mode is now decided entirely by the text itself,
+            never by the visible textarea's current layout. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 flex gap-2 px-2 py-1.5 opacity-0 pointer-events-none -z-10"
+        >
+          <div className="h-10 w-10 shrink-0" />
+          <div
+            ref={mirrorRef}
+            className="min-w-0 flex-1 px-1 text-[16px] md:text-[15px] leading-relaxed py-2 whitespace-pre-wrap break-words"
+          />
+          <div className="h-10 w-10 shrink-0" />
+        </div>
+
+        {/* Attach · text · send — three permanent siblings whose only
+            the CSS arrangement (never their mount identity) changes
+            between states, so the textarea never remounts and never
+            loses focus/cursor position mid-type.
+            - Single line: one row, DOM order = attach → text → send.
+            - Wrapped (2+ lines): text is forced onto its own full-
+              width line (`basis-full`), which pushes attach/send onto
+              a second flex line together; `justify-between` then
+              pins attach to that line's left edge and send to its
+              right edge — matching the reference composer exactly.
+            isComposerMultiline itself comes from the hidden mirror
+            above, never from this textarea's own scrollHeight, so
+            widening the textarea here can't loop back into the
+            decision that widened it. */}
+        <div
+          className={cn(
+            'flex flex-wrap items-center',
+            isComposerMultiline
+              ? 'justify-between gap-x-2 gap-y-1.5 px-3 pt-3 pb-1.5'
+              : 'gap-2 px-2 py-1.5',
+          )}
+        >
+          {/* Attachment button */}
+          <div
+            id="attach-picker-root"
+            className={cn('relative shrink-0', isComposerMultiline && 'order-2')}
+          >
+            <button
+              type="button"
+              aria-label="Attach file"
+              aria-expanded={showAttachPicker}
+              onClick={onToggleAttachPicker}
+              className={cn(
+                'flex items-center justify-center h-10 w-10 rounded-full transition-colors',
+                showAttachPicker
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-on-surface-variant/60 hover:text-on-surface-variant hover:bg-on-surface/8',
+              )}
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+            {showAttachPicker && (
+              <AttachmentPicker onSelect={onSelectAttachments} onClose={onCloseAttachPicker} />
+            )}
+          </div>
+
+          {/* Auto-resizing textarea */}
+          <textarea
+            ref={inputRef}
+            value={inputText}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            // Tells mobile virtual keyboards to render a "return"
+            // (newline) key instead of "Next"/"Go"/"Send", matching
+            // the actual behaviour: Enter always inserts a line
+            // break here, never submits.
+            enterKeyHint="enter"
+            placeholder={isConnected ? `Message ${botNickname} or use ${prefix}help` : 'Connecting…'}
+            rows={1}
+            disabled={!isConnected}
+            className={cn(
+              // 16px minimum on mobile — anything smaller makes iOS
+              // Safari auto-zoom the whole page in when the field is
+              // focused, which is exactly the "page keeps resizing
+              // itself" instability on mobile. Desktop keeps the
+              // original 15px.
+              'cr-input-scroll min-w-0 px-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
+              'placeholder:text-on-surface-variant/40 focus:outline-none resize-none overflow-y-auto',
+              !isConnected && 'opacity-40 cursor-not-allowed',
+              isComposerMultiline ? 'order-1 basis-full w-full' : 'flex-1 py-2',
+            )}
+            style={{ minHeight: '40px', maxHeight: '200px' }}
+          />
+
+          {/* Send button */}
+          <button
+            type="button"
+            aria-label="Send message"
+            onClick={handleSend}
+            disabled={!canSend}
+            className={cn(
+              // Same plain, unmarked footprint as the attach (+)
+              // button — and when active, the exact same soft
+              // highlight treatment it uses (bg-primary/15 +
+              // text-primary), so both controls read as one
+              // consistent visual language.
+              'flex items-center justify-center h-10 w-10 rounded-full transition-colors shrink-0',
+              isComposerMultiline && 'order-3',
+              canSend
+                ? 'bg-primary/15 text-primary active:scale-95'
+                : 'text-on-surface-variant/30 cursor-not-allowed',
+            )}
+          >
+            {/* The arrow is always visible; it only switches from a
+                faint outline to the "full" active send icon once
+                there's text (or an attachment) to send. */}
+            <ArrowUp className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop-only composer hint — replaces the old keyboard-
+          shortcut reminder (Enter/Shift+Enter behaviour is standard
+          desktop chat convention and no longer needs a caption)
+          with a pointer toward the AI feature instead: mentioning
+          the bot's name in a message triggers an AI response. */}
+      <p className="hidden sm:block text-center text-[10px] text-on-surface-variant/30 mt-1.5 select-none">
+        Type {botNickname} to trigger an AI response
+      </p>
+    </>
+  )
+})
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
+
+// Hoisted out of the component so this large, fully-static string is
+// allocated once at module load instead of being rebuilt on every render
+// (e.g. on every keystroke in the composer).
+const CR_STYLES = `
+        :root {
+          --chatroom-bg: #0d0f12;
+          --chatroom-header: #111318;
+          --bubble-bot: #1e2330;
+          --bubble-bot-text: #e2e8f0;
+          --bubble-user: #7c3200;
+          --bubble-user-text: #fff7ed;
+          --input-bg: #161a22;
+          --input-border: rgba(255,255,255,0.1);
+          --input-border-focus: rgba(255,130,40,0.45);
+          --input-ring: rgba(255,130,40,0.12);
+        }
+
+
+        @keyframes cr-fadeIn {
+          from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes cr-fadeInFast {
+          from { opacity: 0; transform: translateY(4px) scale(0.9); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .cr-fadein-fast { animation: cr-fadeInFast 0.12s ease-out; }
+
+        /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
+        .cr-highlight-flash { background-color: rgba(255,130,40,0.16); }
+
+        /* ── Auto-hiding scroll bar — thumb only appears while actively
+               scrolling, then fades out, instead of sitting on screen
+               permanently. Applied to the message list scroll container. */
+        .cr-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: transparent transparent;
+        }
+        .cr-scroll.is-scrolling {
+          scrollbar-color: rgba(255,255,255,0.22) transparent;
+        }
+        .cr-scroll::-webkit-scrollbar { width: 6px; }
+        .cr-scroll::-webkit-scrollbar-track { background: transparent; }
+        .cr-scroll::-webkit-scrollbar-thumb {
+          background: transparent;
+          border-radius: 999px;
+          transition: background-color 200ms ease;
+        }
+        .cr-scroll.is-scrolling::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.22);
+        }
+
+        /* ── Composer wrapper — safe-area-aware bottom padding ─────────────
+               Adds the iOS/Android home-indicator inset on top of the
+               normal padding instead of the input bar sitting flush under
+               it, and keeps the same visual spacing on devices/browsers
+               that don't report a safe-area inset (env(...) falls back to
+               0px there, leaving the base value untouched). */
+        .cr-input-safe-pb {
+          padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        }
+        @media (min-width: 768px) {
+          .cr-input-safe-pb {
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+          }
+        }
+
+        /* ── Composer textarea — scrollbar fully hidden ────────────────────
+               The input still scrolls internally once its content exceeds
+               max-height (200px), but no scrollbar track/thumb is ever
+               rendered, on mobile or desktop. */
+        .cr-input-scroll {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .cr-input-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+        /* ── Audio player: seek bar ─────────────────────────────────────── */
+        .cr-audio-range {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          height: 12px;
+        }
+        .cr-audio-range::-webkit-slider-runnable-track { background: transparent; height: 12px; }
+        .cr-audio-range::-moz-range-track { background: transparent; height: 12px; }
+        .cr-audio-range::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: transparent;
+          cursor: pointer;
+        }
+        .cr-audio-range::-moz-range-thumb {
+          width: 12px;
+          height: 12px;
+          border: none;
+          border-radius: 50%;
+          background: transparent;
+          cursor: pointer;
+        }
+
+        .cr-audio-player audio { display: none; }
+
+        /* Markdown styles */
+        .chatmd strong { font-weight: 700; }
+        .chatmd em { font-style: italic; }
+        .chatmd del { text-decoration: line-through; opacity: 0.65; }
+        .chatmd u { text-decoration: underline; }
+
+        .chatmd-code {
+          font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
+          font-size: 0.8em;
+          padding: 0.1em 0.38em;
+          border-radius: 5px;
+          background: rgba(255 255 255 / 0.1);
+          border: 1px solid rgba(255 255 255 / 0.08);
+        }
+        .chatmd-pre {
+          margin: 6px 0;
+          border-radius: 10px;
+          background: rgba(0 0 0 / 0.35);
+          border: 1px solid rgba(255 255 255 / 0.07);
+          padding: 10px 14px;
+          overflow-x: auto;
+        }
+        .chatmd-pre-wrap { position: relative; display: block; }
+        .chatmd-pre-wrap .chatmd-pre { padding-right: 56px; }
+        .chatmd-pre-lang {
+          position: absolute;
+          top: 8px;
+          left: 14px;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.32);
+          user-select: none;
+          pointer-events: none;
+        }
+        .chatmd-pre-wrap:has(.chatmd-pre-lang) .chatmd-pre { padding-top: 22px; }
+        /* Syntax token colors — VS Code "Dark+" palette */
+        .tok-keyword  { color: #569cd6; }
+        .tok-string   { color: #ce9178; }
+        .tok-comment  { color: #6a9955; font-style: italic; }
+        .tok-number   { color: #b5cea8; }
+        .tok-function { color: #dcdcaa; }
+        .tok-type     { color: #4ec9b0; }
+        .tok-property { color: #9cdcfe; }
+        .tok-tag      { color: #569cd6; }
+        .tok-attr     { color: #9cdcfe; }
+        .tok-punct    { color: rgba(255,255,255,0.75); }
+        .chatmd-copy-btn {
+          position: absolute;
+          top: 12px;
+          right: 8px;
+          font-size: 10px;
+          font-weight: 600;
+          line-height: 1;
+          padding: 4px 8px;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.14);
+          color: rgba(255,255,255,0.55);
+          opacity: 0.7;
+          transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
+          cursor: pointer;
+        }
+        .chatmd-pre-wrap:hover .chatmd-copy-btn,
+        .chatmd-copy-btn:focus-visible {
+          opacity: 1;
+        }
+        .chatmd-copy-btn:hover {
+          background: rgba(255,255,255,0.18);
+          color: rgba(255,255,255,0.95);
+        }
+        .chatmd-copy-btn:disabled { cursor: default; color: #4ade80; }
+        .chatmd-code-block {
+          font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
+          font-size: 0.78em;
+          white-space: pre-wrap;
+          word-break: break-all;
+          display: block;
+        }
+        .chatmd-link {
+          color: #79c0ff;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          word-break: break-all;
+          overflow-wrap: anywhere;
+        }
+        .chatmd-link:hover { color: #a5d6ff; }
+        .chatmd-link:visited { color: #b39ddb; }
+        .chatmd-h1 { display: block; font-size: 1.12em; font-weight: 800; margin: 5px 0 2px; }
+        .chatmd-h2 { display: block; font-size: 1.06em; font-weight: 700; margin: 4px 0 1px; }
+        .chatmd-h3 { display: block; font-size: 1em; font-weight: 600; margin: 3px 0 1px; }
+        .chatmd-hr { border: none; border-top: 1px solid rgba(255 255 255 / 0.12); margin: 7px 0; }
+        .chatmd-li { display: block; padding-left: 4px; margin: 1px 0; }
+        .chatmd-oli { display: block; padding-left: 4px; margin: 1px 0; }
+        .chatmd-quote {
+          display: block;
+          border-left: 2px solid rgba(255 255 255 / 0.25);
+          padding-left: 8px;
+          margin: 2px 0;
+          opacity: 0.78;
+          font-style: italic;
+        }
+`
 
 export default function ChatRoomPage() {
   const { user } = useUserAuth()
@@ -1883,7 +2789,6 @@ export default function ChatRoomPage() {
   const avatarUrl = user?.image ?? ''
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadMessagesFromStorage())
-  const [inputText, setInputText] = useState('')
   const [prefix, setPrefix] = useState<string>(
     () => localStorage.getItem(PREFIX_KEY) ?? DEFAULT_PREFIX,
   )
@@ -1898,11 +2803,6 @@ export default function ChatRoomPage() {
   const [showClearModal, setShowClearModal] = useState(false)
   const [showNicknameModal, setShowNicknameModal] = useState(false)
   const [showAttachPicker, setShowAttachPicker] = useState(false)
-  // True once the composer has wrapped past a single line — switches the
-  // input bar from a compact single-row pill (attach · text · send, all
-  // inline) to a stacked layout (text on top, attach/send pinned to a full-
-  // width row underneath), matching the reference composer design.
-  const [isComposerMultiline, setIsComposerMultiline] = useState(false)
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null)
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
   const [isConnected, setIsConnected] = useState(false)
@@ -2184,8 +3084,8 @@ export default function ChatRoomPage() {
     [],
   )
 
-  const sendMessage = useCallback(() => {
-    const text = inputText.trim()
+  const sendMessage = useCallback((rawText: string) => {
+    const text = rawText.trim()
     if (!text && pendingAttachments.length === 0) return
     if (!isConnected) return
 
@@ -2238,19 +3138,12 @@ export default function ChatRoomPage() {
       }
     })()
 
-    setInputText('')
     setPendingAttachments([])
     setReplyTarget(null)
 
     // Always scroll to bottom when the user sends — even if they were reading up
     isNearBottomRef.current = true
-
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto'
-    }
-    setIsComposerMultiline(false)
-    inputRef.current?.focus()
-  }, [inputText, pendingAttachments, replyTarget, isConnected, socket, sessionId, resolveAttachmentsForSend])
+  }, [pendingAttachments, replyTarget, isConnected, socket, sessionId, resolveAttachmentsForSend])
 
   useEffect(() => {
     if (!awaitingReply) return
@@ -2297,40 +3190,31 @@ export default function ChatRoomPage() {
     socket.emit('chatroom:join', { sessionId, botNickname: name, userId: userIdRef.current, userName: displayNameRef.current, username: usernameRef.current, avatarUrl: avatarUrlRef.current })
   }, [socket, sessionId])
 
-  const handleStart = () => {
+  const handleStart = useCallback(() => {
     localStorage.setItem(GET_STARTED_KEY, 'true')
     setHasStarted(true)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
+    // Composer mounts as soon as hasStarted flips true and autofocuses itself.
+  }, [])
 
-  const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    // Mobile: Enter/Next always inserts a newline (the textarea's native
-    // behaviour) — sending is exclusively the dedicated Send button's job.
-    if (isMobileViewport) return
+  const handleRemoveAttachment = useCallback((index: number) => {
+    setPendingAttachments((prev) => prev.filter((_, j) => j !== index))
+  }, [])
 
-    // Desktop: standard chat-app behaviour — Enter sends, Shift+Enter
-    // inserts a newline.
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
-  }
+  const handleToggleAttachPicker = useCallback(() => {
+    setShowAttachPicker((p) => !p)
+  }, [])
 
-  // Single-line textarea content height, in px, at the composer's base font
-  // size/line-height/padding — anything taller means the text has wrapped.
-  const SINGLE_LINE_THRESHOLD = 46
+  const handleSelectAttachments = useCallback((files: ChatAttachment[]) => {
+    setPendingAttachments((prev) => [...prev, ...files])
+  }, [])
 
-  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    setInputText(value)
-    const el = e.target
-    el.style.height = 'auto'
-    const nextHeight = Math.min(el.scrollHeight, 200)
-    el.style.height = `${nextHeight}px`
-    setIsComposerMultiline(value.length > 0 && el.scrollHeight > SINGLE_LINE_THRESHOLD)
-  }
+  const handleCloseAttachPicker = useCallback(() => {
+    setShowAttachPicker(false)
+  }, [])
 
-  const canSend = isConnected && (!!inputText.trim() || pendingAttachments.length > 0)
+  const handleDismissReply = useCallback(() => {
+    setReplyTarget(null)
+  }, [])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2490,165 +3374,26 @@ export default function ChatRoomPage() {
               {replyTarget && (
                 <ReplyPreviewBar
                   target={replyTarget}
-                  onDismiss={() => setReplyTarget(null)}
+                  onDismiss={handleDismissReply}
                   botNickname={botNickname}
                   displayName={displayName}
                 />
               )}
 
-              {/* ChatGPT-style rounded composer — the message bar itself.
-                  Filled with the same translucent surface + blur as the
-                  page header (bg-surface/90 backdrop-blur-xl) so the two
-                  bars read as one consistent tone, top and bottom. */}
-              <div
-                className={cn(
-                  'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
-                  'bg-surface/90 backdrop-blur-xl ring-1 ring-inset ring-[var(--input-border)]',
-                  'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
-                )}
-              >
-                {/* Pending attachments row — images shown in the message bar */}
-                {pendingAttachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
-                    {pendingAttachments.map((att, i) => (
-                      <div key={i} className="relative group/att">
-                        {att.type === 'image' && att.localUrl ? (
-                          <img
-                            src={att.localUrl}
-                            alt={att.name}
-                            className="h-16 w-16 rounded-xl object-cover border border-white/10 shadow-sm"
-                          />
-                        ) : (
-                          <div className="h-16 w-16 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
-                            {<FileText className="h-4 w-4 text-on-surface-variant" />}
-                            <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
-                          aria-label="Remove attachment"
-                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-outline-variant/50 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Attach · text · send — three permanent siblings whose only
-                    the CSS arrangement (never their mount identity) changes
-                    between states, so the textarea never remounts and never
-                    loses focus/cursor position mid-type.
-                    - Single line: one row, DOM order = attach → text → send.
-                    - Wrapped (2+ lines): text is forced onto its own full-
-                      width line (`basis-full`), which pushes attach/send onto
-                      a second flex line together; `justify-between` then
-                      pins attach to that line's left edge and send to its
-                      right edge — exactly the reference composer's layout. */}
-                <div
-                  className={cn(
-                    'flex flex-wrap items-center',
-                    isComposerMultiline
-                      ? 'justify-between gap-x-1 gap-y-1 px-2.5 pt-2 pb-1.5'
-                      : 'gap-1 pl-1 pr-1 py-1',
-                  )}
-                >
-                  {/* Attachment button */}
-                  <div
-                    id="attach-picker-root"
-                    className={cn('relative shrink-0', isComposerMultiline && 'order-2')}
-                  >
-                    <button
-                      type="button"
-                      aria-label="Attach file"
-                      aria-expanded={showAttachPicker}
-                      onClick={() => setShowAttachPicker((p) => !p)}
-                      className={cn(
-                        'flex items-center justify-center h-9 w-9 rounded-full transition-colors',
-                        showAttachPicker
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-on-surface-variant/60 hover:text-on-surface-variant hover:bg-on-surface/8',
-                      )}
-                    >
-                      <Plus className="h-[18px] w-[18px]" />
-                    </button>
-                    {showAttachPicker && (
-                      <AttachmentPicker
-                        onSelect={(files) => setPendingAttachments((prev) => [...prev, ...files])}
-                        onClose={() => setShowAttachPicker(false)}
-                      />
-                    )}
-                  </div>
-
-                  {/* Auto-resizing textarea */}
-                  <textarea
-                    ref={inputRef}
-                    value={inputText}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    // Tells mobile virtual keyboards to render a "return"
-                    // (newline) key instead of "Next"/"Go"/"Send", matching
-                    // the actual behaviour: Enter always inserts a line
-                    // break here, never submits.
-                    enterKeyHint="enter"
-                    placeholder={
-                      isConnected
-                        ? `Message ${botNickname} or use ${prefix}help`
-                        : 'Connecting…'
-                    }
-                    rows={1}
-                    disabled={!isConnected}
-                    className={cn(
-                      // 16px minimum on mobile — anything smaller makes iOS
-                      // Safari auto-zoom the whole page in when the field is
-                      // focused, which is exactly the "page keeps resizing
-                      // itself" instability on mobile. Desktop keeps the
-                      // original 15px.
-                      'cr-input-scroll min-w-0 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
-                      'placeholder:text-on-surface-variant/40 focus:outline-none resize-none overflow-y-auto',
-                      !isConnected && 'opacity-40 cursor-not-allowed',
-                      isComposerMultiline ? 'order-1 basis-full w-full' : 'flex-1 py-2',
-                    )}
-                    style={{ minHeight: '36px', maxHeight: '200px' }}
-                  />
-
-                  {/* Send button */}
-                  <button
-                    type="button"
-                    aria-label="Send message"
-                    onClick={sendMessage}
-                    disabled={!canSend}
-                    className={cn(
-                      // Same plain, unmarked footprint as the attach (+)
-                      // button — and when active, the exact same soft
-                      // highlight treatment it uses (bg-primary/15 +
-                      // text-primary), so both controls read as one
-                      // consistent visual language.
-                      'flex items-center justify-center h-9 w-9 rounded-full transition-colors shrink-0',
-                      isComposerMultiline && 'order-3',
-                      canSend
-                        ? 'bg-primary/15 text-primary active:scale-95'
-                        : 'text-on-surface-variant/30 cursor-not-allowed',
-                    )}
-                  >
-                    {/* The arrow is always visible; it only switches from a
-                        faint outline to the "full" active send icon once
-                        there's text (or an attachment) to send. */}
-                    <ArrowUp className="h-[18px] w-[18px]" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Desktop-only composer hint — replaces the old keyboard-
-                  shortcut reminder (Enter/Shift+Enter behaviour is standard
-                  desktop chat convention and no longer needs a caption)
-                  with a pointer toward the AI feature instead: mentioning
-                  the bot's name in a message triggers an AI response. */}
-              <p className="hidden sm:block text-center text-[10px] text-on-surface-variant/30 mt-1.5 select-none">
-                Type {botNickname} to trigger an AI response
-              </p>
+              <Composer
+                prefix={prefix}
+                botNickname={botNickname}
+                isConnected={isConnected}
+                isMobileViewport={isMobileViewport}
+                pendingAttachments={pendingAttachments}
+                onRemoveAttachment={handleRemoveAttachment}
+                showAttachPicker={showAttachPicker}
+                onToggleAttachPicker={handleToggleAttachPicker}
+                onSelectAttachments={handleSelectAttachments}
+                onCloseAttachPicker={handleCloseAttachPicker}
+                onSend={sendMessage}
+                inputRef={inputRef}
+              />
             </div>
           </div>
         )}
@@ -2685,190 +3430,7 @@ export default function ChatRoomPage() {
       )}
 
       {/* ── Scoped styles ──────────────────────────────────────────────────── */}
-      <style>{`
-        :root {
-          --chatroom-bg: #0d0f12;
-          --chatroom-header: #111318;
-          --bubble-bot: #1e2330;
-          --bubble-bot-text: #e2e8f0;
-          --bubble-user: #7c3200;
-          --bubble-user-text: #fff7ed;
-          --input-bg: #161a22;
-          --input-border: rgba(255,255,255,0.1);
-          --input-border-focus: rgba(255,130,40,0.45);
-          --input-ring: rgba(255,130,40,0.12);
-        }
-
-
-        @keyframes cr-fadeIn {
-          from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        @keyframes cr-fadeInFast {
-          from { opacity: 0; transform: translateY(4px) scale(0.9); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .cr-fadein-fast { animation: cr-fadeInFast 0.12s ease-out; }
-
-        /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
-        .cr-highlight-flash { background-color: rgba(255,130,40,0.16); }
-
-        /* ── Auto-hiding scroll bar — thumb only appears while actively
-               scrolling, then fades out, instead of sitting on screen
-               permanently. Applied to the message list scroll container. */
-        .cr-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: transparent transparent;
-        }
-        .cr-scroll.is-scrolling {
-          scrollbar-color: rgba(255,255,255,0.22) transparent;
-        }
-        .cr-scroll::-webkit-scrollbar { width: 6px; }
-        .cr-scroll::-webkit-scrollbar-track { background: transparent; }
-        .cr-scroll::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 999px;
-          transition: background-color 200ms ease;
-        }
-        .cr-scroll.is-scrolling::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.22);
-        }
-
-        /* ── Composer wrapper — safe-area-aware bottom padding ─────────────
-               Adds the iOS/Android home-indicator inset on top of the
-               normal padding instead of the input bar sitting flush under
-               it, and keeps the same visual spacing on devices/browsers
-               that don't report a safe-area inset (env(...) falls back to
-               0px there, leaving the base value untouched). */
-        .cr-input-safe-pb {
-          padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-        }
-        @media (min-width: 768px) {
-          .cr-input-safe-pb {
-            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-          }
-        }
-
-        /* ── Composer textarea — scrollbar fully hidden ────────────────────
-               The input still scrolls internally once its content exceeds
-               max-height (200px), but no scrollbar track/thumb is ever
-               rendered, on mobile or desktop. */
-        .cr-input-scroll {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .cr-input-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
-
-        /* ── Audio player: seek bar ─────────────────────────────────────── */
-        .cr-audio-range {
-          -webkit-appearance: none;
-          appearance: none;
-          background: transparent;
-          height: 12px;
-        }
-        .cr-audio-range::-webkit-slider-runnable-track { background: transparent; height: 12px; }
-        .cr-audio-range::-moz-range-track { background: transparent; height: 12px; }
-        .cr-audio-range::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: transparent;
-          cursor: pointer;
-        }
-        .cr-audio-range::-moz-range-thumb {
-          width: 12px;
-          height: 12px;
-          border: none;
-          border-radius: 50%;
-          background: transparent;
-          cursor: pointer;
-        }
-
-        .cr-audio-player audio { display: none; }
-
-        /* Markdown styles */
-        .chatmd strong { font-weight: 700; }
-        .chatmd em { font-style: italic; }
-        .chatmd del { text-decoration: line-through; opacity: 0.65; }
-        .chatmd u { text-decoration: underline; }
-
-        .chatmd-code {
-          font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
-          font-size: 0.8em;
-          padding: 0.1em 0.38em;
-          border-radius: 5px;
-          background: rgba(255 255 255 / 0.1);
-          border: 1px solid rgba(255 255 255 / 0.08);
-        }
-        .chatmd-pre {
-          margin: 6px 0;
-          border-radius: 10px;
-          background: rgba(0 0 0 / 0.35);
-          border: 1px solid rgba(255 255 255 / 0.07);
-          padding: 10px 14px;
-          overflow-x: auto;
-        }
-        .chatmd-pre-wrap { position: relative; display: block; }
-        .chatmd-pre-wrap .chatmd-pre { padding-right: 56px; }
-        .chatmd-copy-btn {
-          position: absolute;
-          top: 12px;
-          right: 8px;
-          font-size: 10px;
-          font-weight: 600;
-          line-height: 1;
-          padding: 4px 8px;
-          border-radius: 6px;
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.14);
-          color: rgba(255,255,255,0.55);
-          opacity: 0.7;
-          transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
-          cursor: pointer;
-        }
-        .chatmd-pre-wrap:hover .chatmd-copy-btn,
-        .chatmd-copy-btn:focus-visible {
-          opacity: 1;
-        }
-        .chatmd-copy-btn:hover {
-          background: rgba(255,255,255,0.18);
-          color: rgba(255,255,255,0.95);
-        }
-        .chatmd-copy-btn:disabled { cursor: default; color: #4ade80; }
-        .chatmd-code-block {
-          font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
-          font-size: 0.78em;
-          white-space: pre-wrap;
-          word-break: break-all;
-          display: block;
-        }
-        .chatmd-link {
-          color: #79c0ff;
-          text-decoration: underline;
-          text-underline-offset: 2px;
-          word-break: break-all;
-          overflow-wrap: anywhere;
-        }
-        .chatmd-link:hover { color: #a5d6ff; }
-        .chatmd-link:visited { color: #b39ddb; }
-        .chatmd-h1 { display: block; font-size: 1.12em; font-weight: 800; margin: 5px 0 2px; }
-        .chatmd-h2 { display: block; font-size: 1.06em; font-weight: 700; margin: 4px 0 1px; }
-        .chatmd-h3 { display: block; font-size: 1em; font-weight: 600; margin: 3px 0 1px; }
-        .chatmd-hr { border: none; border-top: 1px solid rgba(255 255 255 / 0.12); margin: 7px 0; }
-        .chatmd-li { display: block; padding-left: 4px; margin: 1px 0; }
-        .chatmd-oli { display: block; padding-left: 4px; margin: 1px 0; }
-        .chatmd-quote {
-          display: block;
-          border-left: 2px solid rgba(255 255 255 / 0.25);
-          padding-left: 8px;
-          margin: 2px 0;
-          opacity: 0.78;
-          font-style: italic;
-        }
-      `}</style>
+      <style>{CR_STYLES}</style>
     </>
   )
 }
