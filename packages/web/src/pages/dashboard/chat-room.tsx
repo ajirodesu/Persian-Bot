@@ -1080,6 +1080,26 @@ function resolveAudioMime(att: ChatAttachment, url: string): string {
  * receipt) is rendered on the last visual (image/video) item, matching the
  * pattern used by high-quality chat clients for full-bleed photos.
  */
+/** Detects an animated GIF from whatever metadata the attachment carries —
+ *  the explicit MIME type when present, falling back to a `.gif` extension
+ *  on the name/URL (covers bot-sent attachments that only ever set a name). */
+function isGifAttachment(att: ChatAttachment): boolean {
+  if (att.mime) return att.mime === 'image/gif'
+  const src = att.name ?? att.url ?? att.localUrl ?? ''
+  return /\.gif(?:[?#]|$)/i.test(src)
+}
+
+/** Small "GIF" tag overlaid on animated-image thumbnails so they read as
+ *  distinct from static photos at a glance, matching the badge treatment
+ *  most chat clients use. */
+function GifBadge() {
+  return (
+    <span className="absolute top-1.5 left-1.5 px-1.5 py-[1px] rounded-md bg-black/55 text-white text-[9px] font-bold tracking-wide backdrop-blur-sm pointer-events-none select-none">
+      GIF
+    </span>
+  )
+}
+
 function FlushMedia({
   att,
   onOpen,
@@ -1116,6 +1136,8 @@ function FlushMedia({
   ) : null
 
   if (att.type === 'image') {
+    const isGif = isGifAttachment(att)
+
     if (disableFullscreen) {
       return (
         <div className="relative block w-full bg-black/10">
@@ -1128,6 +1150,7 @@ function FlushMedia({
             onLoad={onMediaLoad}
             className="block w-full h-auto max-h-[340px] object-cover select-none"
           />
+          {isGif && <GifBadge />}
           {MetaOverlay}
         </div>
       )
@@ -1140,6 +1163,10 @@ function FlushMedia({
         aria-label={`View ${att.name ?? 'image'} fullscreen`}
         className="group/photo relative block w-full cursor-zoom-in bg-black/10"
       >
+        {/* Animated GIFs play natively in a plain <img> — no special decoding
+            is needed, so the same element that renders a static photo also
+            renders (and keeps animating) a GIF; the badge below is purely
+            an affordance so the person knows it's animated before opening it. */}
         <img
           src={url}
           alt={att.name ?? 'image'}
@@ -1149,6 +1176,7 @@ function FlushMedia({
           onLoad={onMediaLoad}
           className="block w-full h-auto max-h-[340px] object-cover select-none"
         />
+        {isGif && <GifBadge />}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/photo:bg-black/20 transition-colors duration-200">
           <span className="flex items-center justify-center h-9 w-9 rounded-full bg-black/50 text-white opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
             <Maximize2 className="h-4 w-4" />
@@ -1182,6 +1210,121 @@ function FlushMedia({
   const mime = resolveAudioMime(att, url)
   const fileName = att.name ?? 'audio'
   return <AudioPlayer url={url} mime={mime} fileName={fileName} flush />
+}
+
+/**
+ * Compact multi-photo grid for messages carrying 2+ consecutive image
+ * attachments — mirrors the album layout used by Messenger/WhatsApp/Telegram
+ * (equal-width tiles, up to 4 visible, a "+N" overlay for anything beyond
+ * that) instead of stacking every photo full-width down the bubble. GIFs
+ * still animate normally since each tile is a plain <img>; a small badge
+ * flags which tiles are animated.
+ */
+function ImageGrid({
+  images,
+  allImages,
+  onOpen,
+  showMeta,
+  isBot,
+  timestamp,
+  onMediaLoad,
+}: {
+  /** The consecutive-image run this grid renders (2+ items). */
+  images: ChatAttachment[]
+  /** Every image attachment on the message, in order — used to resolve the
+   *  correct starting index into the fullscreen lightbox + filmstrip. */
+  allImages: ChatAttachment[]
+  onOpen: (index: number) => void
+  showMeta: boolean
+  isBot: boolean
+  timestamp: number
+  onMediaLoad?: () => void
+}) {
+  const MAX_TILES = 4
+  const visible = images.slice(0, MAX_TILES)
+  const extra = images.length - visible.length
+
+  return (
+    <div
+      className="grid gap-[2px] w-full"
+      style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
+    >
+      {visible.map((att, i) => {
+        const url = att.localUrl ?? att.url
+        if (!url) return null
+        const isLastVisible = i === visible.length - 1
+        const showOverlayCount = isLastVisible && extra > 0
+        const globalIndex = allImages.indexOf(att)
+        const isGif = isGifAttachment(att)
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onOpen(globalIndex >= 0 ? globalIndex : i)}
+            aria-label={`View image ${i + 1} of ${images.length} fullscreen`}
+            className="group/photo relative block w-full aspect-square cursor-zoom-in bg-black/10 overflow-hidden"
+          >
+            <img
+              src={url}
+              alt={att.name ?? 'image'}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              onLoad={isLastVisible ? onMediaLoad : undefined}
+              className="block w-full h-full object-cover select-none"
+            />
+            {isGif && !showOverlayCount && <GifBadge />}
+            {showOverlayCount ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-white text-lg font-semibold">
+                +{extra}
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/photo:bg-black/20 transition-colors duration-200">
+                <span className="flex items-center justify-center h-7 w-7 rounded-full bg-black/50 text-white opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </span>
+              </div>
+            )}
+            {showMeta && isLastVisible && (
+              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 backdrop-blur-sm text-white shadow-sm pointer-events-none">
+                <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
+                  {formatTime(timestamp)}
+                </span>
+                {!isBot && <CheckCheck className="h-3 w-3 opacity-90" />}
+              </div>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Groups a message's media attachments into render units: runs of 2+
+ *  consecutive images collapse into a single grid unit, everything else
+ *  (lone images, video, audio) stays its own unit rendered by FlushMedia. */
+type MediaGroup =
+  | { kind: 'grid'; items: ChatAttachment[] }
+  | { kind: 'single'; item: ChatAttachment }
+
+function groupMediaAttachments(atts: ChatAttachment[]): MediaGroup[] {
+  const groups: MediaGroup[] = []
+  let i = 0
+  while (i < atts.length) {
+    if (atts[i].type === 'image') {
+      const run: ChatAttachment[] = []
+      while (i < atts.length && atts[i].type === 'image') {
+        run.push(atts[i])
+        i++
+      }
+      if (run.length > 1) groups.push({ kind: 'grid', items: run })
+      else groups.push({ kind: 'single', item: run[0] })
+    } else {
+      groups.push({ kind: 'single', item: atts[i] })
+      i++
+    }
+  }
+  return groups
 }
 
 function AttachmentView({ att }: { att: ChatAttachment }) {
@@ -1417,10 +1560,15 @@ const MessageBubble = memo(function MessageBubble({
   const pillAttachments = (msg.attachments ?? []).filter((a) => !mediaAttachments.includes(a))
   const hasMedia = mediaAttachments.length > 0
   const hasPills = pillAttachments.length > 0
+  // Consecutive images collapse into a single grid unit (see ImageGrid) so a
+  // message with several photos reads as an album instead of a long stack of
+  // full-width bubbles; video/audio and lone images render individually.
+  const mediaGroups = groupMediaAttachments(mediaAttachments)
+  const lastGroup = mediaGroups[mediaGroups.length - 1]
   // The timestamp overlay only works on visual media (image/video) since
   // they provide a canvas to sit on top of; audio has no such surface, so
   // when audio is the trailing item we fall back to a normal meta row.
-  const lastMediaType = hasMedia ? mediaAttachments[mediaAttachments.length - 1].type : null
+  const lastMediaType = lastGroup ? (lastGroup.kind === 'grid' ? 'image' : lastGroup.item.type) : null
   const trailingIsVisual = lastMediaType === 'image' || lastMediaType === 'video'
 
   // The reply preview row sits directly above this message's own bubble,
@@ -1556,16 +1704,31 @@ const MessageBubble = memo(function MessageBubble({
               video, and audio are always rendered at the same size: the
               message bubble's max size. */}
           {hasMedia && (
-            <div className="flex flex-col w-full">
-              {mediaAttachments.map((att, i) => {
+            <div className="flex flex-col w-full gap-[2px]">
+              {mediaGroups.map((group, gi) => {
+                const isLastGroup = gi === mediaGroups.length - 1
+                if (group.kind === 'grid') {
+                  return (
+                    <ImageGrid
+                      key={gi}
+                      images={group.items}
+                      allImages={imageAttachments}
+                      onOpen={(idx) => onImageOpen(imageAttachments, idx)}
+                      showMeta={isLastGroup}
+                      isBot={isBot}
+                      timestamp={msg.timestamp}
+                      onMediaLoad={onMediaLoad}
+                    />
+                  )
+                }
+                const att = group.item
                 const imgIndex = att.type === 'image' ? imageAttachments.indexOf(att) : -1
-                const isLast = i === mediaAttachments.length - 1
                 return (
                   <FlushMedia
-                    key={i}
+                    key={gi}
                     att={att}
                     onOpen={imgIndex >= 0 ? () => onImageOpen(imageAttachments, imgIndex) : undefined}
-                    showMeta={isLast && att.type !== 'audio'}
+                    showMeta={isLastGroup && att.type !== 'audio'}
                     isBot={isBot}
                     timestamp={msg.timestamp}
                     onMediaLoad={onMediaLoad}
@@ -2452,11 +2615,18 @@ const Composer = memo(function Composer({
             {pendingAttachments.map((att, i) => (
               <div key={i} className="relative group/att">
                 {att.type === 'image' && att.localUrl ? (
-                  <img
-                    src={att.localUrl}
-                    alt={att.name}
-                    className="h-16 w-16 rounded-xl object-cover border border-white/10 shadow-sm"
-                  />
+                  <div className="relative h-16 w-16 rounded-xl overflow-hidden border border-white/10 shadow-sm">
+                    <img
+                      src={att.localUrl}
+                      alt={att.name}
+                      className="h-full w-full object-cover"
+                    />
+                    {isGifAttachment(att) && (
+                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded bg-black/55 text-white text-[7px] font-bold tracking-wide backdrop-blur-sm pointer-events-none select-none">
+                        GIF
+                      </span>
+                    )}
+                  </div>
                 ) : (
                   <div className="h-16 w-16 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
                     {<FileText className="h-4 w-4 text-on-surface-variant" />}
@@ -3128,9 +3298,13 @@ export default function ChatRoomPage() {
             throw new Error(`"${att.name ?? 'file'}" is too large (max 8MB).`)
           }
           const dataUrl = await fileToDataUrl(att.file)
-          resolved.push({ type: att.type, name: att.name, url: dataUrl })
+          // Carry the MIME type through to the server/renderer — it's what lets
+          // the viewer tell an animated GIF apart from a static image (data:
+          // URLs already encode the right type for <img> itself, but we still
+          // need it as plain metadata for things like the "GIF" badge).
+          resolved.push({ type: att.type, name: att.name, url: dataUrl, ...(att.mime ? { mime: att.mime } : {}) })
         } else {
-          resolved.push({ type: att.type, name: att.name, url: att.url })
+          resolved.push({ type: att.type, name: att.name, url: att.url, ...(att.mime ? { mime: att.mime } : {}) })
         }
       }
       return resolved
