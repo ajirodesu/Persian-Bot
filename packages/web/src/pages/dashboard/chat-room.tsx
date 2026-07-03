@@ -1138,7 +1138,7 @@ function FlushMedia({
         type="button"
         onClick={onOpen}
         aria-label={`View ${att.name ?? 'image'} fullscreen`}
-        className="group relative block w-full cursor-zoom-in bg-black/10"
+        className="group/photo relative block w-full cursor-zoom-in bg-black/10"
       >
         <img
           src={url}
@@ -1149,8 +1149,8 @@ function FlushMedia({
           onLoad={onMediaLoad}
           className="block w-full h-auto max-h-[340px] object-cover select-none"
         />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors duration-200">
-          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-200">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/photo:bg-black/20 transition-colors duration-200">
+          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-black/50 text-white opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
             <Maximize2 className="h-4 w-4" />
           </span>
         </div>
@@ -1444,7 +1444,7 @@ const MessageBubble = memo(function MessageBubble({
       )}
       <div
       className={cn(
-        'group relative flex w-full items-end gap-1 px-3 py-1',
+        'group/msg relative flex w-full items-end gap-1 px-3 py-1',
         isBot ? 'justify-start' : 'justify-end',
       )}
       onTouchStart={handleTouchStart}
@@ -1479,7 +1479,7 @@ const MessageBubble = memo(function MessageBubble({
         className={cn(
           'hidden md:flex items-center justify-center h-7 w-7 rounded-full shrink-0 self-center',
           'text-on-surface-variant/50 hover:text-on-surface hover:bg-on-surface/10',
-          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150',
+          'opacity-0 group-hover/msg:opacity-100 focus-visible:opacity-100 transition-opacity duration-150',
           isBot ? 'order-last' : 'order-first',
         )}
       >
@@ -1568,7 +1568,6 @@ const MessageBubble = memo(function MessageBubble({
                     showMeta={isLast && att.type !== 'audio'}
                     isBot={isBot}
                     timestamp={msg.timestamp}
-                    disableFullscreen={hasButtons}
                     onMediaLoad={onMediaLoad}
                   />
                 )
