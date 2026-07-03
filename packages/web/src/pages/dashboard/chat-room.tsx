@@ -1240,36 +1240,76 @@ const BotButtonRow = memo(function BotButtonRow({
   )
 })
 
-// ── Reply Quote inside bubble ─────────────────────────────────────────────────
+// ── Reply attribution + quote bubble (Facebook Messenger style) ────────────────
+//
+// Messenger renders a reply as three stacked pieces, all aligned to the
+// replying message's side of the screen:
+//   1. a small "{Sender} replied to {Original Sender}" label
+//   2. a separate, muted quote bubble holding a single truncated line of the
+//      original message — NOT nested inside the reply's own colored bubble
+//   3. the actual reply bubble, normal size/color, right below it
+// This intentionally does NOT reuse the reply bubble's own background/text
+// color for the quote — Messenger's quote bubble is always the same neutral
+// gray regardless of who's replying, which is what visually separates "what
+// was quoted" from "the new message" instead of blending them into one box.
+
+function buildReplyLabel(
+  isBot: boolean,
+  originalType: ChatMessage['type'] | undefined,
+  botNickname: string,
+  displayName: string,
+): string {
+  const replierName = isBot ? botNickname : 'You'
+  const originalIsBot = originalType === 'bot'
+  const sameAuthor = originalIsBot === isBot
+  if (sameAuthor) return `${replierName} replied to ${isBot ? 'themselves' : 'yourself'}`
+  return `${replierName} replied to ${originalIsBot ? botNickname : displayName}`
+}
 
 const ReplyQuote = memo(function ReplyQuote({
   messages,
   replyToId,
+  isBot,
   botNickname,
   displayName,
   onClick,
 }: {
   messages: ChatMessage[]
   replyToId: string
+  isBot: boolean
   botNickname: string
   displayName: string
   onClick?: () => void
 }) {
   const original = messages.find((m) => m.id === replyToId)
   if (!original) return null
+  const label = buildReplyLabel(isBot, original.type, botNickname, displayName)
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex flex-col gap-0.5 mb-1.5 pl-2 border-l-[3px] border-current/50 min-w-0 w-full max-w-full overflow-hidden text-left cursor-pointer active:opacity-70 transition-opacity"
-    >
-      <p className="text-[12.5px] font-bold leading-tight truncate w-full max-w-full">
-        {original.type === 'bot' ? botNickname : displayName}
-      </p>
-      <p className="text-[12.5px] opacity-70 truncate leading-tight w-full max-w-full">
-        {original.text ? original.text.split('\n')[0] : '📎 Attachment'}
-      </p>
-    </button>
+    <div className={cn('flex flex-col gap-0.5 max-w-[min(80%,420px)]', isBot ? 'items-start' : 'items-end')}>
+      <div className={cn('flex items-center gap-1 px-1 text-[11px] text-on-surface-variant/55', isBot ? 'flex-row' : 'flex-row-reverse')}>
+        <Reply className="h-3 w-3 shrink-0" />
+        <span className="truncate">{label}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          'min-w-0 max-w-full overflow-hidden text-left cursor-pointer active:opacity-70 transition-opacity',
+          'rounded-2xl bg-on-surface/10 text-on-surface-variant px-3.5 py-2 text-[12.5px] leading-tight',
+        )}
+      >
+        {/* Up to three lines of the original message, ellipsis-truncated
+            beyond that — matches Messenger's quote-bubble preview, which
+            never grows unbounded for long original messages. */}
+        <p
+          className="line-clamp-3 w-full max-w-full whitespace-pre-wrap"
+          style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+        >
+          {original.text || '📎 Attachment'}
+        </p>
+      </button>
+    </div>
   )
 })
 
@@ -1383,8 +1423,26 @@ const MessageBubble = memo(function MessageBubble({
   const lastMediaType = hasMedia ? mediaAttachments[mediaAttachments.length - 1].type : null
   const trailingIsVisual = lastMediaType === 'image' || lastMediaType === 'video'
 
+  // The reply preview row sits directly above this message's own bubble,
+  // so it's positioned on the same side as the replying message itself
+  // (not the original quoted message).
+  const replyOriginal = msg.replyTo ? messages.find((m) => m.id === msg.replyTo) : undefined
+
   return (
-    <div
+    <>
+      {msg.replyTo && replyOriginal && (
+        <div className={cn('flex w-full px-3 pt-1', isBot ? 'justify-start' : 'justify-end')}>
+          <ReplyQuote
+            messages={messages}
+            replyToId={msg.replyTo}
+            isBot={isBot}
+            botNickname={botNickname}
+            displayName={displayName}
+            onClick={() => onQuoteClick(msg.replyTo!)}
+          />
+        </div>
+      )}
+      <div
       className={cn(
         'group relative flex w-full items-end gap-1 px-3 py-1',
         isBot ? 'justify-start' : 'justify-end',
@@ -1436,7 +1494,10 @@ const MessageBubble = memo(function MessageBubble({
       <div
         ref={bubbleColRef}
         className={cn(
-          'flex flex-col relative max-w-[72%]',
+          // A fixed "standard" cap (420px) — like Messenger's own desktop
+          // bubble width — with an 80% viewport fallback so bubbles never
+          // overflow on narrow/mobile screens.
+          'flex flex-col relative max-w-[min(80%,420px)]',
           hasMedia && 'w-full',
           isBot ? 'items-start order-first' : 'items-end order-last',
         )}
@@ -1454,21 +1515,11 @@ const MessageBubble = memo(function MessageBubble({
             'shadow-md',
           )}
         >
-          {(hasText || hasPills || msg.replyTo) && (
+          {(hasText || hasPills) && (
             <div
               className="px-3.5 py-2.5"
               style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
             >
-              {msg.replyTo && (
-                <ReplyQuote
-                  messages={messages}
-                  replyToId={msg.replyTo}
-                  botNickname={botNickname}
-                  displayName={displayName}
-                  onClick={() => onQuoteClick(msg.replyTo!)}
-                />
-              )}
-
               {hasPills && (
                 <div className={cn('flex flex-col gap-2', hasText && 'mb-2')}>
                   {pillAttachments.map((att, i) => (
@@ -1535,7 +1586,8 @@ const MessageBubble = memo(function MessageBubble({
           />
         )}
       </div>
-    </div>
+      </div>
+    </>
   )
 })
 
@@ -2134,8 +2186,11 @@ function ReplyPreviewBar({
         <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
           {target.type === 'bot' ? botNickname : displayName}
         </p>
-        <p className="text-xs text-on-surface-variant truncate leading-snug">
-          {target.text.slice(0, 80) || '📎 Attachment'}
+        <p
+          className="text-xs text-on-surface-variant leading-snug line-clamp-3 whitespace-pre-wrap"
+          style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+        >
+          {target.text || '📎 Attachment'}
         </p>
       </div>
       <button
@@ -2440,7 +2495,7 @@ const Composer = memo(function Composer({
           <div className="h-10 w-10 shrink-0" />
           <div
             ref={mirrorRef}
-            className="min-w-0 flex-1 p-1 text-[16px] md:text-[15px] leading-relaxed whitespace-pre-wrap break-words"
+            className="min-w-0 flex-1 py-1 text-[16px] md:text-[15px] leading-relaxed whitespace-pre-wrap break-words"
           />
           <div className="h-10 w-10 shrink-0" />
         </div>
@@ -2512,12 +2567,12 @@ const Composer = memo(function Composer({
               // focused, which is exactly the "page keeps resizing
               // itself" instability on mobile. Desktop keeps the
               // original 15px.
-              'cr-input-scroll min-w-0 p-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
+              'cr-input-scroll min-w-0 py-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
               'placeholder:text-on-surface-variant/40 focus:outline-none resize-none overflow-y-auto',
               !isConnected && 'opacity-40 cursor-not-allowed',
-              isComposerMultiline ? 'order-1 basis-full w-full' : 'flex-1',
+              isComposerMultiline ? 'order-1 basis-full w-full px-1' : 'flex-1',
             )}
-            style={{ minHeight: '40px', maxHeight: '200px' }}
+            style={{ maxHeight: '200px' }}
           />
 
           {/* Send button */}
