@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import ScrollToTop from '@/components/ScrollToTop'
+import { getPlatformIconComponent } from '@/components/icons/PlatformIcons'
+import { botService } from '@/features/users/services/bot.service'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import { DashboardSidebarProvider } from '@/contexts/DashboardSidebarContext'
@@ -79,10 +81,17 @@ function isNavItemActive(itemPath: string, pathname: string): boolean {
 const SidebarNav = memo(function SidebarNav({
   activePath,
   onNavClick,
+  openBot,
 }: {
   activePath: string
   onNavClick?: () => void
+  /** The bot currently open under /dashboard/bot — null/undefined when no
+   *  bot is open. Drives the extra "own page" nav entry below. */
+  openBot?: { id: string; nickname: string; platform: string } | null
 }) {
+  const isBotRoute =
+    activePath === ROUTES.DASHBOARD.BOT || activePath.startsWith(`${ROUTES.DASHBOARD.BOT}/`)
+
   return (
     <div className="flex flex-col h-full">
       {/* Sidebar header — aligns with content header */}
@@ -112,8 +121,12 @@ const SidebarNav = memo(function SidebarNav({
         aria-label="Dashboard navigation"
       >
         {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
-          const isActive = isNavItemActive(path, activePath)
-          return (
+          // Bot Manager defers its own highlight to the dedicated "open
+          // bot" entry below while a specific bot is open — otherwise
+          // both would light up together for the same set of routes.
+          const isActive =
+            isNavItemActive(path, activePath) && !(path === ROUTES.DASHBOARD.ROOT && openBot)
+          const navLink = (
             <Link
               key={path}
               to={path}
@@ -130,6 +143,36 @@ const SidebarNav = memo(function SidebarNav({
               <Icon className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
               {label}
             </Link>
+          )
+
+          // The open bot's own page sits directly under Bot Manager — it
+          // only exists in the sidebar for as long as that bot stays
+          // open, and disappears the instant it's closed (navigated away
+          // from). Styled identically to every other nav item, no nested/
+          // indented treatment, so it reads as just another page, not a
+          // sub-item.
+          if (path !== ROUTES.DASHBOARD.ROOT || !openBot) return navLink
+
+          const PlatformIcon = getPlatformIconComponent(openBot.platform)
+          return (
+            <div key={path} className="flex flex-col gap-0.5">
+              {navLink}
+              <Link
+                to={`${ROUTES.DASHBOARD.BOT}?id=${openBot.id}`}
+                onClick={onNavClick}
+                aria-current={isBotRoute ? 'page' : undefined}
+                className={cn(
+                  H_SIDEBAR_NAV,
+                  'rounded-xl font-medium transition-colors duration-fast',
+                  isBotRoute
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
+                )}
+              >
+                <PlatformIcon className="h-3.5 w-3.5 3xl:h-4 3xl:w-4 shrink-0" />
+                <span className="truncate">{openBot.nickname}</span>
+              </Link>
+            </div>
           )
         })}
       </nav>
@@ -341,13 +384,54 @@ export default function DashboardLayout() {
     }
   }, [snackbar, setPosition])
 
-  const currentLabel =
-    NAV_ITEMS.find((i) => isNavItemActive(i.path, activePath))?.label ?? 'Dashboard'
-
   // The chat room manages its own internal scroll (message list) and needs
   // the content column pinned to the viewport instead of growing the page —
   // every other dashboard page keeps the normal padded, page-scrolling main.
   const isChatRoom = activePath.startsWith(ROUTES.DASHBOARD.CHAT_ROOM)
+
+  // ── "Currently open bot" sidebar entry ───────────────────────────────────
+  // Bot detail pages live at /dashboard/bot?id=<id> (and its /commands,
+  // /events, /settings tabs) rather than a path param, so the id has to be
+  // read from the query string. Resolving to null outside that route (or
+  // once the id itself goes away) is what makes the sidebar entry disappear
+  // the moment the bot is "closed" — there's nothing to opt back out of.
+  const isBotRoute =
+    activePath === ROUTES.DASHBOARD.BOT || activePath.startsWith(`${ROUTES.DASHBOARD.BOT}/`)
+  const openBotId = isBotRoute ? new URLSearchParams(location.search).get('id') : null
+
+  const [openBot, setOpenBot] = useState<{
+    id: string
+    nickname: string
+    platform: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (!openBotId) {
+      setOpenBot(null)
+      return
+    }
+
+    let cancelled = false
+    botService
+      .getBot(openBotId)
+      .then((bot) => {
+        if (!cancelled) {
+          setOpenBot({ id: openBotId, nickname: bot.nickname, platform: bot.platform })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOpenBot(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [openBotId])
+
+  const currentLabel =
+    openBot && isBotRoute
+      ? openBot.nickname
+      : (NAV_ITEMS.find((i) => isNavItemActive(i.path, activePath))?.label ?? 'Dashboard')
 
   return (
     <DashboardSidebarProvider open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -359,7 +443,7 @@ export default function DashboardLayout() {
             H_SIDEBAR_WIDTH,
           )}
         >
-          <SidebarNav activePath={activePath} />
+          <SidebarNav activePath={activePath} openBot={openBot} />
         </aside>
 
         {/* Mobile scrim */}
@@ -384,6 +468,7 @@ export default function DashboardLayout() {
           <SidebarNav
             activePath={activePath}
             onNavClick={() => setMobileOpen(false)}
+            openBot={openBot}
           />
         </aside>
 
