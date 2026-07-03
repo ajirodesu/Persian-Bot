@@ -2440,7 +2440,7 @@ const Composer = memo(function Composer({
           <div className="h-10 w-10 shrink-0" />
           <div
             ref={mirrorRef}
-            className="min-w-0 flex-1 px-1 text-[16px] md:text-[15px] leading-relaxed py-2 whitespace-pre-wrap break-words"
+            className="min-w-0 flex-1 p-1 text-[16px] md:text-[15px] leading-relaxed whitespace-pre-wrap break-words"
           />
           <div className="h-10 w-10 shrink-0" />
         </div>
@@ -2512,10 +2512,10 @@ const Composer = memo(function Composer({
               // focused, which is exactly the "page keeps resizing
               // itself" instability on mobile. Desktop keeps the
               // original 15px.
-              'cr-input-scroll min-w-0 px-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
+              'cr-input-scroll min-w-0 p-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
               'placeholder:text-on-surface-variant/40 focus:outline-none resize-none overflow-y-auto',
               !isConnected && 'opacity-40 cursor-not-allowed',
-              isComposerMultiline ? 'order-1 basis-full w-full' : 'flex-1 py-2',
+              isComposerMultiline ? 'order-1 basis-full w-full' : 'flex-1',
             )}
             style={{ minHeight: '40px', maxHeight: '200px' }}
           />
