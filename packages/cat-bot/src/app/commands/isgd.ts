@@ -71,7 +71,7 @@ async function fetchShortUrl(targetUrl: string): Promise<string | null> {
 
 export const meta: CommandMeta = {
   name: 'isgd',
-  aliases: ['is.gd'] as string[],
+  aliases: [] as string[],
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
