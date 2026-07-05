@@ -41,15 +41,45 @@ export async function createDiscordClient(
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
   });
 
+  // WHY A TIMEOUT IS REQUIRED: client.login() can hang forever with neither
+  // ClientReady nor an error firing — e.g. the WebSocket handshake to Discord's
+  // gateway stalls on a flaky/blocked outbound connection. Without a timeout, this
+  // bootstrap Promise never settles, so boot() never resolves or rejects,
+  // runManagedSession's lock is never released in its `finally`, and every later
+  // Start click is met with "start is busy" forever — the session looks stuck
+  // rather than actually retrying.
+  const LOGIN_TIMEOUT_MS = 30_000;
   await new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      sessionLogger.error(
+        `[discord] Login timed out after ${LOGIN_TIMEOUT_MS}ms — no ClientReady event received (gateway handshake stalled)`,
+      );
+      // Best-effort cleanup so a half-connected client isn't leaked before the
+      // caller's own cleanup() runs on the next retry attempt.
+      client.destroy().catch(() => {});
+      reject(new Error('DiscordLoginTimeout'));
+    }, LOGIN_TIMEOUT_MS);
+
     // Events.ClientReady avoids raw strings that could rename between discord.js versions
     client.once(Events.ClientReady, (c) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       sessionLogger.info(`[discord] Logged in as ${c.user.tag}`);
       resolve();
     });
     // Reject the bootstrap Promise on login failure so startSessionWithRetry can classify
     // the error: TokenInvalid → shouldRetry returns false → immediate fail (no retries).
-    client.login(token).catch(reject);
+    client.login(token).catch((err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
   });
 
   // discord.js emits 'error' on WebSocket failures and unhandled REST errors.
