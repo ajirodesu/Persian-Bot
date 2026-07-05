@@ -108,62 +108,6 @@ async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
         const mod = (await import(
           pathToFileURL(path.join(dir, file)).href
         )) as Record<string, unknown>;
-
-        // ── Multi-command file support ─────────────────────────────────────
-        // A file may export `commands: Array<{ meta, onCommand, onChat?, button? }>`
-        // instead of a single top-level `meta`/`onCommand` pair. Each array entry
-        // is registered exactly like a standalone command module — this lets a
-        // family of closely-related commands (e.g. a shared API-config table)
-        // live in one source file without polluting the commands/ directory with
-        // near-duplicate files, while every downstream consumer (dispatcher,
-        // help.ts, registry sync, isPlatformAllowed) keeps working unmodified
-        // since each registered entry is itself a fully-shaped
-        // `{ meta, onCommand, ... }` object.
-        if (Array.isArray(mod['commands'])) {
-          for (const rawEntry of mod['commands'] as Array<
-            Record<string, unknown>
-          >) {
-            const entryCfg = rawEntry['meta'] as
-              | { name?: string; aliases?: string[]; options?: Array<{ name?: string }> }
-              | undefined;
-
-            if (!entryCfg?.name) {
-              logger.warn(`⚠️  Skipping an entry in ${file}: missing meta.name`);
-              continue;
-            }
-            if (
-              typeof rawEntry['onCommand'] !== 'function' &&
-              typeof rawEntry['onChat'] !== 'function'
-            ) {
-              logger.warn(
-                `⚠️  Skipping "${entryCfg.name}" in ${file}: missing onCommand/onChat`,
-              );
-              continue;
-            }
-
-            entryCfg.name = entryCfg.name.toLowerCase();
-            if (Array.isArray(entryCfg.options)) {
-              for (const opt of entryCfg.options) {
-                if (opt && typeof opt.name === 'string') {
-                  opt.name = opt.name.toLowerCase();
-                }
-              }
-            }
-
-            commands.set(entryCfg.name, rawEntry);
-            commandRegistry.set(entryCfg.name, rawEntry);
-            logger.info(`Loaded command: ${entryCfg.name} (from ${file})`);
-
-            if (Array.isArray(entryCfg.aliases)) {
-              for (const alias of entryCfg.aliases) {
-                commands.set(String(alias).toLowerCase(), rawEntry);
-                logger.info(`  ↳ Alias: ${String(alias).toLowerCase()}`);
-              }
-            }
-          }
-          return;
-        }
-
         const cfg = mod['meta'] as
           | { name?: string; aliases?: string[] }
           | undefined;

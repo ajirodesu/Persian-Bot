@@ -92,16 +92,6 @@ export async function urlToStream(
   const response = await axios.get<Readable>(url, {
     responseType: 'stream',
     timeout: 15_000,
-    // Several free third-party API providers reject requests that don't look
-    // like they came from a browser (basic bot-protection / Cloudflare rules)
-    // and reply with 403 even though the same URL loads fine in a browser.
-    // A standard desktop User-Agent + Accept header is enough to pass that
-    // check without impersonating anything beyond "a normal HTTP client".
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      Accept: 'image/*,video/*,audio/*,*/*;q=0.8',
-    },
   });
 
   // Set the path property on the response stream for MIME type detection by platform wrappers
