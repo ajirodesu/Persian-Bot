@@ -1,32 +1,37 @@
 /**
- * Popcat Text Effects — multi-command family (single file)
+ * Popcat Two-Panel Memes — multi-command family (single file, config-driven)
  *
- * Every entry sends the user's text to a api.popcat.xyz/v2/<effect>?text=
- * endpoint and returns the rendered result as an image attachment. Every
- * endpoint responds with the raw image bytes directly (no JSON envelope),
- * so the shared handler just downloads and verifies that response before
- * attaching it.
+ * Same architecture as popcat.ts / popcat-text.ts / popcat-media.ts: one
+ * EFFECT_CONFIGS table declares each endpoint (path, label, example text
+ * for both panels), and one shared runEffect() dispatches on that config.
+ * Adding another two-panel meme later means appending one config object —
+ * no new onCommand function required.
  *
- * The loader (`engine/app.ts` loadCommands) natively supports a file
- * exporting `commands: Array<{ meta, onCommand }>` and registers each entry
- * exactly like a standalone command module.
+ * Every endpoint takes a `text1` / `text2` pair and responds with the raw
+ * image bytes directly (no JSON envelope), so a shared downloader validates
+ * the response before attaching it.
+ *
+ * Commands:
+ *   /drake  — Drake disapprove/approve meme
+ *   /pooh   — Regular Pooh / Fancy Pooh meme
  *
  * Flow (per command):
- *   User: /alert Something happened
+ *   User: /drake amongus | amogus
  *   Bot:  [effect-rendered image]
  *
- * If the command is invoked with no text but is a reply to a message, the
- * replied-to message's text is used instead (mirrors the reply-fallback
- * convention used by other text-input commands, e.g. say.ts).
+ * If invoked with no "|" pair but as a reply to a message, that message's
+ * text is used as text2 (top/first panel is left for the caller to type),
+ * mirroring the reply-fallback convention used by other text-input
+ * commands (see say.ts, popcat-text.ts).
  */
 
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
-import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { createUrl } from '@/engine/lib/apis.lib.js';
+import type { CommandMeta, CommandOption } from '@/engine/types/module-config.types.js';
+import { OptionType } from '@/engine/modules/command/command-option.constants.js';
+import { createUrl, type UrlParams } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // ── Outbound request headers ─────────────────────────────────────────────────
@@ -67,13 +72,13 @@ function extFromContentType(contentType: unknown): string {
 }
 
 /**
- * Downloads the rendered effect image ourselves (rather than handing a bare
+ * Downloads the rendered meme image ourselves (rather than handing a bare
  * URL to attachment_url) so a non-2xx response is caught and reported here
  * with a clear, per-command message.
  */
-async function fetchEffectImage(
+async function fetchRenderedImage(
   requestUrl: string,
-  sourceText: string,
+  context: string,
   label: string,
 ): Promise<{ buffer: Buffer; ext: string }> {
   const response = await axios.get<ArrayBuffer>(requestUrl, {
@@ -86,7 +91,7 @@ async function fetchEffectImage(
   if (response.status < 200 || response.status >= 300) {
     const reason = describeErrorBody(response.data);
     logger.warn(
-      `[popcat-text] ${label} failed (status ${response.status}): ${reason} | request=${requestUrl} | text=${sourceText}`,
+      `[popcat-meme] ${label} failed (status ${response.status}): ${reason} | request=${requestUrl} | context=${context}`,
     );
     throw new Error(`${label} API responded with status ${response.status}: ${reason}`);
   }
@@ -99,72 +104,43 @@ async function fetchEffectImage(
 
 // ── Config table ──────────────────────────────────────────────────────────────
 
-interface EffectConfig {
+interface EndpointConfig {
+  /** Command name — also the API path segment under /v2/. */
   name: string;
+  /** Full path appended to the popcat base URL. */
   path: string;
+  /** Display label used in reply messages / error text. */
   label: string;
   description: string;
-  example: string;
+  /** Example values shown in usage/option hints. */
+  example1: string;
+  example2: string;
+  aliases?: string[];
 }
 
-const EFFECT_CONFIGS: EffectConfig[] = [
+const EFFECT_CONFIGS: EndpointConfig[] = [
   {
-    name: 'alert',
-    path: '/v2/alert',
-    label: 'Alert',
-    description: 'Render text as an iOS-style alert popup.',
-    example: 'Something happened',
+    name: 'drake',
+    path: '/v2/drake',
+    label: 'Drake',
+    description: 'Render the Drake disapprove/approve meme.',
+    example1: 'amongus',
+    example2: 'amogus',
   },
   {
-    name: 'biden',
-    path: '/v2/biden',
-    label: 'Biden Tweet',
-    description: 'Render text as a Joe Biden tweet meme.',
-    example: 'pop cat is horni',
-  },
-  {
-    name: 'caution',
-    path: '/v2/caution',
-    label: 'Caution',
-    description: 'Render text on a yellow caution sign.',
-    example: 'Wet floor',
-  },
-  {
-    name: 'couldread',
-    path: '/v2/couldread',
-    label: 'Could Read',
-    description: 'Render text as a "bet you could read that" meme.',
-    example: 'Never Gonna Give You Up',
-  },
-  {
-    name: 'facts',
-    path: '/v2/facts',
-    label: 'Facts',
-    description: 'Render text as a "facts" meme card.',
-    example: 'Cats are liquid',
-  },
-  {
-    name: 'pikachu',
-    path: '/v2/pikachu',
-    label: 'Pikachu',
-    description: 'Render text as the surprised Pikachu meme caption.',
-    example: 'hello',
-  },
-  {
-    name: 'sadcat',
-    path: '/v2/sadcat',
-    label: 'Sadcat',
-    description: 'Make a Sad Cat Meme!',
-    example: 'hello',
+    name: 'pooh',
+    path: '/v2/pooh',
+    label: 'Pooh',
+    description: 'Render the regular Pooh / fancy Pooh meme.',
+    example1: 'making a discord bot',
+    example2: 'making an api',
+    aliases: ['poohmeme'],
   },
 ];
 
 // ── Shared handler ────────────────────────────────────────────────────────────
 
-async function runEffect(
-  ctx: AppCtx,
-  config: EffectConfig,
-): Promise<void> {
+async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
   const { chat, event, args, usage } = ctx;
 
   const messageReply = event['messageReply'] as
@@ -172,19 +148,36 @@ async function runEffect(
     | null
     | undefined;
 
-  // Text-first, falling back to the replied-to message's text when the
-  // command itself was invoked with no arguments.
-  const typed = args.join(' ').trim();
-  const text = typed || ((messageReply?.['message'] as string) ?? '').trim();
+  const rawInput = args.join(' ');
+  const pipeIndex = rawInput.indexOf('|');
 
-  if (!text) {
+  let text1: string;
+  let text2: string;
+
+  if (pipeIndex !== -1) {
+    text1 = rawInput.slice(0, pipeIndex).trim();
+    text2 = rawInput.slice(pipeIndex + 1).trim();
+  } else {
+    // No "a | b" pair typed — treat the whole input as the first panel and
+    // fall back to the replied-to message's text for the second panel.
+    text1 = rawInput.trim();
+    text2 = ((messageReply?.['message'] as string) ?? '').trim();
+  }
+
+  if (!text1 || !text2) {
     await usage();
     return;
   }
 
+  const params: UrlParams = { text1, text2 };
+
   try {
-    const requestUrl = createUrl('popcat', config.path, { text });
-    const { buffer, ext } = await fetchEffectImage(requestUrl, text, config.label);
+    const requestUrl = createUrl('popcat', config.path, params);
+    const { buffer, ext } = await fetchRenderedImage(
+      requestUrl,
+      `${text1} | ${text2}`,
+      config.label,
+    );
 
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
@@ -200,6 +193,25 @@ async function runEffect(
   }
 }
 
+// ── Dynamic meta generation ──────────────────────────────────────────────────
+
+function buildOptions(config: EndpointConfig): CommandOption[] {
+  return [
+    {
+      type: OptionType.string,
+      name: 'text1',
+      description: `First panel text (e.g. "${config.example1}")`,
+      required: true,
+    },
+    {
+      type: OptionType.string,
+      name: 'text2',
+      description: `Second panel text (e.g. "${config.example2}")`,
+      required: true,
+    },
+  ];
+}
+
 // ── Command entry generation ──────────────────────────────────────────────────
 
 interface CommandEntry {
@@ -210,23 +222,16 @@ interface CommandEntry {
 export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
   meta: {
     name: config.name,
-    aliases: [],
+    aliases: config.aliases ?? [],
     version: '1.0.0',
     role: Role.ANYONE,
     author: 'AjiroDesu',
     description: config.description,
     category: 'image',
-    usage: '<text> (or reply to a message)',
+    usage: `<text1> | <text2> (or reply for text2)`,
     cooldown: 8,
     hasPrefix: true,
-    options: [
-      {
-        type: OptionType.string,
-        name: 'text',
-        description: `Text to render (e.g. "${config.example}")`,
-        required: true,
-      },
-    ],
+    options: buildOptions(config),
   },
   onCommand: async (ctx: AppCtx) => runEffect(ctx, config),
 }));
