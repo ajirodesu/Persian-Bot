@@ -528,6 +528,10 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     usage: buildUsage(config),
     cooldown: 8,
     hasPrefix: true,
+    platform: [
+    Platforms.Discord,
+    Platforms.Telegram,
+  ],
     options: buildOptions(config),
   },
   onCommand: async (ctx: AppCtx) => runEffect(ctx, config),
