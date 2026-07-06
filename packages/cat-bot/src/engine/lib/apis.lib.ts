@@ -68,9 +68,6 @@ export const APIs = {
   nexray: {
     baseURL: 'https://api.nexray.eu.cc',
   },
-  popcat: {
-    baseURL: 'https://api.popcat.xyz',
-  },
   sanka: {
     baseURL: 'https://www.sankavollerei.web.id',
     APIKey: 'planaai',
