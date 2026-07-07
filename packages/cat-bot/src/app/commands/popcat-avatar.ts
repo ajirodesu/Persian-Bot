@@ -14,6 +14,14 @@
  * Flow (per command):
  *   User: /jail [attach or reply to a photo]
  *   Bot:  [effect-rendered image]
+ *
+ * If no photo was attached or replied to, this now falls back to a profile
+ * picture instead of failing outright:
+ *   1. an image attached directly to the command message
+ *   2. an image in the message being replied to
+ *   3. the profile picture of the user being replied to (replying to a
+ *      plain-text message and asking for THEIR avatar to be jailed/etc.)
+ *   4. the invoking user's own profile picture, as the final fallback
  */
 
 import axios from 'axios';
@@ -56,9 +64,18 @@ function isImageAttachment(att: RawAttachment): boolean {
 }
 
 /**
- * Resolves an image URL from the triggering message first, falling back to
- * the replied-to message. If the reply exists but carries no image, returns
- * null. If there's no reply at all, also returns null.
+ * Resolves an image URL to run the effect on, in priority order:
+ *   1. an image attached directly to the triggering message
+ *   2. an image attached to the message being replied to
+ *   3. the profile picture of the user whose message is being replied to
+ *      (covers "reply to someone's text and jail their avatar")
+ *   4. the invoking user's own profile picture — the guaranteed-to-exist
+ *      final fallback, so the command basically never comes up empty
+ *
+ * Avatar lookups (steps 3-4) only run on platforms whose UnifiedApi actually
+ * implements getAvatarUrl() (Discord/Telegram) — on platforms that don't
+ * (e.g. Webchat), getAvatarUrl() throws rather than returning null, so those
+ * are skipped and the command simply asks for an image instead.
  */
 async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
   const event = ctx.event;
@@ -77,11 +94,36 @@ async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
   const fromReply = replyAttachments.find((a) => a?.url && isImageAttachment(a));
   if (fromReply?.url) return fromReply.url;
 
-  return null;
+  const platform = ctx.native.platform;
+  if (platform !== Platforms.Discord && platform !== Platforms.Telegram) {
+    // No image was attached/replied, and avatar lookups aren't supported on
+    // this platform — nothing left to fall back to.
+    return null;
+  }
+
+  // Prefer the replied-to user's avatar when replying to a message that
+  // carries no image of its own; otherwise fall back to the sender's own
+  // avatar (no reply at all, or a reply with neither an image nor a usable
+  // sender ID).
+  const replySenderID = reply?.['senderID'] as string | undefined;
+  const senderID = replySenderID || (event['senderID'] as string | undefined);
+  if (!senderID) return null;
+
+  try {
+    return await ctx.api.getAvatarUrl(senderID);
+  } catch (err) {
+    // No avatar available for this user on this platform — no image to use.
+    logger.warn('[popcat] Avatar fallback lookup failed', {
+      senderID,
+      platform,
+      error: err,
+    });
+    return null;
+  }
 }
 
 const NO_IMAGE_MESSAGE =
-  '📎 **Missing image.** Send a photo with this command, or reply to one, to continue.';
+  '📎 **Missing image.** Send a photo with this command, reply to one, reply to a user, or make sure your profile has an avatar set.';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -294,7 +336,7 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     author: 'AjiroDesu',
     description: config.description,
     category: 'image',
-    usage: ['(send a photo, or reply to one)'],
+    usage: ['(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)'],
     cooldown: 8,
     hasPrefix: true,
     platform: [Platforms.Discord, Platforms.Telegram],
