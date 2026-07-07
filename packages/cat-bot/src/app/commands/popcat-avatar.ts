@@ -231,6 +231,12 @@ const EFFECT_CONFIGS: EffectConfig[] = [
     description: 'Overlay jail bars on a photo.',
   },
   {
+    name: 'jokeoverhead',
+    path: '/v2/jokeoverhead',
+    label: 'Joke Overhead',
+    description: 'Overlay the "joke went over their head" meme on a photo.',
+  },
+  {
     name: 'mnm',
     path: '/v2/mnm',
     label: 'M&M',

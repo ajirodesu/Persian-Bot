@@ -11,10 +11,11 @@
  * function required.
  *
  * Commands:
- *   /8ball — Magic 8-ball answer (aliases: eightball, ball)
- *            question is optional — e.g. "/8ball" or "/8ball Will it rain today?"
- *   /fact  — random fact                                (aliases: randomfact)
- *   /wyr   — random "Would You Rather" question pair     (aliases: wouldyourather)
+ *   /8ball       — Magic 8-ball answer (aliases: eightball, ball)
+ *                  question is optional — e.g. "/8ball" or "/8ball Will it rain today?"
+ *   /fact        — random fact                                (aliases: randomfact)
+ *   /wyr         — random "Would You Rather" question pair     (aliases: wouldyourather)
+ *   /pickupline  — random pickup line                          (aliases: pickuplines, pickup)
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
  * exporting `commands: Array<{ meta, onCommand, button? }>` and registers
@@ -103,6 +104,22 @@ const PROMPT_CONFIGS: PromptConfig<any>[] = [
     usage: '',
     formatMessage: (message: { ops1?: string; ops2?: string }) =>
       `Would you rather...\n\n**A)** ${message.ops1 ?? '?'}\n**B)** ${message.ops2 ?? '?'}`,
+  },
+  {
+    name: 'pickupline',
+    aliases: ['pickuplines', 'pickup'],
+    version: '1.0.0',
+    description: 'Get a random pickup line.',
+    cooldown: 5,
+    emoji: '💘',
+    title: 'Pickup Line',
+    buttonLabel: '🔁 Another One',
+    path: '/v2/pickuplines',
+    usage: '',
+    formatMessage: (message: { pickupline?: string; contributor?: string }) =>
+      `${message.pickupline ?? ''}${
+        message.contributor ? `\n\n_— contributed by ${message.contributor}_` : ''
+      }`,
   },
 ];
 
