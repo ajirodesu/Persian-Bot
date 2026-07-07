@@ -50,9 +50,6 @@ export const APIs = {
   delirius: {
     baseURL: 'https://api.delirius.store',
   },
-  faaa: {
-    baseURL: 'https://api-faa.my.id',
-  },
   kuroneko: {
     baseURL: 'https://api.danzy.web.id',
   },
