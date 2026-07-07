@@ -1,3 +1,6 @@
+.replit
 node_modules
 package-lock.json
-.replit
+packages/cat-bot/dist
+packages/database/dist
+packages/web/dist
