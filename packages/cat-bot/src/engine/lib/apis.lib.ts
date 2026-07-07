@@ -47,6 +47,9 @@ export const APIs = {
   alwayscodex: {
     baseURL: 'https://api.alwayscodex.my.id',
   },
+  betadash: {
+    baseURL: 'https://betadash-api-swordslush-production.up.railway.app',
+  },
   delirius: {
     baseURL: 'https://api.delirius.store',
   },
