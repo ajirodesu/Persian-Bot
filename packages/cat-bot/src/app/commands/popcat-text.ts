@@ -1,118 +1,34 @@
 /**
- * Popcat Image Effects — multi-command family (single file)
+ * Popcat Text Effects — multi-command family (single file)
  *
- * Every entry sends the user's photo (attached or replied-to) to a
- * api.popcat.xyz/v2/<effect> endpoint and returns the rendered result as an
- * image attachment. Every endpoint responds with the raw image bytes
- * directly (no JSON envelope), so the shared handler just downloads and
- * verifies that response before attaching it.
+ * Every entry sends the user's text to a api.popcat.xyz/v2/<effect>?text=
+ * endpoint and returns the rendered result as an image attachment. Every
+ * endpoint responds with the raw image bytes directly (no JSON envelope),
+ * so the shared handler just downloads and verifies that response before
+ * attaching it.
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
  * exporting `commands: Array<{ meta, onCommand }>` and registers each entry
  * exactly like a standalone command module.
  *
  * Flow (per command):
- *   User: /jail [attach or reply to a photo]
+ *   User: /alert Something happened
  *   Bot:  [effect-rendered image]
+ *
+ * If the command is invoked with no text but is a reply to a message, the
+ * replied-to message's text is used instead (mirrors the reply-fallback
+ * convention used by other text-input commands, e.g. say.ts).
  */
 
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
+import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
-import { AttachmentType } from '@/engine/adapters/models/enums/index.js';
-import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
-
-// ── Shared attachment resolution ─────────────────────────────────────────────
-
-/** Minimal shape read off a unified attachment entry (see attachment.prototypes.ts). */
-interface RawAttachment {
-  type?: string;
-  url?: string | null;
-  filename?: string | null;
-  name?: string | null;
-}
-
-const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|bmp)(?:\?.*)?$/i;
-
-/**
- * True when a raw attachment looks like a static/animated image.
- * Telegram tags images as 'photo' (and gifs as 'gif'); Discord tags every
- * attachment as generic 'file', so filename/url extension is the fallback.
- */
-function isImageAttachment(att: RawAttachment): boolean {
-  const type = (att.type ?? '').toLowerCase();
-  if (
-    type === AttachmentType.PHOTO ||
-    type === AttachmentType.ANIMATED_IMAGE ||
-    type === 'gif'
-  ) {
-    return true;
-  }
-  const probe = att.filename ?? att.name ?? att.url ?? '';
-  return IMAGE_EXT_RE.test(probe);
-}
-
-/**
- * Resolves an image URL from the triggering message first, falling back to
- * the replied-to message. If the reply exists but carries no image, falls
- * back to the replied-to user's profile picture (e.g. replying to a plain
- * text message and asking for their avatar to be jailed). If there's no
- * reply at all, falls back to the invoking user's own profile picture.
- * Avatar lookups only happen on Discord/Telegram, since UnifiedApi's
- * getAvatarUrl() throws on platforms that don't implement it (e.g.
- * Webchat), rather than returning null.
- */
-async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
-  const event = ctx.event;
-
-  const direct = (event['attachments'] as RawAttachment[] | undefined) ?? [];
-  const fromDirect = direct.find((a) => a?.url && isImageAttachment(a));
-  if (fromDirect?.url) return fromDirect.url;
-
-  const reply = event['messageReply'] as
-    | Record<string, unknown>
-    | null
-    | undefined;
-  const replyAttachments =
-    (reply?.['attachments'] as RawAttachment[] | undefined) ?? [];
-  const fromReply = replyAttachments.find((a) => a?.url && isImageAttachment(a));
-  if (fromReply?.url) return fromReply.url;
-
-  const platform = ctx.native.platform;
-  if (platform !== Platforms.Discord && platform !== Platforms.Telegram) {
-    return null;
-  }
-
-  // Prefer the replied-to user's avatar when replying to a message that
-  // has no image of its own; otherwise fall back to the sender's avatar.
-  const replySenderID = reply?.['senderID'] as string | undefined;
-  const senderID = replySenderID || (event['senderID'] as string | undefined);
-  if (!senderID) return null;
-
-  try {
-    return await ctx.api.getAvatarUrl(senderID);
-  } catch {
-    // No avatar available for this user on this platform — no image to use.
-    return null;
-  }
-}
-
-const NO_IMAGE_MESSAGE =
-  '📎 **Missing image.** Send a photo with this command, or reply to one, to continue.';
-
-// ── Outbound request headers ─────────────────────────────────────────────────
-//
-// A standard desktop User-Agent/Accept pair avoids basic bot-protection
-// rejections some free API providers apply to headerless requests.
-const REQUEST_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  Accept: 'image/*,*/*;q=0.8',
-};
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 /** Best-effort decode of a non-2xx response body for diagnostics. */
 function describeErrorBody(data: ArrayBuffer): string {
@@ -148,22 +64,23 @@ function extFromContentType(contentType: unknown): string {
  */
 async function fetchEffectImage(
   requestUrl: string,
-  sourceImageUrl: string,
+  sourceText: string,
   label: string,
 ): Promise<{ buffer: Buffer; ext: string }> {
   const response = await axios.get<ArrayBuffer>(requestUrl, {
     responseType: 'arraybuffer',
     timeout: 30_000,
-    headers: REQUEST_HEADERS,
     validateStatus: () => true,
   });
 
   if (response.status < 200 || response.status >= 300) {
     const reason = describeErrorBody(response.data);
     logger.warn(
-      `[popcat] ${label} failed (status ${response.status}): ${reason} | request=${requestUrl} | source=${sourceImageUrl}`,
+      `[popcat-text] ${label} failed (status ${response.status}): ${reason} | request=${requestUrl} | text=${sourceText}`,
     );
-    throw new Error(`${label} API responded with status ${response.status}: ${reason}`);
+    throw new Error(
+      `${label} API responded with status ${response.status}: ${reason}`,
+    );
   }
 
   const buffer = Buffer.from(response.data);
@@ -179,116 +96,87 @@ interface EffectConfig {
   path: string;
   label: string;
   description: string;
+  example: string;
 }
 
 const EFFECT_CONFIGS: EffectConfig[] = [
   {
-    name: 'ad',
-    path: '/v2/ad',
-    label: 'Ad',
-    description: 'Turn a photo into a fake advertisement billboard meme.',
+    name: 'alert',
+    path: '/v2/alert',
+    label: 'Alert',
+    description: 'Render text as an iOS-style alert popup.',
+    example: 'Something happened',
   },
   {
-    name: 'blur',
-    path: '/v2/blur',
-    label: 'Blur',
-    description: 'Apply a blur effect to a photo.',
+    name: 'biden',
+    path: '/v2/biden',
+    label: 'Biden Tweet',
+    description: 'Render text as a Joe Biden tweet meme.',
+    example: 'pop cat is horni',
   },
   {
-    name: 'clown',
-    path: '/v2/clown',
-    label: 'Clown',
-    description: 'Overlay a clown filter on a photo.',
+    name: 'caution',
+    path: '/v2/caution',
+    label: 'Caution',
+    description: 'Render text on a yellow caution sign.',
+    example: 'Wet floor',
   },
   {
-    name: 'communism',
-    path: '/v2/communism',
-    label: 'Communism',
-    description: 'Apply the "communism" meme filter to a photo.',
+    name: 'couldread',
+    path: '/v2/couldread',
+    label: 'Could Read',
+    description: 'Render text as a "bet you could read that" meme.',
+    example: 'Never Gonna Give You Up',
   },
   {
-    name: 'drip',
-    path: '/v2/drip',
-    label: 'Drip',
-    description: 'Overlay a "drip" gold-chain meme filter on a photo.',
+    name: 'facts',
+    path: '/v2/facts',
+    label: 'Facts',
+    description: 'Render text as a "facts" meme card.',
+    example: 'Cats are liquid',
   },
   {
-    name: 'greyscale',
-    path: '/v2/greyscale',
-    label: 'Greyscale',
-    description: 'Convert a photo to greyscale.',
+    name: 'pikachu',
+    path: '/v2/pikachu',
+    label: 'Pikachu',
+    description: 'Render text as the surprised Pikachu meme caption.',
+    example: 'hello',
   },
   {
-    name: 'invert',
-    path: '/v2/invert',
-    label: 'Invert',
-    description: 'Invert the colors of a photo.',
-  },
-  {
-    name: 'jail',
-    path: '/v2/jail',
-    label: 'Jail',
-    description: 'Overlay jail bars on a photo.',
-  },
-  {
-    name: 'jokeoverhead',
-    path: '/v2/jokeoverhead',
-    label: 'Joke Overhead',
-    description: 'Overlay the "joke went over their head" meme on a photo.',
-  },
-  {
-    name: 'mnm',
-    path: '/v2/mnm',
-    label: 'M&M',
-    description: 'Overlay the M&M meme filter on a photo.',
-  },
-  {
-    name: 'nokia',
-    path: '/v2/nokia',
-    label: 'Nokia',
-    description: 'Overlay the indestructible Nokia phone meme on a photo.',
-  },
-  {
-    name: 'pet',
-    path: '/v2/pet',
-    label: 'Pet',
-    description: 'Turn a photo into the animated "petpet" meme.',
-  },
-  {
-    name: 'uncover',
-    path: '/v2/uncover',
-    label: 'Uncover',
-    description: 'Apply the "uncover" meme filter to a photo.',
-  },
-  {
-    name: 'wanted',
-    path: '/v2/wanted',
-    label: 'Wanted',
-    description: 'Turn a photo into an old-west "wanted" poster.',
+    name: 'sadcat',
+    path: '/v2/sadcat',
+    label: 'Sadcat',
+    description: 'Make a Sad Cat Meme!',
+    example: 'hello',
   },
 ];
 
 // ── Shared handler ────────────────────────────────────────────────────────────
 
-async function runEffect(ctx: AppCtx, config: EffectConfig): Promise<void> {
-  const { chat } = ctx;
-  const imageUrl = await resolveImageUrl(ctx);
+async function runEffect(
+  ctx: AppCtx,
+  config: EffectConfig,
+): Promise<void> {
+  const { chat, event, args, usage } = ctx;
 
-  if (!imageUrl) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: NO_IMAGE_MESSAGE,
-    });
+  const messageReply = event['messageReply'] as
+    | Record<string, unknown>
+    | null
+    | undefined;
+
+  // Text-first, falling back to the replied-to message's text when the
+  // command itself was invoked with no arguments.
+  const typed = args.join(' ').trim();
+  const text = typed || ((messageReply?.['message'] as string) ?? '').trim();
+
+  if (!text) {
+    await usage();
     return;
   }
 
   try {
-    const requestUrl = createUrl('popcat', config.path, { image: imageUrl });
-    const { buffer, ext } = await fetchEffectImage(
-      requestUrl,
-      imageUrl,
-      config.label,
-    );
+    const requestUrl = createUrl('popcat', config.path, { text });
+    const { buffer, ext } = await fetchEffectImage(requestUrl, text, config.label);
 
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
@@ -320,9 +208,18 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     author: 'AjiroDesu',
     description: config.description,
     category: 'image',
-    usage: ['(send a photo, or reply to one)'],
+    usage: '<text> (or reply to a message)',
     cooldown: 8,
     hasPrefix: true,
+    platform: [Platforms.Discord, Platforms.Telegram],
+    options: [
+      {
+        type: OptionType.string,
+        name: 'text',
+        description: `Text to render (e.g. "${config.example}")`,
+        required: true,
+      },
+    ],
   },
   onCommand: async (ctx: AppCtx) => runEffect(ctx, config),
 }));

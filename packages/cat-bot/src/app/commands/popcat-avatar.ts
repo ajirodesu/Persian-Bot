@@ -40,8 +40,6 @@ const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|bmp)(?:\?.*)?$/i;
 
 /**
  * True when a raw attachment looks like a static/animated image.
- * Telegram tags images as 'photo' (and gifs as 'gif'); Discord tags every
- * attachment as generic 'file', so filename/url extension is the fallback.
  */
 function isImageAttachment(att: RawAttachment): boolean {
   const type = (att.type ?? '').toLowerCase();
@@ -52,19 +50,15 @@ function isImageAttachment(att: RawAttachment): boolean {
   ) {
     return true;
   }
+
   const probe = att.filename ?? att.name ?? att.url ?? '';
   return IMAGE_EXT_RE.test(probe);
 }
 
 /**
  * Resolves an image URL from the triggering message first, falling back to
- * the replied-to message. If the reply exists but carries no image, falls
- * back to the replied-to user's profile picture (e.g. replying to a plain
- * text message and asking for their avatar to be jailed). If there's no
- * reply at all, falls back to the invoking user's own profile picture.
- * Avatar lookups only happen on Discord/Telegram, since UnifiedApi's
- * getAvatarUrl() throws on platforms that don't implement it (e.g.
- * Webchat), rather than returning null.
+ * the replied-to message. If the reply exists but carries no image, returns
+ * null. If there's no reply at all, also returns null.
  */
 async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
   const event = ctx.event;
@@ -77,48 +71,26 @@ async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
     | Record<string, unknown>
     | null
     | undefined;
+
   const replyAttachments =
     (reply?.['attachments'] as RawAttachment[] | undefined) ?? [];
   const fromReply = replyAttachments.find((a) => a?.url && isImageAttachment(a));
   if (fromReply?.url) return fromReply.url;
 
-  const platform = ctx.native.platform;
-  if (platform !== Platforms.Discord && platform !== Platforms.Telegram) {
-    return null;
-  }
-
-  // Prefer the replied-to user's avatar when replying to a message that
-  // has no image of its own; otherwise fall back to the sender's avatar.
-  const replySenderID = reply?.['senderID'] as string | undefined;
-  const senderID = replySenderID || (event['senderID'] as string | undefined);
-  if (!senderID) return null;
-
-  try {
-    return await ctx.api.getAvatarUrl(senderID);
-  } catch {
-    // No avatar available for this user on this platform — no image to use.
-    return null;
-  }
+  return null;
 }
 
 const NO_IMAGE_MESSAGE =
   '📎 **Missing image.** Send a photo with this command, or reply to one, to continue.';
 
-// ── Outbound request headers ─────────────────────────────────────────────────
-//
-// A standard desktop User-Agent/Accept pair avoids basic bot-protection
-// rejections some free API providers apply to headerless requests.
-const REQUEST_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  Accept: 'image/*,*/*;q=0.8',
-};
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Best-effort decode of a non-2xx response body for diagnostics. */
 function describeErrorBody(data: ArrayBuffer): string {
   try {
     const text = Buffer.from(data).toString('utf8').trim().slice(0, 300);
     if (!text) return '(empty body)';
+
     try {
       const parsed = JSON.parse(text) as Record<string, unknown>;
       const reason = parsed['message'] ?? parsed['error'] ?? parsed['msg'];
@@ -126,6 +98,7 @@ function describeErrorBody(data: ArrayBuffer): string {
     } catch {
       // not JSON — fall through to raw text
     }
+
     return text;
   } catch {
     return '(unreadable body)';
@@ -154,7 +127,6 @@ async function fetchEffectImage(
   const response = await axios.get<ArrayBuffer>(requestUrl, {
     responseType: 'arraybuffer',
     timeout: 30_000,
-    headers: REQUEST_HEADERS,
     validateStatus: () => true,
   });
 
@@ -163,7 +135,9 @@ async function fetchEffectImage(
     logger.warn(
       `[popcat] ${label} failed (status ${response.status}): ${reason} | request=${requestUrl} | source=${sourceImageUrl}`,
     );
-    throw new Error(`${label} API responded with status ${response.status}: ${reason}`);
+    throw new Error(
+      `${label} API responded with status ${response.status}: ${reason}`,
+    );
   }
 
   const buffer = Buffer.from(response.data);
@@ -323,6 +297,7 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     usage: ['(send a photo, or reply to one)'],
     cooldown: 8,
     hasPrefix: true,
+    platform: [Platforms.Discord, Platforms.Telegram],
   },
   onCommand: async (ctx: AppCtx) => runEffect(ctx, config),
 }));
