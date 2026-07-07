@@ -37,7 +37,7 @@ export async function updateDiscordCredentialCommandHash(
       { userId, platformId: PLATFORM_TO_ID[Platforms.Discord], sessionId },
       { $set: data },
     );
-  // Mirror Prisma's update() which throws P2025 when the record is absent.
+  // Throw explicitly when the record is absent, matching update-must-exist semantics.
   if (result.matchedCount === 0) throw new Error('Credential record not found');
 }
 
@@ -158,7 +158,7 @@ export async function removeBotAdmin(
 ): Promise<void> {
   const db = getMongoDb();
   const platformId = toPlatformNumericId(platform);
-  // deleteOne no-ops when absent — mirrors Prisma deleteMany fail-open contract.
+  // deleteOne no-ops when absent — this is an intentional fail-open contract.
   await db
     .collection('botAdmins')
     .deleteOne({ userId, platformId, sessionId, adminId });
@@ -267,7 +267,7 @@ export async function removeBotPremium(
 ): Promise<void> {
   const db = getMongoDb();
   const platformId = toPlatformNumericId(platform);
-  // deleteOne no-ops when absent — mirrors Prisma deleteMany fail-open contract.
+  // deleteOne no-ops when absent — this is an intentional fail-open contract.
   await db
     .collection('botPremiums')
     .deleteOne({ userId, platformId, sessionId, premiumId });

@@ -47,7 +47,7 @@ export async function syncThreadAndParticipants(
     // when the session row is absent or older than 1 hour. No guard needed here.
     const info = await ctx.thread.getInfo(threadId);
 
-    // Sync users FIRST to guarantee Prisma connect operations find foreign keys in bot_users
+    // Sync users FIRST to guarantee downstream writes find matching foreign keys in bot_users
     const allUsersToSync = Array.from(
       new Set([...info.participantIDs, ...info.adminIDs]),
     );

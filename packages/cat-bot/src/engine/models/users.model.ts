@@ -2,7 +2,7 @@
  * BotUser Model — Type definitions and mapper for persistent user records.
  *
  * Bridges UnifiedUserInfo (produced by ctx.user.getInfo()) and the flat data
- * shape the Prisma repository layer accepts. Keeping the mapper here means:
+ * shape the repository layer accepts. Keeping the mapper here means:
  *   - Repo files never import from adapters/ (clean dependency direction)
  *   - Field renames (e.g. UnifiedUserInfo.id → BotUser.userId) live in one place
  */
@@ -15,8 +15,8 @@ import { toPlatformNumericId } from '@/engine/modules/platform/platform-id.util.
 
 /**
  * Flat data shape accepted by upsertUser().
- * Mirrors the Prisma BotUser model's non-auto fields so the repo can pass it
- * directly to prisma.botUser.upsert() without knowing UnifiedUserInfo's field names.
+ * Mirrors the BotUser model's non-auto fields so the repo can pass it
+ * directly to the upsert call without knowing UnifiedUserInfo's field names.
  */
 export interface BotUserData {
   /** Platform identifier — e.g. 'discord', 'telegram'. */

@@ -18,7 +18,7 @@ export async function upsertSessionCommands(
   // interpolation producing the slot number — together they emit the pg placeholder "$4", "$5", etc.
   // (Writing just ${i + 4} would emit bare integer "4", not the pg placeholder "$4".)
   //
-  // Single-statement equivalent of prisma-sqlite's find-then-createMany.
+  // Single-statement equivalent of a find-then-createMany approach.
   // ON CONFLICT DO NOTHING preserves existing isEnable=false rows (admin-disabled
   // commands are never overwritten — the skip is intentional, not a lost update).
   const values = commandNames

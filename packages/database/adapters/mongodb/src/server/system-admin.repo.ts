@@ -72,8 +72,8 @@ export async function isSystemAdmin(adminId: string): Promise<boolean> {
 export async function deleteUser(userId: string): Promise<void> {
   const db = getMongoDb();
 
-  // Collections with no FK relation declared on the user row in the Prisma schema —
-  // mirrors the explicit cleanup the prisma-sqlite adapter performs for the same set.
+  // Collections with no FK relation declared on the user row — cleaned up explicitly
+  // since MongoDB has no cross-collection cascade for this set.
   await db.collection('botSessionCommands').deleteMany({ userId });
   await db.collection('botSessionEvents').deleteMany({ userId });
   await db.collection('botUserBanned').deleteMany({ userId });
@@ -82,7 +82,7 @@ export async function deleteUser(userId: string): Promise<void> {
   await db.collection('botThreadSessions').deleteMany({ userId });
   await db.collection('botDiscordServerSessions').deleteMany({ userId });
 
-  // Collections that cascade automatically in the Prisma adapter (onDelete: Cascade) —
+  // Collections that would cascade automatically in a relational adapter —
   // deleted explicitly here since MongoDB has no FK enforcement.
   await db.collection('session').deleteMany({ userId });
   await db.collection('account').deleteMany({ userId });

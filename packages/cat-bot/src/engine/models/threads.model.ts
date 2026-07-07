@@ -2,7 +2,7 @@
  * BotThread Model — Type definitions and mapper for persistent thread records.
  *
  * Bridges UnifiedThreadInfo (produced by ctx.thread.getInfo()) and the flat data
- * shape the Prisma repository layer accepts for multi-model upserting.
+ * shape the repository layer accepts for multi-model upserting.
  */
 
 import type { UnifiedThreadInfo } from '@/engine/adapters/models/thread.model.js';
@@ -13,7 +13,7 @@ import { toPlatformNumericId } from '@/engine/modules/platform/platform-id.util.
 
 /**
  * Data shape accepted by upsertThread().
- * participantIDs and adminIDs are mapped internally to Prisma many-to-many connections.
+ * participantIDs and adminIDs are mapped internally to many-to-many connections.
  */
 export interface BotThreadData {
   /** Platform identifier — e.g. 'discord', 'telegram'. */
@@ -40,7 +40,7 @@ export interface BotThreadData {
  * Maps a UnifiedThreadInfo to BotThreadData.
  *
  * UnifiedThreadInfo uses `threadID`; BotThread uses `threadId` (camelCase
- * consistency with Prisma conventions for non-ID fields).
+ * consistency convention for non-ID fields).
  */
 export function toBotThreadData(info: UnifiedThreadInfo): BotThreadData {
   return {

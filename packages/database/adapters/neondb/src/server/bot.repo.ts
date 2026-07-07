@@ -30,7 +30,7 @@ export class BotRepo {
     try {
       await client.query('BEGIN');
 
-      // isRunning defaults to TRUE via column default, matching Prisma schema @default(true).
+      // isRunning defaults to TRUE via column default.
       await client.query(
         `INSERT INTO bot_session (user_id, platform_id, session_id, nickname, prefix)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -195,7 +195,7 @@ export class BotRepo {
         [userId, platformId, sessionId, dto.botNickname, dto.botPrefix],
       );
 
-      // Full admin list replacement — delete all then re-insert mirrors Prisma's set: pattern.
+      // Full admin list replacement — delete all then re-insert the full set.
       await client.query(
         `DELETE FROM bot_admin WHERE user_id = $1 AND platform_id = $2 AND session_id = $3`,
         [userId, platformId, sessionId],

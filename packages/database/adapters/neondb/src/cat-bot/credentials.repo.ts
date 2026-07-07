@@ -33,7 +33,7 @@ export async function updateDiscordCredentialCommandHash(
   sessionId: string,
   data: { isCommandRegister: boolean; commandHash: string },
 ): Promise<void> {
-  // UPDATE throws implicitly on missing row via rowCount check — mirrors Prisma update() P2025.
+  // UPDATE throws implicitly on missing row via rowCount check.
   const res = await pool.query(
     `UPDATE bot_credential_discord
      SET is_command_register = $4, command_hash = $5
@@ -184,11 +184,8 @@ export async function addBotAdmin(
   adminId: string,
 ): Promise<void> {
   const platformId = toPlatformNumericId(platform);
-  // ON CONFLICT DO NOTHING is the PostgreSQL equivalent of prisma-sqlite's:
-  //   prisma.botAdmin.upsert({ ..., update: {} })
-  // Both are idempotent: a duplicate admin insert silently no-ops without error.
-  // The empty update: {} in Prisma also no-ops on conflict — DO NOTHING makes this
-  // explicit and avoids the overhead of an UPDATE that writes nothing.
+  // ON CONFLICT DO NOTHING makes the insert idempotent: a duplicate admin insert
+  // silently no-ops without error, avoiding the overhead of an UPDATE that writes nothing.
   await pool.query(
     `INSERT INTO bot_admin (user_id, platform_id, session_id, admin_id)
      VALUES ($1, $2, $3, $4)
@@ -287,8 +284,8 @@ export async function addBotPremium(
   premiumId: string,
 ): Promise<void> {
   const platformId = toPlatformNumericId(platform);
-  // ON CONFLICT DO NOTHING mirrors prisma-sqlite's upsert({ update: {} }) — idempotent
-  // when the same premiumId is added twice; no error on duplicate insert.
+  // ON CONFLICT DO NOTHING keeps this idempotent when the same premiumId is added
+  // twice; no error on duplicate insert.
   await pool.query(
     `INSERT INTO bot_premium (user_id, platform_id, session_id, premium_id)
      VALUES ($1, $2, $3, $4)

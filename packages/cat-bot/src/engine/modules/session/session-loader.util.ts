@@ -1,8 +1,8 @@
 /**
  * Session Credential Loader — Database Edition
  *
- * Loads all platform session credentials directly from the database using Prisma.
- * Each credential table row becomes one resolved session config.
+ * Loads all platform session credentials directly from the configured database adapter
+ * (mongodb | neondb). Each credential row becomes one resolved session config.
  *
  * Prefix is resolved from BotSession for each (userId, platformId, sessionId) tuple;
  * defaults to '/' when no BotSession row exists for that session.

@@ -8,9 +8,8 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
   );
 
   // ATOMICITY — why BEGIN/COMMIT is mandatory here:
-  // Prisma's botThread.upsert with `participants: { set: [...] }` executes the implicit-M:M
-  // junction DELETE+INSERT inside a single DB transaction automatically. Reproducing that
-  // semantic in raw SQL requires explicit BEGIN/COMMIT: without it, a concurrent
+  // Replacing the M:M junction rows via DELETE+INSERT must happen inside a single
+  // DB transaction. Without explicit BEGIN/COMMIT, a concurrent
   // isThreadAdmin() read arriving between the DELETE and the INSERT sees an empty admin set
   // and incorrectly returns false for every member — observable in high-traffic bursts.
   const client = await pool.connect();
@@ -59,8 +58,8 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
       ],
     );
 
-    // Atomically replace participants and admins M:M sets — DELETE+INSERT is the standard
-    // SQL equivalent of Prisma's { set: [...] } which replaces the full junction set in one TX.
+    // Atomically replace participants and admins M:M sets — DELETE+INSERT replaces
+    // the full junction set within a single transaction.
     // $1 = threadId (shared constant across all rows); $${i+2} emits "$2","$3"… for each userId.
     await client.query(
       `DELETE FROM bot_thread_participants WHERE thread_id = $1`,
@@ -103,7 +102,7 @@ export async function threadExists(
   // _platform is intentionally unused — threadId is the globally unique key across all
   // platforms (each platform adapter generates platform-namespaced IDs). Filtering by
   // platform would require a JOIN to bot_threads.platform_id which adds cost with no gain.
-  // Mirrors prisma-sqlite: findUnique({ where: { id: threadId } }) also ignores platform.
+  // A lookup by id alone (ignoring platform) is sufficient here.
   const res = await pool.query(`SELECT 1 FROM bot_threads WHERE id = $1`, [
     threadId,
   ]);
@@ -132,8 +131,8 @@ export async function upsertThreadSession(
   threadId: string,
 ): Promise<void> {
   const platformId = toPlatformNumericId(platform);
-  // Always set last_updated_at = NOW() on conflict — unlike Prisma's @updatedAt, PostgreSQL
-  // does not auto-stamp on UPDATE so the explicit assignment is required for staleness checks.
+  // Always set last_updated_at = NOW() on conflict — PostgreSQL does not auto-stamp
+  // on UPDATE, so the explicit assignment is required for staleness checks.
   await pool.query(
     `INSERT INTO bot_threads_session (user_id, platform_id, session_id, bot_thread_id, last_updated_at)
      VALUES ($1, $2, $3, $4, NOW())

@@ -4,7 +4,7 @@ import { betterAuth } from 'better-auth';
 // MongoDB adapter — bundled via @better-auth/mongo-adapter; only evaluated when DATABASE_TYPE=mongodb.
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
 // Import the shared singleton exported from the database workspace package — avoids TS6059
-// rootDir errors while keeping the Prisma client lifecycle owned in one place.
+// rootDir errors while keeping the DB client lifecycle owned in one place.
 // mongoClient and getMongoDb are undefined at runtime when DATABASE_TYPE !== 'mongodb'.
 import { mongoClient, getMongoDb, pool as neonPool } from 'database';
 // Admin plugin — registers /api/auth/admin/* endpoints gated by user.role === 'admin'.

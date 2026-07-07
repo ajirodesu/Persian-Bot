@@ -42,7 +42,7 @@ export async function unbanUser(
 ): Promise<void> {
   const db = getMongoDb();
   const platformId = toPlatformNumericId(platform);
-  // updateOne no-ops when the document is absent — mirrors Prisma updateMany fail-open contract.
+  // updateOne no-ops when the document is absent — this is an intentional fail-open contract.
   await db
     .collection('botUserBanned')
     .updateOne(

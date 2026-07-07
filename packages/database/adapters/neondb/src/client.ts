@@ -14,7 +14,7 @@ const { Pool } = pg;
 // Source: https://neon.com/docs/connect/choose-connection (Feb 2026)
 // ──────────────────────────────────────────────────────────────────────────────
 
-// Prevent connection leaks on tsx --watch hot-reloads — same globalThis singleton guard as the Prisma client.
+// Prevent connection leaks on tsx --watch hot-reloads — a globalThis singleton guard.
 // Each tsx module reload would spawn a fresh Pool (and N new TCP connections) without this gate.
 const globalForPool = globalThis as unknown as {
   neonPool: InstanceType<typeof Pool> | undefined;
@@ -184,7 +184,7 @@ export async function initDb(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    -- M:M junction tables — explicit because Prisma's implicit join tables aren't used here
+    -- M:M junction tables, defined explicitly
     CREATE TABLE IF NOT EXISTS bot_thread_participants (
       thread_id TEXT NOT NULL REFERENCES bot_threads(id) ON DELETE CASCADE,
       user_id   TEXT NOT NULL REFERENCES bot_users(id)   ON DELETE CASCADE,

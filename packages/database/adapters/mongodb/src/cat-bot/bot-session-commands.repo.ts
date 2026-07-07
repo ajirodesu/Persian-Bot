@@ -11,8 +11,8 @@ export async function upsertSessionCommands(
   const db = getMongoDb();
   const platformId = toPlatformNumericId(platform);
   // $setOnInsert means this operation creates the row with isEnable=true only when absent.
-  // Existing rows with isEnable=false set by the bot admin are never touched — same
-  // semantics as the Prisma adapter's createMany({ skipDuplicates: true }) approach.
+  // Existing rows with isEnable=false set by the bot admin are never touched — this
+  // mirrors a createMany-with-skip-duplicates approach.
   const ops = commandNames.map((commandName) => ({
     updateOne: {
       filter: { userId, platformId, sessionId, commandName },

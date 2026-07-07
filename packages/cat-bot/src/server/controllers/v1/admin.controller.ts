@@ -24,8 +24,8 @@ export class AdminController {
       );
       const search = ((req.query['search'] as string | undefined) || '').trim();
 
-      // WHY: Search and pagination MUST happen in the packages/database layer natively (using SQL LIMIT/OFFSET,
-      // MongoDB $facet, or Prisma skip/take) rather than dynamically slicing arrays in the server layer.
+      // WHY: Search and pagination MUST happen in the packages/database layer natively (using SQL
+      // LIMIT/OFFSET or MongoDB $facet) rather than dynamically slicing arrays in the server layer.
       // This ensures O(1) memory complexity and O(limit) time complexity even with 100k+ users.
       const result = await listAllUsers(search, page, limit);
 

@@ -70,8 +70,7 @@ export async function isSystemAdmin(adminId: string): Promise<boolean> {
  * Tables with an ON DELETE CASCADE foreign key to "user" (session, account, bot_session,
  * bot_admin, bot_premium, bot_credential_discord, bot_credential_telegram) are cleaned up
  * automatically by Postgres when the user row is deleted below. Tables below carry a
- * user_id column but no FK constraint, so they're purged explicitly first — same scope
- * as the prisma-sqlite adapter's deleteUser.
+ * user_id column but no FK constraint, so they're purged explicitly first.
  */
 export async function deleteUser(userId: string): Promise<void> {
   const client = await pool.connect();

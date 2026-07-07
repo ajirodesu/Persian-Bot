@@ -33,8 +33,8 @@ export class BotRepo {
     if (platformId === undefined)
       throw new Error(`Unknown platform ${dto.credentials.platform}`);
 
-    // isRunning: true mirrors the Prisma schema's @default(true) so session-loader picks
-    // this session up on first boot without requiring an explicit API start call.
+    // isRunning: true by default so session-loader picks this session up on first boot
+    // without requiring an explicit API start call.
     await db.collection('botSessions').insertOne({
       userId,
       platformId,
@@ -185,7 +185,7 @@ export class BotRepo {
       .collection<any>('botSessions')
       .findOne({ userId, sessionId }, { projection: { _id: 0 } });
     if (!session) throw new Error('Bot not found');
-    // Guard matches Prisma: platform is part of the composite PK; changing it would corrupt
+    // Guard: platform is part of the composite key; changing it would corrupt
     // all credential documents that are keyed by (userId, platformId, sessionId).
     if ((session.platformId as number) !== platformId)
       throw new Error('Platform cannot be changed after bot creation.');
@@ -197,7 +197,7 @@ export class BotRepo {
         { $set: { nickname: dto.botNickname, prefix: dto.botPrefix } },
       );
 
-    // Replace all admins atomically by deleting then re-inserting — mirrors Prisma's deleteMany + create loop.
+    // Replace all admins atomically by deleting then re-inserting the full set.
     await db
       .collection('botAdmins')
       .deleteMany({ userId, platformId, sessionId });

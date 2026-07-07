@@ -147,7 +147,7 @@ export async function getUserSessionData(
 
 /**
  * Writes the JSON data blob for a specific bot user session record.
- * Silently no-ops when the record is absent — mirrors the Prisma updateMany contract.
+ * Silently no-ops when the record is absent — this is an intentional fail-open contract.
  */
 export async function setUserSessionData(
   userId: string,

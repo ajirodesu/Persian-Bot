@@ -55,8 +55,8 @@ export async function upsertUserSession(
   botUserId: string,
 ): Promise<void> {
   const platformId = toPlatformNumericId(platform);
-  // Explicit last_updated_at = NOW() on conflict mirrors the fix in prisma-sqlite's upsertUserSession:
-  // Prisma's @updatedAt only fires when a field is written; raw SQL requires the same explicit stamp.
+  // Explicit last_updated_at = NOW() on conflict ensures the timestamp is always refreshed,
+  // since raw SQL has no auto-updated-timestamp column behavior.
   await pool.query(
     `INSERT INTO bot_users_session (user_id, platform_id, session_id, bot_user_id, last_updated_at)
      VALUES ($1, $2, $3, $4, NOW())

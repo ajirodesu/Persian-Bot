@@ -41,10 +41,8 @@
        inverse direction (cat-bot importing from ../database/adapters/…). */
     "rootDirs": [
       "./src",
-      "./adapters/json/src",
       "./adapters/mongodb/src",
-      "./adapters/prisma-sqlite/src",
-      "./adapters/prisma-sqlite/src/generated/prisma"
+      "./adapters/neondb/src"
     ]
   },
   "include": ["src"]

@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS bot_threads (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- M:M junction tables replacing Prisma's implicit @relation join tables
+-- M:M junction tables, defined explicitly
 CREATE TABLE IF NOT EXISTS bot_thread_participants (
   thread_id TEXT NOT NULL REFERENCES bot_threads(id) ON DELETE CASCADE,
   user_id   TEXT NOT NULL REFERENCES bot_users(id)   ON DELETE CASCADE,

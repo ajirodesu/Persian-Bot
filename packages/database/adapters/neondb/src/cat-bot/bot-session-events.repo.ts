@@ -14,7 +14,7 @@ export async function upsertSessionEvents(
   // $${i + 4}: the first $ is a literal "$"; ${i + 4} is JS interpolation that produces the slot
   // number — together they emit the pg placeholder "$4", "$5", etc. (bare ${i+4} would emit "4").
   // ON CONFLICT DO NOTHING preserves admin-set isEnable=false rows (same intent as
-  // prisma-sqlite's find-then-createMany approach, in a single DB round trip).
+  // a find-then-createMany approach, in a single DB round trip).
   const values = eventNames
     .map((_, i) => `($1, $2, $3, $${i + 4}, TRUE)`)
     .join(', ');
