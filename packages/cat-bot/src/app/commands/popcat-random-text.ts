@@ -11,8 +11,8 @@
  * function required.
  *
  * Commands:
- *   /8ball — Magic 8-ball answer to a yes/no question  (aliases: eightball, ball)
- *            requires a question, e.g. "/8ball Will it rain today?"
+ *   /8ball — Magic 8-ball answer (aliases: eightball, ball)
+ *            question is optional — e.g. "/8ball" or "/8ball Will it rain today?"
  *   /fact  — random fact                                (aliases: randomfact)
  *   /wyr   — random "Would You Rather" question pair     (aliases: wouldyourather)
  *
@@ -54,9 +54,9 @@ interface PromptConfig<T = Record<string, unknown>> {
   title: string;
   buttonLabel: string;
   path: string;
-  /** When set, the command requires free-text input, sent under this query param. */
+  /** When set, the command accepts optional free-text input, sent under this query param. */
   inputParam?: string;
-  /** Usage string shown when `inputParam` is required but missing. */
+  /** Usage string shown in help/menu output. */
   usage: string;
   /** Formats the endpoint-specific `message` object down to display text. */
   formatMessage: (message: T) => string;
@@ -67,14 +67,14 @@ const PROMPT_CONFIGS: PromptConfig<any>[] = [
     name: '8ball',
     aliases: ['eightball', 'ball'],
     version: '1.0.0',
-    description: 'Ask the magic 8-ball a yes/no question.',
+    description: 'Ask the magic 8-ball a yes/no question (or just roll one blind).',
     cooldown: 5,
     emoji: '🎱',
     title: 'Magic 8-Ball',
     buttonLabel: '🔁 Ask Again',
     path: '/v2/8ball',
     inputParam: 'question',
-    usage: '<question>',
+    usage: '[question]',
     formatMessage: (message: { answer?: string }) => message.answer ?? '',
   },
   {
@@ -137,25 +137,20 @@ function buttonId(config: PromptConfig): string {
 }
 
 async function runPrompt(ctx: AppCtx, config: PromptConfig): Promise<void> {
-  const { chat, native, event, args, button, session, usage } = ctx;
+  const { chat, native, event, args, button, session } = ctx;
   const isButtonAction = event['type'] === 'button_action';
 
-  // Input-driven commands (currently only /8ball) require an argument on a
-  // fresh invocation. On a button refresh, the original question is recovered
-  // from the button's persisted context rather than from args (button clicks
-  // carry no args of their own) — mirrors the pattern used by bible.ts's
+  // Input-driven commands (currently only /8ball) accept an optional argument
+  // on a fresh invocation — no question at all is a valid "blind roll". On a
+  // button refresh, the original question (if any) is recovered from the
+  // button's persisted context rather than from args (button clicks carry no
+  // args of their own) — mirrors the pattern used by bible.ts's
   // switch-translation button.
   let input: string | undefined;
   if (config.inputParam) {
-    if (isButtonAction) {
-      input = (session.context as { question?: string }).question ?? '';
-    } else {
-      input = args.join(' ').trim();
-      if (!input) {
-        await usage();
-        return;
-      }
-    }
+    input = isButtonAction
+      ? ((session.context as { question?: string }).question ?? '')
+      : args.join(' ').trim();
   }
 
   try {
@@ -230,8 +225,8 @@ export const commands: CommandEntry[] = PROMPT_CONFIGS.map((config) => ({
             {
               type: OptionType.string,
               name: config.inputParam,
-              description: `Input for ${config.title}`,
-              required: true,
+              description: `Optional input for ${config.title}`,
+              required: false,
             },
           ],
         }
