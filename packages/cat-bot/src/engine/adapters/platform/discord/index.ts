@@ -124,9 +124,18 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
         void sessionManager.markInactive(smKey);
       });
 
-      // Phase 2: Register or clear slash commands based on the active prefix
-      await registerSlashCommands({
+      // Phase 2: Attach all Discord.js event listeners FIRST — the client is already
+      // connected to the gateway after Phase 1 (login/ready), so it can start receiving
+      // interactionCreate/messageCreate dispatches immediately. Registering slash commands
+      // (next phase) is a REST round-trip whose duration scales with command count — if
+      // that ran first, the client would sit connected-but-deaf for however long it takes,
+      // and any interaction landing in that window would either get silently dropped or
+      // (worse) get picked up right at the tail end, too close to Discord's 3s ack deadline,
+      // producing "Unknown interaction" (10062) failures on deferReply(). Attaching the
+      // listener before the REST call closes that window entirely.
+      await attachEventHandlers({
         client: activeClient,
+        emitter,
         commands,
         prefix,
         clientId,
@@ -136,10 +145,9 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
         sessionLogger,
       });
 
-      // Phase 3: Attach all Discord.js event listeners — each emits normalised events
-      await attachEventHandlers({
+      // Phase 3: Register or clear slash commands based on the active prefix
+      await registerSlashCommands({
         client: activeClient,
-        emitter,
         commands,
         prefix,
         clientId,

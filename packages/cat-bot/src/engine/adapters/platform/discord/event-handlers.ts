@@ -154,7 +154,21 @@ export async function attachEventHandlers(
 
     if (!interaction.isChatInputCommand()) return;
 
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch (err) {
+      // "Unknown interaction" (10062) means the 3s ack window had already elapsed
+      // before this POST reached Discord — nothing we can do for THIS interaction
+      // (its token is dead), but letting it throw here becomes an unhandled
+      // rejection that surfaces as a scary top-level "Client error" log and can
+      // interfere with in-flight processing of other interactions. Log at debug
+      // level and bail out for this one only.
+      sessionLogger.warn(
+        '[discord] Failed to acknowledge interaction in time (likely event-loop delay or a stale token) — skipping',
+        { error: err, commandName: interaction.commandName },
+      );
+      return;
+    }
 
     const commandName = interaction.commandName;
     const mod = commands.get(commandName);

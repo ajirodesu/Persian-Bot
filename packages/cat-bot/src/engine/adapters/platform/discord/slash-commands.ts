@@ -80,8 +80,22 @@ function buildSlashCommandPayloads(
     InstanceType<typeof SlashCommandBuilder>['toJSON']
   >[] = [];
 
-  // Iterate using keys to properly register both canonical names and their aliases as separate slash commands
-  for (const [key, mod] of commands) {
+  // loadCommands() registers one Map key per command name AND one per alias, all
+  // pointing to the SAME module object — mirrors the dedupe in on-chat-runner.ts.
+  // Without this guard, a module with N aliases registers N+1 separate top-level
+  // Discord slash commands for what is really one command, which (a) clutters the
+  // '/' menu with duplicate entries, (b) inflates the REST payload and per-guild
+  // clear step in registerSlashCommands — directly extending the window before
+  // attachEventHandlers is live, and (c) makes it far easier to blow past Discord's
+  // 100-global-command cap once a "family" file with several aliased commands is
+  // added. Only the canonical meta.name is registered; aliases keep working for
+  // prefix-style invocation via the commands Map lookup in event-handlers.ts.
+  const seen = new Set<Record<string, unknown>>();
+
+  for (const mod of commands.values()) {
+    if (seen.has(mod)) continue;
+    seen.add(mod);
+
     if (typeof mod['onCommand'] !== 'function') continue;
     if (!isPlatformAllowed(mod, Platforms.Discord)) continue;
 
@@ -95,7 +109,7 @@ function buildSlashCommandPayloads(
     if (disabledNames?.has(cfg.name.toLowerCase())) continue;
 
     const builder = new SlashCommandBuilder()
-      .setName(truncate(key, 32)) // Discord hard limit safety
+      .setName(truncate(cfg.name, 32)) // Discord hard limit safety
       .setDescription(truncate(cfg.description, 100));
 
     for (const opt of cfg.options ?? []) {
