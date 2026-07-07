@@ -272,6 +272,14 @@ interface EndpointConfig {
   /** Default values applied when a flag/value isn't supplied. */
   defaults?: Record<string, string | number | boolean>;
 
+  /**
+   * Params always sent exactly as given — no user-facing --flag exists for
+   * these, unlike booleanFlags/valueFlags. Used for endpoints whose non-image
+   * options are fixed to the API's own recommended defaults rather than
+   * being user-configurable (e.g. caption's bottom/dark/fontsize).
+   */
+  fixedParams?: Record<string, string | number | boolean>;
+
   /** If set, auto-fills this API param with the sender's avatar when not given via a value flag. */
   autoAvatarParam?: string;
   /** If set, auto-fills this API param with the current ISO timestamp when not given via a value flag. */
@@ -294,9 +302,11 @@ const EFFECT_CONFIGS: EndpointConfig[] = [
     example: 'Zero Two Caption',
     needsImage: true,
     textParam: 'text',
-    booleanFlags: ['bottom', 'dark'],
-    valueFlags: ['fontsize'],
-    defaults: { bottom: false, dark: false, fontsize: 30 },
+    // bottom/dark/fontsize are no longer user-configurable — every request
+    // uses the endpoint's recommended defaults, so the user only ever needs
+    // to supply the text (image resolution is automatic via
+    // attach/reply/avatar fallback).
+    fixedParams: { bottom: false, dark: true, fontsize: 30 },
   },
   {
     name: 'discord-message',
@@ -410,6 +420,13 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
       }
     } else if (fallback !== undefined) {
       params[flagName] = fallback;
+    }
+  }
+
+  // ── Fixed params — always sent as configured, never user-overridable ──
+  if (config.fixedParams) {
+    for (const [key, value] of Object.entries(config.fixedParams)) {
+      params[key] = value;
     }
   }
 
