@@ -13,6 +13,7 @@
  *        /coffee — random coffee image  (aliases: coffeepic, coffeeimage, brew)
  *        /picsum — random Picsum photo  (aliases: randomphoto)
  *        /waifu  — random anime waifu   (aliases: randomwaifu)
+ *        /ba     — random Blue Archive image (aliases: bluearchive)
  *
  *   2. TAGGED_PHOTO_CONFIGS — tag/topic-driven, shared 2×3 button grid.
  *        /loremflickr — tagged random photo (aliases: flickr)
@@ -161,6 +162,31 @@ const SIMPLE_PHOTO_CONFIGS: SimplePhotoConfig[] = [
         ok: true,
         caption,
         attachment: { kind: 'url', name: `waifu_${waifu.id}${waifu.ext}`, url: waifu.image },
+      };
+    },
+  },
+  {
+    name: 'ba',
+    aliases: ['bluearchive'],
+    version: '1.0.0',
+    category: 'anime',
+    description: 'Fetches a random Blue Archive image.',
+    cooldown: 5,
+    label: 'Blue Archive image',
+    buttonLabel: '🔄 Refresh',
+    fetch: async () => {
+      const { data } = await axios.get<string[]>(
+        'https://raw.githubusercontent.com/rynxzyy/blue-archive-r-img/refs/heads/main/links.json',
+      );
+      const imageUrl = data[Math.floor(data.length * Math.random())];
+      if (!imageUrl) return { ok: false };
+      const response = await axios.get<ArrayBuffer>(imageUrl, {
+        responseType: 'arraybuffer',
+      });
+      return {
+        ok: true,
+        caption: '🎓 **Random Blue Archive Image**',
+        attachment: { kind: 'buffer', name: 'bluearchive.png', buffer: Buffer.from(response.data) },
       };
     },
   },
