@@ -3,17 +3,17 @@
  *
  * setChatPhoto requires a multipart/form-data upload — the Bot API does NOT
  * accept remote URL strings the way sendPhoto does server-side. For URL inputs,
- * axios downloads to a Buffer first, then Input.fromBuffer uploads it cleanly.
- * Input.fromURLStream returns a ClientRequest (Writable), not a Readable —
- * Telegraf's multipart uploader throws TypeError when piping from it, making
- * the axios download path mandatory for URLs.
+ * axios downloads to a Buffer first, then a grammY InputFile uploads it cleanly.
+ * A raw ClientRequest (Writable) cannot be wrapped by InputFile — it only accepts
+ * Buffer-like or Readable-stream sources — making the axios download path mandatory
+ * for URLs.
  *
- * ctx.setChatPhoto() reads chat.id internally via Telegraf context.ts:536,
+ * ctx.setChatPhoto() reads chat.id internally via grammY's context shortcut,
  * eliminating the chat?.id optional-chain risk.
  */
 import type { Readable } from 'stream';
-import type { Context } from 'telegraf';
-import { Input } from 'telegraf';
+import type { Context } from 'grammy';
+import { InputFile } from 'grammy';
 import axios from 'axios';
 
 export async function setGroupImage(
@@ -21,9 +21,7 @@ export async function setGroupImage(
   _threadID: string,
   imageSource: Buffer | Readable | string,
 ): Promise<void> {
-  let photo:
-    | ReturnType<typeof Input.fromBuffer>
-    | ReturnType<typeof Input.fromReadableStream>;
+  let photo: InputFile;
 
   if (typeof imageSource === 'string') {
     // setChatPhoto rejects remote URLs — download via axios then upload as Buffer
@@ -31,12 +29,10 @@ export async function setGroupImage(
       responseType: 'arraybuffer',
       timeout: 15_000,
     });
-    photo = Input.fromBuffer(Buffer.from(res.data), 'photo.jpg');
-  } else if (Buffer.isBuffer(imageSource)) {
-    photo = Input.fromBuffer(imageSource, 'photo.jpg');
+    photo = new InputFile(Buffer.from(res.data), 'photo.jpg');
   } else {
-    // Readable stream path for callers that already have a stream
-    photo = Input.fromReadableStream(imageSource, 'photo.jpg');
+    // Covers both Buffer and Readable stream sources — InputFile accepts either directly
+    photo = new InputFile(imageSource, 'photo.jpg');
   }
 
   await ctx.setChatPhoto(photo);

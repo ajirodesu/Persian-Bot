@@ -174,7 +174,7 @@ export const onCommand = async ({
   // Capture Telegram @username at set-time so mention-by-handle and bare-username
   // checks in onChat can resolve this user even when the Bot API only delivers a
   // handle string (mention entity) rather than a numeric ID (text_mention entity).
-  // native.ctx is a raw Telegraf Context on Telegram; undefined on other platforms.
+  // native.ctx is a raw grammY Context on Telegram; undefined on other platforms.
   const telegramUsername =
     native.platform === Platforms.Telegram
       ? ((native.ctx as { from?: { username?: string } } | undefined)?.from

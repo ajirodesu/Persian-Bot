@@ -5,7 +5,7 @@
  * The immediate unban lets the user rejoin later via an invite link — a
  * permanent ban would be too destructive for a general-purpose kick command.
  */
-import type { Context } from 'telegraf';
+import type { Context } from 'grammy';
 
 export async function removeUserFromGroup(
   ctx: Context,
@@ -14,8 +14,8 @@ export async function removeUserFromGroup(
 ): Promise<void> {
   const chatId = ctx.chat?.id as number;
   // banChatMember removes the user immediately; unban with only_if_banned lets them rejoin via link
-  await ctx.telegram.banChatMember(chatId, Number(userID));
-  await ctx.telegram.unbanChatMember(chatId, Number(userID), {
+  await ctx.api.banChatMember(chatId, Number(userID));
+  await ctx.api.unbanChatMember(chatId, Number(userID), {
     only_if_banned: true,
   });
 }

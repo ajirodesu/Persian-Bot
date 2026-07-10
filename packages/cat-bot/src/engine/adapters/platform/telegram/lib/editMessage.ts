@@ -1,13 +1,14 @@
 /**
  * Telegram — editMessage
  *
- * editMessageText(chatId, message_id, inline_message_id, text):
- * inline_message_id must be undefined (not null) for non-inline messages —
- * passing null would violate the strict TypeScript signature on the Telegraf type.
+ * editMessageText(chatId, messageId, text, other) and editMessageMedia(chatId,
+ * messageId, media, other): grammY pulls chat_id/message_id into the positional
+ * signature and omits inline_message_id entirely when chat_id/message_id are
+ * supplied — no explicit `undefined` placeholder is needed for the inline-message case.
  */
-import type { Context } from 'telegraf';
-import { Input } from 'telegraf';
-import type { InputMedia } from 'telegraf/types';
+import type { Context } from 'grammy';
+import { InputFile } from 'grammy';
+import type { InputMedia } from 'grammy/types';
 import type { EditMessageOptions } from '@/engine/adapters/models/api.model.js';
 import { sanitizeMarkdownV2 } from '../utils/markdownv2.util.js';
 import { streamToBuffer, urlToStream } from '@/engine/utils/streams.util.js';
@@ -89,14 +90,14 @@ export async function editMessage(
     const firstUrl = !first ? attachmentUrl?.[0] : undefined;
     let inputMedia: InputMedia | undefined;
     if (first) {
-      // Buffer the incoming stream so Input.fromBuffer() can wrap it for multipart upload
+      // Buffer the incoming stream so InputFile can wrap it for multipart upload
       const buf = Buffer.isBuffer(first.stream)
         ? first.stream
         : await streamToBuffer(first.stream as import('stream').Readable);
       const ext = first.name.split('.').pop()?.toLowerCase() ?? '';
       inputMedia = {
         type: getMediaType(ext),
-        media: Input.fromBuffer(buf, first.name || 'file.bin'),
+        media: new InputFile(buf, first.name || 'file.bin'),
         ...(text ? { caption: text } : {}),
         ...(parseMode ? { parse_mode: parseMode } : {}),
       } as InputMedia;
@@ -109,16 +110,15 @@ export async function editMessage(
       const urlExt = firstUrl.name.split('.').pop()?.toLowerCase() ?? '';
       inputMedia = {
         type: getMediaType(urlExt),
-        media: Input.fromBuffer(buf, firstUrl.name || 'file.bin'),
+        media: new InputFile(buf, firstUrl.name || 'file.bin'),
         ...(text ? { caption: text } : {}),
         ...(parseMode ? { parse_mode: parseMode } : {}),
       } as InputMedia;
     }
     if (inputMedia) {
-      await ctx.telegram.editMessageMedia(
-        ctx.chat?.id,
+      await ctx.api.editMessageMedia(
+        ctx.chat?.id as number,
         mId,
-        undefined, // inline_message_id — must be undefined for non-inline messages
         inputMedia,
         replyMarkup ? { reply_markup: replyMarkup } : undefined,
       );
@@ -132,14 +132,8 @@ export async function editMessage(
   if (!Number.isFinite(msgId) || msgId <= 0) {
     throw new Error(`[telegram] editMessage: invalid messageID "${messageID}"`);
   }
-  await ctx.telegram.editMessageText(
-    ctx.chat?.id,
-    msgId,
-    undefined, // inline_message_id — must be undefined, not null, for non-inline messages
-    text,
-    {
-      ...(parseMode ? { parse_mode: parseMode } : {}),
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-    },
-  );
+  await ctx.api.editMessageText(ctx.chat?.id as number, msgId, text, {
+    ...(parseMode ? { parse_mode: parseMode } : {}),
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  });
 }

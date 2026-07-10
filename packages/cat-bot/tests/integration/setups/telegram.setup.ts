@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import { Bot } from 'grammy';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -43,11 +43,11 @@ export async function setupTelegram(): Promise<PlatformTestContext | null> {
   }
 
   try {
-    const bot = new Telegraf(token);
+    const bot = new Bot(token);
     const chatId = Number(TELEGRAM_CHAT_ID);
 
     const mockCtx = {
-      telegram: bot.telegram,
+      api: bot.api,
       chat: { id: chatId, type: 'supergroup' as const },
       from: {
         id: TELEGRAM_BOT_ID,
@@ -57,16 +57,16 @@ export async function setupTelegram(): Promise<PlatformTestContext | null> {
         username: 'johnlester0369_telebot',
       },
       message: { message_id: 0, date: 0, chat: { id: chatId } },
-      setChatTitle: (title: string) => bot.telegram.setChatTitle(chatId, title),
+      setChatTitle: (title: string) => bot.api.setChatTitle(chatId, title),
       deleteMessage: (msgId: number | string) =>
-        bot.telegram.deleteMessage(chatId, Number(msgId)),
+        bot.api.deleteMessage(chatId, Number(msgId)),
       setChatPhoto: (photo: unknown) =>
-        bot.telegram.setChatPhoto(chatId, photo as string),
-      deleteChatPhoto: () => bot.telegram.deleteChatPhoto(chatId),
+        bot.api.setChatPhoto(chatId, photo as string),
+      deleteChatPhoto: () => bot.api.deleteChatPhoto(chatId),
     };
 
     const telegramApi = createTelegramApi(
-      mockCtx as unknown as import('telegraf').Context,
+      mockCtx as unknown as import('grammy').Context,
     );
     const baseEvent = {
       threadID: TELEGRAM_CHAT_ID,

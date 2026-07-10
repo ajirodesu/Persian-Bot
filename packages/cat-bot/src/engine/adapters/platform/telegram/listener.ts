@@ -1,11 +1,11 @@
 /**
  * Telegram Platform Listener — Factory
  *
- * Creates an EventEmitter-based platform listener that wraps Telegraf.
+ * Creates an EventEmitter-based platform listener that wraps grammY.
  * Delegates each lifecycle step to focused modules:
  *   - types.ts          → TelegramConfig, TelegramEmitter
  *   - slash-commands.ts → Command menu registration across broadcast scopes
- *   - handlers.ts       → All Telegraf update handler registrations
+ *   - handlers.ts       → All grammY update handler registrations
  *
  * Retry architecture:
  *   emitter.start() delegates to runManagedSession() (platform-runner.lib.ts) which
@@ -13,15 +13,15 @@
  *   zombie guards, AbortController cancellation, and markActive / markInactive dashboard
  *   sync. This file provides only boot() and cleanup() hooks to the runner.
  *
- * Lifecycle (per Telegraf docs — all handlers must be registered BEFORE launch):
- *   1. Construct Telegraf instance
+ * Lifecycle (per grammY docs — all handlers must be registered BEFORE start):
+ *   1. Construct Bot instance
  *   2. Validate bot token (getMe) — 401 → runner classifies as auth error, no retry
  *   3. Register or clear slash command menu across all broadcast scopes
  *   4. Attach all update handlers (they emit typed events on the returned emitter)
- *   5. Call bot.launch() with allowedUpdates — polling starts here (webhook: createWebhook)
+ *   5. Call bot.start() with allowedUpdates — polling starts here (webhook: setWebhook + webhookCallback)
  */
 import { EventEmitter } from 'events';
-import { Telegraf } from 'telegraf';
+import { Bot, webhookCallback } from 'grammy';
 import { createLogger } from '@/engine/modules/logger/logger.lib.js';
 import type { TelegramConfig, TelegramEmitter } from './types.js';
 import { registerSlashMenu } from './slash-commands.js';
@@ -58,7 +58,7 @@ export function createTelegramListener(
   config: TelegramConfig,
 ): TelegramEmitter {
   const emitter = new EventEmitter() as TelegramEmitter;
-  let activeBot: Telegraf | null = null;
+  let activeBot: Bot | null = null;
 
   // Retained across start() calls so the slash-sync callback always references the current Map.
   let activeCommands: Map<string, Record<string, unknown>> | null = null;
@@ -84,11 +84,9 @@ export function createTelegramListener(
       unregisterTelegramWebhookHandler(`${config.userId}:${config.sessionId}`);
       activeCommands = null;
       if (activeBot) {
-        try {
-          activeBot.stop('Restarting');
-        } catch {
-          /* suppress "Bot is not running!" when start() set activeBot but aborted before launch() */
-        }
+        // grammY's stop() resolves without throwing when the bot was never started
+        // (e.g. boot() set activeBot but aborted before start()) — no try/catch needed.
+        await activeBot.stop();
         activeBot = null;
       }
     };
@@ -112,14 +110,14 @@ export function createTelegramListener(
       const prefix = botDetail
         ? (botDetail.prefix ?? config.prefix)
         : config.prefix;
-      activeBot = new Telegraf(botToken);
+      activeBot = new Bot(botToken);
 
-      // Validate bot token before registering handlers or launching.
-      // bot.launch() calls getMe() fire-and-forget — if it fails, the rejection escapes to
-      // unhandledRejection and can crash every platform session. Calling getMe() here lets
-      // the runner classify 401 → auth error → no retry (immediate permanent failure).
+      // Validate bot token before registering handlers or starting.
+      // bot.start() calls getMe() internally as part of init() — if it fails, the rejection
+      // escapes to unhandledRejection and can crash every platform session. Calling getMe() here
+      // lets the runner classify 401 → auth error → no retry (immediate permanent failure).
       try {
-        await activeBot.telegram.getMe();
+        await activeBot.api.getMe();
       } catch (err) {
         activeBot = null; // Release — a fresh instance is created on the next attempt
         throw err;
@@ -135,7 +133,7 @@ export function createTelegramListener(
         sessionLogger,
       );
 
-      // Step 2: Attach all update handlers — must happen before bot.launch()
+      // Step 2: Attach all update handlers — must happen before bot.start()
       attachHandlers(
         activeBot,
         emitter,
@@ -144,12 +142,14 @@ export function createTelegramListener(
         config.sessionId,
       );
 
-      // Catch errors thrown inside any Telegraf middleware or handler.
+      // Catch errors thrown inside any grammY middleware or handler.
       // Without this, handler rejections surface as unhandledRejection which crashes
       // Node ≥15 and takes down every other platform session.
-      activeBot.catch((err: unknown, _ctx: unknown) => {
+      // grammY wraps the original error in a BotError — unwrap via err.error to match
+      // the underlying error shape directly.
+      activeBot.catch((err) => {
         sessionLogger.error('[telegram] Handler error (session continues)', {
-          error: err,
+          error: err.error,
         });
       });
 
@@ -158,15 +158,14 @@ export function createTelegramListener(
       if (rawWebhookDomain) {
         const domain = rawWebhookDomain.replace(/^https?:\/\//, '');
         const webhookPath = `/api/v1/telegram-webhook/${config.userId}/${config.sessionId}`;
-        const handler = await activeBot.createWebhook({
-          domain,
-          path: webhookPath,
-          // Derived from ENCRYPTION_KEY + userId + sessionId — unique per session.
-          secret_token: generateTelegramSecretToken(
-            config.userId,
-            config.sessionId,
-          ),
-          // message_reaction is opt-in since Bot API 7.0 — must mirror allowedUpdates in long-poll.
+        // Derived from ENCRYPTION_KEY + userId + sessionId — unique per session.
+        const secretToken = generateTelegramSecretToken(
+          config.userId,
+          config.sessionId,
+        );
+        // message_reaction is opt-in since Bot API 7.0 — must mirror allowedUpdates in long-poll.
+        await activeBot.api.setWebhook(`https://${domain}${webhookPath}`, {
+          secret_token: secretToken,
           allowed_updates: [
             'message',
             'message_reaction',
@@ -174,6 +173,10 @@ export function createTelegramListener(
             'callback_query',
           ],
         });
+        // grammY has no bot.createWebhook() equivalent — webhookCallback() builds the
+        // (req, res) request listener ourselves; the 'http' adapter matches the raw
+        // Node.js IncomingMessage/ServerResponse signature server/app.ts invokes it with.
+        const handler = webhookCallback(activeBot, 'http', { secretToken });
         registerTelegramWebhookHandler(
           `${config.userId}:${config.sessionId}`,
           handler,
@@ -182,10 +185,10 @@ export function createTelegramListener(
           `[telegram] Webhook mode active — Telegram will POST to https://${domain}${webhookPath}`,
         );
       } else {
-        // Long-polling fallback — all handlers registered above, then launch().
+        // Long-polling fallback — all handlers registered above, then start().
         activeBot
-          .launch({
-            allowedUpdates: [
+          .start({
+            allowed_updates: [
               'message',
               'message_reaction',
               'message_reaction_count',
@@ -193,9 +196,8 @@ export function createTelegramListener(
             ],
           })
           .catch((err: unknown) => {
-            // "Bot is stopped!" is emitted during graceful stop() — not an error condition.
-            if (err instanceof Error && err.message === 'Bot is stopped!')
-              return;
+            // grammY's stop() resolves bot.start() normally rather than rejecting it,
+            // so any rejection here reflects a genuine polling failure.
             if (isAuthError(err)) {
               sessionLogger.error(
                 '[telegram] Session offline — bot token revoked during active polling',
@@ -214,9 +216,9 @@ export function createTelegramListener(
 
       sessionLogger.info('[telegram] Listener active');
 
-      // Register the slash-sync callback AFTER launch succeeds.
+      // Register the slash-sync callback AFTER start succeeds.
       // Closure captures activeBot and activeCommands by variable reference so dashboard
-      // restarts bind to the current Telegraf instance without re-registering.
+      // restarts bind to the current grammY Bot instance without re-registering.
       registerSlashSync(smKey, async () => {
         if (!activeBot || !activeCommands) return;
         const livePrefix = prefixManager.getPrefix(
@@ -271,11 +273,9 @@ export function createTelegramListener(
       unregisterTelegramWebhookHandler(`${config.userId}:${config.sessionId}`);
       activeCommands = null;
       if (activeBot) {
-        try {
-          activeBot.stop(signal || 'Restarting');
-        } catch {
-          // Suppress "Bot is not running!" — start() may have set activeBot but aborted before launch()
-        }
+        // grammY's stop() resolves without throwing when the bot was never started
+        // (e.g. start() may have set activeBot but aborted before start() completed).
+        await activeBot.stop();
         activeBot = null;
       }
     } finally {

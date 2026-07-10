@@ -8,7 +8,7 @@
  * to call per-user in bulk; this trade-off is acceptable since getUserInfo
  * is called primarily for the sender.
  */
-import type { Context } from 'telegraf';
+import type { Context } from 'grammy';
 import type { UserInfo } from '@/engine/adapters/models/api.model.js';
 
 export async function getUserInfo(

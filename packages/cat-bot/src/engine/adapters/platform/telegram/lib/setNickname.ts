@@ -7,7 +7,7 @@
  * as of 2026. Command modules should handle the resulting API error gracefully
  * and inform the user that the target must be an admin.
  */
-import type { Context } from 'telegraf';
+import type { Context } from 'grammy';
 
 export async function setNickname(
   ctx: Context,
@@ -15,7 +15,7 @@ export async function setNickname(
   userID: string,
   nickname: string,
 ): Promise<void> {
-  await ctx.telegram.setChatAdministratorCustomTitle(
+  await ctx.api.setChatAdministratorCustomTitle(
     ctx.chat?.id as number,
     Number(userID),
     nickname ?? '',

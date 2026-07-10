@@ -7,7 +7,7 @@
  *   types.ts          → TelegramConfig, PLATFORM_ID, TelegramEmitter
  *   listener.ts       → createTelegramListener factory
  *   slash-commands.ts → Command menu registration across broadcast scopes
- *   handlers.ts       → Telegraf update handler registrations
+ *   handlers.ts       → grammY update handler registrations
  *   wrapper.ts        → UnifiedApi class shell + createTelegramApi factory
  *   unsupported.ts    → Unsupported operation stubs (addUserToGroup, setGroupReaction)
  *   utils/            → Event normalisation utilities (pure functions)

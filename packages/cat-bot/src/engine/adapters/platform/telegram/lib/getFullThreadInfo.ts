@@ -10,7 +10,7 @@
  * Falls back to ctx.chat when getChat fails (e.g., bot is not a member of
  * the target chat but has a reference to it from a forwarded message).
  */
-import type { Context } from 'telegraf';
+import type { Context } from 'grammy';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
   createUnifiedThreadInfo,
@@ -22,10 +22,10 @@ export async function getFullThreadInfo(
   threadID: string,
 ): Promise<UnifiedThreadInfo> {
   const chatId = Number(threadID) || threadID;
-  let chat: Awaited<ReturnType<typeof ctx.telegram.getChat>> | null = null;
+  let chat: Awaited<ReturnType<typeof ctx.api.getChat>> | null = null;
 
   try {
-    chat = await ctx.telegram.getChat(chatId);
+    chat = await ctx.api.getChat(chatId);
   } catch {
     // Fall back to the current context chat when getChat fails (e.g., bot not in chat)
     if (String(ctx.chat?.id) === String(threadID)) {
@@ -47,14 +47,14 @@ export async function getFullThreadInfo(
 
   if (isGroup) {
     try {
-      const admins = await ctx.telegram.getChatAdministrators(chatId);
+      const admins = await ctx.api.getChatAdministrators(chatId);
       adminIDs = admins.map((a) => String(a.user.id));
     } catch {
       /* non-fatal; adminIDs stays empty */
     }
-    // getChatMembersCount is the Telegraf v4 method name (note plural "Members")
+    // getChatMemberCount is the current Bot API method name (singular "Member")
     try {
-      memberCount = await ctx.telegram.getChatMembersCount(chatId);
+      memberCount = await ctx.api.getChatMemberCount(chatId);
     } catch {
       /* non-fatal */
     }

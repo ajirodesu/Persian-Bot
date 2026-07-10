@@ -8,8 +8,8 @@
  *
  * avatarUrl is null — getFile round-trip is deferred to avoid blocking.
  */
-import type { Context } from 'telegraf';
-import type { User } from 'telegraf/types';
+import type { Context } from 'grammy';
+import type { User } from 'grammy/types';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
   createUnifiedUserInfo,
@@ -23,7 +23,7 @@ export async function getFullUserInfo(
   let u: User | null = null;
 
   try {
-    const member = await ctx.telegram.getChatMember(
+    const member = await ctx.api.getChatMember(
       ctx.chat?.id as number,
       Number(userID),
     );

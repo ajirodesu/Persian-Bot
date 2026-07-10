@@ -14,7 +14,7 @@
  *   CLEAR    when: prefix != '/' AND (isCommandRegister OR commandHash IS NOT NULL)
  *   SKIP     otherwise — menu is already in the desired state
  */
-import type { Telegraf } from 'telegraf';
+import type { Bot } from 'grammy';
 import type { SessionLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 import { computeCommandHash } from '@/engine/modules/command/command-hash.util.js';
 import {
@@ -67,7 +67,7 @@ function sanitizeTelegramDescription(desc: string): string {
  * from persisting when the bot uses a non-slash prefix.
  */
 export async function registerSlashMenu(
-  bot: Telegraf,
+  bot: Bot,
   commands: Map<string, Record<string, unknown>>,
   prefix: string,
   userId: string,
@@ -144,7 +144,7 @@ export async function registerSlashMenu(
       try {
         await Promise.all(
           BROADCAST_SCOPES.map((scope) =>
-            bot.telegram.setMyCommands([], { scope }),
+            bot.api.setMyCommands([], { scope }),
           ),
         );
         await updateTelegramCredentialCommandHash(userId, sessionId, {
@@ -163,7 +163,7 @@ export async function registerSlashMenu(
     try {
       await Promise.all(
         BROADCAST_SCOPES.map((scope) =>
-          bot.telegram.setMyCommands(slashCommands, { scope }),
+          bot.api.setMyCommands(slashCommands, { scope }),
         ),
       );
       sessionLogger.info(
@@ -201,7 +201,7 @@ export async function registerSlashMenu(
     try {
       await Promise.all(
         BROADCAST_SCOPES.map((scope) =>
-          bot.telegram.setMyCommands([], { scope }),
+          bot.api.setMyCommands([], { scope }),
         ),
       );
       sessionLogger.info(

@@ -65,9 +65,10 @@ export function createApp(): Application {
   app.all('/api/admin-auth/{*any}', toNodeHandler(adminAuth));
 
   // Telegram webhook — mounted BEFORE express.json() for the same reason as better-auth:
-  // Telegraf's RequestListener reads the raw body stream itself. If express.json() ran first
-  // the stream would be consumed and Telegraf would receive an empty update payload.
-  // The handler is registered lazily by listener.ts after bot.createWebhook() resolves,
+  // grammY's webhookCallback() RequestListener reads the raw body stream itself. If
+  // express.json() ran first the stream would be consumed and grammY would receive an
+  // empty update payload.
+  // The handler is registered lazily by listener.ts after bot.api.setWebhook() resolves,
   // so requests arriving before a session is live receive a 404 (safe no-op).
   app.post('/api/v1/telegram-webhook/:userId/:sessionId', (req, res) => {
     const key = `${String(req.params['userId'])}:${String(req.params['sessionId'])}`;

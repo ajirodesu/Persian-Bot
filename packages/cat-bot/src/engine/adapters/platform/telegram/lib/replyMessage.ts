@@ -11,10 +11,10 @@
  * to the original. Caption appears on the first photo of a media group only —
  * Telegram displays one caption per group.
  */
-import type { Context } from 'telegraf';
+import type { Context } from 'grammy';
 import type { Readable } from 'stream';
-import { Input } from 'telegraf';
-import type { MessageEntity } from 'telegraf/types';
+import { InputFile } from 'grammy';
+import type { MessageEntity } from 'grammy/types';
 import {
   bufferToStream,
   streamToBuffer,
@@ -145,7 +145,7 @@ export async function replyMessage(
   ];
 
   if (allAttachments.length === 0) {
-    const sent = await ctx.telegram.sendMessage(chatId, text || ' ', {
+    const sent = await ctx.api.sendMessage(chatId, text || ' ', {
       ...textExtra,
       ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     });
@@ -186,21 +186,21 @@ export async function replyMessage(
     };
 
     if (photos.length === 1) {
-      sent = await ctx.telegram.sendPhoto(
+      sent = await ctx.api.sendPhoto(
         chatId,
-        Input.fromBuffer(await streamToBuffer(att), att.path || 'photo.jpg'),
+        new InputFile(await streamToBuffer(att), att.path || 'photo.jpg'),
         commonExtra,
       );
     } else if (videos.length === 1) {
-      sent = await ctx.telegram.sendVideo(
+      sent = await ctx.api.sendVideo(
         chatId,
-        Input.fromBuffer(await streamToBuffer(att), att.path || 'video.mp4'),
+        new InputFile(await streamToBuffer(att), att.path || 'video.mp4'),
         commonExtra,
       );
     } else if (gifs.length === 1) {
-      sent = await ctx.telegram.sendAnimation(
+      sent = await ctx.api.sendAnimation(
         chatId,
-        Input.fromBuffer(
+        new InputFile(
           await streamToBuffer(att),
           att.path || 'animation.gif',
         ),
@@ -208,15 +208,15 @@ export async function replyMessage(
       );
     } else if (audios.length === 1) {
       // Use sendAudio instead of sendVoice: Telegram's editMessageMedia cannot mutate Voice messages.
-      sent = await ctx.telegram.sendAudio(
+      sent = await ctx.api.sendAudio(
         chatId,
-        Input.fromBuffer(await streamToBuffer(att), att.path || 'audio.mp3'),
+        new InputFile(await streamToBuffer(att), att.path || 'audio.mp3'),
         commonExtra,
       );
     } else {
-      sent = await ctx.telegram.sendDocument(
+      sent = await ctx.api.sendDocument(
         chatId,
-        Input.fromBuffer(await streamToBuffer(att), att.path || 'document.bin'),
+        new InputFile(await streamToBuffer(att), att.path || 'document.bin'),
         commonExtra,
       );
     }
@@ -224,12 +224,12 @@ export async function replyMessage(
   }
   // Batch multiple photos into one album — caption on first item only
   if (photos.length > 0) {
-    await ctx.telegram.sendMediaGroup(
+    await ctx.api.sendMediaGroup(
       chatId,
       await Promise.all(
         photos.map(async (s, idx) => ({
           type: 'photo' as const,
-          media: Input.fromBuffer(
+          media: new InputFile(
             await streamToBuffer(s),
             s.path || `photo_${idx}.jpg`,
           ),
@@ -251,9 +251,9 @@ export async function replyMessage(
   }
 
   for (const video of videos) {
-    await ctx.telegram.sendVideo(
+    await ctx.api.sendVideo(
       chatId,
-      Input.fromBuffer(await streamToBuffer(video), video.path || 'video.mp4'),
+      new InputFile(await streamToBuffer(video), video.path || 'video.mp4'),
       videos.indexOf(video) === 0 && photos.length === 0 && text
         ? { caption: text, ...captionExtra }
         : captionExtra,
@@ -261,9 +261,9 @@ export async function replyMessage(
   }
 
   for (const gif of gifs) {
-    await ctx.telegram.sendAnimation(
+    await ctx.api.sendAnimation(
       chatId,
-      Input.fromBuffer(await streamToBuffer(gif), gif.path || 'animation.gif'),
+      new InputFile(await streamToBuffer(gif), gif.path || 'animation.gif'),
       gifs.indexOf(gif) === 0 &&
         photos.length === 0 &&
         videos.length === 0 &&
@@ -275,17 +275,17 @@ export async function replyMessage(
 
   for (const audio of audios) {
     // Use sendAudio instead of sendVoice: Telegram's editMessageMedia cannot mutate Voice messages.
-    await ctx.telegram.sendAudio(
+    await ctx.api.sendAudio(
       chatId,
-      Input.fromBuffer(await streamToBuffer(audio), audio.path || 'audio.mp3'),
+      new InputFile(await streamToBuffer(audio), audio.path || 'audio.mp3'),
       captionExtra,
     );
   }
 
   for (const doc of others) {
-    await ctx.telegram.sendDocument(
+    await ctx.api.sendDocument(
       chatId,
-      Input.fromBuffer(await streamToBuffer(doc), doc.path || 'document.bin'),
+      new InputFile(await streamToBuffer(doc), doc.path || 'document.bin'),
       { caption: text, ...captionExtra },
     );
   }
@@ -293,7 +293,7 @@ export async function replyMessage(
   // sendMediaGroup does not support reply_markup — send a separate message with
   // the button keyboard appended after the media so both are visible in sequence.
   if (replyMarkup) {
-    const sent = await ctx.telegram.sendMessage(chatId, text || '\u200b', {
+    const sent = await ctx.api.sendMessage(chatId, text || '\u200b', {
       ...replyExtra,
       ...(parseMode !== undefined ? { parse_mode: parseMode } : {}),
       reply_markup: replyMarkup,

@@ -1,7 +1,7 @@
 /**
  * Telegram — Event Normalisation Utilities
  *
- * Pure transformation functions that map raw Telegraf context objects into
+ * Pure transformation functions that map raw grammY context objects into
  * the unified event contract. Separated from the class shell so normalizers
  * can be unit-tested by supplying a mock ctx without constructing a TelegramApi.
  *
@@ -13,9 +13,9 @@
  *   resolveAttachmentUrls          — resolves file_id → CDN URL in-place
  *   buildTelegramMentionEntities   — builds Bot API text_mention entity array
  */
-import type { Context } from 'telegraf';
+import type { Context, Api } from 'grammy';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
-import type { Message, MessageEntity, PhotoSize } from 'telegraf/types';
+import type { Message, MessageEntity, PhotoSize } from 'grammy/types';
 import type { MentionEntry } from '@/engine/adapters/models/api.model.js';
 import {
   EventType,
@@ -77,7 +77,7 @@ function extractAttachments(
 // ── Text message normaliser ───────────────────────────────────────────────────
 
 /**
- * Maps a Telegraf text-message context into UnifiedMessageEvent.
+ * Maps a grammY text-message context into UnifiedMessageEvent.
  * messageReply is derived from ctx.message.reply_to_message (Telegram pushes
  * the replied-to message inline — no extra API call needed).
  */
@@ -316,21 +316,24 @@ export function normalizeTelegramReactionEvent(
  * file > 20 MB Bot API limit, or transient network error) so callers can always
  * safely read att.url without additional null-guards beyond what they already have.
  *
- * Fires all getFileLink requests in parallel — typical message has 0–1 attachments
+ * Fires all getFile requests in parallel — typical message has 0–1 attachments
  * so Promise.all overhead is negligible versus sequential await.
  */
 export async function resolveAttachmentUrls(
   attachments: TelegramAttachment[],
-  telegram: Context['telegram'],
+  api: Api,
 ): Promise<void> {
   await Promise.all(
     attachments
       .filter((a) => a.ID && a.url === null)
       .map(async (a) => {
         try {
-          const link = await telegram.getFileLink(a.ID);
-          // Telegraf v4 getFileLink returns a URL object, not a plain string
-          a.url = typeof link === 'string' ? link : link.href;
+          // grammY has no built-in getFileLink() helper — getFile() resolves file_id to
+          // a file_path, which is combined with the bot token to build the CDN URL.
+          const file = await api.getFile(a.ID);
+          a.url = file.file_path
+            ? `https://api.telegram.org/file/bot${api.token}/${file.file_path}`
+            : null;
         } catch {
           // File > 20 MB or expired — leave url: null so downstream code handles gracefully
         }

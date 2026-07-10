@@ -6,7 +6,7 @@
  * never platform-native APIs — so they remain completely platform-agnostic.
  *
  * All methods are async/Promise-based regardless of whether the underlying platform
- * uses Promises (discord.js, telegraf).
+ * uses Promises (discord.js, grammY).
  *
  * ARCHITECTURE:
  *   - Interfaces  → ./interfaces/ (SendPayload, ButtonItem, etc.)

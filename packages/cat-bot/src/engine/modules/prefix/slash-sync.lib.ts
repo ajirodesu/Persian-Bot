@@ -4,12 +4,12 @@
  * Decoupled EventEmitter-style registry that lets the REST controller layer
  * (server/controllers/bot-session-config.controller.ts) trigger slash command
  * re-registration on live Discord/Telegram sessions without importing any
- * platform transport code (Discord.js, Telegraf) or creating circular deps.
+ * platform transport code (Discord.js, grammY) or creating circular deps.
  *
  * Contract:
  *   - Discord adapter registers a callback on start(); Discord.js Client and
  *     commands Map are captured in the closure.
- *   - Telegram adapter registers a callback on start(); Telegraf instance and
+ *   - Telegram adapter registers a callback on start(); grammY Bot instance and
  *     commands Map are captured in the closure.
  *   - The controller calls triggerSlashSync(key) after every setCommandEnabled().
  *     The registered callback fetches current enabled/disabled state from the DB

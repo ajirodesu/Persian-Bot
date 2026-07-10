@@ -1,7 +1,7 @@
 /**
- * Telegram — Telegraf Handler Registrations
+ * Telegram — grammY Handler Registrations
  *
- * Registers all Telegraf update handlers that emit unified events on the
+ * Registers all grammY update handlers that emit unified events on the
  * platform emitter. Each handler normalizes its raw Telegram context into
  * the unified event contract before emitting.
  *
@@ -17,9 +17,8 @@
  *   'callback_query'    → emit 'button_action'
  */
 import type { EventEmitter } from 'events';
-import type { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters';
-import type { Message } from 'telegraf/types';
+import type { Bot } from 'grammy';
+import type { Message } from 'grammy/types';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { EventType } from '@/engine/adapters/models/enums/index.js';
 import { createTelegramApi } from './wrapper.js';
@@ -32,25 +31,25 @@ import {
 } from './utils/helper.util.js';
 
 /**
- * Attaches all Telegraf update handlers to the given bot instance.
+ * Attaches all grammY update handlers to the given bot instance.
  * Each handler normalizes its context and emits a typed event on the emitter.
  *
- * IMPORTANT: Must be called BEFORE bot.launch() per Telegraf documentation.
+ * IMPORTANT: Must be called BEFORE bot.start() per grammY documentation.
  */
 export function attachHandlers(
-  bot: Telegraf,
+  bot: Bot,
   emitter: EventEmitter,
   prefix: string,
   userId: string,
   sessionId: string,
 ): void {
   // ── Service message handlers MUST be registered before the general 'message' handler ───
-  // Telegraf uses Koa-style middleware: the first registered handler that omits next() terminates
+  // grammY uses Koa-style middleware: the first registered handler that omits next() terminates
   // the chain. bot.on('message') matches ALL message-type updates (including service messages).
   // If it were first and returned without calling next(), these specific handlers would never fire.
 
   // ── Member join → emit 'event' (log:subscribe) ────────────────────────────
-  bot.on(message('new_chat_members'), async (ctx) => {
+  bot.on('message:new_chat_members', async (ctx) => {
     const api = createTelegramApi(ctx);
     const event = normalizeNewChatMembersEvent(ctx);
     const native = { platform: Platforms.Telegram, userId, sessionId, ctx };
@@ -58,7 +57,7 @@ export function attachHandlers(
   });
 
   // ── Member leave → emit 'event' (log:unsubscribe) ─────────────────────────
-  bot.on(message('left_chat_member'), async (ctx) => {
+  bot.on('message:left_chat_member', async (ctx) => {
     const api = createTelegramApi(ctx);
     const event = normalizeLeftChatMemberEvent(ctx);
     const native = { platform: Platforms.Telegram, userId, sessionId, ctx };
@@ -88,13 +87,13 @@ export function attachHandlers(
     const event = normalizeTelegramEvent(ctx, rawArgs);
 
     // Resolve file_id → CDN URL for outer message and replied-to message attachments.
-    // Telegram Bot API never embeds direct URLs — getFileLink() is the mandatory round-trip.
-    // URLs are valid for ~1 hour per Bot API spec.
+    // Telegram Bot API never embeds direct URLs — the getFile()-derived link is the mandatory
+    // round-trip. URLs are valid for ~1 hour per Bot API spec.
     await resolveAttachmentUrls(
       (event['attachments'] as Array<
         import('./utils/helper.util.js').TelegramAttachment
       >) ?? [],
-      ctx.telegram,
+      ctx.api,
     );
     const replyAtts = (
       event['messageReply'] as Record<string, unknown> | null
@@ -102,7 +101,7 @@ export function attachHandlers(
     if (replyAtts?.length) {
       await resolveAttachmentUrls(
         replyAtts as Array<import('./utils/helper.util.js').TelegramAttachment>,
-        ctx.telegram,
+        ctx.api,
       );
     }
 
@@ -127,11 +126,11 @@ export function attachHandlers(
 
   // ── Inline keyboard button press → emit 'button_action' ─────────────────────
   // callback_query fires when a user taps an InlineKeyboardButton sent with callback_data.
-  // answerCbQuery() MUST be called within ~10 s to dismiss the loading spinner — the call is
+  // answerCallbackQuery() MUST be called within ~10 s to dismiss the loading spinner — the call is
   // deliberately deferred to button.dispatcher so it can pass an alert message (show_alert=true)
   // for unauthorized button clicks before acknowledging the query.
   bot.on('callback_query', async (ctx) => {
-    // Do NOT call ctx.answerCbQuery() here — button.dispatcher owns the call so it can show
+    // Do NOT call ctx.answerCallbackQuery() here — button.dispatcher owns the call so it can show
     // a show_alert=true popup (private modal visible only to the button clicker) on scope failure.
     const api = createTelegramApi(ctx);
     const cbq = ctx.callbackQuery as {
@@ -153,13 +152,18 @@ export function attachHandlers(
       userId,
       sessionId,
       ctx,
-      // Expose answerCbQuery so button.dispatcher can pass an alert text for unauthorized clicks
+      // Expose answerCallbackQuery so button.dispatcher can pass an alert text for unauthorized clicks
       // (show_alert=true renders a native modal popup visible only to the user who pressed the button)
       // or call with no arguments for a normal silent acknowledgement on authorized clicks.
       ack: (text?: string, showAlert?: boolean) =>
-        ctx.answerCbQuery(text, {
-          ...(showAlert !== undefined ? { show_alert: showAlert } : {}),
-        }),
+        ctx.answerCallbackQuery(
+          text !== undefined || showAlert !== undefined
+            ? {
+                ...(text !== undefined ? { text } : {}),
+                ...(showAlert !== undefined ? { show_alert: showAlert } : {}),
+              }
+            : undefined,
+        ),
     };
     emitter.emit(EventType.BUTTON_ACTION, { api, event, native, prefix });
   });

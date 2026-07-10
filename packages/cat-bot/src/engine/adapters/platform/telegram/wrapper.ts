@@ -16,7 +16,7 @@
  */
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 
-import type { Context } from 'telegraf';
+import type { Context } from 'grammy';
 import type { Readable } from 'stream';
 import {
   UnifiedApi,
@@ -85,12 +85,12 @@ class TelegramApi extends UnifiedApi {
       const text = String(msg.message ?? msg.body ?? '');
       const chatId = Number(threadID) || this.#ctx.chat?.id;
       const entities = buildTelegramMentionEntities(text, msg.mentions);
-      return this.#ctx.telegram
+      return this.#ctx.api
         .sendMessage(
           chatId as number,
           text || ' ',
           entities.length
-            ? { entities: entities as import('telegraf/types').MessageEntity[] }
+            ? { entities: entities as import('grammy/types').MessageEntity[] }
             : undefined,
         )
         .then((m) => String(m.message_id));
@@ -257,13 +257,13 @@ class TelegramApi extends UnifiedApi {
   /**
    * getChatMemberCount is the official Telegram Bot API method — returns the exact real-time count.
    * The bot must be a member of the target chat for this call to succeed.
-   * Falls back to 0 when the chat ID cannot be resolved from the current Telegraf context.
+   * Falls back to 0 when the chat ID cannot be resolved from the current grammY context.
    */
   override getMemberCount(threadID: string): Promise<number> {
     logger.debug('[telegram] getMemberCount called', { threadID });
     const chatId = Number(threadID) || this.#ctx.chat?.id;
     if (!chatId) return Promise.resolve(0);
-    return this.#ctx.telegram.getChatMembersCount(chatId);
+    return this.#ctx.api.getChatMemberCount(chatId);
   }
 
   override addUserToGroup(threadID: string, userID: string): Promise<void> {
@@ -285,14 +285,14 @@ class TelegramApi extends UnifiedApi {
     const chatId = Number(threadID) || this.#ctx.chat?.id;
     if (!chatId)
       throw new Error('[telegram] Cannot determine chat ID to leave');
-    await this.#ctx.telegram.leaveChat(chatId);
+    await this.#ctx.api.leaveChat(chatId);
   }
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 /**
- * Creates a TelegramApi instance bound to the current Telegraf context.
+ * Creates a TelegramApi instance bound to the current grammY context.
  * Returns UnifiedApi so callers depend only on the abstract contract.
  */
 export function createTelegramApi(ctx: Context): UnifiedApi {

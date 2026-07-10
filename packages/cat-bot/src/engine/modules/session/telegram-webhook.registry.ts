@@ -14,14 +14,15 @@
  */
 
 // Typed as any-parameters to avoid forcing callers to import node:http types.
-// At runtime the handler is Telegraf's RequestListener (IncomingMessage, ServerResponse)
-// which is structurally compatible with Express req/res (both extend the Node.js types).
+// At runtime the handler is grammY's webhookCallback() request listener
+// (IncomingMessage, ServerResponse) which is structurally compatible with
+// Express req/res (both extend the Node.js types).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WebhookHandler = (req: any, res: any) => void;
 
 const registry = new Map<string, WebhookHandler>();
 
-/** Stores the Telegraf RequestListener for a session after bot.createWebhook() resolves. */
+/** Stores the grammY webhookCallback() handler for a session after bot.api.setWebhook() resolves. */
 export function registerTelegramWebhookHandler(
   key: string,
   handler: WebhookHandler,
