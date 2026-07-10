@@ -9,6 +9,7 @@ import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 
 export const meta: CommandMeta = {
   name: 'ai',
@@ -45,6 +46,23 @@ export const meta: CommandMeta = {
 //   • Rate-limited to one notification per 15 s per user per mode (prevents flooding).
 //   • hideNoti / adminOnlyHideNoti → completely silent rejection.
 //   • System admin > bot admin > thread admin bypass (most → least privileged).
+
+// ── Telegram @username vs. nickname conflict guard ─────────────────────────
+//
+// The nickname trigger below does a plain substring match against the raw message
+// text. On Telegram, "@BotUsername" mentions — either attached to a command
+// ("/help@ShiaBot") or standalone ("@ShiaBot what's up") — are addressing syntax,
+// not the nickname feature. When a bot's nickname happens to be identical or
+// similar to its Telegram @username (a common setup), that substring match would
+// otherwise misfire alongside (or instead of) the actual command/mention handling.
+//
+// Stripping every "@token" before the nickname check keeps the two features
+// independent: "/help@ShiaBot" is routed purely through command dispatch, and a
+// bare nickname mention elsewhere in the message (without "@") still triggers the
+// AI as intended. Scoped to Telegram only, per platform.
+function stripTelegramMentions(message: string): string {
+  return message.replace(/@\S+/g, ' ');
+}
 
 async function isBlockedByAdminRestrictions(
   ctx: AppCtx,
@@ -192,7 +210,17 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   const webchatNickname = ctx.native['webchatNickname'] as string | null | undefined;
   const targetName = nickname || webchatNickname || 'Cat-Bot';
 
-  if (!message.toLowerCase().includes(targetName.toLowerCase())) return;
+  // On Telegram, ignore "@..." mention tokens when checking for the nickname so an
+  // @username mention (e.g. attached to a command like "/help@ShiaBot", or typed
+  // standalone) never conflicts with a nickname that's identical or similar to the
+  // bot's actual @username. See stripTelegramMentions() above for details.
+  const nicknameMatchSource =
+    ctx.native.platform === Platforms.Telegram
+      ? stripTelegramMentions(message)
+      : message;
+
+  if (!nicknameMatchSource.toLowerCase().includes(targetName.toLowerCase()))
+    return;
 
   // ── Admin restriction gate ─────────────────────────────────────────────────
   // Must mirror enforceAdminOnly because onChat bypasses the command middleware chain.

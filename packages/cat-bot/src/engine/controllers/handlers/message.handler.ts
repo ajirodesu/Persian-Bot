@@ -37,6 +37,19 @@ import {
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 // BaseCtx construction delegated to shared factory — eliminates ~35-line duplication across handlers
 import { buildBaseCtx } from '../factories/ctx.factory.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+
+/**
+ * Resolves the bot's own @username on Telegram so a command sent with a stuck mention
+ * (e.g. "+help@ShiaBot") can be matched and validated correctly — see command-parser.util.ts.
+ * grammY exposes this via ctx.me once the bot is initialized (always true by the time any
+ * update reaches a handler). Returns undefined for every other platform, or if unavailable.
+ */
+function resolveTelegramBotUsername(native: NativeContext): string | undefined {
+  if (native.platform !== Platforms.Telegram) return undefined;
+  const ctx = native['ctx'] as { me?: { username?: string } } | undefined;
+  return ctx?.me?.username;
+}
 
 /**
  * Returns the set of command names disabled by the bot admin for this session.
@@ -132,9 +145,10 @@ export async function handleMessage(
     | undefined;
 
   // Prefix commands vs. Prefix-less commands
+  const botUsername = resolveTelegramBotUsername(native);
   if (body.startsWith(prefix)) {
     isCommandInvocation = true;
-    parsed = parseCommand(args, prefix) ?? undefined;
+    parsed = parseCommand(args, prefix, botUsername) ?? undefined;
     if (parsed) {
       mod = commands.get(parsed.name);
       // Nullify unsupported commands so they fallback to "command not found" logic naturally
@@ -143,8 +157,17 @@ export async function handleMessage(
       }
     }
   } else if (args.length > 0) {
-    const firstToken = args[0]!.toLowerCase();
-    const noPrefixMod = commands.get(firstToken);
+    // Strip a stuck "@BotUsername" mention (e.g. "help@ShiaBot") from prefix-less commands too.
+    const rawFirstToken = args[0]!.toLowerCase();
+    const atIndex = rawFirstToken.indexOf('@');
+    const mention = atIndex === -1 ? undefined : rawFirstToken.slice(atIndex + 1);
+    const firstToken =
+      atIndex === -1 ? rawFirstToken : rawFirstToken.slice(0, atIndex);
+    // A mention present but addressed to a different bot — not for us, skip prefix-less matching.
+    if (mention && botUsername && mention !== botUsername.toLowerCase()) {
+      return;
+    }
+    const noPrefixMod = firstToken ? commands.get(firstToken) : undefined;
     const noPrefixCfg = noPrefixMod?.['meta'] as
       | Record<string, unknown>
       | undefined;

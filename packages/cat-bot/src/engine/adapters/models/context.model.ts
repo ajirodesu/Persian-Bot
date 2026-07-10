@@ -270,6 +270,7 @@ export function createChatContext(
       onClick?: (...args: unknown[]) => unknown;
     }
   > | null = null,
+  platform?: string,
 ): import('./interfaces/index.js').ChatContext {
   const defaultThreadID = event['threadID'] as string;
   const defaultMessageID = event['messageID'] as string;
@@ -277,6 +278,13 @@ export function createChatContext(
     threadID: defaultThreadID,
     messageID: defaultMessageID,
   });
+
+  // DM/PM detection — scoped to Discord and Telegram only (per product requirement).
+  // event.isGroup === false means the triggering message came from a private/DM chat.
+  // Webchat has no group/DM distinction, so it's intentionally excluded here.
+  const isDmOrPm =
+    (platform === 'discord' || platform === 'telegram') &&
+    (event['isGroup'] as boolean | undefined) === false;
 
   // Extract explicit thread ID from options, fallback to event context
   function getThreadID(opts: unknown): string {
@@ -287,6 +295,27 @@ export function createChatContext(
       );
     }
     return defaultThreadID;
+  }
+
+  // True when the caller explicitly targets a different thread than the one that
+  // triggered this context (e.g. cross-thread admin↔user relays in callad.ts).
+  // Those sends are pinned to a specific message on purpose — threading is the whole
+  // mechanism that lets the other party know which conversation to continue — so they
+  // must keep working even inside a DM/PM, and are therefore not "replies to the user's
+  // own message in this chat" in the sense the DM/PM rule below cares about.
+  function hasExplicitThreadOverride(opts: unknown): boolean {
+    if (typeof opts === 'object' && opts !== null) {
+      const o = opts as Record<string, unknown>;
+      return !!(o.threadID || o.thread_id);
+    }
+    return false;
+  }
+
+  // In a DM/PM (Discord or Telegram), bot responses should land as plain new messages
+  // instead of Telegram/Discord "reply" threads — unless the send explicitly targets a
+  // different thread (see hasExplicitThreadOverride above).
+  function shouldSendAsNewMessage(opts: unknown): boolean {
+    return isDmOrPm && !hasExplicitThreadOverride(opts);
   }
 
   // Extract explicit message ID from options, fallback to event context
@@ -482,6 +511,10 @@ export function createChatContext(
       }
       const targetThreadID = getThreadID(opts);
       const customMessageID = opts.messageID || opts.reply_to_message_id;
+      // Suppress reply-threading in DM/PM (Discord/Telegram) even when a custom message ID
+      // was supplied, unless the send explicitly targets a different thread — see
+      // shouldSendAsNewMessage() above.
+      const sendAsNewMessage = shouldSendAsNewMessage(opts);
       logger.debug('[context.model] ChatContext.reply called', {
         threadID: targetThreadID,
         hasMessage: !!message,
@@ -491,7 +524,9 @@ export function createChatContext(
         message,
         attachment,
         attachment_url,
-        ...(customMessageID ? { reply_to_message_id: customMessageID } : {}),
+        ...(customMessageID && !sendAsNewMessage
+          ? { reply_to_message_id: customMessageID }
+          : {}),
         button: resolveButtons(button),
         ...(style !== undefined ? { style } : {}),
       });
@@ -523,17 +558,21 @@ export function createChatContext(
       }
       const targetThreadID = getThreadID(opts);
       const targetMessageID = getMessageID(opts);
+      // In a DM/PM (Discord or Telegram), send as a plain new message instead of
+      // threading a reply onto the triggering message — see shouldSendAsNewMessage().
+      const sendAsNewMessage = shouldSendAsNewMessage(opts);
       logger.debug('[context.model] ChatContext.replyMessage called', {
         threadID: targetThreadID,
         messageID: targetMessageID,
         hasMessage: !!message,
         buttonCount: button.length,
+        sendAsNewMessage,
       });
       return api.replyMessage(targetThreadID, {
         message,
         attachment,
         attachment_url,
-        reply_to_message_id: targetMessageID,
+        ...(sendAsNewMessage ? {} : { reply_to_message_id: targetMessageID }),
         button: resolveButtons(button),
         ...(style !== undefined ? { style } : {}),
       });

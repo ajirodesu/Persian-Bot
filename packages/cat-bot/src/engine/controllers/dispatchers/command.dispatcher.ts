@@ -70,6 +70,7 @@ export async function dispatchCommand(
         onClick?: (...args: unknown[]) => unknown;
       }
     >) ?? null,
+    ctx.native?.platform,
   );
 
   // Bind the usage guide to this command and the resolved chat context.

@@ -147,6 +147,7 @@ export async function dispatchButtonFallback(
     buttonEvent,
     stored.command,
     buttonDef as Parameters<typeof createChatContext>[3],
+    ctx.native?.platform,
   );
 
   // Re-bind ctx to the synthetic buttonEvent so chat.reply() targets the selection reply's
@@ -276,6 +277,7 @@ export async function handleButtonAction(
         event,
         commandName,
         mod['button'] as Parameters<typeof createChatContext>[3],
+        native.platform,
       );
 
       const ctx: AppCtx = {

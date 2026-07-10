@@ -31,4 +31,35 @@ describe('Command Parser Utility', () => {
     const result = parseCommand(['/PiNg'], '/');
     expect(result?.name).toBe('ping');
   });
+
+  describe('Telegram "@BotUsername" mention suffix', () => {
+    it('strips a stuck @BotUsername suffix when no bot username is known', () => {
+      // WHY: Non-Telegram callers (or Telegram before bot info resolves) pass no botUsername —
+      // the mention should still be stripped so the command resolves.
+      const result = parseCommand(['+help@ShiaBot', 'arg1'], '+');
+      expect(result).toEqual({ name: 'help', args: ['arg1'] });
+    });
+
+    it('strips the suffix and matches when it targets this bot (case-insensitive)', () => {
+      const result = parseCommand(['+help@ShiaBot'], '+', 'ShiaBot');
+      expect(result).toEqual({ name: 'help', args: [] });
+    });
+
+    it('returns null when the mention targets a different bot', () => {
+      // WHY: Mirrors Telegram's native /command@OtherBot behavior in multi-bot groups —
+      // a command addressed to another bot must not misfire on this one.
+      const result = parseCommand(['+help@OtherBot'], '+', 'ShiaBot');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the mention is empty (command was just "@")', () => {
+      const result = parseCommand(['+@ShiaBot'], '+');
+      expect(result).toBeNull();
+    });
+
+    it('preserves remaining args when stripping the mention', () => {
+      const result = parseCommand(['/start@ShiaBot', 'foo', 'bar'], '/', 'ShiaBot');
+      expect(result).toEqual({ name: 'start', args: ['foo', 'bar'] });
+    });
+  });
 });

@@ -60,7 +60,7 @@ export function buildBaseCtx(
   const thread = createThreadContext(api, event, native);
   // Generic chat context — handlers that need a command-aware variant (button callbacks,
   // slash-command dispatch) override ctx.chat after calling this factory.
-  const chat = createChatContext(api, event);
+  const chat = createChatContext(api, event, '', null, native.platform);
   // Forward `event` so createBotContext's bot.leave() fallback can resolve event.threadID
   // when the caller omits an explicit threadID (e.g. /out with no args).
   // Without event, the fallback chain (threadID ?? event?.threadID ?? '') always returns ''.
