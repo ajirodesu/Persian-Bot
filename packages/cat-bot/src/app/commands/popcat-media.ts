@@ -309,7 +309,7 @@ const EFFECT_CONFIGS: EndpointConfig[] = [
     fixedParams: { bottom: false, dark: true, fontsize: 30 },
   },
   {
-    name: 'discord-message',
+    name: 'discordmessage',
     path: '/v2/discord-message',
     label: 'Discord Message',
     description:
