@@ -2790,10 +2790,10 @@ const Composer = memo(function Composer({
 const CR_STYLES = `
         :root {
           --chatroom-bg: #0d0f12;
-          --bubble-bot: #1e2330;
-          --bubble-bot-text: #e2e8f0;
-          --bubble-user: #7c3200;
-          --bubble-user-text: #fff7ed;
+          --bubble-bot: rgb(var(--color-surface-container-high));
+          --bubble-bot-text: rgb(var(--color-on-surface));
+          --bubble-user: rgb(var(--color-primary));
+          --bubble-user-text: rgb(var(--color-on-primary));
           --input-border: rgba(255,255,255,0.1);
           --input-border-focus: rgb(var(--color-primary) / 0.45);
           --input-ring: rgb(var(--color-primary) / 0.12);
