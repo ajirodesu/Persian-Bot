@@ -3027,6 +3027,11 @@ export default function ChatRoomPage() {
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  // Mobile only: false while the thread is pinned to the top, so the header
+  // renders "invisible" (just the hamburger + profile icon floating over the
+  // content) until the user scrolls, at which point the surface, border, and
+  // nickname title fade in. Desktop always shows the full header regardless.
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false)
   const [lightbox, setLightbox] = useState<{ images: ChatAttachment[]; index: number } | null>(null)
   // Drives the Enter-key behaviour split below: on mobile, Enter/Next must
   // only insert a newline (sending is Send-button-only); on desktop, Enter
@@ -3238,6 +3243,10 @@ export default function ChatRoomPage() {
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
       isNearBottomRef.current = dist < 150
       setShowScrollBtn(dist > 120)
+      // Mobile-only header chrome (surface, border, nickname) stays hidden
+      // while pinned to the very top and fades in once the thread scrolls
+      // away from it — see header render below.
+      setIsHeaderScrolled(el.scrollTop > 4)
 
       // Scrollbar only appears while actively scrolling, then fades out
       // after a short idle period instead of staying visible permanently.
@@ -3460,8 +3469,15 @@ export default function ChatRoomPage() {
               differs: [hamburger, mobile-only] · [nickname, centred] · [profile icon]. */}
         <header
           className={cn(
-            'relative flex items-center shrink-0 z-sticky',
-            'bg-surface/90 backdrop-blur-xl border-b border-outline-variant/70',
+            'relative flex items-center shrink-0 z-sticky transition-colors duration-normal',
+            // Mobile only: no surface/border while pinned to the top — just
+            // the hamburger and profile icon float over the message list.
+            // Scrolling reveals the same surface/border every other
+            // dashboard header uses. Desktop is unaffected and always shows
+            // the full header, regardless of scroll position.
+            isHeaderScrolled
+              ? 'bg-surface/90 backdrop-blur-xl border-b border-outline-variant/70'
+              : 'bg-transparent border-b border-transparent md:bg-surface/90 md:backdrop-blur-xl md:border-outline-variant/70',
             H_HEIGHT,
             H_PX,
           )}
@@ -3489,7 +3505,14 @@ export default function ChatRoomPage() {
             {botNickname}
           </p>
 
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-16 md:hidden">
+          {/* Mobile: title fades in with the rest of the header chrome once
+              scrolled — invisible while pinned to the top. */}
+          <div
+            className={cn(
+              'absolute inset-0 flex items-center justify-center pointer-events-none px-16 md:hidden transition-opacity duration-normal',
+              isHeaderScrolled ? 'opacity-100' : 'opacity-0',
+            )}
+          >
             <p
               className={cn(
                 H_BRAND_TEXT,

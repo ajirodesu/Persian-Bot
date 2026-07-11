@@ -9,6 +9,7 @@ import Alert from '@/components/ui/feedback/Alert'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { authAdminClient } from '@/lib/better-auth-admin-client.lib'
 import { Plus, Trash2 } from 'lucide-react'
 import { adminService } from '@/features/admin/services/admin.service'
@@ -198,6 +199,20 @@ export default function AdminSettingsPage() {
           Manage your admin profile and interface preferences.
         </p>
       </div>
+
+      {/* ── Appearance ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div>
+            <Card.Title as="h2">Appearance</Card.Title>
+            <Card.Description>
+              Choose the interface theme. Aurora is the new default; Classic
+              is the original look.
+            </Card.Description>
+          </div>
+        </Card.Header>
+        <ThemeToggle />
+      </Card.Root>
 
       {/* ── Profile ── */}
       <Card.Root variant="elevated" shadowElevation={1} padding="md">

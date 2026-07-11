@@ -29,10 +29,3 @@ export function getSocket(): Socket {
   return socket
 }
 
-/** Closes the socket connection and clears the singleton. */
-export function disconnectSocket(): void {
-  if (socket) {
-    socket.disconnect()
-    socket = null
-  }
-}

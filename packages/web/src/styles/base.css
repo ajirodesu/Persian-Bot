@@ -7,16 +7,7 @@
 
 @layer base {
   :root {
-    font-family:
-      'Inter',
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      'Helvetica Neue',
-      Arial,
-      sans-serif;
+    font-family: var(--font-family-plain);
     font-weight: 400;
     line-height: 1.6;
     letter-spacing: 0em;
@@ -43,6 +34,13 @@
 
   /* -----------------------------------------------------------
     Global Custom Scrollbar Styles
+
+    Scrollbars stay invisible at rest and fade in only during
+    active scroll interaction (Aurora theme sets
+    --scrollbar-idle-opacity to 0 and ThemeProvider toggles
+    html[data-scrolling="true"] while the user is scrolling;
+    Classic theme sets it to 1 to preserve its always-visible
+    behavior).
     ----------------------------------------------------------- */
   *:not(html) {
     scrollbar-width: thin;
@@ -62,10 +60,29 @@
   *:not(html)::-webkit-scrollbar-thumb {
     background: rgb(var(--color-outline-variant) / 0.6);
     border-radius: 3px;
+    opacity: var(--scrollbar-idle-opacity, 1);
+    transition: opacity var(--duration-normal) var(--easing-standard);
+  }
+
+  html[data-scrolling='true'] *:not(html)::-webkit-scrollbar-thumb {
+    opacity: 1;
+  }
+
+  *:not(html):hover::-webkit-scrollbar-thumb {
+    opacity: 1;
   }
 
   *:not(html)::-webkit-scrollbar-thumb:hover {
     background: rgb(var(--color-outline) / 0.8);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-family-brand);
   }
 
   h1 {
@@ -120,9 +137,7 @@
   }
 
   code {
-    font-family:
-      ui-monospace, 'SF Mono', 'Cascadia Code', 'Cascadia Mono',
-      'Segoe UI Mono', Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+    font-family: var(--font-family-mono);
     font-size: 0.875em;
     background-color: rgb(var(--color-surface-container-highest) / 1);
     color: rgb(var(--color-primary) / 0.9);

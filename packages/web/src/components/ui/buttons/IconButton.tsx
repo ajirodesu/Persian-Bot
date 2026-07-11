@@ -41,7 +41,7 @@ export type IconButtonProps<T extends React.ElementType = 'button'> =
  * Uses `relative` for proper state layer positioning
  */
 const base =
-  'relative inline-flex items-center justify-center rounded-lg transition-all duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-state-disabled disabled:pointer-events-none active:scale-[0.95]'
+  'relative inline-flex items-center justify-center rounded-full transition-all duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-state-disabled disabled:pointer-events-none active:scale-[0.95]'
 
 /**
  * Filled variant state layer structure
@@ -51,7 +51,7 @@ const base =
  * - disabled:after:opacity-0 prevents state layer when disabled
  */
 const filledStateLayer =
-  'after:absolute after:inset-0 after:z-[1] after:rounded-lg after:pointer-events-none after:opacity-0 after:transition-opacity after:duration-fast after:will-change-[opacity] hover:after:opacity-state-hover active:after:opacity-state-pressed disabled:after:opacity-0'
+  'after:absolute after:inset-0 after:z-[1] after:rounded-full after:pointer-events-none after:opacity-0 after:transition-opacity after:duration-fast after:will-change-[opacity] hover:after:opacity-state-hover active:after:opacity-state-pressed disabled:after:opacity-0'
 
 /**
  * Variant classes using design system state opacity tokens

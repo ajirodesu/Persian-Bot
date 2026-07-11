@@ -3,7 +3,7 @@
    
    All CSS custom properties for the design system scale.
    These are global (not theme-specific) — color roles live
-   in theme/light.css and theme/dark.css.
+   in theme/aurora.css and theme/classic.css.
    
    Token groups:
    1. Typography (font sizes, line heights, weights, tracking)
@@ -16,13 +16,9 @@
 
 :root {
   /* ==================== TYPOGRAPHY ==================== */
-  /* Font Families — Inter as the premium screen typeface */
-  --font-family-brand:
-    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-family-plain:
-    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-family-mono:
-    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  /* Font Families are theme-specific — see theme/aurora.css and
+     theme/classic.css (brand/plain/mono vary per theme so each
+     theme can express its own typographic personality). */
 
   --font-size-base: 1rem;
 

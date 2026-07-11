@@ -262,7 +262,7 @@ export function createTelegramListener(
     });
   };
 
-  emitter.stop = async (signal?: string): Promise<void> => {
+  emitter.stop = async (_signal?: string): Promise<void> => {
     if (sessionManager.isLocked(smKey)) return;
 
     sessionManager.markLocked(smKey);

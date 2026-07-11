@@ -13,6 +13,50 @@
 
 @layer utilities {
   /**
+   * Frosted-glass surface utility.
+   *
+   * Translucent surface fill + heavy backdrop blur + saturation
+   * boost + hairline border. Reserved for chrome-level surfaces
+   * (sidebar, header) rather than content cards. Every value
+   * comes from theme tokens, so Classic renders this as a
+   * near-opaque, unblurred surface (preserving its original
+   * look) while Aurora renders true frosted glass.
+   */
+  .glass-surface {
+    background-color: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border-color: var(--glass-border);
+  }
+
+  /**
+   * Ambient background glow utility.
+   *
+   * A single large, heavily-blurred radial color blob, meant to
+   * sit absolutely positioned and off-canvas behind hero-style
+   * sections. Never used as a flat gradient fill on buttons or
+   * cards. Opacity is theme-controlled — Classic disables it
+   * entirely (--ambient-glow-opacity: 0) to preserve its flat
+   * original background.
+   */
+  .ambient-glow {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 9999px;
+    filter: blur(100px);
+    opacity: var(--ambient-glow-opacity, 0);
+    z-index: var(--z-deep);
+  }
+
+  .ambient-glow-primary {
+    background: var(--ambient-glow-primary, transparent);
+  }
+
+  .ambient-glow-secondary {
+    background: var(--ambient-glow-secondary, transparent);
+  }
+
+  /**
    * Explicit scrollbar class - for backward compatibility.
    * Global base styles already apply to all non-html elements,
    * so this class is only needed when a parent has reset to default.

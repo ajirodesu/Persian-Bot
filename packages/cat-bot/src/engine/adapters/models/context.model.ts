@@ -28,10 +28,7 @@ import {
   ButtonStyle,
   type ButtonStyleValue,
 } from '@/engine/constants/button-style.constants.js';
-import {
-  createUnifiedThreadInfo,
-  type UnifiedThreadInfo,
-} from './thread.model.js';
+import { type UnifiedThreadInfo } from './thread.model.js';
 
 // Re-export interfaces for backward compatibility
 export type {
@@ -393,95 +390,6 @@ export function createChatContext(
         };
       }),
     );
-  }
-
-  /**
-   * Builds a numbered option list appended to the message body.
-   * Some platforms have no interactive button component —
-   * we simulate the button UX as a text menu the user replies to with their selection number.
-   */
-
-  /**
-   * Flattens a flat or 2-D button ID layout to a single ordered list.
-   * Grid rows are concatenated left-to-right, top-to-bottom so FB Messenger's
-   * numbered text-menu assigns sequential option numbers independent of row grouping.
-   */
-  function flattenButtonIds(buttonIds: string[] | string[][]): string[] {
-    if (buttonIds.length === 0) return [];
-    const first = buttonIds[0];
-    if (first === undefined) return [];
-    return Array.isArray(first)
-      ? (buttonIds as string[][]).flat()
-      : (buttonIds as string[]);
-  }
-
-  function buildButtonFallbackText(
-    msg: string,
-    buttonIds: string[] | string[][],
-  ): string {
-    logger.debug('[context.model] buildButtonFallbackText called');
-    const flat = flattenButtonIds(buttonIds);
-    const lines = flat.map((id, idx) => {
-      const bKey = baseKey(id);
-      const overrideFull = buttonContextLib.getOverride(`${commandName}:${id}`);
-      const overrideBase = buttonContextLib.getOverride(
-        `${commandName}:${bKey}`,
-      );
-      const label =
-        overrideFull?.label ??
-        overrideBase?.label ??
-        buttonDef?.[bKey]?.label ??
-        id;
-      return `${idx + 1}. ${label}`;
-    });
-    const footer = 'Reply with a number to choose an option.';
-    return msg
-      ? `${msg}\n\n${lines.join('\n')}\n\n${footer}`
-      : `${lines.join('\n')}\n\n${footer}`;
-  }
-
-  /**
-   * Registers a persistent button-fallback state keyed to the sent message ID.
-   * Intentionally never auto-deleted — the numbered menu stays selectable for the message's
-   * lifetime, mirroring how Discord, Telegram, and FB Page button components persist until
-   * the message is deleted or edited.
-   */
-  function registerButtonFallbackState(
-    msgId: string,
-    buttonIds: string[] | string[][],
-  ): void {
-    logger.debug('[context.model] registerButtonFallbackState called', {
-      msgId,
-    });
-    const flat = flattenButtonIds(buttonIds);
-    // Private key (msgId:senderID) so only the user who ran the command can select from this menu
-    const key = `${msgId}:${event['senderID'] as string}`;
-    stateStore.create(key, {
-      command: commandName,
-      state: 'button_fallback',
-      context: {
-        type: 'button_fallback',
-        buttons: flat.map((id, idx) => {
-          const bKey = baseKey(id);
-          const overrideFull = buttonContextLib.getOverride(
-            `${commandName}:${id}`,
-          );
-          const overrideBase = buttonContextLib.getOverride(
-            `${commandName}:${bKey}`,
-          );
-          const label =
-            overrideFull?.label ??
-            overrideBase?.label ??
-            buttonDef?.[bKey]?.label ??
-            id;
-          return {
-            number: idx + 1,
-            id,
-            label,
-          };
-        }),
-      },
-    });
   }
 
   return {

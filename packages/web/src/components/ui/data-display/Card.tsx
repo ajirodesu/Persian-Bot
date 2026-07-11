@@ -289,12 +289,22 @@ const CardRoot = forwardRefWithAs<'div', CardRootOwnProps>((props, ref) => {
   const showShadow =
     effectiveVariant === 'elevated' || effectiveVariant === 'filled'
 
+  const showHairline = effectiveVariant === 'elevated' || effectiveVariant === 'filled'
+
   return (
     <Component
       ref={ref}
       className={cn(
-        // Base styles
-        'rounded-xl',
+        // Base styles — large rounded corners driven by theme token
+        'rounded-[var(--radius-card,0.75rem)]',
+        // Hairline definition on elevated/filled cards only — outlined
+        // cards already carry their own semantic border color. Uses
+        // `outline` rather than `border` so it never collides with a
+        // card's own border-color override (e.g. a destructive-action
+        // card). Theme-controlled: transparent on Classic, 8% white on
+        // Aurora.
+        showHairline &&
+          'outline outline-1 outline-offset-[-1px] outline-[var(--color-hairline-border,transparent)]',
         // Variant-specific styles
         getVariantClasses(),
         // Shadow elevation (only for elevated and filled variants)

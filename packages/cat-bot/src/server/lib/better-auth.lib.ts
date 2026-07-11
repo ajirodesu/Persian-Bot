@@ -20,9 +20,6 @@ import {
 } from '@/server/email-template/index.js';
 
 const isMongo = env.DATABASE_TYPE === 'mongodb';
-// NeonDB: better-auth natively accepts a pg.Pool via Kysely's PostgresDialect —
-// no custom adapter is needed; the pool is passed directly as the database option.
-const isNeon = env.DATABASE_TYPE === 'neondb';
 
 const isEmailServicesEnabled = env.VITE_EMAIL_SERVICES_ENABLE === 'true';
 

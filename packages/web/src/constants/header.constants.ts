@@ -59,18 +59,6 @@ export const H_LOGO_ICON = 'h-8 w-8 md:h-10 md:w-10' as const
  */
 export const H_BRAND_TEXT = 'text-title-md md:text-title-lg font-semibold' as const
 
-// ─── Desktop Navigation Items ──────────────────────────────────────────────
-
-/** Base classes for desktop horizontal nav links (colours applied per-component). */
-export const H_NAV_ITEM =
-  'inline-flex items-center gap-2 px-3 py-2 rounded-lg text-label-lg font-medium transition-colors duration-fast' as const
-
-// ─── Mobile Navigation Items ───────────────────────────────────────────────
-
-/** Base classes for mobile drawer nav links (full-width touch targets). */
-export const H_NAV_ITEM_MOBILE =
-  'flex items-center gap-3 w-full px-4 py-3 rounded-xl text-label-lg font-medium transition-colors duration-fast' as const
-
 // ─── User / Admin Avatar ───────────────────────────────────────────────────
 
 /**
@@ -101,12 +89,6 @@ export const H_AVATAR_TEXT =
  */
 export const H_ICON_BTN_MOBILE =
   '!w-9 !h-9 md:!w-10 md:!h-10 [&>svg]:!w-[18px] [&>svg]:!h-[18px] md:[&>svg]:!w-5 md:[&>svg]:!h-5' as const
-
-// ─── Dropdown Menu Trigger ─────────────────────────────────────────────────
-
-/** User menu trigger button classes (layout + spacing only). */
-export const H_MENU_TRIGGER =
-  'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-label-lg font-medium' as const
 
 /** Chevron icon in menu triggers. */
 export const H_CHEVRON = 'h-4 w-4 3xl:h-5 3xl:w-5' as const

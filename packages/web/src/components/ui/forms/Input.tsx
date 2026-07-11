@@ -38,13 +38,19 @@ export interface InputProps extends Omit<
  * All variants use border-2 for consistent sizing (no layout shift).
  */
 const base =
-  'w-full text-on-surface focus:outline-none disabled:opacity-state-disabled disabled:cursor-not-allowed placeholder:text-on-surface-variant transition-all duration-fast'
+  'w-full text-on-surface focus:outline-none disabled:opacity-state-disabled disabled:cursor-not-allowed placeholder:text-on-surface-variant transition-all duration-fast ease-standard focus:shadow-[var(--shadow-focus-ring,none)]'
 
 /**
- * Variant classes with consistent border-2 sizing
+ * Variant classes with consistent border-2 sizing.
+ *
+ * `default` pulls its background/border from theme tokens so Aurora gets
+ * a translucent surface fill with an 8% hairline border while Classic
+ * keeps its original transparent background + solid outline-variant
+ * border untouched.
  */
 const variantClasses: Record<InputVariant, string> = {
-  default: 'bg-transparent border-2 border-outline-variant',
+  default:
+    'bg-[var(--color-input-bg,transparent)] border-2 border-[var(--color-input-border,rgb(var(--color-outline-variant)))]',
   subtle:
     'border-2 border-transparent bg-surface-container hover:bg-surface-container-high',
 }
@@ -87,7 +93,7 @@ const iconSizeClasses: Record<InputSize, string> = {
  * Border radius class based on pill prop
  */
 const getBorderRadiusClass = (pill: boolean): string =>
-  pill ? 'rounded-full' : 'rounded-lg'
+  pill ? 'rounded-full' : 'rounded-[var(--radius-input,0.5rem)]'
 
 /**
  * Input component - A focused input element

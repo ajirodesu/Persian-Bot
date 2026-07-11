@@ -64,7 +64,7 @@ const filledStateLayer =
  */
 const variantClasses: Record<SelectVariant, string> = {
   default:
-    'bg-transparent text-on-surface border-2 border-outline-variant hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)] focus:border-primary',
+    'bg-[var(--color-input-bg,transparent)] text-on-surface border-2 border-[var(--color-input-border,rgb(var(--color-outline-variant)))] hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)] focus:border-primary',
   filled: cn(
     filledStateLayer,
     'bg-primary text-on-primary after:bg-on-primary border-2 border-transparent focus:border-on-primary/50 shadow-elevation-1 hover:shadow-elevation-2',
@@ -371,7 +371,7 @@ const Select: React.FC<SelectProps> = ({
   }
 
   // Border radius class based on pill prop
-  const borderRadiusClass = pill ? 'rounded-full' : 'rounded-lg'
+  const borderRadiusClass = pill ? 'rounded-full' : 'rounded-[var(--radius-input,0.5rem)]'
 
   // Render select menu via portal
   const selectMenu = isOpen && menuRect && (

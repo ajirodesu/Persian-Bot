@@ -245,7 +245,7 @@ const UserMenu = memo(function UserMenu() {
       >
         <span
           className={cn(
-            'flex items-center justify-center rounded-full shrink-0 bg-primary-container text-on-primary-container select-none font-bold',
+            'flex items-center justify-center rounded-full shrink-0 bg-primary text-on-primary select-none font-bold',
             H_AVATAR,
             H_AVATAR_TEXT,
           )}
@@ -276,7 +276,7 @@ const UserMenu = memo(function UserMenu() {
           <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-outline-variant/60">
             <span
               className={cn(
-                'flex items-center justify-center rounded-full shrink-0 bg-primary-container text-on-primary-container select-none font-bold',
+                'flex items-center justify-center rounded-full shrink-0 bg-primary text-on-primary select-none font-bold',
                 H_AVATAR,
                 H_AVATAR_TEXT,
               )}
@@ -325,6 +325,13 @@ export default function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [prevPath, setPrevPath] = useState(location.pathname)
   const activePath = location.pathname
+  // Mobile only: false while the page is pinned to the top, so the content
+  // header renders "invisible" (just the hamburger + avatar floating over
+  // the page) until the user scrolls, at which point the surface, border,
+  // and page title fade in. Desktop always shows the full header. Not used
+  // for the Chat Room route — it tracks its own internal scroll container
+  // (see chat-room.tsx) instead of window scroll.
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false)
 
   if (location.pathname !== prevPath) {
     setPrevPath(location.pathname)
@@ -346,6 +353,13 @@ export default function DashboardLayout() {
       document.body.style.overflow = ''
     }
   }, [mobileOpen])
+
+  useEffect(() => {
+    const onScroll = () => setIsHeaderScrolled(window.scrollY > 4)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [activePath])
 
   useEffect(() => {
     const socket = getSocket()
@@ -439,7 +453,7 @@ export default function DashboardLayout() {
         {/* Desktop sidebar — permanent, collapses to icon-free hidden state below md */}
         <aside
           className={cn(
-            'hidden md:flex shrink-0 flex-col bg-surface border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden',
+            'glass-surface hidden md:flex shrink-0 flex-col border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden',
             H_SIDEBAR_WIDTH,
           )}
         >
@@ -458,7 +472,7 @@ export default function DashboardLayout() {
         {/* Mobile off-canvas drawer */}
         <aside
           className={cn(
-            'fixed inset-y-0 left-0 z-modal flex flex-col bg-surface border-r border-outline-variant/70 md:hidden transition-transform duration-normal',
+            'glass-surface fixed inset-y-0 left-0 z-modal flex flex-col border-r border-outline-variant/70 md:hidden transition-transform duration-normal',
             H_SIDEBAR_WIDTH,
             mobileOpen ? 'translate-x-0 shadow-elevation-4' : '-translate-x-full',
           )}
@@ -493,7 +507,15 @@ export default function DashboardLayout() {
           {!isChatRoom && (
             <div
               className={cn(
-                'sticky top-0 z-sticky bg-surface/90 backdrop-blur-xl border-b border-outline-variant/70 flex items-center',
+                'sticky top-0 z-sticky flex items-center transition-colors duration-normal',
+                // Mobile only: no surface/border while pinned to the top —
+                // just the hamburger and avatar float over the page.
+                // Scrolling reveals the same surface/border every other
+                // dashboard header uses. Desktop always shows the full
+                // header, regardless of scroll position.
+                isHeaderScrolled
+                  ? 'glass-surface border-b border-outline-variant/70'
+                  : 'bg-transparent border-b border-transparent md:glass-surface md:border-outline-variant/70',
                 H_HEIGHT,
                 H_PX,
               )}
@@ -518,8 +540,14 @@ export default function DashboardLayout() {
                 {currentLabel}
               </span>
 
-              {/* Mobile: page title — absolutely centred */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none md:hidden">
+              {/* Mobile: page title — absolutely centred, fades in with the
+                  rest of the header chrome once scrolled */}
+              <div
+                className={cn(
+                  'absolute inset-0 flex items-center justify-center pointer-events-none md:hidden transition-opacity duration-normal',
+                  isHeaderScrolled ? 'opacity-100' : 'opacity-0',
+                )}
+              >
                 <span
                   className={cn(
                     H_BRAND_TEXT,

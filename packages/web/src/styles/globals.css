@@ -17,15 +17,26 @@
 
 /* -----------------------------------------------------------
   0. Web Fonts
-  Inter: a clean, high-legibility sans-serif optimised for
-  screen rendering. Used as the brand and plain typeface.
+  Inter: humanist body typeface, used across both themes.
+  Sora: geometric extrabold display face used by the Aurora
+  theme for headings/brand.
+  JetBrains Mono: distinct developer-grade monospace used by
+  the Aurora theme for code/data.
   ----------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* -----------------------------------------------------------
   1. Theme Color Variables
+
+  Two selectable themes:
+   • aurora  — new theme (default), cyan/aqua accent, iOS-style
+               shape/glass/glow tokens. Lives on :root so it
+               applies even before the switcher JS runs.
+   • classic — the original Replit-orange theme, opt-in via
+               html[data-theme="classic"].
   ----------------------------------------------------------- */
-@import './theme/dark.css';
+@import './theme/aurora.css';
+@import './theme/classic.css';
 
 /* -----------------------------------------------------------
   2. Design Token Variables

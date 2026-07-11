@@ -345,7 +345,7 @@ function verifySignedToken(
     .update(payload)
     .digest('hex');
 
-  let sigMatch = false;
+  let sigMatch: boolean;
   try {
     const sigBuf = Buffer.from(sig, 'hex');
     const expectedBuf = Buffer.from(expectedSig, 'hex');

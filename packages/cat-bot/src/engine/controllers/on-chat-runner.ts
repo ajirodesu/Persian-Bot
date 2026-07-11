@@ -95,7 +95,7 @@ export async function runOnChat(
   // Collect all onChat promises before awaiting so every eligible module starts
   // immediately — no module waits for the previous module's onChat to resolve.
   const tasks: Promise<void>[] = [];
-  for (const [name, mod] of commands) {
+  for (const [, mod] of commands) {
     if (seen.has(mod)) continue;
     seen.add(mod);
     if (typeof mod['onChat'] === 'function') {

@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Cat-Bot</title>
+    <script>
+      // Applies the persisted theme (defaulting to the new "aurora" theme)
+      // before first paint so there's never a flash of the wrong theme.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('cat-bot-ui-theme')
+          var theme = stored === 'classic' ? 'classic' : 'aurora'
+          document.documentElement.setAttribute('data-theme', theme)
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'aurora')
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

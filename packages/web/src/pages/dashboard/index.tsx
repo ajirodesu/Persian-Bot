@@ -40,7 +40,7 @@ function BotCard({
       padding="md"
       interactive
       onClick={onClick}
-      className="group hover:shadow-elevation-2 hover:border-outline-variant transition-all duration-normal border border-outline-variant/60"
+      className="group hover:shadow-elevation-2 hover:border-outline-variant/80 transition-all duration-normal border border-outline-variant/60"
     >
       {/* Identity + live status */}
       <div className="flex items-start justify-between gap-4">

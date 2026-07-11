@@ -1,0 +1,205 @@
+/* ============================================================
+   "CLASSIC" THEME — the original Replit-inspired dark theme
+
+   This is the pre-existing theme, preserved byte-for-byte in
+   spirit and kept selectable via the theme switcher. It is no
+   longer the default (Aurora is), but remains fully supported.
+
+   Palette strategy:
+   • Surfaces: deep navy-black (Replit IDE dark) — reads as
+     "professional developer tool"
+   • Primary: Replit orange (#F08730) — warm, vibrant, on-brand
+   • Secondary: muted amber for supporting actions
+   • Tertiary: electric blue for code/data accents
+   • Elevation via surface container steps, each a shade lighter
+     in the navy register
+   ============================================================ */
+
+html[data-theme='classic'] {
+  /* ==================== PRIMARY (Replit orange) ==================== */
+  --classic-color-primary: 240 135 60;
+  --classic-color-on-primary: 26 12 0;
+  --classic-color-primary-container: 138 61 0;
+  --classic-color-on-primary-container: 255 207 160;
+
+  /* ==================== SECONDARY (muted amber) ==================== */
+  --classic-color-secondary: 201 168 124;
+  --classic-color-on-secondary: 58 32 16;
+  --classic-color-secondary-container: 106 60 20;
+  --classic-color-on-secondary-container: 248 222 184;
+
+  /* ==================== TERTIARY (code blue) ==================== */
+  --classic-color-tertiary: 121 192 255;
+  --classic-color-on-tertiary: 0 27 62;
+  --classic-color-tertiary-container: 0 54 117;
+  --classic-color-on-tertiary-container: 202 232 255;
+
+  /* ==================== SURFACE SYSTEM ==================== */
+  --classic-color-surface: 13 17 23;
+  --classic-color-on-surface: 230 237 243;
+  --classic-color-surface-variant: 61 68 81;
+  --classic-color-on-surface-variant: 139 148 158;
+  --classic-color-surface-container-lowest: 9 12 16;
+  --classic-color-surface-container-low: 22 27 34;
+  --classic-color-surface-container: 28 33 40;
+  --classic-color-surface-container-high: 34 39 46;
+  --classic-color-surface-container-highest: 45 51 59;
+  --classic-color-surface-bright: 139 148 158;
+  --classic-color-surface-dim: 9 12 16;
+
+  /* ==================== INVERSE ==================== */
+  --classic-color-inverse-surface: 230 237 243;
+  --classic-color-inverse-on-surface: 13 17 23;
+  --classic-color-inverse-primary: 168 77 0;
+
+  /* ==================== OUTLINE ==================== */
+  --classic-color-outline: 110 118 129;
+  --classic-color-outline-variant: 48 54 61;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --classic-color-scrim: 0 0 0;
+  --classic-color-shadow: 0 0 0;
+
+  /* ==================== ERROR ==================== */
+  --classic-color-error: 248 81 73;
+  --classic-color-on-error: 68 6 8;
+  --classic-color-error-container: 130 20 22;
+  --classic-color-on-error-container: 255 218 220;
+
+  /* ==================== SUCCESS ==================== */
+  --classic-color-success: 56 211 121;
+  --classic-color-on-success: 2 48 22;
+  --classic-color-success-container: 8 88 44;
+  --classic-color-on-success-container: 214 252 230;
+
+  /* ==================== WARNING ==================== */
+  --classic-color-warning: 255 192 0;
+  --classic-color-on-warning: 66 24 0;
+  --classic-color-warning-container: 140 56 0;
+  --classic-color-on-warning-container: 252 240 192;
+
+  /* ==================== INFO ==================== */
+  --classic-color-info: 88 166 255;
+  --classic-color-on-info: 4 48 74;
+  --classic-color-info-container: 4 78 112;
+  --classic-color-on-info-container: 218 244 255;
+
+  /* ==================== GRADIENTS ==================== */
+  --classic-color-gradient-primary: linear-gradient(135deg, rgb(240 135 60) 0%, rgb(200 90 20) 100%);
+  --classic-color-gradient-secondary: linear-gradient(135deg, rgb(160 120 72) 0%, rgb(240 135 60) 100%);
+  --classic-color-gradient-tertiary: linear-gradient(135deg, rgb(88 166 255) 0%, rgb(121 192 255) 100%);
+  --classic-color-gradient-error: linear-gradient(135deg, rgb(130 20 22) 0%, rgb(110 40 10) 100%);
+  --classic-color-gradient-success: linear-gradient(135deg, rgb(8 96 48) 0%, rgb(10 100 84) 100%);
+  --classic-color-gradient-warning: linear-gradient(135deg, rgb(130 56 0) 0%, rgb(112 80 10) 100%);
+  --classic-color-gradient-info: linear-gradient(135deg, rgb(16 96 152) 0%, rgb(8 100 120) 100%);
+
+  /* ==================== SHAPE ==================== */
+  /* Classic keeps the original, more conservative Material-ish shape scale */
+  --radius-card: 0.75rem;
+  --radius-card-lg: 1rem;
+  --radius-button: 0.5rem;
+  --radius-input: 0.5rem;
+  --radius-badge: 0.375rem;
+
+  /* ==================== SURFACES: GLASS / HAIRLINE ==================== */
+  --color-hairline-border: transparent;
+  --glass-bg: rgb(var(--classic-color-surface) / 0.9);
+  --glass-blur: 12px;
+  --glass-saturate: 100%;
+  --glass-border: rgb(var(--classic-color-outline-variant) / 0.7);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: transparent;
+  --color-input-border: rgb(var(--classic-color-outline-variant) / 1);
+
+  /* ==================== SHADOWS / GLOW ==================== */
+  --shadow-cta-glow: none;
+  --shadow-focus-ring: none;
+  --shadow-card-rest: var(--shadow-elevation-1);
+  --shadow-card-hover: var(--shadow-elevation-2);
+
+  /* ==================== MOTION ==================== */
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ==================== TYPOGRAPHY ==================== */
+  --font-family-brand:
+    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-plain:
+    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ==================== AMBIENT BACKGROUND ==================== */
+  --ambient-glow-opacity: 0;
+
+  /* ==================== SCROLLBAR ==================== */
+  --scrollbar-idle-opacity: 1;
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--classic-color-primary);
+  --color-on-primary: var(--classic-color-on-primary);
+  --color-primary-container: var(--classic-color-primary-container);
+  --color-on-primary-container: var(--classic-color-on-primary-container);
+
+  --color-secondary: var(--classic-color-secondary);
+  --color-on-secondary: var(--classic-color-on-secondary);
+  --color-secondary-container: var(--classic-color-secondary-container);
+  --color-on-secondary-container: var(--classic-color-on-secondary-container);
+
+  --color-tertiary: var(--classic-color-tertiary);
+  --color-on-tertiary: var(--classic-color-on-tertiary);
+  --color-tertiary-container: var(--classic-color-tertiary-container);
+  --color-on-tertiary-container: var(--classic-color-on-tertiary-container);
+
+  --color-surface: var(--classic-color-surface);
+  --color-on-surface: var(--classic-color-on-surface);
+  --color-surface-variant: var(--classic-color-surface-variant);
+  --color-on-surface-variant: var(--classic-color-on-surface-variant);
+  --color-surface-container-lowest: var(--classic-color-surface-container-lowest);
+  --color-surface-container-low: var(--classic-color-surface-container-low);
+  --color-surface-container: var(--classic-color-surface-container);
+  --color-surface-container-high: var(--classic-color-surface-container-high);
+  --color-surface-container-highest: var(--classic-color-surface-container-highest);
+  --color-surface-bright: var(--classic-color-surface-bright);
+  --color-surface-dim: var(--classic-color-surface-dim);
+
+  --color-inverse-surface: var(--classic-color-inverse-surface);
+  --color-inverse-on-surface: var(--classic-color-inverse-on-surface);
+  --color-inverse-primary: var(--classic-color-inverse-primary);
+
+  --color-outline: var(--classic-color-outline);
+  --color-outline-variant: var(--classic-color-outline-variant);
+
+  --color-scrim: var(--classic-color-scrim);
+  --color-shadow: var(--classic-color-shadow);
+
+  --color-error: var(--classic-color-error);
+  --color-on-error: var(--classic-color-on-error);
+  --color-error-container: var(--classic-color-error-container);
+  --color-on-error-container: var(--classic-color-on-error-container);
+
+  --color-success: var(--classic-color-success);
+  --color-on-success: var(--classic-color-on-success);
+  --color-success-container: var(--classic-color-success-container);
+  --color-on-success-container: var(--classic-color-on-success-container);
+
+  --color-warning: var(--classic-color-warning);
+  --color-on-warning: var(--classic-color-on-warning);
+  --color-warning-container: var(--classic-color-warning-container);
+  --color-on-warning-container: var(--classic-color-on-warning-container);
+
+  --color-info: var(--classic-color-info);
+  --color-on-info: var(--classic-color-on-info);
+  --color-info-container: var(--classic-color-info-container);
+  --color-on-info-container: var(--classic-color-on-info-container);
+
+  --color-gradient-primary: var(--classic-color-gradient-primary);
+  --color-gradient-secondary: var(--classic-color-gradient-secondary);
+  --color-gradient-tertiary: var(--classic-color-gradient-tertiary);
+  --color-gradient-error: var(--classic-color-gradient-error);
+  --color-gradient-success: var(--classic-color-gradient-success);
+  --color-gradient-warning: var(--classic-color-gradient-warning);
+  --color-gradient-info: var(--classic-color-gradient-info);
+
+  color-scheme: dark;
+}

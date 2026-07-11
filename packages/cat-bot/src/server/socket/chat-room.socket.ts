@@ -500,7 +500,7 @@ class WebChatApi extends UnifiedApi {
   ): Promise<void> {
     const session = getSession(this.sessionId);
 
-    let text = '';
+    let text: string;
     let style: string | undefined;
     let buttons: BotButton[][] | undefined;
     let attachments: ChatAttachment[] | undefined;

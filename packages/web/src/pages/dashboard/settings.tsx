@@ -9,6 +9,7 @@ import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import apiClient from '@/lib/api-client.lib'
 
@@ -111,6 +112,25 @@ export default function SettingsPage() {
           Manage your profile and account security.
         </p>
       </div>
+
+      {/* ── Appearance ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div>
+            <Card.Title as="h2">Appearance</Card.Title>
+            <Card.Description>
+              Choose the interface theme. Aurora is the new default; Classic
+              is the original look.
+            </Card.Description>
+          </div>
+        </Card.Header>
+        <ThemeToggle />
+      </Card.Root>
 
       {/* ── Profile ── */}
       <Card.Root

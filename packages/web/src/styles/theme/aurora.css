@@ -1,0 +1,239 @@
+/* ============================================================
+   "AURORA" THEME — the new default theme
+
+   Mood: calm, premium, "iOS meets developer" — quiet neutral
+   navy surfaces with a single vivid cyan/aqua accent used
+   sparingly and purposefully for active states, links, primary
+   actions and focus rings only.
+
+   This is the DEFAULT theme. Values live on `:root` (unscoped)
+   so they apply before the theme switcher JS has a chance to
+   run, and are re-stated under the explicit attribute selector
+   for clarity/robustness once the switcher sets it.
+   ============================================================ */
+
+:root,
+html[data-theme='aurora'] {
+  /* ==================== PRIMARY (cyan/aqua) ====================
+     Scale reference: light #eefcff → mid #0ab4e8 → dark #062f45 */
+  --aurora-color-primary: 10 180 232;
+  --aurora-color-on-primary: 255 255 255;
+  --aurora-color-primary-container: 6 47 69;
+  --aurora-color-on-primary-container: 238 252 255;
+
+  /* ==================== SECONDARY (muted slate — supporting actions) ==================== */
+  --aurora-color-secondary: 148 163 184;
+  --aurora-color-on-secondary: 15 23 35;
+  --aurora-color-secondary-container: 30 41 59;
+  --aurora-color-on-secondary-container: 203 213 225;
+
+  /* ==================== TERTIARY (soft indigo — data/code accent) ==================== */
+  --aurora-color-tertiary: 129 140 248;
+  --aurora-color-on-tertiary: 15 15 35;
+  --aurora-color-tertiary-container: 30 27 66;
+  --aurora-color-on-tertiary-container: 199 199 255;
+
+  /* ==================== SURFACE SYSTEM ==================== */
+  /* Base background: near-black navy #0b1220 */
+  --aurora-color-surface: 11 18 32;
+  --aurora-color-on-surface: 236 240 245;
+  --aurora-color-surface-variant: 71 85 105;
+  --aurora-color-on-surface-variant: 148 163 184;
+  --aurora-color-surface-container-lowest: 7 12 22;
+  /* Secondary background #0e1626 */
+  --aurora-color-surface-container-low: 14 22 38;
+  /* Card/surface background #151f34 */
+  --aurora-color-surface-container: 21 31 52;
+  --aurora-color-surface-container-high: 27 39 62;
+  --aurora-color-surface-container-highest: 34 48 74;
+  --aurora-color-surface-bright: 148 163 184;
+  --aurora-color-surface-dim: 7 12 22;
+
+  /* ==================== INVERSE ==================== */
+  --aurora-color-inverse-surface: 236 240 245;
+  --aurora-color-inverse-on-surface: 11 18 32;
+  --aurora-color-inverse-primary: 6 47 69;
+
+  /* ==================== OUTLINE ==================== */
+  --aurora-color-outline: 100 116 139;
+  --aurora-color-outline-variant: 51 65 85;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --aurora-color-scrim: 0 0 0;
+  --aurora-color-shadow: 0 0 0;
+
+  /* ==================== DANGER / ERROR (rose) ==================== */
+  --aurora-color-error: 244 63 94;
+  --aurora-color-on-error: 255 255 255;
+  --aurora-color-error-container: 46 16 26;
+  --aurora-color-on-error-container: 253 164 175;
+
+  /* ==================== SUCCESS (green) ==================== */
+  --aurora-color-success: 34 197 94;
+  --aurora-color-on-success: 5 26 15;
+  --aurora-color-success-container: 16 44 32;
+  --aurora-color-on-success-container: 134 239 172;
+
+  /* ==================== WARNING (amber) ==================== */
+  --aurora-color-warning: 245 158 11;
+  --aurora-color-on-warning: 38 22 0;
+  --aurora-color-warning-container: 46 32 10;
+  --aurora-color-on-warning-container: 252 211 120;
+
+  /* ==================== INFO (cyan — same family as primary) ==================== */
+  --aurora-color-info: 10 180 232;
+  --aurora-color-on-info: 4 26 35;
+  --aurora-color-info-container: 10 35 46;
+  --aurora-color-on-info-container: 153 230 255;
+
+  /* ==================== GRADIENTS ====================
+     Reserved for large, heavily-blurred ambient background
+     glows only — never flat fills on buttons/cards. */
+  --aurora-color-gradient-primary: linear-gradient(135deg, rgb(10 180 232) 0%, rgb(6 47 69) 100%);
+  --aurora-color-gradient-secondary: linear-gradient(135deg, rgb(148 163 184) 0%, rgb(71 85 105) 100%);
+  --aurora-color-gradient-tertiary: linear-gradient(135deg, rgb(129 140 248) 0%, rgb(67 56 130) 100%);
+  --aurora-color-gradient-error: linear-gradient(135deg, rgb(244 63 94) 0%, rgb(46 16 26) 100%);
+  --aurora-color-gradient-success: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(16 44 32) 100%);
+  --aurora-color-gradient-warning: linear-gradient(135deg, rgb(245 158 11) 0%, rgb(46 32 10) 100%);
+  --aurora-color-gradient-info: linear-gradient(135deg, rgb(10 180 232) 0%, rgb(10 35 46) 100%);
+
+  /* ==================== SHAPE ====================
+     Large rounded corners, pill-shaped interactive controls */
+  --radius-card: 1.25rem;      /* 20px */
+  --radius-card-lg: 1.5rem;    /* 24px */
+  --radius-button: 9999px;     /* fully pill */
+  --radius-input: 0.75rem;     /* 12px */
+  --radius-badge: 9999px;
+
+  /* ==================== HAIRLINE BORDERS ====================
+     White at 8% opacity only — never solid gray */
+  --color-hairline-border: rgba(255, 255, 255, 0.08);
+
+  /* ==================== FROSTED GLASS ==================== */
+  --glass-bg: rgba(21, 31, 52, 0.55);
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: rgba(21, 31, 52, 0.55);
+  --color-input-border: rgba(255, 255, 255, 0.08);
+
+  /* ==================== SOFT iOS-STYLE SHADOW SCALE ==================== */
+  --shadow-soft-sm:
+    0 1px 2px rgba(0, 0, 0, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-soft-md:
+    0 1px 2px rgba(0, 0, 0, 0.24),
+    0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-soft-lg:
+    0 2px 4px rgba(0, 0, 0, 0.26),
+    0 16px 40px rgba(0, 0, 0, 0.32),
+    0 32px 64px rgba(0, 0, 0, 0.22);
+
+  --shadow-card-rest: var(--shadow-soft-sm);
+  --shadow-card-hover: var(--shadow-soft-md);
+
+  /* Signature glow — reserved exclusively for primary CTA buttons */
+  --shadow-cta-glow:
+    0 0 0 1px rgba(10, 180, 232, 0.35),
+    0 8px 24px rgba(10, 180, 232, 0.35),
+    0 2px 10px rgba(10, 180, 232, 0.3);
+
+  /* Wide, soft accent glow ring for focused inputs */
+  --shadow-focus-ring: 0 0 0 4px rgba(10, 180, 232, 0.22);
+
+  /* ==================== MOTION ====================
+     Custom springy easing — replaces the default M3 standard
+     curve so every hover/press/focus transition feels bouncy */
+  --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ==================== TYPOGRAPHY ====================
+     Geometric extrabold for headings/brand, humanist for body,
+     distinct monospace for code/data */
+  --font-family-brand:
+    'Sora', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-plain:
+    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ==================== AMBIENT BACKGROUND GLOW ====================
+     Large, heavily-blurred radial blobs placed off-canvas behind
+     hero sections only — never as flat gradient fills. */
+  --ambient-glow-opacity: 1;
+  --ambient-glow-primary: rgba(10, 180, 232, 0.22);
+  --ambient-glow-secondary: rgba(129, 140, 248, 0.16);
+
+  /* ==================== SCROLLBAR ====================
+     Invisible at rest, fades in only while actively scrolling */
+  --scrollbar-idle-opacity: 0;
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--aurora-color-primary);
+  --color-on-primary: var(--aurora-color-on-primary);
+  --color-primary-container: var(--aurora-color-primary-container);
+  --color-on-primary-container: var(--aurora-color-on-primary-container);
+
+  --color-secondary: var(--aurora-color-secondary);
+  --color-on-secondary: var(--aurora-color-on-secondary);
+  --color-secondary-container: var(--aurora-color-secondary-container);
+  --color-on-secondary-container: var(--aurora-color-on-secondary-container);
+
+  --color-tertiary: var(--aurora-color-tertiary);
+  --color-on-tertiary: var(--aurora-color-on-tertiary);
+  --color-tertiary-container: var(--aurora-color-tertiary-container);
+  --color-on-tertiary-container: var(--aurora-color-on-tertiary-container);
+
+  --color-surface: var(--aurora-color-surface);
+  --color-on-surface: var(--aurora-color-on-surface);
+  --color-surface-variant: var(--aurora-color-surface-variant);
+  --color-on-surface-variant: var(--aurora-color-on-surface-variant);
+  --color-surface-container-lowest: var(--aurora-color-surface-container-lowest);
+  --color-surface-container-low: var(--aurora-color-surface-container-low);
+  --color-surface-container: var(--aurora-color-surface-container);
+  --color-surface-container-high: var(--aurora-color-surface-container-high);
+  --color-surface-container-highest: var(--aurora-color-surface-container-highest);
+  --color-surface-bright: var(--aurora-color-surface-bright);
+  --color-surface-dim: var(--aurora-color-surface-dim);
+
+  --color-inverse-surface: var(--aurora-color-inverse-surface);
+  --color-inverse-on-surface: var(--aurora-color-inverse-on-surface);
+  --color-inverse-primary: var(--aurora-color-inverse-primary);
+
+  --color-outline: var(--aurora-color-outline);
+  --color-outline-variant: var(--aurora-color-outline-variant);
+
+  --color-scrim: var(--aurora-color-scrim);
+  --color-shadow: var(--aurora-color-shadow);
+
+  --color-error: var(--aurora-color-error);
+  --color-on-error: var(--aurora-color-on-error);
+  --color-error-container: var(--aurora-color-error-container);
+  --color-on-error-container: var(--aurora-color-on-error-container);
+
+  --color-success: var(--aurora-color-success);
+  --color-on-success: var(--aurora-color-on-success);
+  --color-success-container: var(--aurora-color-success-container);
+  --color-on-success-container: var(--aurora-color-on-success-container);
+
+  --color-warning: var(--aurora-color-warning);
+  --color-on-warning: var(--aurora-color-on-warning);
+  --color-warning-container: var(--aurora-color-warning-container);
+  --color-on-warning-container: var(--aurora-color-on-warning-container);
+
+  --color-info: var(--aurora-color-info);
+  --color-on-info: var(--aurora-color-on-info);
+  --color-info-container: var(--aurora-color-info-container);
+  --color-on-info-container: var(--aurora-color-on-info-container);
+
+  --color-gradient-primary: var(--aurora-color-gradient-primary);
+  --color-gradient-secondary: var(--aurora-color-gradient-secondary);
+  --color-gradient-tertiary: var(--aurora-color-gradient-tertiary);
+  --color-gradient-error: var(--aurora-color-gradient-error);
+  --color-gradient-success: var(--aurora-color-gradient-success);
+  --color-gradient-warning: var(--aurora-color-gradient-warning);
+  --color-gradient-info: var(--aurora-color-gradient-info);
+
+  color-scheme: dark;
+}
