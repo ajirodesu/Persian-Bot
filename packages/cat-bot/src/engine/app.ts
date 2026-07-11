@@ -35,13 +35,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
-// MUST be first local import — configures Node's global http/https keep-alive agents
-// before any command module or platform adapter can issue a request. See the file's
-// own header comment for why this is the single highest-leverage latency fix available:
-// it turns every axios.get() call across the whole codebase into a pooled, reused
-// connection instead of a fresh TCP+TLS handshake per request, with no per-file changes.
-import '@/engine/config/http-agent.config.js';
-
 // ── Core config and logging ───────────────────────────────────────────────────
 import { env } from '@/engine/config/env.config.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
@@ -74,8 +67,7 @@ import type { SessionConfigs } from '@/engine/modules/session/session-loader.uti
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
-// dbReady resolves once each adapter's startup step completes (NeonDB schema DDL,
-// or MongoDB hot-path index creation) — see database/adapters/mongodb/src/indexes.ts.
+// dbReady is the NeonDB schema-init promise; undefined for mongodb adapter.
 import { dbReady } from 'database';
 
 // ============================================================================
@@ -365,11 +357,9 @@ async function main(): Promise<void> {
   logger.info('Cat-Bot - loading modules...');
   logger.info(`Environment: ${env.NODE_ENV}`);
 
-  // Ensure the DB adapter's startup step has completed before any session/credential
-  // queries land: NeonDB's schema DDL, or MongoDB's hot-path index creation. Both
-  // resolve quickly on a warm database (createIndex/CREATE TABLE IF NOT EXISTS are
-  // no-ops once already applied) and dbReady is undefined for any future adapter
-  // that doesn't need a startup step, so this guard stays a zero-cost no-op there.
+  // Ensure NeonDB schema DDL has completed before any session/credential queries land.
+  // For the mongodb adapter, dbReady is undefined — await on undefined
+  // resolves immediately, so this guard is a zero-cost no-op for non-neondb adapters.
   if (dbReady !== undefined) {
     await dbReady;
   }

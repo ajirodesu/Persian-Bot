@@ -26,7 +26,6 @@ import { createLogger } from '@/engine/modules/logger/logger.lib.js';
 import type { TelegramConfig, TelegramEmitter } from './types.js';
 import { registerSlashMenu } from './slash-commands.js';
 import { attachHandlers } from './handlers.js';
-import { primeBotID } from './lib/getBotID.js';
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
 // isAuthError retained — still needed inside boot() to classify long-poll errors mid-session.
 // withRetry removed — runner (platform-runner.lib.ts) now owns the retry loop.
@@ -118,11 +117,7 @@ export function createTelegramListener(
       // escapes to unhandledRejection and can crash every platform session. Calling getMe() here
       // lets the runner classify 401 → auth error → no retry (immediate permanent failure).
       try {
-        const me = await activeBot.api.getMe();
-        // PERF: seed getBotID()'s cache with the result of this call — otherwise
-        // every single onEvent/onCommand invocation for this session would repeat
-        // this exact network round trip just to learn an ID that never changes.
-        primeBotID(activeBot.api, me.id);
+        await activeBot.api.getMe();
       } catch (err) {
         activeBot = null; // Release — a fresh instance is created on the next attempt
         throw err;

@@ -112,5 +112,4 @@ export {
   deleteUser,
 } from '../adapters/mongodb/src/server/system-admin.repo.js';
 // getMongoDb  — factory returning the Db instance for MONGO_DATABASE_NAME.
-// dbReady     — resolves once hot-path indexes are ensured (mirrors NeonDB's schema-init promise).
-export { mongoClient, getMongoDb, dbReady } from '../adapters/mongodb/src/client.js';
+export { mongoClient, getMongoDb } from '../adapters/mongodb/src/client.js';

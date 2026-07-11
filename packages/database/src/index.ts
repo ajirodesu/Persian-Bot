@@ -1,9 +1,5 @@
 // Load .env before any process.env access — DATABASE_TYPE must be readable before the adapter is selected.
 import 'dotenv/config';
-import {
-  commandEnabledCache,
-  eventEnabledCache,
-} from './cache/enabled-flag.cache.js';
 
 // Dynamic import defers module resolution entirely to runtime based on DATABASE_TYPE.
 const dbType = process.env['DATABASE_TYPE'];
@@ -17,83 +13,20 @@ const m = (await (dbType === 'mongodb'
 export const upsertSessionCommands = m.upsertSessionCommands;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const findSessionCommands = m.findSessionCommands;
-
-// setCommandEnabled/isCommandEnabled are wrapped with an in-process cache — see
-// cache/enabled-flag.cache.ts for why. Writes update the cache immediately so an
-// admin's toggle is visible on the very next message rather than waiting out the TTL.
-export async function setCommandEnabled(
-  userId: string,
-  platform: string,
-  sessionId: string,
-  commandName: string,
-  isEnable: boolean,
-): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  await m.setCommandEnabled(userId, platform, sessionId, commandName, isEnable);
-  commandEnabledCache.set(userId, platform, sessionId, commandName, isEnable);
-}
-
-export async function isCommandEnabled(
-  userId: string,
-  platform: string,
-  sessionId: string,
-  commandName: string,
-): Promise<boolean> {
-  const cached = commandEnabledCache.get(
-    userId,
-    platform,
-    sessionId,
-    commandName,
-  );
-  if (cached !== undefined) return cached;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const value = (await m.isCommandEnabled(
-    userId,
-    platform,
-    sessionId,
-    commandName,
-  )) as boolean;
-  commandEnabledCache.set(userId, platform, sessionId, commandName, value);
-  return value;
-}
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const setCommandEnabled = m.setCommandEnabled;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const isCommandEnabled = m.isCommandEnabled;
 
 // --- BOT SESSION EVENTS ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const upsertSessionEvents = m.upsertSessionEvents;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const findSessionEvents = m.findSessionEvents;
-
-// Same cache treatment as setCommandEnabled/isCommandEnabled above.
-export async function setEventEnabled(
-  userId: string,
-  platform: string,
-  sessionId: string,
-  eventName: string,
-  isEnable: boolean,
-): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  await m.setEventEnabled(userId, platform, sessionId, eventName, isEnable);
-  eventEnabledCache.set(userId, platform, sessionId, eventName, isEnable);
-}
-
-export async function isEventEnabled(
-  userId: string,
-  platform: string,
-  sessionId: string,
-  eventName: string,
-): Promise<boolean> {
-  const cached = eventEnabledCache.get(userId, platform, sessionId, eventName);
-  if (cached !== undefined) return cached;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const value = (await m.isEventEnabled(
-    userId,
-    platform,
-    sessionId,
-    eventName,
-  )) as boolean;
-  eventEnabledCache.set(userId, platform, sessionId, eventName, value);
-  return value;
-}
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const setEventEnabled = m.setEventEnabled;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const isEventEnabled = m.isEventEnabled;
 
 // --- CREDENTIALS ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -244,8 +177,8 @@ export const pool = m.pool;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const initDb = m.initDb;
 
-// dbReady resolves once each adapter's own startup step completes: NeonDB's schema DDL,
-// or MongoDB's hot-path index creation (see adapters/mongodb/src/indexes.ts).
+// dbReady resolves when the NeonDB schema DDL has completed; undefined for all other adapters.
+// dbReady resolves when the NeonDB schema DDL has completed; undefined for all other adapters.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const dbReady = m.dbReady as Promise<void> | undefined;
 
