@@ -69,24 +69,34 @@ export async function replyMessage(
   const finalContent = style === 'text' ? escapeMarkdown(content) : content;
   const files: AttachmentBuilder[] = [];
 
+  // Both loops below convert each entry to a Buffer independently — there is no
+  // dependency between entries, so awaiting them one at a time serialises N
+  // independent network/stream reads for no reason (e.g. 3 image attachments at
+  // ~150ms each becomes ~450ms sequential vs ~150ms in parallel). Promise.all keeps
+  // output order stable (Array.map preserves index) while running the I/O concurrently.
+
   // Destructure {name, stream} — name drives the AttachmentBuilder filename shown in Discord
-  for (const { name, stream } of attachment) {
-    const buf = Buffer.isBuffer(stream)
-      ? stream
-      : await streamToBuffer(stream as NodeJS.ReadableStream);
-    files.push(new AttachmentBuilder(buf, { name: name || 'file.bin' }));
-  }
+  const streamFiles = await Promise.all(
+    attachment.map(async ({ name, stream }) => {
+      const buf = Buffer.isBuffer(stream)
+        ? stream
+        : await streamToBuffer(stream as NodeJS.ReadableStream);
+      return new AttachmentBuilder(buf, { name: name || 'file.bin' });
+    }),
+  );
+  files.push(...streamFiles);
 
   // Pass explicit name to urlToStream so Discord displays the caller-specified filename
-  for (const { name, url } of attachment_url) {
-    const s = await urlToStream(url, name);
-    const buf = await streamToBuffer(s);
-    files.push(
-      new AttachmentBuilder(buf, {
+  const urlFiles = await Promise.all(
+    attachment_url.map(async ({ name, url }) => {
+      const s = await urlToStream(url, name);
+      const buf = await streamToBuffer(s);
+      return new AttachmentBuilder(buf, {
         name: name || (s as unknown as { path?: string }).path || 'file.bin',
-      }),
-    );
-  }
+      });
+    }),
+  );
+  files.push(...urlFiles);
 
   // Map unified ButtonItem style strings to Discord ButtonStyle enum values.
   const STYLE_MAP: Record<string, ButtonStyle> = {

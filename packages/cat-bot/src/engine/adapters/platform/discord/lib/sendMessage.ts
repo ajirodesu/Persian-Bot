@@ -25,15 +25,21 @@ export async function sendMessage(
   const files: AttachmentBuilder[] = [];
 
   if (typeof msg !== 'string') {
-    // Align with Unified SendPayload contract allowing NamedStreamAttachment[] arrays
+    // Align with Unified SendPayload contract allowing NamedStreamAttachment[] arrays.
+    // Each entry converts independently, so Promise.all runs the I/O concurrently instead
+    // of serialising N stream/network reads one at a time (see replyMessage.ts for the
+    // same fix with more detail).
     if (msg.attachment) {
       if (Array.isArray(msg.attachment)) {
-        for (const { name, stream } of msg.attachment) {
-          const buf = Buffer.isBuffer(stream)
-            ? stream
-            : await streamToBuffer(stream as NodeJS.ReadableStream);
-          files.push(new AttachmentBuilder(buf, { name: name || 'file.bin' }));
-        }
+        const streamFiles = await Promise.all(
+          msg.attachment.map(async ({ name, stream }) => {
+            const buf = Buffer.isBuffer(stream)
+              ? stream
+              : await streamToBuffer(stream as NodeJS.ReadableStream);
+            return new AttachmentBuilder(buf, { name: name || 'file.bin' });
+          }),
+        );
+        files.push(...streamFiles);
       } else {
         const stream = msg.attachment;
         const buf = Buffer.isBuffer(stream)
@@ -48,16 +54,17 @@ export async function sendMessage(
     }
     // Support unified NamedUrlAttachment[] arrays identical to replyMessage
     if (msg.attachment_url) {
-      for (const { name, url } of msg.attachment_url) {
-        const s = await urlToStream(url, name);
-        const buf = await streamToBuffer(s);
-        files.push(
-          new AttachmentBuilder(buf, {
+      const urlFiles = await Promise.all(
+        msg.attachment_url.map(async ({ name, url }) => {
+          const s = await urlToStream(url, name);
+          const buf = await streamToBuffer(s);
+          return new AttachmentBuilder(buf, {
             name:
               name || (s as unknown as { path?: string }).path || 'file.bin',
-          }),
-        );
-      }
+          });
+        }),
+      );
+      files.push(...urlFiles);
     }
   }
   const sent = await sendFn(content, files);

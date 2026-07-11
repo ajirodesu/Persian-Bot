@@ -1,6 +1,7 @@
 // Load .env before any process.env access — MongoDB URI vars must be readable at module evaluation time.
 import 'dotenv/config';
 import { MongoClient, ServerApiVersion, type Db } from 'mongodb';
+import { ensureIndexes } from './indexes.js';
 
 // ── Environment resolution ────────────────────────────────────────────────────
 
@@ -58,3 +59,18 @@ if (process.env['NODE_ENV'] !== 'production')
  * keeping the module safe to import in environments where DATABASE_TYPE !== 'mongodb'.
  */
 export const getMongoDb = (): Db => mongoClient.db(MONGO_DATABASE_NAME);
+
+// dbReady mirrors the NeonDB adapter's schema-init promise (see adapters/neondb/src/client.ts).
+// NeonDB gets its indexes for free from composite PRIMARY KEY declarations in its CREATE TABLE
+// statements; MongoDB has no equivalent schema step, so without this every hot-path query
+// (resolving a user/thread name, checking isCommandEnabled, reading session data, ban checks)
+// would COLLSCAN the whole collection on every message. createIndex() is a fast no-op once the
+// index exists, so this safely runs on every boot. Failures are swallowed inside ensureIndexes
+// itself (fail-open) so a slow/unreachable Mongo never blocks the bot from starting.
+const globalForMongoIndexes = globalThis as unknown as {
+  mongoDbReadyPromise: Promise<void> | undefined;
+};
+export const dbReady: Promise<void> =
+  globalForMongoIndexes.mongoDbReadyPromise ?? ensureIndexes(getMongoDb());
+if (process.env['NODE_ENV'] !== 'production')
+  globalForMongoIndexes.mongoDbReadyPromise = dbReady;
