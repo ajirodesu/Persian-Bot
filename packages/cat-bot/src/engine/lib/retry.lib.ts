@@ -53,15 +53,14 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       reject(new Error('Retry aborted'));
       return;
     }
-    let id: ReturnType<typeof setTimeout>;
+    const id = setTimeout(() => {
+      signal?.removeEventListener('abort', handler);
+      resolve();
+    }, ms);
     const handler = () => {
       clearTimeout(id);
       reject(new Error('Retry aborted'));
     };
-    id = setTimeout(() => {
-      signal?.removeEventListener('abort', handler);
-      resolve();
-    }, ms);
     // { once: true } auto-removes the listener after the signal fires.
     signal?.addEventListener('abort', handler, { once: true });
   });

@@ -22,6 +22,7 @@
  */
 import { EventEmitter } from 'events';
 import { Bot, webhookCallback } from 'grammy';
+import { run, type RunnerHandle } from '@grammyjs/runner';
 import { createLogger } from '@/engine/modules/logger/logger.lib.js';
 import type { TelegramConfig, TelegramEmitter } from './types.js';
 import { registerSlashMenu } from './slash-commands.js';
@@ -59,6 +60,11 @@ export function createTelegramListener(
 ): TelegramEmitter {
   const emitter = new EventEmitter() as TelegramEmitter;
   let activeBot: Bot | null = null;
+  // grammY's built-in bot.start() polls and processes updates one at a time — under
+  // concurrent chats, later updates queue behind whichever handler is still awaiting an
+  // API call, adding real latency. @grammyjs/runner fetches update batches and dispatches
+  // them concurrently while preserving per-chat ordering, so busy sessions stay responsive.
+  let activeRunner: RunnerHandle | null = null;
 
   // Retained across start() calls so the slash-sync callback always references the current Map.
   let activeCommands: Map<string, Record<string, unknown>> | null = null;
@@ -83,6 +89,10 @@ export function createTelegramListener(
       unregisterSlashSync(smKey);
       unregisterTelegramWebhookHandler(`${config.userId}:${config.sessionId}`);
       activeCommands = null;
+      if (activeRunner && activeRunner.isRunning()) {
+        await activeRunner.stop();
+      }
+      activeRunner = null;
       if (activeBot) {
         // grammY's stop() resolves without throwing when the bot was never started
         // (e.g. boot() set activeBot but aborted before start()) — no try/catch needed.
@@ -185,33 +195,39 @@ export function createTelegramListener(
           `[telegram] Webhook mode active — Telegram will POST to https://${domain}${webhookPath}`,
         );
       } else {
-        // Long-polling fallback — all handlers registered above, then start().
-        activeBot
-          .start({
-            allowed_updates: [
-              'message',
-              'message_reaction',
-              'message_reaction_count',
-              'callback_query',
-            ],
-          })
-          .catch((err: unknown) => {
-            // grammY's stop() resolves bot.start() normally rather than rejecting it,
-            // so any rejection here reflects a genuine polling failure.
-            if (isAuthError(err)) {
-              sessionLogger.error(
-                '[telegram] Session offline — bot token revoked during active polling',
-                { error: err },
-              );
-              void sessionManager.markInactive(smKey);
-            } else {
-              sessionLogger.warn(
-                '[telegram] Polling interrupted (non-fatal; will recover if network restores)',
-                { error: err },
-              );
-            }
-          });
-        sessionLogger.info('[telegram] Bot running (long-polling).');
+        // Long-polling via @grammyjs/runner — dispatches fetched updates concurrently
+        // (bounded by maxSourceConcurrency below) instead of grammY's default of awaiting
+        // each update's full handler chain before fetching/processing the next one.
+        activeRunner = run(activeBot, {
+          runner: {
+            fetch: {
+              allowed_updates: [
+                'message',
+                'message_reaction',
+                'message_reaction_count',
+                'callback_query',
+              ],
+            },
+          },
+        });
+        activeRunner.task()?.catch((err: unknown) => {
+          // The runner's task rejects on genuine polling failure (stop() resolves cleanly).
+          if (isAuthError(err)) {
+            sessionLogger.error(
+              '[telegram] Session offline — bot token revoked during active polling',
+              { error: err },
+            );
+            void sessionManager.markInactive(smKey);
+          } else {
+            sessionLogger.warn(
+              '[telegram] Polling interrupted (non-fatal; will recover if network restores)',
+              { error: err },
+            );
+          }
+        });
+        sessionLogger.info(
+          '[telegram] Bot running (long-polling, concurrent via @grammyjs/runner).',
+        );
       }
 
       sessionLogger.info('[telegram] Listener active');
@@ -272,6 +288,10 @@ export function createTelegramListener(
       // Remove webhook handler entry so server/app.ts returns 404 for this dead session
       unregisterTelegramWebhookHandler(`${config.userId}:${config.sessionId}`);
       activeCommands = null;
+      if (activeRunner && activeRunner.isRunning()) {
+        await activeRunner.stop();
+      }
+      activeRunner = null;
       if (activeBot) {
         // grammY's stop() resolves without throwing when the bot was never started
         // (e.g. start() may have set activeBot but aborted before start() completed).

@@ -235,12 +235,15 @@ export async function handleButtonAction(
       const mod = commands.get(commandName);
       if (!mod || typeof mod['button'] !== 'object' || !mod['button']) {
         // Acknowledge on Telegram even for early exits — prevents the spinner from hanging ~10 s.
-        await ack?.().catch(() => {});
+        // Fire-and-forget: Telegram only requires the ack to land within ~10 s, it does not need
+        // to complete before we return — awaiting it here just adds its network round-trip to
+        // every early-exit path for no benefit.
+        void ack?.().catch(() => {});
         return;
       }
       // Respect config.platform[] — skip button action on platforms the module doesn't support
       if (!isPlatformAllowed(mod, native.platform)) {
-        await ack?.().catch(() => {});
+        void ack?.().catch(() => {});
         return;
       }
 
@@ -262,14 +265,22 @@ export async function handleButtonAction(
       };
 
       if (typeof handler.onClick !== 'function') {
-        await ack?.().catch(() => {});
+        void ack?.().catch(() => {});
         return;
       }
 
-      // Dismiss the Telegram loading spinner before running the handler — handler.onClick() may take
-      // several seconds (DB queries, API calls) and Telegram shows an error after ~10 s if the
-      // callback query is not answered. On Discord, deferUpdate() already cleared the spinner.
-      await ack?.().catch(() => {});
+      // Dismiss the Telegram loading spinner — handler.onClick() may take several seconds
+      // (DB queries, API calls) and Telegram shows an error after ~10 s if the callback query
+      // is not answered. On Discord, deferUpdate() already cleared the spinner before this
+      // dispatcher even ran, so ack() here is a fast local no-op on that platform.
+      //
+      // Fire-and-forget rather than awaited: awaiting Telegram's answerCallbackQuery round-trip
+      // here used to sit directly inside the window every button handler measures as its own
+      // latency (e.g. /ping and /uptime's Refresh button use `Date.now() - startTime`), making a
+      // "Refresh" click look ~100-300ms slower than the original command for no real reason —
+      // that time was Telegram API latency for a spinner dismissal, not our own processing time.
+      // The 10 s acknowledgment deadline only requires the call to be *sent*, not awaited here.
+      void ack?.().catch(() => {});
       // Reuse the middleware ctx base but override chat with the command-aware variant so button
       // callbacks embed "commandName:buttonId" for routing without a global button ID registry.
       const actionChat = createChatContext(

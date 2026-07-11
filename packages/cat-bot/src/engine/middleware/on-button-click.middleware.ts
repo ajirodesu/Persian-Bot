@@ -65,7 +65,9 @@ export const enforceButtonScope: MiddlewareFn<OnButtonClickCtx> =
     if (scopeUserId !== null && ctx.event['senderID'] !== scopeUserId) {
       // Notify the non-owner privately — show_alert popup on Telegram, ephemeral on Discord.
       // The rejection message is never visible to other channel/group members.
-      await ack?.(
+      // Fire-and-forget — nothing else runs on this path, so there is no reason to hold the
+      // handler open for the round-trip.
+      void ack?.(
         '🔒 This button can only be used by the person who ran the command.',
         true,
       ).catch(() => {});

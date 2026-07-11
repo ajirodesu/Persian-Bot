@@ -35,6 +35,13 @@ export function startServer(): void {
 
   // Bind explicitly to 0.0.0.0 — without this Node.js defaults to '::' (IPv6 dual-stack),
   // which silently drops IPv4 traffic in container runtimes where IPV6_V6ONLY=1 is the default.
+  // Keep-alive tuning for the inbound server (dashboard API + Telegram webhook mode):
+  // longer keepAliveTimeout lets clients/webhook senders reuse the same TCP connection
+  // across requests instead of reconnecting each time, and headersTimeout is kept safely
+  // above it (Node requirement) without letting a slow client hold a socket forever.
+  httpServer.keepAliveTimeout = 65_000;
+  httpServer.headersTimeout = 66_000;
+
   const server = httpServer.listen(port, '0.0.0.0', () => {
     logger.info(`Webhook & API server listening on port ${port}`);
   });

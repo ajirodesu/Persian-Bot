@@ -31,6 +31,10 @@
  *   'message_unsend'   → handleEvent   (platform unsend events)
  */
 
+// Side-effect import — must run before any command module (which calls axios.get/post)
+// is dynamically loaded, so every outbound HTTP request reuses pooled keep-alive sockets.
+import '@/engine/lib/http-agent.lib.js';
+
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
