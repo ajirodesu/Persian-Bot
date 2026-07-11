@@ -13,6 +13,7 @@
  *        /coffee — random coffee image  (aliases: coffeepic, coffeeimage, brew)
  *        /picsum — random Picsum photo  (aliases: randomphoto)
  *        /waifu  — random anime waifu   (aliases: randomwaifu)
+ *        /dog    — random dog image     (aliases: dogpic, doggo, randomdog)
  *        /ba     — random Blue Archive image (aliases: bluearchive)
  *
  *   2. TAGGED_PHOTO_CONFIGS — tag/topic-driven, shared 2×3 button grid.
@@ -162,6 +163,29 @@ const SIMPLE_PHOTO_CONFIGS: SimplePhotoConfig[] = [
         ok: true,
         caption,
         attachment: { kind: 'url', name: `waifu_${waifu.id}${waifu.ext}`, url: waifu.image },
+      };
+    },
+  },
+  {
+    name: 'dog',
+    aliases: ['dogpic', 'doggo', 'randomdog'],
+    version: '1.0.0',
+    category: 'random',
+    description: 'Sends a random dog image.',
+    cooldown: 5,
+    label: 'dog image',
+    buttonLabel: '🐶 Another Pupper',
+    fetch: async () => {
+      const { data } = await axios.get<{ message?: string; status?: string }>(
+        'https://dog.ceo/api/breeds/image/random',
+        { headers: { Accept: 'application/json' }, timeout: 10000 },
+      );
+      const imageUrl = data?.status === 'success' ? data.message : undefined;
+      if (!imageUrl) return { ok: false };
+      return {
+        ok: true,
+        caption: '🐶 **Random Dog Image**',
+        attachment: { kind: 'url', name: `dog.${extFromUrl(imageUrl)}`, url: imageUrl },
       };
     },
   },
