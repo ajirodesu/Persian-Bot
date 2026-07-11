@@ -123,4 +123,3 @@ export class BotService {
 }
 
 export const botService = new BotService()
-export default botService

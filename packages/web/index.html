@@ -3,7 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content makes the layout viewport (and
+         therefore `dvh` units) actually shrink when the on-screen keyboard
+         opens on Android/Chrome. Without it, Chrome's default is
+         "resizes-visual": the layout viewport (and h-dvh) stays full-size,
+         and the browser instead auto-scrolls the page to reveal the
+         focused input — which un-clips the bottom of the sticky, h-dvh,
+         overflow-hidden chat-room container and shows a chunk of dead
+         space below the composer where the keyboard covers. This is the
+         cause of the extra gap below the message bar when the keyboard opens. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Cat-Bot</title>
     <script>
       // Applies the persisted theme (defaulting to the new "aurora" theme)

@@ -2795,8 +2795,8 @@ const CR_STYLES = `
           --bubble-user: #7c3200;
           --bubble-user-text: #fff7ed;
           --input-border: rgba(255,255,255,0.1);
-          --input-border-focus: rgba(255,130,40,0.45);
-          --input-ring: rgba(255,130,40,0.12);
+          --input-border-focus: rgb(var(--color-primary) / 0.45);
+          --input-ring: rgb(var(--color-primary) / 0.12);
         }
 
 

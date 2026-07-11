@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from 'react'
 
+import { applyFaviconTheme } from '../utils/favicon.util'
+
 /**
  * Available UI themes.
  * - 'aurora'  — the new default theme (dark navy + cyan accent, iOS-style
@@ -54,6 +56,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     window.localStorage.setItem(STORAGE_KEY, theme)
+    // The favicon is a separate document (no access to the app's CSS vars),
+    // so it's recolored to the theme's primary color imperatively here.
+    void applyFaviconTheme(theme)
   }, [theme])
 
   // Scrollbars stay invisible at rest and fade in only while the user is
