@@ -47,6 +47,9 @@ export const APIs = {
   alwayscodex: {
     baseURL: 'https://api.alwayscodex.my.id',
   },
+  aqua: {
+    baseURL: 'https://aqua-api-w6dy.onrender.com'
+  },
   betadash: {
     baseURL: 'https://betadash-api-swordslush-production.up.railway.app',
   },
