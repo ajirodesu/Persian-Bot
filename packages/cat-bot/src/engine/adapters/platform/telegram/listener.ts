@@ -50,6 +50,7 @@ import { generateTelegramSecretToken } from '@/server/utils/hash.util.js';
 import { botRepo } from '@/server/repos/bot.repo.js';
 // Centralized retry runner — replaces the inline withRetry + AbortController boilerplate.
 import { runManagedSession } from '@/engine/lib/platform-runner.lib.js';
+import { startHeartbeat, stopHeartbeat } from '@/engine/lib/rest-heartbeat.lib.js';
 
 /**
  * Creates a Telegram platform listener.
@@ -65,6 +66,11 @@ export function createTelegramListener(
   // API call, adding real latency. @grammyjs/runner fetches update batches and dispatches
   // them concurrently while preserving per-chat ordering, so busy sessions stay responsive.
   let activeRunner: RunnerHandle | null = null;
+  // Keeps activeBot.api's underlying HTTPS connection to api.telegram.org warm — without
+  // this, any idle gap (including boot → a person's first typed command) lets the pooled
+  // connection close, so that command pays a fresh TCP/TLS handshake that shows up
+  // directly in ping/uptime's real round-trip measurement.
+  let heartbeatHandle: NodeJS.Timeout | null = null;
 
   // Retained across start() calls so the slash-sync callback always references the current Map.
   let activeCommands: Map<string, Record<string, unknown>> | null = null;
@@ -89,6 +95,8 @@ export function createTelegramListener(
       unregisterSlashSync(smKey);
       unregisterTelegramWebhookHandler(`${config.userId}:${config.sessionId}`);
       activeCommands = null;
+      stopHeartbeat(heartbeatHandle);
+      heartbeatHandle = null;
       if (activeRunner && activeRunner.isRunning()) {
         await activeRunner.stop();
       }
@@ -150,6 +158,20 @@ export function createTelegramListener(
         prefix,
         config.userId,
         config.sessionId,
+      );
+
+      // Keep activeBot.api's connection to api.telegram.org warm on a short interval —
+      // this is the exact Api instance sendMessage/editMessageText use, so warming it
+      // here directly keeps real user-facing ping/uptime readings low and consistent,
+      // instead of only being warm right after boot (via the getMe() call above) and
+      // going cold the moment nobody has typed a command in a while. getMe() is the
+      // cheapest possible authenticated call and is what grammY itself uses to validate
+      // a token, so it's a safe, side-effect-free choice to repeat on an interval.
+      const heartbeatBot = activeBot;
+      heartbeatHandle = startHeartbeat(
+        () => heartbeatBot.api.getMe(),
+        sessionLogger,
+        '[telegram]',
       );
 
       // Catch errors thrown inside any grammY middleware or handler.
@@ -288,6 +310,8 @@ export function createTelegramListener(
       // Remove webhook handler entry so server/app.ts returns 404 for this dead session
       unregisterTelegramWebhookHandler(`${config.userId}:${config.sessionId}`);
       activeCommands = null;
+      stopHeartbeat(heartbeatHandle);
+      heartbeatHandle = null;
       if (activeRunner && activeRunner.isRunning()) {
         await activeRunner.stop();
       }

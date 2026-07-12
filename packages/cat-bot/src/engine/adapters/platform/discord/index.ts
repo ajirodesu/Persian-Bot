@@ -24,6 +24,7 @@
 
 import { EventEmitter } from 'events';
 
+import { Routes } from 'discord.js';
 import { createLogger } from '@/engine/modules/logger/logger.lib.js';
 import { createDiscordClient } from './client.js';
 import { registerSlashCommands } from './slash-commands.js';
@@ -43,6 +44,7 @@ import { botRepo } from '@/server/repos/bot.repo.js';
 // Centralized retry runner — replaces the inline withRetry + AbortController boilerplate
 // that was previously copy-pasted across all four platform listeners.
 import { runManagedSession } from '@/engine/lib/platform-runner.lib.js';
+import { startHeartbeat, stopHeartbeat } from '@/engine/lib/rest-heartbeat.lib.js';
 
 interface DiscordConfig {
   token: string;
@@ -71,6 +73,11 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
   const smKey = `${config.userId}:${Platforms.Discord}:${config.sessionId}`;
 
   let activeClient: import('discord.js').Client | null = null;
+  // Keeps client.rest's underlying connection pool to discord.com warm — without this,
+  // any gap of inactivity (including the gap between boot and a person's first typed
+  // command) lets the pooled connection close, so that command pays a fresh TCP/TLS
+  // handshake that shows up directly in ping/uptime's real round-trip measurement.
+  let heartbeatHandle: NodeJS.Timeout | null = null;
 
   // Retained across start() calls so the slash-sync callback always references the current Map.
   let activeCommands: Map<string, Record<string, unknown>> | null = null;
@@ -85,6 +92,8 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
     const cleanup = async (): Promise<void> => {
       unregisterSlashSync(smKey);
       activeCommands = null;
+      stopHeartbeat(heartbeatHandle);
+      heartbeatHandle = null;
       if (activeClient) {
         activeClient.destroy();
         activeClient = null;
@@ -157,6 +166,19 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
         sessionLogger,
       });
 
+      // Keep client.rest's connection to discord.com warm on a short interval — this is
+      // the exact REST manager instance channel.send()/message edits use, so warming it
+      // here directly keeps real user-facing ping/uptime readings low and consistent,
+      // instead of only being warm right after boot and going cold the moment nobody
+      // has typed a command in a while. Routes.gateway() is unauthenticated and trivial
+      // for Discord to serve, but still exercises the same pooled connection.
+      const heartbeatClient = activeClient;
+      heartbeatHandle = startHeartbeat(
+        () => heartbeatClient.rest.get(Routes.gateway()),
+        sessionLogger,
+        '[discord]',
+      );
+
       // Register the slash-sync callback AFTER all three phases succeed.
       // The closure captures activeClient and activeCommands by variable reference so
       // subsequent dashboard restarts bind to the new Client instance without re-registering.
@@ -214,6 +236,8 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
       sessionLogger.info('[discord] Stopping Listener...');
       unregisterSlashSync(smKey);
       activeCommands = null;
+      stopHeartbeat(heartbeatHandle);
+      heartbeatHandle = null;
       if (activeClient) {
         activeClient.destroy();
         activeClient = null;
