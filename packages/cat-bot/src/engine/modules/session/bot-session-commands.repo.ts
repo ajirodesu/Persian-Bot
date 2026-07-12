@@ -16,8 +16,23 @@
  * Invalidation strategy:
  *   - setCommandEnabled     → clears the session's command-list cache (isCommandEnabled
  *     and findSessionCommands both read from it, so one entry covers both).
- *   - upsertSessionCommands → clears the session's command-list cache (boot-time sync
- *     can add newly-discovered commands that must be visible immediately).
+ *   - upsertSessionCommands → re-fetches and WARMS the session's command-list cache
+ *     (rather than just clearing it). This runs once per session during boot's
+ *     syncCommandsAndEvents(), before any platform transport starts. Merely deleting
+ *     the entry here left it cold, so the very first command a user sent after a
+ *     restart paid a full DB round-trip inside isCommandEnabled() before the command
+ *     body even ran — inflating that command's measured latency (visible in ping/uptime,
+ *     since their reported "latency" is pipeline time captured from event receipt, not
+ *     network round-trip). Priming it at boot moves that DB cost off the user-facing path.
+ *
+ * TTL: entries in this file are written with an explicit `ttl: 0` (= no expiry), which
+ * overrides the shared cache's 5-minute default just for these keys. That default exists
+ * as a safety net for repos that DON'T write through on every mutation; this one does
+ * (see above), so a time-based expiry here only hurt — a session idle for more than 5
+ * minutes would silently go cold and pay the same DB round-trip on its next command,
+ * which is exactly the "works after restart, breaks again after being idle" pattern.
+ * Correctness still holds because every mutation path explicitly updates or clears the
+ * entry; nothing depends on the TTL to eventually pick up stale data.
  */
 import {
   upsertSessionCommands as _upsertSessionCommands,
@@ -47,7 +62,10 @@ async function findSessionCommandsCached(
   const cached = lruCache.get<SessionCommandRows>(key);
   if (cached !== undefined) return cached;
   const result = await _findSessionCommands(userId, platform, sessionId);
-  lruCache.set(key, result);
+  // ttl: 0 = never expire this entry on its own — see file header. Without this, a
+  // session idle for 5+ minutes would silently evict here and pay a fresh DB
+  // round-trip on its very next command.
+  lruCache.set(key, result, 0);
   return result;
 }
 
@@ -103,5 +121,16 @@ export async function upsertSessionCommands(
   commandNames: string[],
 ): Promise<void> {
   await _upsertSessionCommands(userId, platform, sessionId, commandNames);
-  lruCache.del(commandsListKey(userId, platform, sessionId));
+  const key = commandsListKey(userId, platform, sessionId);
+  try {
+    // Re-read the merged row set (existing isEnable=false overrides survive the upsert
+    // unchanged, new rows default enabled) and cache it directly — a warm cache after
+    // boot instead of a cold one waiting to be filled by the first real user command.
+    const rows = await _findSessionCommands(userId, platform, sessionId);
+    lruCache.set(key, rows, 0); // ttl: 0 = never expire — see file header
+  } catch {
+    // Fail-open: if the warm-up read fails for any reason, fall back to the previous
+    // behaviour (invalidate only) so isCommandEnabled() still self-heals on next call.
+    lruCache.del(key);
+  }
 }

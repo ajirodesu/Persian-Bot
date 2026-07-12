@@ -20,55 +20,18 @@ export const meta: CommandMeta = {
 
 const BUTTON_ID = { refresh: 'refresh' } as const;
 
-// Refresh re-measures round-trip latency on button click so the user gets a
-// fresh reading without re-typing the command — common for network spot-checks.
-export const button = {
-  [BUTTON_ID.refresh]: {
-    label: '🔄 Refresh',
-    style: ButtonStyle.SECONDARY,
-    onClick: async ({
-      chat,
-      startTime,
-      event,
-      native,
-      session,
-      button,
-    }: AppCtx) => {
-      const scopedRefresh = session.id; // Reuse active instance ID
-      const sessionCount = (session.context.count as number) || 0; // avoid undefined value
-      const count = sessionCount + 1; //increment from the previous context count
-      button.update({
-        id: scopedRefresh,
-        label: `🔄 Refresh (${count})`,
-      });
+// ── Latency measurement ─────────────────────────────────────────────────────────
+// `ctx.startTime` is captured at the very start of the message pipeline (event
+// receipt), so `Date.now() - startTime` used to include everything upstream of this
+// handler — prefix parsing, middleware, the isCommandEnabled() session/DB lookup,
+// etc. Any of those (a cold cache, a sleepy DB, a slow middleware added later) would
+// silently inflate the number shown to the user, even though none of it reflects the
+// thing a "ping" command is meant to measure: how fast the bot can currently talk to
+// the platform. Timing the actual send/edit call instead — and only that call — keeps
+// the number both real (an actual round-trip) and stable regardless of what happens
+// upstream in the pipeline.
 
-      button.createContext({
-        id: scopedRefresh,
-        context: {
-          count: count,
-        },
-      });
-
-      // FB Messenger has no native button components — it renders a numbered text-menu
-      // fallback which clutters a simple one-liner response. Skip buttons there
-      await chat.editMessage({
-        style: MessageStyle.MARKDOWN,
-        message_id_to_edit: event.messageID as string,
-        message: `🏓 Pong! Latency: \`${Date.now() - startTime}ms\``,
-        ...(hasNativeButtons(native.platform)
-          ? { button: [scopedRefresh] }
-          : {}),
-      });
-    },
-  },
-};
-
-export const onCommand = async ({
-  chat,
-  startTime,
-  native,
-  button,
-}: AppCtx) => {
+export const onCommand = async ({ chat, native, button }: AppCtx) => {
   // Scope the Refresh button's button ID to the sender so only the user who issued
   // /ping can click it — prevents other users from hijacking another person's flow.
   const scopedRefresh = button.generateID({ id: BUTTON_ID.refresh });
@@ -84,11 +47,72 @@ export const onCommand = async ({
       count: count,
     },
   });
+
   // FB Messenger has no native button components — it renders a numbered text-menu
   // fallback which clutters a simple one-liner response. Skip buttons there.
-  await chat.replyMessage({
+  const sendStart = Date.now();
+  const messageID = await chat.replyMessage({
     style: MessageStyle.MARKDOWN,
-    message: `🏓 Pong! Latency: \`${Date.now() - startTime}ms\``,
+    message: '🏓 Pinging...',
     ...(hasNativeButtons(native.platform) ? { button: [scopedRefresh] } : {}),
   });
+  const latency = Date.now() - sendStart;
+
+  await chat.editMessage({
+    style: MessageStyle.MARKDOWN,
+    message_id_to_edit: messageID as string,
+    message: `🏓 Pong! Latency: \`${latency}ms\``,
+    ...(hasNativeButtons(native.platform) ? { button: [scopedRefresh] } : {}),
+  });
+};
+
+// Refresh re-measures round-trip latency on button click so the user gets a
+// fresh reading without re-typing the command — common for network spot-checks.
+export const button = {
+  [BUTTON_ID.refresh]: {
+    label: '🔄 Refresh',
+    style: ButtonStyle.SECONDARY,
+    onClick: async ({ chat, event, native, session, button }: AppCtx) => {
+      const scopedRefresh = session.id; // Reuse active instance ID
+      const sessionCount = (session.context.count as number) || 0; // avoid undefined value
+      const count = sessionCount + 1; //increment from the previous context count
+      button.update({
+        id: scopedRefresh,
+        label: `🔄 Refresh (${count})`,
+      });
+
+      button.createContext({
+        id: scopedRefresh,
+        context: {
+          count: count,
+        },
+      });
+
+      const messageID = event.messageID as string;
+
+      // Same real-round-trip approach as onCommand, but timing an edit instead of a
+      // send since this is refreshing an existing message.
+      const editStart = Date.now();
+      await chat.editMessage({
+        style: MessageStyle.MARKDOWN,
+        message_id_to_edit: messageID,
+        message: '🏓 Pinging...',
+        ...(hasNativeButtons(native.platform)
+          ? { button: [scopedRefresh] }
+          : {}),
+      });
+      const latency = Date.now() - editStart;
+
+      // FB Messenger has no native button components — it renders a numbered text-menu
+      // fallback which clutters a simple one-liner response. Skip buttons there
+      await chat.editMessage({
+        style: MessageStyle.MARKDOWN,
+        message_id_to_edit: messageID,
+        message: `🏓 Pong! Latency: \`${latency}ms\``,
+        ...(hasNativeButtons(native.platform)
+          ? { button: [scopedRefresh] }
+          : {}),
+      });
+    },
+  },
 };

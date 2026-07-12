@@ -10,6 +10,17 @@
  *   - updateTelegramCredentialCommandHash → clears telegram state + all-telegram list
  *   - addBotAdmin / removeBotAdmin        → clears the specific check entry and the list for that session
  *   - updateBotSessionPrefix              → clears the all-sessions list (prefix is a session field)
+ *
+ * TTL: the bot-admin and bot-premium list caches (listBotAdmins/listBotPremiums, and
+ * therefore isBotAdmin/isBotPremium) use ttl: 0 — never expire on their own. Safe because
+ * addBotAdmin/removeBotAdmin/addBotPremium/removeBotPremium are the ONLY writers, including
+ * dashboard-triggered changes (the dashboard API runs in this same process via
+ * server/server.ts, so it calls these same functions rather than writing the DB directly).
+ * isBotAdmin runs on every command via enforceNotBanned/enforceAdminOnly, so a time-based
+ * expiry here meant every command after a 5+ minute idle gap paid a DB round-trip before
+ * the handler even ran. The other caches in this file (credential state, all-* lists) keep
+ * the shared default TTL — they're read far less often (mostly at boot) so the tradeoff
+ * doesn't favor removing it there.
  */
 import {
   findDiscordCredentialState as _findDiscordCredentialState,
@@ -169,7 +180,7 @@ export async function addBotAdmin(
   const listKey = adminListKey(userId, platform, sessionId);
   const cachedList = lruCache.get<string[]>(listKey);
   if (cachedList !== undefined && !cachedList.includes(adminId)) {
-    lruCache.set(listKey, [...cachedList, adminId]);
+    lruCache.set(listKey, [...cachedList, adminId], 0);
   }
   // bot.repo.ts caches admin data inside bot:detail and bot:list — clear both so
   // the dashboard reflects the new member immediately.
@@ -192,6 +203,7 @@ export async function removeBotAdmin(
     lruCache.set(
       listKey,
       cachedList.filter((id) => id !== adminId),
+      0,
     );
   }
   // Clear bot detail and list caches so the dashboard immediately reflects the removal.
@@ -208,7 +220,13 @@ export async function listBotAdmins(
   const cached = lruCache.get<string[]>(key);
   if (cached !== undefined) return cached;
   const result = await _listBotAdmins(userId, platform, sessionId);
-  lruCache.set(key, result);
+  // ttl: 0 = never expire on its own. isBotAdmin (via this list) is checked on
+  // every single command via enforceNotBanned/enforceAdminOnly, so a 5-min TTL
+  // eviction here meant every command after 5+ idle minutes paid a DB round-trip
+  // before the command handler even ran. Safe because addBotAdmin/removeBotAdmin
+  // below are the ONLY mutation path (including dashboard writes — the dashboard
+  // API runs in this same process) and both write-through this exact key.
+  lruCache.set(key, result, 0);
   return result;
 }
 
@@ -262,7 +280,7 @@ export async function addBotPremium(
   const listKey = premiumListKey(userId, platform, sessionId);
   const cachedList = lruCache.get<string[]>(listKey);
   if (cachedList !== undefined && !cachedList.includes(premiumId)) {
-    lruCache.set(listKey, [...cachedList, premiumId]);
+    lruCache.set(listKey, [...cachedList, premiumId], 0);
   }
   lruCache.del(`bot:detail:${userId}:${sessionId}`);
   lruCache.del(`bot:list:${userId}`);
@@ -282,6 +300,7 @@ export async function removeBotPremium(
     lruCache.set(
       listKey,
       cachedList.filter((id) => id !== premiumId),
+      0,
     );
   }
   lruCache.del(`bot:detail:${userId}:${sessionId}`);
@@ -297,6 +316,9 @@ export async function listBotPremiums(
   const cached = lruCache.get<string[]>(key);
   if (cached !== undefined) return cached;
   const result = await _listBotPremiums(userId, platform, sessionId);
-  lruCache.set(key, result);
+  // ttl: 0 — same reasoning as listBotAdmins above: fully self-contained mutation
+  // path, safe to keep warm indefinitely instead of paying a cold DB hit after
+  // every 5-minute idle gap.
+  lruCache.set(key, result, 0);
   return result;
 }

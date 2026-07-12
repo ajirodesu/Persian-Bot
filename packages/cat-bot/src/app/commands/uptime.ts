@@ -11,6 +11,15 @@
  *   os.totalmem() / freemem() — host total/available RAM
  *   os.loadavg()              — 1 / 5 / 15-minute load averages (POSIX only;
  *                               returns [0, 0, 0] on Windows — handled gracefully)
+ *
+ * Ping measurement: the displayed "Ping" used to be `Date.now() - ctx.startTime`,
+ * i.e. everything from event receipt through this handler running — prefix parsing,
+ * middleware, the isCommandEnabled() session/DB lookup, etc. Any of that (a cold
+ * cache, a sleepy DB, a slow middleware added later) silently inflated the number
+ * without reflecting an actual round-trip. Instead, the stats message is sent/edited
+ * first with a placeholder, the real send/edit round-trip is timed, and a follow-up
+ * edit fills in the real number — so "Ping" always reflects an actual measured
+ * round-trip to the platform, not upstream pipeline time.
  */
 
 import os from 'node:os';
@@ -61,7 +70,6 @@ const BUTTON_ID = { refresh: 'refresh' } as const;
 // onCommand defined before button so button.refresh.onClick can reference it directly.
 export const onCommand = async ({
   chat,
-  startTime,
   native,
   event,
   button,
@@ -89,8 +97,6 @@ export const onCommand = async ({
       ? `❯ **CPU load (1/5/15 min):** ${load1.toFixed(2)} / ${load5.toFixed(2)} / ${load15.toFixed(2)}`
       : `❯ **CPU load:** N/A (Windows)`;
 
-  const ping = Date.now() - startTime;
-
   // Build the session key from native context to look up the start time recorded by
   // sessionManager.markActive() — gives wall-clock age of this specific bot session
   // independently from process.uptime(), which resets only on full process restart.
@@ -114,29 +120,47 @@ export const onCommand = async ({
       ? session.id
       : button.generateID({ id: BUTTON_ID.refresh, public: true });
 
-  const payload = {
-    message: [
+  const buildMessage = (pingText: string): string =>
+    [
       `⏱️ **Uptime:** ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`,
       `❯ **Bot session:** ${botUptimeFmt}`,
       '',
       `❯ **RAM (host)** — Total: ${formatBytes(totalRam)} | Used: ${formatBytes(usedRam)} | Free: ${formatBytes(freeRam)}`,
       `❯ **RAM (node)** — RSS: ${formatBytes(mem.rss)} | Heap used: ${formatBytes(mem.heapUsed)}`,
       loadLine,
-      `❯ **Ping:** ${ping}ms`,
-    ].join('\n'),
+      `❯ **Ping:** ${pingText}`,
+    ].join('\n');
+
+  const basePayload = {
     style: MessageStyle.MARKDOWN,
     ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
   };
 
-  // Update the existing message if triggered via button; otherwise send a new message
+  // Step 1: send/edit with a placeholder, timing only this real network call.
+  const pingStart = Date.now();
+  let messageID: string;
   if (event['type'] === 'button_action') {
+    messageID = event['messageID'] as string;
     await chat.editMessage({
-      ...payload,
-      message_id_to_edit: event['messageID'] as string,
+      ...basePayload,
+      message: buildMessage('Measuring...'),
+      message_id_to_edit: messageID,
     });
   } else {
-    await chat.replyMessage(payload);
+    const sent = await chat.replyMessage({
+      ...basePayload,
+      message: buildMessage('Measuring...'),
+    });
+    messageID = sent as string;
   }
+  const latency = Date.now() - pingStart;
+
+  // Step 2: fill in the real, measured round-trip time.
+  await chat.editMessage({
+    ...basePayload,
+    message: buildMessage(`${latency}ms`),
+    message_id_to_edit: messageID,
+  });
 };
 
 // Placed after onCommand — const is initialized before this object literal evaluates,
