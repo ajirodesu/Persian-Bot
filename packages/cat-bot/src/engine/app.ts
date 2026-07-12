@@ -72,9 +72,7 @@ import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.uti
 import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
 // dbReady is the NeonDB schema-init promise; undefined for mongodb adapter.
-// mongoClient is the raw driver client; undefined when DATABASE_TYPE !== 'mongodb'.
-import { dbReady, mongoClient } from 'database';
-import { startDbKeepAlive } from '@/engine/lib/db-keepalive.lib.js';
+import { dbReady } from 'database';
 
 // ============================================================================
 // __dirname equivalent — needed for dynamic module path resolution in ESM
@@ -367,26 +365,8 @@ async function main(): Promise<void> {
   // For the mongodb adapter, dbReady is undefined — await on undefined
   // resolves immediately, so this guard is a zero-cost no-op for non-neondb adapters.
   if (dbReady !== undefined) {
-    // initDb()'s DDL run already forces the pg Pool to open its first TCP/TLS
-    // connection, so by the time this resolves the connection is warm.
     await dbReady;
-  } else if (mongoClient) {
-    // Neon gets connection warm-up "for free" via the DDL check above. Mongo has no
-    // equivalent boot-time query, so without this the driver's lazy auto-connect would
-    // otherwise fire on whichever DB call happens to run first after boot — which could
-    // be a real user's first command (e.g. the isCommandEnabled() check in
-    // message.handler.ts), adding TCP/TLS handshake latency to that command's measured
-    // pipeline time (surfaces as an inflated first ping/uptime reading). Connecting here
-    // moves that one-time cost before any platform transport starts.
-    logger.info('[app] Warming MongoDB connection...');
-    await mongoClient.connect();
   }
-
-  // Keep the DB connection/compute warm for the lifetime of the process — without
-  // this, the same cold-start cost paid once at boot would simply recur after every
-  // idle gap longer than Neon's auto-suspend window or the driver's socket idle
-  // timeout (see db-keepalive.lib.ts).
-  startDbKeepAlive();
 
   // Load once — all platform listeners share the same Maps
   const [commands, eventModules] = await Promise.all([

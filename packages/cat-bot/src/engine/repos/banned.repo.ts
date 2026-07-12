@@ -6,14 +6,6 @@
  * ban/unban mutations write the known new boolean directly into cache rather than deleting
  * the key, so the next isUserBanned read sees the authoritative value from memory instead
  * of re-querying the DB.
- *
- * All entries use ttl: 0 (never expire on their own). This is safe specifically because
- * ban/unban state has exactly one mutation path — banUser/unbanUser/banThread/unbanThread
- * below — with no other process or dashboard writing to it directly; every write updates
- * the cache in the same call. (Contrast with session.repo.ts / system-admin.repo.ts, which
- * deliberately keep a time-based TTL because their data can also change through paths this
- * process doesn't observe.) Without ttl: 0, a session idle for 5+ minutes would silently
- * evict here and pay a fresh DB round-trip on the very next command from every user.
  */
 import {
   banUser as _banUser,
@@ -53,10 +45,9 @@ export async function banUser(
   reason?: string,
 ): Promise<void> {
   await _banUser(userId, platform, sessionId, botUserId, reason);
-  // Write true immediately (ttl: 0 = never expire on its own) so the next
-  // isUserBanned call always sees the authoritative value from memory rather
-  // than a stale pre-ban read or a cold DB hit after an idle gap.
-  lruCache.set(userBanKey(userId, platform, sessionId, botUserId), true, 0);
+  // Write true immediately so the next isUserBanned call within the TTL window
+  // doesn't see a stale false from a pre-ban read that's still in cache.
+  lruCache.set(userBanKey(userId, platform, sessionId, botUserId), true);
 }
 
 export async function unbanUser(
@@ -66,7 +57,7 @@ export async function unbanUser(
   botUserId: string,
 ): Promise<void> {
   await _unbanUser(userId, platform, sessionId, botUserId);
-  lruCache.set(userBanKey(userId, platform, sessionId, botUserId), false, 0);
+  lruCache.set(userBanKey(userId, platform, sessionId, botUserId), false);
 }
 
 export async function isUserBanned(
@@ -79,9 +70,7 @@ export async function isUserBanned(
   const cached = lruCache.get<boolean>(key);
   if (cached !== undefined) return cached;
   const result = await _isUserBanned(userId, platform, sessionId, botUserId);
-  // ttl: 0 — checked on every command via enforceNotBanned; fully self-contained
-  // (banUser/unbanUser above are the only writers), so no time-based expiry needed.
-  lruCache.set(key, result, 0);
+  lruCache.set(key, result);
   return result;
 }
 
@@ -95,7 +84,7 @@ export async function banThread(
   reason?: string,
 ): Promise<void> {
   await _banThread(userId, platform, sessionId, botThreadId, reason);
-  lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), true, 0);
+  lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), true);
 }
 
 export async function unbanThread(
@@ -105,7 +94,7 @@ export async function unbanThread(
   botThreadId: string,
 ): Promise<void> {
   await _unbanThread(userId, platform, sessionId, botThreadId);
-  lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), false, 0);
+  lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), false);
 }
 
 export async function isThreadBanned(
@@ -123,7 +112,6 @@ export async function isThreadBanned(
     sessionId,
     botThreadId,
   );
-  // ttl: 0 — same reasoning as isUserBanned above.
-  lruCache.set(key, result, 0);
+  lruCache.set(key, result);
   return result;
 }
