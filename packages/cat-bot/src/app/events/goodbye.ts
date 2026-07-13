@@ -28,6 +28,8 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { EventMeta } from '@/engine/types/module-config.types.js';
 import { LogMessageType } from '@/engine/adapters/models/enums/index.js';
+import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
   name: 'goodbye',
@@ -38,7 +40,14 @@ export const meta: EventMeta = {
     'Sends a farewell message when a member leaves the group (Discord & Telegram).',
 };
 
-export const onEvent = async ({ event, chat, bot }: AppCtx): Promise<void> => {
+export const onEvent = async ({
+  event,
+  chat,
+  bot,
+  thread,
+  native,
+  api,
+}: AppCtx): Promise<void> => {
   try {
     const logMessageData = event['logMessageData'] as
       | Record<string, unknown>
@@ -66,9 +75,49 @@ export const onEvent = async ({ event, chat, bot }: AppCtx): Promise<void> => {
       `You're always welcome back anytime. 🚪✨`,
     ];
 
+    // Canvas card is best-effort: the departing user's avatar/profile can be
+    // unresolvable right after they leave (esp. on Discord, once they drop
+    // out of the guild member cache) — any failure here just keeps the
+    // existing text-only farewell.
+    const canvasPlatform = normalizeCanvasPlatform(native.platform);
+    let canvasAttachment: { name: string; stream: Buffer } | undefined;
+    const threadID = event['threadID'] as string | undefined;
+
+    if (canvasPlatform) {
+      try {
+        const avatar = await api.getAvatarUrl(leftId);
+
+        if (avatar) {
+          const [groupName, memberCount] = await Promise.all([
+            thread.getName().catch(() => null),
+            threadID ? api.getMemberCount(threadID).catch(() => 0) : Promise.resolve(0),
+          ]);
+
+          const { buffer, ext } = await fetchGreetCanvas({
+            type: 'Goodbye',
+            platform: canvasPlatform,
+            avatar,
+            username: name,
+            serverName: groupName || 'this group',
+            message: `We'll miss you, ${name}!`,
+            memberCount,
+          });
+
+          canvasAttachment = { name: `goodbye.${ext}`, stream: buffer };
+        }
+      } catch (err) {
+        logger.warn('[goodbye] Canvas card failed, falling back to text', {
+          leftId,
+          platform: native.platform,
+          error: err,
+        });
+      }
+    }
+
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: lines.join('\n'),
+      ...(canvasAttachment ? { attachment: [canvasAttachment] } : {}),
     });
   } catch (err) {
     console.error('❌ goodbye event handler failed:', err);

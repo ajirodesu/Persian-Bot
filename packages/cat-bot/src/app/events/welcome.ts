@@ -30,6 +30,8 @@ import type { EventMeta } from '@/engine/types/module-config.types.js';
 import { LogMessageType } from '@/engine/adapters/models/enums/index.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
+import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
   name: 'welcome',
@@ -46,6 +48,7 @@ export const onEvent = async ({
   bot,
   thread,
   native,
+  api,
 }: AppCtx): Promise<void> => {
   try {
     const logMessageData = event['logMessageData'] as
@@ -107,9 +110,48 @@ export const onEvent = async ({
       `Feel free to introduce yourself and enjoy your stay! 🌟`,
     ];
 
+    // Canvas cards need a single avatar/username, so only attempt one for a
+    // single-joiner event on a supported platform; bulk joins (or unsupported
+    // platforms / any fetch failure) keep the existing text-only greeting.
+    const canvasPlatform = normalizeCanvasPlatform(native.platform);
+    let canvasAttachment: { name: string; stream: Buffer } | undefined;
+
+    if (canvasPlatform && joiners.length === 1) {
+      const joiner = joiners[0]!;
+      const joinerId = String(joiner['userFbId'] ?? '');
+
+      try {
+        const avatar = joinerId ? await api.getAvatarUrl(joinerId) : null;
+
+        if (avatar) {
+          const joinerName = getName(joiner);
+          const memberCount = await api.getMemberCount(threadID).catch(() => 0);
+
+          const { buffer, ext } = await fetchGreetCanvas({
+            type: 'Welcome',
+            platform: canvasPlatform,
+            avatar,
+            username: joinerName,
+            serverName: group,
+            message: `Glad to have you here, ${joinerName}!`,
+            memberCount,
+          });
+
+          canvasAttachment = { name: `welcome.${ext}`, stream: buffer };
+        }
+      } catch (err) {
+        logger.warn('[welcome] Canvas card failed, falling back to text', {
+          threadID,
+          platform: native.platform,
+          error: err,
+        });
+      }
+    }
+
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: lines.join('\n'),
+      ...(canvasAttachment ? { attachment: [canvasAttachment] } : {}),
     });
   } catch (err) {
     console.error('❌ welcome event handler failed:', err);

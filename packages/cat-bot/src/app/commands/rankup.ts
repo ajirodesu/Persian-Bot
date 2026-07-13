@@ -26,6 +26,8 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { fetchRankupCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,34 @@ function expToLevel(exp: number): number {
 function levelToExp(level: number): number {
   if (level <= 0) return 0;
   return Math.floor(((level * level - level) * DELTA_NEXT) / 2);
+}
+
+/**
+ * Computes a user's 1-indexed leaderboard position by EXP. Mirrors rank.ts's
+ * full-scan approach — only invoked here on an actual level-up (rare
+ * relative to onChat's per-message frequency), so the extra query is cheap
+ * in aggregate. Fail-open: returns 1 if the session query fails.
+ */
+async function getLeaderboardRank(
+  db: AppCtx['db'],
+  targetID: string,
+): Promise<number> {
+  try {
+    const allSessions = await db.users.getAll();
+    const leaderboard = allSessions
+      .map(({ botUserId, data }) => {
+        const xpData = data?.['xp'] as Record<string, unknown> | undefined;
+        const userExp =
+          xpData && typeof xpData['exp'] === 'number' ? (xpData['exp'] as number) : 0;
+        return { botUserId, exp: userExp };
+      })
+      .sort((a, b) => b.exp - a.exp);
+
+    const pos = leaderboard.findIndex((u) => u.botUserId === targetID);
+    return pos === -1 ? 1 : pos + 1;
+  } catch {
+    return 1;
+  }
 }
 
 // ─── Module Config ────────────────────────────────────────────────────────────
@@ -82,7 +112,7 @@ export const meta: CommandMeta = {
  * level boundary AND rankup notifications are enabled for this thread, sends a
  * plain congratulation text message.
  */
-export const onChat = async ({ event, db, chat }: AppCtx): Promise<void> => {
+export const onChat = async ({ event, db, chat, api, native }: AppCtx): Promise<void> => {
   const senderID = event['senderID'] as string | undefined;
   const threadID = event['threadID'] as string | undefined;
   if (!senderID || !threadID) return;
@@ -120,10 +150,51 @@ export const onChat = async ({ event, db, chat }: AppCtx): Promise<void> => {
     if (!rankupEnabled) return;
 
     const name = await db.users.getName(senderID);
+    const congratsMessage = `🎉 Congratulations **${name}**! You reached **level ${newLevel}**!`;
+
+    // Try the canvas rankup card first (Discord/Telegram only); fall back to
+    // the plain-text notification on unsupported platforms or any failure —
+    // EXP tracking + notification must never break because the image did.
+    const canvasPlatform = normalizeCanvasPlatform(native.platform);
+
+    if (canvasPlatform) {
+      try {
+        const avatar = await api.getAvatarUrl(senderID);
+
+        if (avatar) {
+          const currentBase = levelToExp(newLevel);
+          const nextBase = levelToExp(newLevel + 1);
+          const rank = await getLeaderboardRank(db, senderID);
+
+          const { buffer, ext } = await fetchRankupCanvas({
+            platform: canvasPlatform,
+            avatar,
+            username: name,
+            level: newLevel,
+            previousLevel: oldLevel,
+            xpText: `${newExp - currentBase} / ${nextBase - currentBase} XP`,
+            rank,
+          });
+
+          await chat.replyMessage({
+            style: MessageStyle.MARKDOWN,
+            message: congratsMessage,
+            attachment: [{ name: `rankup.${ext}`, stream: buffer }],
+          });
+          return;
+        }
+      } catch (err) {
+        logger.warn('[rankup] Canvas card failed, falling back to text', {
+          senderID,
+          platform: native.platform,
+          error: err,
+        });
+      }
+    }
 
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `🎉 Congratulations **${name}**! You reached **level ${newLevel}**!`,
+      message: congratsMessage,
     });
   } catch {
     // Swallow all errors — EXP accumulation must never disrupt normal chat flow
