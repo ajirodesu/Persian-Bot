@@ -16,6 +16,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const GENERIC_ERROR =
@@ -83,7 +84,7 @@ export const meta: CommandMeta = {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args, usage } = ctx;
+  const { args, usage } = ctx;
   const emoji1 = args[0]?.trim();
   const emoji2 = args[1]?.trim();
 
@@ -92,14 +93,16 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     return;
   }
 
+  const loading = await withLoadingMedia(ctx, `🎨 **Mixing ${emoji1} + ${emoji2}...**`);
+
   const imageUrl = await fetchEmojiMix(emoji1, emoji2);
 
   if (!imageUrl) {
-    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: GENERIC_ERROR });
+    await loading.fail(GENERIC_ERROR);
     return;
   }
 
-  await chat.replyMessage({
+  await loading.finish({
     style: MessageStyle.MARKDOWN,
     message: `🎨 **Emoji Mix:** ${emoji1} + ${emoji2}`,
     attachment_url: [{ name: 'emojimix.png', url: imageUrl }],

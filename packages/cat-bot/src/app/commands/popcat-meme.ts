@@ -33,6 +33,7 @@ import type { CommandMeta, CommandOption } from '@/engine/types/module-config.ty
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { createUrl, type UrlParams } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Outbound request headers ─────────────────────────────────────────────────
 //
@@ -141,7 +142,7 @@ const EFFECT_CONFIGS: EndpointConfig[] = [
 // ── Shared handler ────────────────────────────────────────────────────────────
 
 async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
-  const { chat, event, args, usage } = ctx;
+  const { event, args, usage } = ctx;
 
   const messageReply = event['messageReply'] as
     | Record<string, unknown>
@@ -171,6 +172,11 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
 
   const params: UrlParams = { text1, text2 };
 
+  const loading = await withLoadingMedia(
+    ctx,
+    `⏳ **Generating ${config.label}...**`,
+  );
+
   try {
     const requestUrl = createUrl('popcat', config.path, params);
     const { buffer, ext } = await fetchRenderedImage(
@@ -179,17 +185,14 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
       config.label,
     );
 
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **${config.label}**`,
       attachment: [{ name: `${config.name}.${ext}`, stream: buffer }],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to generate the image: \`${message}\``,
-    });
+    await loading.fail(`⚠️ Failed to generate the image: \`${message}\``);
   }
 }
 

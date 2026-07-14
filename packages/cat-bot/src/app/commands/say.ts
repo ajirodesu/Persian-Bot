@@ -4,6 +4,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 export const meta: CommandMeta = {
   name: 'say',
@@ -27,12 +28,8 @@ export const meta: CommandMeta = {
   ],
 };
 
-export const onCommand = async ({
-  chat,
-  event,
-  args,
-  prefix = '',
-}: AppCtx): Promise<void> => {
+export const onCommand = async (ctx: AppCtx): Promise<void> => {
+  const { chat, event, args, prefix = '' } = ctx;
   const messageReply = event['messageReply'] as
     | Record<string, unknown>
     | undefined;
@@ -86,22 +83,27 @@ export const onCommand = async ({
     return;
   }
 
+  const loading = await withLoadingMedia(ctx, '🔊 **Generating audio...**');
+
   try {
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
 
-    // Fetch as a stream and pipe directly to the platform wrapper.
-    // Avoids loading the full audio payload into memory or writing to disk.
-    const response = await axios.get(url, { responseType: 'stream' });
+    // Fetch as a buffer (rather than a stream) so the download completes
+    // before we edit the loading message — editMessage's attachment upload
+    // needs a resolvable byte length, and a still-open stream cannot back
+    // an edit of an existing message the way it could a fresh reply.
+    const response = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+    });
 
-    await chat.replyMessage({
+    await loading.finish({
       // We do not provide message string since we just want to send the audio
-      attachment: [{ name: 'say.mp3', stream: response.data }],
+      message: '',
+      attachment: [{ name: 'say.mp3', stream: Buffer.from(response.data) }],
     });
   } catch {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message:
-        '❌ An error occurred while generating audio. The service might be temporarily unavailable.',
-    });
+    await loading.fail(
+      '❌ An error occurred while generating audio. The service might be temporarily unavailable.',
+    );
   }
 };

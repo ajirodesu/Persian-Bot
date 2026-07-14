@@ -17,6 +17,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 const DEFAULT_RATIO = '1:1';
 
@@ -84,7 +85,7 @@ export const meta: CommandMeta = {
 // ── Command Handler ───────────────────────────────────────────────────────────
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, usage } = ctx;
+  const { usage } = ctx;
   const { ratio, prompt } = resolveInput(ctx);
 
   if (!prompt) {
@@ -92,18 +93,17 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     return;
   }
 
+  const loading = await withLoadingMedia(ctx, `🖼️ **Generating image for:** ${prompt}`);
+
   try {
     const image = await fetchText2Image(prompt, ratio);
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}\n📐 **Ratio:** ${ratio}`,
       attachment: [{ name: 'text2image.png', stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to generate the image: \`${error.message ?? 'Unknown error'}\``,
-    });
+    await loading.fail(`⚠️ Failed to generate the image: \`${error.message ?? 'Unknown error'}\``);
   }
 };

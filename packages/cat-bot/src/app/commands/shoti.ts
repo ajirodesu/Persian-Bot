@@ -226,8 +226,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
     // ── Step 3: Send result ──────────────────────────────────────────────
 
-    await dismissLoading();
-
     const displayTitle = title && title !== 'No title' ? title : '_(no title)_';
 
     const caption = [
@@ -264,13 +262,18 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
         ...payload,
         message_id_to_edit: event['messageID'] as string,
       });
+    } else if (loadingId) {
+      try {
+        await chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+      } catch {
+        await dismissLoading();
+        await chat.replyMessage(payload);
+      }
     } else {
       await chat.replyMessage(payload);
     }
   } catch (err) {
     const error = err as { message?: string };
-
-    await dismissLoading();
 
     const errPayload = {
       style: MessageStyle.MARKDOWN,
@@ -284,6 +287,11 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       await chat.editMessage({
         ...errPayload,
         message_id_to_edit: event['messageID'] as string,
+      });
+    } else if (loadingId) {
+      await chat.editMessage({ ...errPayload, message_id_to_edit: loadingId }).catch(async () => {
+        await dismissLoading();
+        await chat.replyMessage(errPayload);
       });
     } else {
       await chat.replyMessage(errPayload);

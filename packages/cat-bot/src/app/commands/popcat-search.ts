@@ -33,6 +33,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Shared response envelope ──────────────────────────────────────────────────
 //
@@ -151,7 +152,7 @@ async function fetchSearchResult<T>(config: SearchConfig<T>, query: string): Pro
 // ── Shared handler ────────────────────────────────────────────────────────────
 
 async function runSearch(ctx: AppCtx, config: SearchConfig): Promise<void> {
-  const { chat, args, usage } = ctx;
+  const { args, usage } = ctx;
 
   const query = args.join(' ').trim();
   if (!query) {
@@ -159,12 +160,17 @@ async function runSearch(ctx: AppCtx, config: SearchConfig): Promise<void> {
     return;
   }
 
+  const loading = await withLoadingMedia(
+    ctx,
+    `⏳ **Searching ${config.label}...**`,
+  );
+
   try {
     const result = await fetchSearchResult(config, query);
     const message = config.formatMessage(result);
     const imageUrl = config.getImageUrl?.(result);
 
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message,
       ...(imageUrl ? { attachment_url: [{ name: `${config.name}.png`, url: imageUrl }] } : {}),
@@ -173,10 +179,7 @@ async function runSearch(ctx: AppCtx, config: SearchConfig): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn(`[popcat-search] ${config.name} failed: ${message}`);
 
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to search ${config.label.toLowerCase()}: \`${message}\``,
-    });
+    await loading.fail(`⚠️ Failed to search ${config.label.toLowerCase()}: \`${message}\``);
   }
 }
 

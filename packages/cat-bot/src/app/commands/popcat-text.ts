@@ -29,6 +29,7 @@ import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 /** Best-effort decode of a non-2xx response body for diagnostics. */
 function describeErrorBody(data: ArrayBuffer): string {
@@ -157,7 +158,7 @@ async function runEffect(
   ctx: AppCtx,
   config: EffectConfig,
 ): Promise<void> {
-  const { chat, event, args, usage } = ctx;
+  const { event, args, usage } = ctx;
 
   const messageReply = event['messageReply'] as
     | Record<string, unknown>
@@ -174,21 +175,23 @@ async function runEffect(
     return;
   }
 
+  const loading = await withLoadingMedia(
+    ctx,
+    `⏳ **Generating ${config.label}...**`,
+  );
+
   try {
     const requestUrl = createUrl('popcat', config.path, { text });
     const { buffer, ext } = await fetchEffectImage(requestUrl, text, config.label);
 
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **${config.label}**`,
       attachment: [{ name: `${config.name}.${ext}`, stream: buffer }],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to generate the image: \`${message}\``,
-    });
+    await loading.fail(`⚠️ Failed to generate the image: \`${message}\``);
   }
 }
 

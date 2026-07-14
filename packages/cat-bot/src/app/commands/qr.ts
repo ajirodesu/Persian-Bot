@@ -14,6 +14,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Fetcher ───────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,8 @@ export const meta: CommandMeta = {
 
 // ── Command Handler ───────────────────────────────────────────────────────────
 
-export const onCommand = async ({ args, chat, usage }: AppCtx): Promise<void> => {
+export const onCommand = async (ctx: AppCtx): Promise<void> => {
+  const { args, usage } = ctx;
   if (!args.length) {
     await usage();
     return;
@@ -55,18 +57,17 @@ export const onCommand = async ({ args, chat, usage }: AppCtx): Promise<void> =>
 
   const text = args.join(' ').trim();
 
+  const loading = await withLoadingMedia(ctx, '🔳 **Generating QR code...**');
+
   try {
     const image = await fetchQrCode(text);
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `🔳 **QR Code**\n📝 ${text}`,
       attachment: [{ name: 'qrcode.png', stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to generate the QR code: \`${error.message ?? 'Unknown error'}\``,
-    });
+    await loading.fail(`⚠️ Failed to generate the QR code: \`${error.message ?? 'Unknown error'}\``);
   }
 };

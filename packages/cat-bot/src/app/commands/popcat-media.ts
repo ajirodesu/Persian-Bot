@@ -31,6 +31,7 @@ import { createUrl, type UrlParams } from '@/engine/lib/apis.lib.js';
 import { AttachmentType } from '@/engine/adapters/models/enums/index.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Shared attachment resolution (same convention as popcat.ts) ────────────────
 
@@ -439,6 +440,11 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
     params[config.autoTimestampParam] = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   }
 
+  const loading = await withLoadingMedia(
+    ctx,
+    `⏳ **Generating ${config.label}...**`,
+  );
+
   try {
     const requestUrl = createUrl('popcat', config.path, params);
     const { buffer, ext } = await fetchRenderedImage(
@@ -447,17 +453,14 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
       config.label,
     );
 
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **${config.label}**`,
       attachment: [{ name: `${config.name}.${ext}`, stream: buffer }],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to generate the image: \`${message}\``,
-    });
+    await loading.fail(`⚠️ Failed to generate the image: \`${message}\``);
   }
 }
 

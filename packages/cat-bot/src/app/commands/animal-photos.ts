@@ -31,6 +31,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -102,24 +103,18 @@ function buttonId(config: AnimalConfig): string {
 }
 
 async function runEffect(ctx: AppCtx, config: AnimalConfig): Promise<void> {
-  const { chat, native, event, button, session } = ctx;
+  const { native, button, session } = ctx;
+
+  const loading = await withLoadingMedia(
+    ctx,
+    `${config.emoji} **Fetching a ${config.name} image...**`,
+  );
 
   try {
     const imageUrl = await fetchAnimalImage(config);
 
     if (!imageUrl) {
-      const errPayload = {
-        style: MessageStyle.MARKDOWN,
-        message: `⚠️ **Error:** Could not retrieve a ${config.name} image.`,
-      };
-      if (event['type'] === 'button_action') {
-        await chat.editMessage({
-          ...errPayload,
-          message_id_to_edit: event['messageID'] as string,
-        });
-      } else {
-        await chat.replyMessage(errPayload);
-      }
+      await loading.fail(`⚠️ **Error:** Could not retrieve a ${config.name} image.`);
       return;
     }
 
@@ -128,39 +123,20 @@ async function runEffect(ctx: AppCtx, config: AnimalConfig): Promise<void> {
     const extMatch = imageUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i);
     const ext = extMatch ? extMatch[1] : 'jpg';
 
-    const resolvedButtonId =
-      event['type'] === 'button_action'
-        ? session.id
-        : button.generateID({ id: buttonId(config), public: true });
+    const resolvedButtonId = loading.isButtonAction
+      ? session.id
+      : button.generateID({ id: buttonId(config), public: true });
 
-    const payload = {
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `${config.emoji} **${config.label}**`,
       attachment_url: [{ name: `${config.name}.${ext}`, url: imageUrl }],
       ...(hasNativeButtons(native.platform) ? { button: [resolvedButtonId] } : {}),
-    };
-
-    if (event['type'] === 'button_action') {
-      await chat.editMessage({
-        ...payload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(payload);
-    }
+    });
   } catch {
-    const errPayload = {
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ **System Error:** Failed to fetch a ${config.name} image. Please try again later.`,
-    };
-    if (event['type'] === 'button_action') {
-      await chat.editMessage({
-        ...errPayload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+    await loading.fail(
+      `⚠️ **System Error:** Failed to fetch a ${config.name} image. Please try again later.`,
+    );
   }
 }
 

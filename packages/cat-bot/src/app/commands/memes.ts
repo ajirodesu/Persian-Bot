@@ -19,6 +19,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Shared fetch ──────────────────────────────────────────────────────────────
 
@@ -89,53 +90,33 @@ const BUTTON_ID = { refresh: 'refresh' } as const;
  * `event.type`.
  */
 async function runMeme(ctx: AppCtx, config: MemeConfig): Promise<void> {
-  const { chat, event, native, button, session } = ctx;
-  const isRefresh = event['type'] === 'button_action';
+  const { native, button, session } = ctx;
+
+  const loading = await withLoadingMedia(ctx, `😂 **Fetching a random meme...**`);
 
   try {
     const meme = await fetchRandomMeme(config.endpoint);
 
     // Reuse the active button instance ID on refresh so the button stays live;
     // otherwise mint a fresh one for the initial send.
-    const buttonId = isRefresh
+    const buttonId = loading.isButtonAction
       ? session.id
       : button.generateID({ id: BUTTON_ID.refresh, public: true });
 
     const extMatch = meme.url.match(/\.(jpe?g|png|gif|webp)(\?|$)/i);
     const ext = extMatch?.[1] ?? 'jpg';
 
-    const payload = {
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `${config.titlePrefix}**${meme.title}**`,
       attachment_url: [
         { name: `${config.attachmentPrefix}.${ext}`, url: meme.url },
       ],
       ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
-    };
-
-    if (isRefresh) {
-      await chat.editMessage({
-        ...payload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(payload);
-    }
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    const errPayload = {
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to fetch a meme: ${message}`,
-    };
-
-    if (isRefresh) {
-      await chat.editMessage({
-        ...errPayload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+    await loading.fail(`⚠️ Failed to fetch a meme: ${message}`);
   }
 }
 

@@ -26,6 +26,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 import type { CommandMeta, CommandOption } from '@/engine/types/module-config.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
@@ -142,8 +143,7 @@ const REROLL_BUTTON_ID = 'periodic-table-reroll';
 // ── Shared handler ────────────────────────────────────────────────────────────
 
 async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
-  const { chat, args, usage, event, native, button } = ctx;
-  const isButtonAction = event['type'] === 'button_action';
+  const { args, usage, native, button, session } = ctx;
 
   let query: Record<string, string> = {};
 
@@ -156,45 +156,32 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
     query = { element };
   }
 
+  const loading = await withLoadingMedia(ctx, `🔬 **Looking up ${config.label}...**`);
+
   try {
     const info = await fetchElement(config.path, query);
     const message = formatElement(info);
 
+    // Reuse the active button instance ID on reroll so the button slot stays
+    // live in place instead of minting (and leaking) a fresh session per click.
     const buttonRow =
       config.hasRerollButton && hasNativeButtons(native.platform)
-        ? [button.generateID({ id: REROLL_BUTTON_ID, public: true })]
+        ? [
+            loading.isButtonAction
+              ? session.id
+              : button.generateID({ id: REROLL_BUTTON_ID, public: true }),
+          ]
         : [];
 
-    const payload = {
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message,
       attachment_url: [{ name: `${info.symbol.toLowerCase()}.png`, url: info.image }],
       ...(buttonRow.length > 0 ? { button: buttonRow } : {}),
-    };
-
-    if (isButtonAction) {
-      await chat.editMessage({
-        ...payload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(payload);
-    }
+    });
   } catch (err) {
     const messageText = err instanceof Error ? err.message : String(err);
-    const errorPayload = {
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to fetch element info: \`${messageText}\``,
-    };
-
-    if (isButtonAction) {
-      await chat.editMessage({
-        ...errorPayload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(errorPayload);
-    }
+    await loading.fail(`⚠️ Failed to fetch element info: \`${messageText}\``);
   }
 }
 

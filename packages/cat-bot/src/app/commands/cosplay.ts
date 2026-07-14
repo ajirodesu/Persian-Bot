@@ -22,6 +22,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -106,48 +107,31 @@ function getSenderID(event: AppCtx['event']): string | undefined {
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
   const { chat, native, event, button, session } = ctx;
 
-  const isButtonAction = event['type'] === 'button_action';
-
   // ── Resolve sender ────────────────────────────────────────────────────────
   const senderID = getSenderID(event);
 
   if (!senderID) {
-    const noIdPayload = {
+    await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message:
         '❌ **Error:** Could not identify your user account on this platform.',
-    };
-    if (isButtonAction) {
-      await chat.editMessage({
-        ...noIdPayload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(noIdPayload);
-    }
+    });
     return;
   }
+
+  const loading = await withLoadingMedia(ctx, '👗 **Fetching a cosplay video...**');
 
   try {
     // ── Fetch video ───────────────────────────────────────────────────────
     const videoUrl = await fetchCosplayVideo();
 
     if (!videoUrl) {
-      const errPayload = {
-        style: MessageStyle.MARKDOWN,
-        message: [
+      await loading.fail(
+        [
           '⚠️ **No videos found.**',
           'The archive may be temporarily unavailable. Please try again in a moment.',
         ].join('\n'),
-      };
-      if (isButtonAction) {
-        await chat.editMessage({
-          ...errPayload,
-          message_id_to_edit: event['messageID'] as string,
-        });
-      } else {
-        await chat.replyMessage(errPayload);
-      }
+      );
       return;
     }
 
@@ -156,41 +140,19 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
     // Reuse the active instance ID when refreshing via button so the button
     // slot is updated in-place and never disappears between clicks.
-    const buttonId = isButtonAction
+    const buttonId = loading.isButtonAction
       ? session.id
       : button.generateID({ id: BUTTON_ID.next, public: true });
 
-    // ── Send or edit ──────────────────────────────────────────────────────
-    if (isButtonAction) {
-      await chat.editMessage({
-        style: MessageStyle.MARKDOWN,
-        message: caption,
-        attachment_url: [{ name: 'cosplay.mp4', url: videoUrl }],
-        message_id_to_edit: event['messageID'] as string,
-        ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
-      });
-    } else {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: caption,
-        attachment_url: [{ name: 'cosplay.mp4', url: videoUrl }],
-        reply_to_message_id: event['messageID'] as string,
-        ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
-      });
-    }
-  } catch {
-    const errPayload = {
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
-      message:
-        '⚠️ **Error:** Something went wrong while fetching a cosplay video. Please try again later.',
-    };
-    if (isButtonAction) {
-      await chat.editMessage({
-        ...errPayload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+      message: caption,
+      attachment_url: [{ name: 'cosplay.mp4', url: videoUrl }],
+      ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
+    });
+  } catch {
+    await loading.fail(
+      '⚠️ **Error:** Something went wrong while fetching a cosplay video. Please try again later.',
+    );
   }
 };

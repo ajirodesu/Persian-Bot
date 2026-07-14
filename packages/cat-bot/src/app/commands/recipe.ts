@@ -11,6 +11,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 const TIMEOUT = 8000;
 const API_URL = 'https://www.themealdb.com/api/json/v1/1/random.php';
@@ -80,7 +81,9 @@ function formatRecipe(meal: MealDbMeal): string {
 const BUTTON_ID = { newRecipe: 'new_recipe' } as const;
 
 async function fetchAndSendRecipe(ctx: AppCtx): Promise<void> {
-  const { chat, native, event, button, session } = ctx;
+  const { native, button, session } = ctx;
+
+  const loading = await withLoadingMedia(ctx, '🍽️ **Cooking up a recipe...**');
 
   try {
     const meal = await fetchRecipe();
@@ -90,43 +93,21 @@ async function fetchAndSendRecipe(ctx: AppCtx): Promise<void> {
     const caption = formatRecipe(meal);
 
     // Reuse active instance ID if triggered via button; generate new one for fresh command
-    const buttonId =
-      event['type'] === 'button_action'
-        ? session.id
-        : button.generateID({ id: BUTTON_ID.newRecipe, public: true });
+    const buttonId = loading.isButtonAction
+      ? session.id
+      : button.generateID({ id: BUTTON_ID.newRecipe, public: true });
 
-    const payload = {
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: caption,
       ...(meal.strMealThumb
         ? { attachment_url: [{ name: 'meal.jpg', url: meal.strMealThumb }] }
         : {}),
       ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
-    };
-
-    if (event['type'] === 'button_action') {
-      await chat.editMessage({
-        ...payload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(payload);
-    }
+    });
   } catch (err) {
     const error = err as { message?: string };
-    const errPayload = {
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ **Error:** ${error.message ?? 'Unknown error'}`,
-    };
-
-    if (event['type'] === 'button_action') {
-      await chat.editMessage({
-        ...errPayload,
-        message_id_to_edit: event['messageID'] as string,
-      });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+    await loading.fail(`⚠️ **Error:** ${error.message ?? 'Unknown error'}`);
   }
 }
 

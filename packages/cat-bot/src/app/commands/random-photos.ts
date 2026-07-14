@@ -36,6 +36,7 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // 1) SIMPLE PHOTO FAMILY — /coffee, /picsum, /waifu
@@ -195,8 +196,9 @@ const SIMPLE_PHOTO_CONFIGS: SimplePhotoConfig[] = [
 const SIMPLE_BUTTON_ID = { repeat: 'repeat' } as const;
 
 async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promise<void> {
-  const { chat, native, event, button, session } = ctx;
-  const isButtonAction = event['type'] === 'button_action';
+  const { native, button, session } = ctx;
+
+  const loading = await withLoadingMedia(ctx, `📸 **Fetching ${config.label}...**`);
 
   try {
     const result = await config.fetch();
@@ -204,28 +206,15 @@ async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promis
     if (!result.ok) {
       // Non-error notice (e.g. NSFW-flagged) — plain message, no button.
       if (result.notice) {
-        const notice = { style: MessageStyle.MARKDOWN, message: result.notice };
-        if (isButtonAction) {
-          await chat.editMessage({ ...notice, message_id_to_edit: event['messageID'] as string });
-        } else {
-          await chat.replyMessage(notice);
-        }
+        await loading.fail(result.notice);
         return;
       }
 
-      const errPayload = {
-        style: MessageStyle.MARKDOWN,
-        message: `⚠️ **Error:** Could not retrieve a ${config.label}.`,
-      };
-      if (isButtonAction) {
-        await chat.editMessage({ ...errPayload, message_id_to_edit: event['messageID'] as string });
-      } else {
-        await chat.replyMessage(errPayload);
-      }
+      await loading.fail(`⚠️ **Error:** Could not retrieve a ${config.label}.`);
       return;
     }
 
-    const resolvedButtonId = isButtonAction
+    const resolvedButtonId = loading.isButtonAction
       ? session.id
       : button.generateID({ id: SIMPLE_BUTTON_ID.repeat, public: true });
 
@@ -234,29 +223,17 @@ async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promis
         ? { attachment_url: [{ name: result.attachment.name, url: result.attachment.url }] }
         : { attachment: [{ name: result.attachment.name, stream: result.attachment.buffer }] };
 
-    const payload = {
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: result.caption,
       ...attachmentField,
       ...(hasNativeButtons(native.platform) ? { button: [resolvedButtonId] } : {}),
-    };
-
-    if (isButtonAction) {
-      await chat.editMessage({ ...payload, message_id_to_edit: event['messageID'] as string });
-    } else {
-      await chat.replyMessage(payload);
-    }
+    });
   } catch (err) {
     const error = err as { message?: string };
-    const errPayload = {
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ **System Error:** Failed to fetch a ${config.label}: \`${error.message ?? 'Unknown error'}\``,
-    };
-    if (isButtonAction) {
-      await chat.editMessage({ ...errPayload, message_id_to_edit: event['messageID'] as string });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+    await loading.fail(
+      `⚠️ **System Error:** Failed to fetch a ${config.label}: \`${error.message ?? 'Unknown error'}\``,
+    );
   }
 }
 
@@ -355,8 +332,16 @@ async function renderLoremFlickr(ctx: AppCtx, tag: string): Promise<void> {
       await chat.editMessage({ ...payload, message_id_to_edit: event['messageID'] as string });
       return;
     }
-    if (loadingId) await chat.unsendMessage(loadingId).catch(() => {});
-    await chat.replyMessage(payload);
+    if (loadingId) {
+      try {
+        await chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+      } catch {
+        await chat.unsendMessage(loadingId).catch(() => {});
+        await chat.replyMessage(payload);
+      }
+    } else {
+      await chat.replyMessage(payload);
+    }
   } catch (err) {
     const error = err as { message?: string };
     const errorPayload = {
@@ -454,8 +439,16 @@ async function renderWallpaper(
       await chat.editMessage({ ...wallpaperPayload, message_id_to_edit: event['messageID'] as string });
       return;
     }
-    if (loadingId) await chat.unsendMessage(loadingId).catch(() => {});
-    await chat.replyMessage(wallpaperPayload);
+    if (loadingId) {
+      try {
+        await chat.editMessage({ ...wallpaperPayload, message_id_to_edit: loadingId });
+      } catch {
+        await chat.unsendMessage(loadingId).catch(() => {});
+        await chat.replyMessage(wallpaperPayload);
+      }
+    } else {
+      await chat.replyMessage(wallpaperPayload);
+    }
   } catch (err) {
     const error = err as { message?: string; response?: { status?: number } };
     let errorMsg = `⚠️ **Generation Failed**\n\`${error.message ?? 'Unknown error'}\``;

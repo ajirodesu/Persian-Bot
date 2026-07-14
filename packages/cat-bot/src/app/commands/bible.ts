@@ -254,16 +254,26 @@ export const onCommand = async ({
         `${reference} (${translationName})\n\n${passageText}`,
         'utf-8',
       );
-      if (loadingId) {
-        await chat.unsendMessage(loadingId as string).catch(() => {});
-      }
-      await chat.reply({
+      const filePayload = {
         style: MessageStyle.MARKDOWN,
         message: `📄 **Passage too long** — here is **${reference}** as a file.`,
         attachment: [
           { name: `${reference.replace(/\s/g, '_')}.txt`, stream: buf },
         ],
-      });
+      };
+      if (loadingId) {
+        try {
+          await chat.editMessage({
+            ...filePayload,
+            message_id_to_edit: loadingId as string,
+          });
+        } catch {
+          await chat.unsendMessage(loadingId as string).catch(() => {});
+          await chat.reply(filePayload);
+        }
+      } else {
+        await chat.reply(filePayload);
+      }
       return;
     }
 

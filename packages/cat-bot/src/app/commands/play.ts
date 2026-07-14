@@ -285,8 +285,6 @@ export const onCommand = async ({
 
     // ── Step 3: Send result ────────────────────────────────────────────────
 
-    await dismissLoading();
-
     const caption = [
       `🎵  **${displayLabel}**`,
       '',
@@ -295,7 +293,7 @@ export const onCommand = async ({
       `🎬  **Video**         ${mp4Url}`,
     ].join('\n');
 
-    await chat.replyMessage({
+    const resultPayload = {
       style: MessageStyle.MARKDOWN,
       message: caption,
       attachment: [
@@ -304,18 +302,36 @@ export const onCommand = async ({
           stream: audioBuffer,
         },
       ],
-    });
+    };
+
+    if (loadingId) {
+      try {
+        await chat.editMessage({ ...resultPayload, message_id_to_edit: loadingId });
+      } catch {
+        await dismissLoading();
+        await chat.replyMessage(resultPayload);
+      }
+    } else {
+      await chat.replyMessage(resultPayload);
+    }
   } catch (err) {
     const error = err as { message?: string };
 
-    await dismissLoading();
-
-    await chat.replyMessage({
+    const errPayload = {
       style: MessageStyle.MARKDOWN,
       message: [
         `❌  **Could not retrieve audio for** \`${displayLabel}\``,
         `\`${error.message ?? 'An unexpected error occurred.'}\``,
       ].join('\n'),
-    });
+    };
+
+    if (loadingId) {
+      await chat.editMessage({ ...errPayload, message_id_to_edit: loadingId }).catch(async () => {
+        await dismissLoading();
+        await chat.replyMessage(errPayload);
+      });
+    } else {
+      await chat.replyMessage(errPayload);
+    }
   }
 };

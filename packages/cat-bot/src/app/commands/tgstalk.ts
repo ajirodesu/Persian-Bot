@@ -20,6 +20,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const GENERIC_ERROR =
@@ -112,7 +113,7 @@ export const meta: CommandMeta = {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args, usage } = ctx;
+  const { args, usage } = ctx;
   const username = args[0]?.trim().replace(/^@/, '');
 
   if (!username || !isValidUsername(username)) {
@@ -120,22 +121,24 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     return;
   }
 
+  const loading = await withLoadingMedia(ctx, `🔎 **Looking up @${username}...**`);
+
   const profile = await fetchTelegramProfile(username);
 
   if (!profile) {
-    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: GENERIC_ERROR });
+    await loading.fail(GENERIC_ERROR);
     return;
   }
 
   const caption = formatProfile(profile);
 
   if (profile.photo) {
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: caption,
       attachment_url: [{ name: 'tgstalk.jpg', url: profile.photo }],
     });
   } else {
-    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: caption });
+    await loading.finish({ style: MessageStyle.MARKDOWN, message: caption });
   }
 };

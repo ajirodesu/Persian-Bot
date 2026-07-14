@@ -12,6 +12,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -57,11 +58,8 @@ interface OmdbMovie {
 
 // ── Command Handler ───────────────────────────────────────────────────────────
 
-export const onCommand = async ({
-  args,
-  chat,
-  usage,
-}: AppCtx): Promise<void> => {
+export const onCommand = async (ctx: AppCtx): Promise<void> => {
+  const { args, usage } = ctx;
   if (!args.length) {
     await usage();
     return;
@@ -71,6 +69,8 @@ export const onCommand = async ({
   const apiKey = 'ec7115';
   const url = `https://www.omdbapi.com/?t=${encodeURIComponent(query)}&plot=full&apikey=${apiKey}`;
 
+  const loading = await withLoadingMedia(ctx, `🎬 **Looking up "${query}"...**`);
+
   let movie: OmdbMovie;
   try {
     const response = await fetch(url);
@@ -79,18 +79,14 @@ export const onCommand = async ({
     movie = (await response.json()) as OmdbMovie;
   } catch (err) {
     const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `❌ Failed to fetch movie data.\n\`${error.message ?? 'Unknown error'}\``,
-    });
+    await loading.fail(
+      `❌ Failed to fetch movie data.\n\`${error.message ?? 'Unknown error'}\``,
+    );
     return;
   }
 
   if (movie.Response === 'False') {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `🔍 No movie found for **${query}**.`,
-    });
+    await loading.fail(`🔍 No movie found for **${query}**.`);
     return;
   }
 
@@ -106,22 +102,16 @@ export const onCommand = async ({
 
   if (movie.Poster && movie.Poster !== 'N/A') {
     try {
-      await chat.replyMessage({
+      await loading.finish({
         style: MessageStyle.MARKDOWN,
         message: caption,
         attachment_url: [{ name: 'movie_poster.jpg', url: movie.Poster }],
       });
     } catch {
       // Poster fetch failed — fall back to text-only
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: caption,
-      });
+      await loading.finish({ style: MessageStyle.MARKDOWN, message: caption });
     }
   } else {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: caption,
-    });
+    await loading.finish({ style: MessageStyle.MARKDOWN, message: caption });
   }
 };

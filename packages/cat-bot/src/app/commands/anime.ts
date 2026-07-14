@@ -16,6 +16,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -158,12 +159,8 @@ export const onReply = {
    * User quoted the list message and replied with a number.
    * Resolves the selection, deletes state, and sends the detail card.
    */
-  [STATE.awaiting_selection]: async ({
-    chat,
-    session,
-    event,
-    state,
-  }: AppCtx): Promise<void> => {
+  [STATE.awaiting_selection]: async (ctx: AppCtx): Promise<void> => {
+    const { chat, session, event, state } = ctx;
     const results = session.context['results'] as AnimeEntry[];
     const raw = String(event['message'] ?? '').trim();
     const selection = parseInt(raw, 10);
@@ -193,7 +190,8 @@ export const onReply = {
     // Send image first with a short caption to stay within Telegram's
     // 1024-character caption limit, then send full details separately.
     if (imageUrl) {
-      await chat.replyMessage({
+      const loading = await withLoadingMedia(ctx, `🎬 **Loading ${anime.title}...**`);
+      await loading.finish({
         style: MessageStyle.MARKDOWN,
         message: `🎬 **${anime.title}**`,
         attachment_url: [{ name: 'anime_cover.jpg', url: imageUrl }],

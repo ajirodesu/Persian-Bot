@@ -15,6 +15,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Fetcher ───────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,8 @@ export const meta: CommandMeta = {
 
 // ── Command Handler ───────────────────────────────────────────────────────────
 
-export const onCommand = async ({ args, chat, usage }: AppCtx): Promise<void> => {
+export const onCommand = async (ctx: AppCtx): Promise<void> => {
+  const { args, usage } = ctx;
   if (!args.length) {
     await usage();
     return;
@@ -61,18 +63,19 @@ export const onCommand = async ({ args, chat, usage }: AppCtx): Promise<void> =>
 
   const name = args.join(' ').trim();
 
+  const loading = await withLoadingMedia(ctx, '🚀 **Generating boarding pass...**');
+
   try {
     const image = await fetchNasaBoardingPass(name);
-    await chat.replyMessage({
+    await loading.finish({
       style: MessageStyle.MARKDOWN,
       message: `🚀 **NASA Boarding Pass** — ${name}`,
       attachment: [{ name: 'nasa-boarding-pass.png', stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to generate the boarding pass: \`${error.message ?? 'Unknown error'}\``,
-    });
+    await loading.fail(
+      `⚠️ Failed to generate the boarding pass: \`${error.message ?? 'Unknown error'}\``,
+    );
   }
 };
