@@ -6,7 +6,7 @@
  */
 import { AttachmentBuilder } from 'discord.js';
 import type { SendPayload } from '@/engine/adapters/models/api.model.js';
-import { streamToBuffer, urlToStream } from '../utils/helper.util.js';
+import { streamToBuffer, urlToBuffer } from '../utils/helper.util.js';
 
 type SendFn = (
   content: string,
@@ -25,40 +25,36 @@ export async function sendMessage(
   const files: AttachmentBuilder[] = [];
 
   if (typeof msg !== 'string') {
-    // Align with Unified SendPayload contract allowing NamedStreamAttachment[] arrays
-    if (msg.attachment) {
-      if (Array.isArray(msg.attachment)) {
-        for (const { name, stream } of msg.attachment) {
-          const buf = Buffer.isBuffer(stream)
-            ? stream
-            : await streamToBuffer(stream as NodeJS.ReadableStream);
-          files.push(new AttachmentBuilder(buf, { name: name || 'file.bin' }));
-        }
-      } else {
-        const stream = msg.attachment;
-        const buf = Buffer.isBuffer(stream)
-          ? stream
-          : await streamToBuffer(stream as NodeJS.ReadableStream);
-        files.push(
-          new AttachmentBuilder(buf, {
-            name: (stream as unknown as { path?: string }).path || 'file.bin',
+    // Build all AttachmentBuilders in parallel — stream buffering and URL downloads
+    // run concurrently so N attachments take ~max(individual times) instead of their sum.
+    const [streamFiles, urlFiles] = await Promise.all([
+      // Parallel: convert every stream/buffer attachment to a Discord AttachmentBuilder
+      (async () => {
+        if (!msg.attachment) return [];
+        const items = Array.isArray(msg.attachment)
+          ? msg.attachment
+          : [{ name: (msg.attachment as unknown as { path?: string }).path || 'file.bin', stream: msg.attachment }];
+        return Promise.all(
+          items.map(async ({ name, stream }) => {
+            const buf = Buffer.isBuffer(stream)
+              ? stream
+              : await streamToBuffer(stream as NodeJS.ReadableStream);
+            return new AttachmentBuilder(buf, { name: name || 'file.bin' });
           }),
         );
-      }
-    }
-    // Support unified NamedUrlAttachment[] arrays identical to replyMessage
-    if (msg.attachment_url) {
-      for (const { name, url } of msg.attachment_url) {
-        const s = await urlToStream(url, name);
-        const buf = await streamToBuffer(s);
-        files.push(
-          new AttachmentBuilder(buf, {
-            name:
-              name || (s as unknown as { path?: string }).path || 'file.bin',
+      })(),
+      // Parallel: download every URL attachment directly into a buffer (single-pass arraybuffer)
+      (async () => {
+        if (!msg.attachment_url) return [];
+        return Promise.all(
+          msg.attachment_url.map(async ({ name, url }) => {
+            const { buffer, filename } = await urlToBuffer(url, name);
+            return new AttachmentBuilder(buffer, { name: filename });
           }),
         );
-      }
-    }
+      })(),
+    ]);
+    files.push(...streamFiles, ...urlFiles);
   }
   const sent = await sendFn(content, files);
   return sent?.id;

@@ -78,6 +78,10 @@ export function getMediaTypeFromPath(pathOrUrl = ''): MediaType {
  * original filename so downstream MIME-detection (Telegram Input.fromBuffer)
  * derives the correct content type from the extension.
  *
+ * Prefer `urlToBuffer` for parallel multi-attachment downloads — it uses
+ * `arraybuffer` mode so all bandwidth consumption is captured inside the single
+ * axios call (no secondary `streamToBuffer` pass needed).
+ *
  * @param url      - Direct media URL (not an HTML embed page)
  * @param filename - Explicit filename override; when omitted the URL tail is used
  */
@@ -98,4 +102,28 @@ export async function urlToStream(
   (response.data as unknown as { path: string }).path = tail;
 
   return response.data;
+}
+
+/**
+ * Downloads a URL directly into a Buffer using Axios `arraybuffer` mode.
+ *
+ * Unlike `urlToStream + streamToBuffer`, this is a single-pass download:
+ * Axios writes directly into a contiguous ArrayBuffer — no PassThrough
+ * allocation, no chunk-by-chunk accumulation.  Use this whenever you need
+ * to parallelize multiple attachment downloads with `Promise.all`.
+ *
+ * @param url      - Direct media URL (not an HTML embed page)
+ * @param filename - Explicit filename override; when omitted the URL tail is used
+ */
+export async function urlToBuffer(
+  url: string,
+  filename?: string,
+): Promise<{ buffer: Buffer; filename: string }> {
+  const tail =
+    filename ?? url.split('/').pop()?.split('?')[0] ?? `file_${Date.now()}.bin`;
+  const response = await axios.get<ArrayBuffer>(url, {
+    responseType: 'arraybuffer',
+    timeout: 15_000,
+  });
+  return { buffer: Buffer.from(response.data), filename: tail };
 }

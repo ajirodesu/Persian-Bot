@@ -13,8 +13,8 @@
 
 import type { SendPayload } from '@/engine/adapters/models/api.model.js';
 
-// Re-export shared stream utility so lib/ files have a single local source
-export { urlToStream } from '@/engine/utils/streams.util.js';
+// Re-export shared stream utilities so lib/ files have a single local source
+export { urlToStream, urlToBuffer } from '@/engine/utils/streams.util.js';
 
 /**
  * Collects all chunks from a stream via async iteration.

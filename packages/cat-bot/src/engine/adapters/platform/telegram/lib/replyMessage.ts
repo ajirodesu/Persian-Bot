@@ -16,9 +16,8 @@ import type { Readable } from 'stream';
 import { InputFile } from 'grammy';
 import type { MessageEntity } from 'grammy/types';
 import {
-  bufferToStream,
   streamToBuffer,
-  urlToStream,
+  urlToBuffer,
 } from '@/engine/utils/streams.util.js';
 // text_mention entities allow tagging users by numeric ID without a public @username — Bot API 7.0+
 import { buildTelegramMentionEntities } from '../utils/helper.util.js';
@@ -124,25 +123,30 @@ export async function replyMessage(
         }
       : undefined;
 
-  // Pass explicit name to urlToStream so extOf() extension routing uses the caller-specified filename
-  const urlStreams = await Promise.all(
-    attachment_url.map(({ name, url }) => urlToStream(url, name)),
-  );
-  // Normalize each attachment: Buffer inputs are wrapped into a named PassThrough stream so
-  // extOf() can route by extension and streamToBuffer() receives a proper Readable
-  const attachStreams: AttachmentStream[] = attachment.map(
-    ({ name, stream }) => {
-      if (Buffer.isBuffer(stream))
-        return bufferToStream(stream, name) as AttachmentStream;
-      const s = stream as AttachmentStream;
-      s.path = name;
-      return s;
-    },
-  );
-  const allAttachments: AttachmentStream[] = [
-    ...attachStreams,
-    ...(urlStreams as AttachmentStream[]),
-  ];
+  // ── Pre-buffer ALL attachments in parallel ────────────────────────────────
+  // urlToBuffer uses arraybuffer mode — a true single-pass download: Axios writes
+  // directly into a contiguous ArrayBuffer with no intermediate PassThrough stream
+  // and no secondary streamToBuffer pass.  All URL downloads AND stream reads run
+  // concurrently inside one Promise.all so the entire pre-load phase costs
+  // ≈ max(individual download times) instead of their sequential sum.
+  type Buffered = { buffer: Buffer; filename: string };
+
+  const [urlBuffered, streamBuffered] = await Promise.all([
+    Promise.all(
+      attachment_url.map(({ name, url }) => urlToBuffer(url, name)),
+    ),
+    Promise.all(
+      attachment.map(async ({ name, stream }): Promise<Buffered> => ({
+        buffer: Buffer.isBuffer(stream)
+          ? stream
+          : await streamToBuffer(stream as import('stream').Readable),
+        filename: name,
+      })),
+    ),
+  ]);
+
+  // stream attachments first (preserves caller ordering), URL attachments after
+  const allAttachments: Buffered[] = [...streamBuffered, ...urlBuffered];
 
   if (allAttachments.length === 0) {
     const sent = await ctx.api.sendMessage(chatId, text || ' ', {
@@ -152,142 +156,106 @@ export async function replyMessage(
     return String(sent.message_id);
   }
 
-  const extOf = (s: AttachmentStream): string =>
-    (s.path ?? '').split('.').pop()?.toLowerCase() ?? '';
+  // Extension-based media-type routing — operates on the pre-buffered filename
+  const extOf = ({ filename }: Buffered): string =>
+    filename.split('.').pop()?.toLowerCase() ?? '';
 
-  const photos = allAttachments.filter((s) =>
-    ['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(extOf(s)),
+  const photos = allAttachments.filter((a) =>
+    ['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(extOf(a)),
   );
-  const gifs = allAttachments.filter((s) => extOf(s) === 'gif');
-  const audios = allAttachments.filter((s) =>
-    ['mp3', 'ogg', 'wav', 'aac', 'opus', 'm4a'].includes(extOf(s)),
+  const gifs    = allAttachments.filter((a) => extOf(a) === 'gif');
+  const audios  = allAttachments.filter((a) =>
+    ['mp3', 'ogg', 'wav', 'aac', 'opus', 'm4a'].includes(extOf(a)),
   );
-  const videos = allAttachments.filter((s) =>
-    ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extOf(s)),
+  const videos  = allAttachments.filter((a) =>
+    ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extOf(a)),
   );
-  const others = allAttachments.filter(
-    (s) =>
-      !photos.includes(s) &&
-      !gifs.includes(s) &&
-      !audios.includes(s) &&
-      !videos.includes(s),
+  const others  = allAttachments.filter(
+    (a) =>
+      !photos.includes(a) &&
+      !gifs.includes(a) &&
+      !audios.includes(a) &&
+      !videos.includes(a),
   );
 
   // Single attachment + buttons: send methods natively support reply_markup. sendMediaGroup never
   // does — the Bot API simply ignores the field. Routing single-attachment+button cases
   // through their dedicated methods collapses both the attachment and buttons into one message.
   if (allAttachments.length === 1 && replyMarkup) {
-    const att = allAttachments[0]!;
-    let sent;
+    const { buffer, filename } = allAttachments[0]!;
     const commonExtra = {
       ...(text ? { caption: text } : {}),
       ...captionExtra,
       reply_markup: replyMarkup,
     };
-
+    // Buffers are already in memory — InputFile wraps them directly, no more awaits here
+    let sent;
     if (photos.length === 1) {
-      sent = await ctx.api.sendPhoto(
-        chatId,
-        new InputFile(await streamToBuffer(att), att.path || 'photo.jpg'),
-        commonExtra,
-      );
+      sent = await ctx.api.sendPhoto(chatId, new InputFile(buffer, filename || 'photo.jpg'), commonExtra);
     } else if (videos.length === 1) {
-      sent = await ctx.api.sendVideo(
-        chatId,
-        new InputFile(await streamToBuffer(att), att.path || 'video.mp4'),
-        commonExtra,
-      );
+      sent = await ctx.api.sendVideo(chatId, new InputFile(buffer, filename || 'video.mp4'), commonExtra);
     } else if (gifs.length === 1) {
-      sent = await ctx.api.sendAnimation(
-        chatId,
-        new InputFile(
-          await streamToBuffer(att),
-          att.path || 'animation.gif',
-        ),
-        commonExtra,
-      );
+      sent = await ctx.api.sendAnimation(chatId, new InputFile(buffer, filename || 'animation.gif'), commonExtra);
     } else if (audios.length === 1) {
       // Use sendAudio instead of sendVoice: Telegram's editMessageMedia cannot mutate Voice messages.
-      sent = await ctx.api.sendAudio(
-        chatId,
-        new InputFile(await streamToBuffer(att), att.path || 'audio.mp3'),
-        commonExtra,
-      );
+      sent = await ctx.api.sendAudio(chatId, new InputFile(buffer, filename || 'audio.mp3'), commonExtra);
     } else {
-      sent = await ctx.api.sendDocument(
-        chatId,
-        new InputFile(await streamToBuffer(att), att.path || 'document.bin'),
-        commonExtra,
-      );
+      sent = await ctx.api.sendDocument(chatId, new InputFile(buffer, filename || 'document.bin'), commonExtra);
     }
     return String(sent.message_id);
   }
+
+  // ── Multi-attachment send ─────────────────────────────────────────────────
+  // Buffers are already in memory — InputFile wraps them with zero extra I/O.
+
   // Batch multiple photos into one album — caption on first item only
   if (photos.length > 0) {
     await ctx.api.sendMediaGroup(
       chatId,
-      await Promise.all(
-        photos.map(async (s, idx) => ({
-          type: 'photo' as const,
-          media: new InputFile(
-            await streamToBuffer(s),
-            s.path || `photo_${idx}.jpg`,
-          ),
-          // caption_entities and parse_mode on the first item apply to the album caption only;
-          // subsequent items in the group intentionally omit them (Telegram Bot API limitation)
-          ...(idx === 0 && text
-            ? {
-                caption: text,
-                ...(entities.length
-                  ? { caption_entities: entities as MessageEntity[] }
-                  : {}),
-                ...(parseMode !== undefined ? { parse_mode: parseMode } : {}),
-              }
-            : {}),
-        })),
-      ),
+      photos.map(({ buffer, filename }, idx) => ({
+        type: 'photo' as const,
+        media: new InputFile(buffer, filename || `photo_${idx}.jpg`),
+        // caption_entities and parse_mode on the first item apply to the album caption only;
+        // subsequent items in the group intentionally omit them (Telegram Bot API limitation)
+        ...(idx === 0 && text
+          ? {
+              caption: text,
+              ...(entities.length ? { caption_entities: entities as MessageEntity[] } : {}),
+              ...(parseMode !== undefined ? { parse_mode: parseMode } : {}),
+            }
+          : {}),
+      })),
       captionExtra,
     );
   }
 
-  for (const video of videos) {
+  for (const [i, { buffer, filename }] of videos.entries()) {
     await ctx.api.sendVideo(
       chatId,
-      new InputFile(await streamToBuffer(video), video.path || 'video.mp4'),
-      videos.indexOf(video) === 0 && photos.length === 0 && text
+      new InputFile(buffer, filename || 'video.mp4'),
+      i === 0 && photos.length === 0 && text
         ? { caption: text, ...captionExtra }
         : captionExtra,
     );
   }
 
-  for (const gif of gifs) {
+  for (const [i, { buffer, filename }] of gifs.entries()) {
     await ctx.api.sendAnimation(
       chatId,
-      new InputFile(await streamToBuffer(gif), gif.path || 'animation.gif'),
-      gifs.indexOf(gif) === 0 &&
-        photos.length === 0 &&
-        videos.length === 0 &&
-        text
+      new InputFile(buffer, filename || 'animation.gif'),
+      i === 0 && photos.length === 0 && videos.length === 0 && text
         ? { caption: text, ...captionExtra }
         : captionExtra,
     );
   }
 
-  for (const audio of audios) {
+  for (const { buffer, filename } of audios) {
     // Use sendAudio instead of sendVoice: Telegram's editMessageMedia cannot mutate Voice messages.
-    await ctx.api.sendAudio(
-      chatId,
-      new InputFile(await streamToBuffer(audio), audio.path || 'audio.mp3'),
-      captionExtra,
-    );
+    await ctx.api.sendAudio(chatId, new InputFile(buffer, filename || 'audio.mp3'), captionExtra);
   }
 
-  for (const doc of others) {
-    await ctx.api.sendDocument(
-      chatId,
-      new InputFile(await streamToBuffer(doc), doc.path || 'document.bin'),
-      { caption: text, ...captionExtra },
-    );
+  for (const { buffer, filename } of others) {
+    await ctx.api.sendDocument(chatId, new InputFile(buffer, filename || 'document.bin'), { caption: text, ...captionExtra });
   }
 
   // sendMediaGroup does not support reply_markup — send a separate message with

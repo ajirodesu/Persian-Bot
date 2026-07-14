@@ -14,7 +14,7 @@ import {
 import type { SendPayload } from '@/engine/adapters/models/api.model.js';
 import type { ButtonItem } from '@/engine/adapters/models/api.model.js';
 import type { MessageStyleValue } from '@/engine/constants/message-style.constants.js';
-import { streamToBuffer, urlToStream } from '../utils/helper.util.js';
+import { streamToBuffer, urlToBuffer } from '../utils/helper.util.js';
 
 type SendFn = (
   content: string,
@@ -69,24 +69,28 @@ export async function replyMessage(
   const finalContent = style === 'text' ? escapeMarkdown(content) : content;
   const files: AttachmentBuilder[] = [];
 
-  // Destructure {name, stream} — name drives the AttachmentBuilder filename shown in Discord
-  for (const { name, stream } of attachment) {
-    const buf = Buffer.isBuffer(stream)
-      ? stream
-      : await streamToBuffer(stream as NodeJS.ReadableStream);
-    files.push(new AttachmentBuilder(buf, { name: name || 'file.bin' }));
-  }
-
-  // Pass explicit name to urlToStream so Discord displays the caller-specified filename
-  for (const { name, url } of attachment_url) {
-    const s = await urlToStream(url, name);
-    const buf = await streamToBuffer(s);
-    files.push(
-      new AttachmentBuilder(buf, {
-        name: name || (s as unknown as { path?: string }).path || 'file.bin',
+  // Build all AttachmentBuilders in parallel — stream buffering and URL downloads
+  // run concurrently so N attachments take ~max(individual times) instead of their sum.
+  const [streamFiles, urlFiles] = await Promise.all([
+    // Parallel: convert every stream/buffer attachment to a Discord AttachmentBuilder
+    Promise.all(
+      attachment.map(async ({ name, stream }) => {
+        const buf = Buffer.isBuffer(stream)
+          ? stream
+          : await streamToBuffer(stream as NodeJS.ReadableStream);
+        return new AttachmentBuilder(buf, { name: name || 'file.bin' });
       }),
-    );
-  }
+    ),
+    // Parallel: download every URL attachment directly into a buffer (single-pass arraybuffer,
+    // no intermediate PassThrough stream) and wrap in an AttachmentBuilder
+    Promise.all(
+      attachment_url.map(async ({ name, url }) => {
+        const { buffer, filename } = await urlToBuffer(url, name);
+        return new AttachmentBuilder(buffer, { name: filename });
+      }),
+    ),
+  ]);
+  files.push(...streamFiles, ...urlFiles);
 
   // Map unified ButtonItem style strings to Discord ButtonStyle enum values.
   const STYLE_MAP: Record<string, ButtonStyle> = {
