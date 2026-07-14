@@ -46,6 +46,21 @@ export interface NativeContext {
 
 /** Base context object injected into every command/event handler */
 export interface BaseCtx {
+  /**
+   * Request-scoped memoization cache for authorization and ban checks.
+   * Populated lazily on the first check and shared across all middlewares
+   * that run within the same pipeline invocation — eliminates redundant
+   * async calls to isSystemAdmin, isBotAdmin, isBotPremium, isUserBanned,
+   * isThreadBanned, and isThreadAdmin when multiple middlewares need the
+   * same value for the same sender/thread within a single request.
+   *
+   * Keyed by a deterministic string built from the check type and its
+   * discriminating arguments. Values are plain booleans.
+   *
+   * Lifecycle: created on first use, garbage-collected with the ctx object
+   * at the end of each request — no cross-request state leaks.
+   */
+  _authCache?: Map<string, boolean>;
   api: UnifiedApi;
   event: Record<string, unknown>;
   commands: CommandMap;

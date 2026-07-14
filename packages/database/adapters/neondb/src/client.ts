@@ -85,14 +85,39 @@ export const pool: InstanceType<typeof Pool> =
     // 10 connections covers a busy multi-platform bot without saturating Neon's
     // connection limits on free-tier plans (which cap at ~100 simultaneous connections).
     max: 10,
-    // Release idle connections after 30 s — Neon autosuspends after 5 min of inactivity
-    // so stale connections would receive a "connection terminated" error on the next query.
-    idleTimeoutMillis: 30_000,
+    // Keep connections alive for 55 s — longer than the heartbeat interval (45 s) so a
+    // connection is never evicted between two consecutive heartbeat pings.
+    // Previously 30 s, which was shorter than the recommended heartbeat cadence and caused
+    // connections to go cold between beats; bumped to 55 s to eliminate that race.
+    idleTimeoutMillis: 55_000,
     // Fail fast on connection timeout rather than queuing requests indefinitely.
     connectionTimeoutMillis: 10_000,
   });
 
 if (process.env['NODE_ENV'] !== 'production') globalForPool.neonPool = pool;
+
+// ── Connection-pool heartbeat ──────────────────────────────────────────────────
+// Neon autosuspends after 5 min of inactivity on the *server* side, but the
+// `pg` pool evicts idle client sockets after `idleTimeoutMillis` (55 s above).
+// Without a periodic ping the pool goes cold between quiet periods, forcing a
+// full TCP + TLS + auth handshake on the next command — this is the primary cause
+// of first-command latency spikes.
+//
+// Fix: fire a no-op `SELECT 1` every 45 s (< 55 s idle timeout) to keep at
+// least one client checked out and warm.  The query is negligible (sub-ms on
+// Neon) and the interval is shorter than idleTimeoutMillis so connections are
+// never evicted between beats.
+//
+// .unref() lets the Node.js event loop exit cleanly even if the interval is
+// still pending — the heartbeat must never prevent graceful shutdown.
+const HEARTBEAT_INTERVAL_MS = 45_000;
+
+setInterval(() => {
+  pool.query('SELECT 1').catch(() => {
+    // Ignore errors — the pool will reconnect automatically on the next real query.
+    // A heartbeat failure must never crash the process or surface to application code.
+  });
+}, HEARTBEAT_INTERVAL_MS).unref();
 
 /** @public
  * Initialises the NeonDB schema by running all CREATE TABLE IF NOT EXISTS statements.
@@ -360,15 +385,27 @@ export async function initDb(): Promise<void> {
   `);
 }
 
-// ── Schema readiness promise ──────────────────────────────────────────────────
+// ── Schema readiness + connection pre-warm ────────────────────────────────────
 // initDb() runs once per process and is stored so every consumer can await it before
 // issuing the first query. Previously this was fire-and-forget, which caused 42P01
 // (undefined_table) errors when application startup queries arrived before DDL committed.
+//
+// After DDL completes, a connection pre-warm fires a SELECT 1 immediately to establish
+// at least one authenticated TCP connection in the pool BEFORE the first user command
+// arrives. Without this, every process restart incurs a full TCP + TLS + auth handshake
+// on the very first command — the main source of first-command latency spikes.
 if (!globalForPool.neonDbReadyPromise) {
-  globalForPool.neonDbReadyPromise = initDb().catch((err: unknown) => {
-    // Non-fatal at the pool level — log clearly so absent tables surface immediately.
-    console.error('[neondb] Failed to apply schema:', err);
-  });
+  globalForPool.neonDbReadyPromise = initDb()
+    .then(() => {
+      // Pre-warm: acquire and release one connection so the pool is not cold on the
+      // first real query. Fire-and-forget — failure is silently swallowed because a
+      // pre-warm error must never surface to application code or crash the process.
+      pool.query('SELECT 1').catch(() => {});
+    })
+    .catch((err: unknown) => {
+      // Non-fatal at the pool level — log clearly so absent tables surface immediately.
+      console.error('[neondb] Failed to apply schema:', err);
+    });
 }
 
 /** Resolves when the NeonDB schema DDL has completed. Await this before issuing any query. */

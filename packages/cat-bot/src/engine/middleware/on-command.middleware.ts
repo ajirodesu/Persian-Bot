@@ -18,6 +18,13 @@
  * Short-circuit: sends a user-facing usage error and returns WITHOUT calling next()
  * when any required option is absent — the onCommand handler never executes.
  * Options are mutated onto ctx so subsequent middleware and the final handler can read them.
+ *
+ * Auth memoization: all six authorization/ban checks (isSystemAdmin, isBotAdmin,
+ * isBotPremium, isUserBanned, isThreadBanned, isThreadAdmin) are routed through
+ * the request-scoped cache in lib/auth-cache.lib.ts.  This eliminates redundant
+ * async calls when multiple middlewares need the same result for the same sender
+ * within one pipeline run — even the first call is deduped so no check ever runs
+ * twice within the same request.
  */
 
 import type {
@@ -30,13 +37,23 @@ import { parseTextOptions } from '@/engine/modules/options/options.util.js';
 // Cooldown state delegated to lib/ — mirrors state.lib.ts pattern;
 // this middleware file stays free of mutable Map declarations.
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
-// Repo functions for role checking — imported here so this middleware stays
-// independently mockable in unit tests without spinning up a real DB connection.
-import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
-import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
+// Request-scoped memoized wrappers — every auth check goes through these so each
+// DB/LRU lookup is performed at most once per middleware chain invocation.
+import {
+  cachedIsSystemAdmin,
+  cachedIsBotAdmin,
+  cachedIsBotPremium,
+  cachedIsUserBanned,
+  cachedIsThreadBanned,
+  cachedIsThreadAdmin,
+} from '@/engine/lib/auth-cache.lib.js';
+import {
+  getCachedSessionAdminOnly,
+  setCachedSessionAdminOnly,
+  getCachedThreadAdminBox,
+  setCachedThreadAdminBox,
+} from '@/engine/lib/admin-only-state.lib.js';
 import { Role } from '@/engine/constants/role.constants.js';
-import { isUserBanned, isThreadBanned } from '@/engine/repos/banned.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 
 // ── Cooldown Enforcement ─────────────────────────────────────────────────────
 
@@ -163,6 +180,9 @@ export const validateCommandOptions: MiddlewareFn<OnCommandCtx> =
  * If sessionUserId or sessionId is absent from native context (rare during early
  * boot or in test harnesses that do not populate them), isBotAdmin receives empty
  * strings and returns false — the Role.BOT_ADMIN command is correctly denied.
+ *
+ * All repo calls are routed through the request-scoped auth cache so results
+ * computed here are free cache hits for enforceAdminOnly / enforceNotBanned.
  */
 export const enforcePermission: MiddlewareFn<OnCommandCtx> = async function (
   ctx,
@@ -192,7 +212,7 @@ export const enforcePermission: MiddlewareFn<OnCommandCtx> = async function (
   // also makes Role.SYSTEM_ADMIN commands reachable: the deny branch below is
   // only reached when the sender is NOT a system admin.
   if (senderID) {
-    const isSysAdmin = await isSystemAdmin(senderID);
+    const isSysAdmin = await cachedIsSystemAdmin(ctx, senderID);
     if (isSysAdmin) {
       await next();
       return;
@@ -209,30 +229,34 @@ export const enforcePermission: MiddlewareFn<OnCommandCtx> = async function (
     return;
   }
 
+  const sessionUserId = ctx.native.userId ?? '';
+  const sessionId = ctx.native.sessionId ?? '';
+  const platform = ctx.native.platform;
+
   if (role === Role.THREAD_ADMIN) {
     // Thread-admin gate: on-chat.middleware has already synced the thread before
     // any command dispatcher runs, so bot_threads should contain the admins list.
     // WHY: For Discord, isThreadAdmin intercepts the call and checks the parent Server's admin
     // list instead, meaning server admins automatically have permission in all its channels.
-    let allowed = await isThreadAdmin(threadID, senderID);
+    let allowed = await cachedIsThreadAdmin(ctx, threadID, senderID);
 
     // Bot admins and premium users both inherit thread-admin privileges —
     // premium grants a superset (ANYONE + THREAD_ADMIN + PREMIUM).
     if (!allowed) {
-      const sessionUserId = ctx.native.userId ?? '';
-      const sessionId = ctx.native.sessionId ?? '';
-      allowed = await isBotAdmin(
+      allowed = await cachedIsBotAdmin(
+        ctx,
         sessionUserId,
-        ctx.native.platform,
+        platform,
         sessionId,
         senderID,
       );
       if (!allowed) {
         // Premium users can run thread-admin commands; thread-admin alone does NOT
         // grant premium access — the privilege relationship is one-directional.
-        allowed = await isBotPremium(
+        allowed = await cachedIsBotPremium(
+          ctx,
           sessionUserId,
-          ctx.native.platform,
+          platform,
           sessionId,
           senderID,
         );
@@ -248,11 +272,10 @@ export const enforcePermission: MiddlewareFn<OnCommandCtx> = async function (
   } else if (role === Role.BOT_ADMIN) {
     // Bot-admin gate: BotAdmin rows are provisioned via the web dashboard by the
     // bot owner; senderID must match an adminId scoped to this exact owner session.
-    const sessionUserId = ctx.native.userId ?? '';
-    const sessionId = ctx.native.sessionId ?? '';
-    const allowed = await isBotAdmin(
+    const allowed = await cachedIsBotAdmin(
+      ctx,
       sessionUserId,
-      ctx.native.platform,
+      platform,
       sessionId,
       senderID,
     );
@@ -266,18 +289,18 @@ export const enforcePermission: MiddlewareFn<OnCommandCtx> = async function (
     // Premium-gate: premium users and bot admins may invoke; SYSTEM_ADMIN bypassed above.
     // Thread admins alone do NOT qualify — PREMIUM (2) sits above THREAD_ADMIN (1) in the
     // hierarchy, so a thread-admin role alone never satisfies the PREMIUM gate.
-    const sessionUserId = ctx.native.userId ?? '';
-    const sessionId = ctx.native.sessionId ?? '';
-    let allowed = await isBotAdmin(
+    let allowed = await cachedIsBotAdmin(
+      ctx,
       sessionUserId,
-      ctx.native.platform,
+      platform,
       sessionId,
       senderID,
     );
     if (!allowed) {
-      allowed = await isBotPremium(
+      allowed = await cachedIsBotPremium(
+        ctx,
         sessionUserId,
-        ctx.native.platform,
+        platform,
         sessionId,
         senderID,
       );
@@ -329,6 +352,13 @@ export const enforcePermission: MiddlewareFn<OnCommandCtx> = async function (
  * Registered AFTER enforcePermission so commands that already require
  * BOT_ADMIN / SYSTEM_ADMIN never re-check, and BEFORE enforceCooldown so a
  * blocked user does not consume their cooldown window.
+ *
+ * Performance: isSystemAdmin and isBotAdmin are only resolved AFTER confirming
+ * that admin-only mode is actually enabled for the session or thread.  When the
+ * feature is disabled (the common case) no auth DB lookups are performed here at
+ * all — the settings read is the only I/O.  All auth lookups use the request-
+ * scoped cache so they are free hits when enforcePermission / enforceNotBanned
+ * already resolved them earlier in the same pipeline run.
  */
 export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
   ctx,
@@ -355,19 +385,29 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
   ).toLowerCase();
   const now = Date.now();
 
-  // System admins bypass both gates unconditionally.
-  if (senderID && (await isSystemAdmin(senderID))) {
-    await next();
-    return;
+  // ── Fast-path skip for Role.ANYONE commands ──────────────────────────────
+  // After the first request per session/thread the LRU holds the enabled flags.
+  // When both are known-false we skip all async DB reads — no Promise chain,
+  // no LRU traversal beyond two synchronous lruCache.get() calls.
+  // Higher-role commands always do the full check (they may be blocked even
+  // when admin-only mode is off, via their own enforcePermission gate).
+  const cmdRole = (cfg?.['role'] as number | undefined) ?? Role.ANYONE;
+  if (cmdRole === Role.ANYONE && sessionUserId && sessionId) {
+    const sessOff =
+      getCachedSessionAdminOnly(sessionUserId, platform, sessionId) === false;
+    const threadOff =
+      !threadID ||
+      getCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID) ===
+        false;
+    if (sessOff && threadOff) {
+      await next();
+      return;
+    }
   }
 
-  // Bot-admin status is reused by both gates — resolve once.
-  const isAdmin =
-    senderID && sessionUserId && sessionId
-      ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
-      : false;
-
   // ── Session-wide admin-only ─────────────────────────────────────────────
+  // Read the setting first — admin status checks only happen when the feature
+  // is actually enabled so public commands pay no auth-lookup cost here.
   // db.bot is already scoped to (userId:platform:sessionId) — no outer sessionUserId guard needed
   try {
     const botColl = ctx.db.bot;
@@ -377,25 +417,53 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
       // that each traverse getBotSessionData() → lruCache.get() independently.
       const settings = await h.getAll();
       const enabled = settings['adminOnlyEnabled'] as boolean | null;
+      // Populate the LRU flag so subsequent Role.ANYONE commands can fast-path skip.
+      // setCachedSessionAdminOnly is a no-op when value is undefined.
+      if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+        setCachedSessionAdminOnly(sessionUserId, platform, sessionId, enabled === true);
+      }
 
-      if (enabled === true && !isAdmin) {
-        const ignoreList =
-          (settings['adminOnlyIgnoreList'] as string[] | null) ?? [];
-        if (!ignoreList.includes(cmdName)) {
-          const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
-          if (hideNoti !== true) {
-            const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
-            if (cooldownStore.check(key, now) === null) {
-              await ctx.chat.replyMessage({
-                message:
-                  '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
-              });
-              cooldownStore.record(key, now, 15000);
+      if (enabled === true) {
+        // Admin-only mode is on — now resolve caller's privilege level.
+        // Both checks go through the request-scoped cache so if enforcePermission
+        // or enforceNotBanned already resolved them they are instant Map lookups.
+        const isSysAdmin = senderID
+          ? await cachedIsSystemAdmin(ctx, senderID)
+          : false;
+        if (isSysAdmin) {
+          // System admins bypass both gates unconditionally — skip thread check too.
+          await next();
+          return;
+        }
+
+        const isAdmin =
+          senderID && sessionUserId && sessionId
+            ? await cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID)
+            : false;
+
+        if (!isAdmin) {
+          const ignoreList =
+            (settings['adminOnlyIgnoreList'] as string[] | null) ?? [];
+          if (!ignoreList.includes(cmdName)) {
+            const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
+            if (hideNoti !== true) {
+              const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+              if (cooldownStore.check(key, now) === null) {
+                await ctx.chat.replyMessage({
+                  message:
+                    '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
+                });
+                cooldownStore.record(key, now, 15000);
+              }
             }
+            return; // halt — handler never runs
           }
-          return; // halt — handler never runs
         }
       }
+    } else if (sessionUserId && sessionId) {
+      // Collection absent → admin-only definitively off; cache so future
+      // Role.ANYONE commands skip this block without isCollectionExist call.
+      setCachedSessionAdminOnly(sessionUserId, platform, sessionId, false);
     }
   } catch {
     // fail-open — DB outage must not lock out the entire session
@@ -411,14 +479,28 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
         // that each traverse getThreadSessionData() → lruCache.get() independently.
         const settings = await h.getAll();
         const enabled = settings['enabled'] as boolean | null;
+        // Populate the LRU flag for the fast-path.
+        if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+          setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, enabled === true);
+        }
 
         if (enabled === true) {
           const ignoreList = (settings['ignoreList'] as string[] | null) ?? [];
           if (!ignoreList.includes(cmdName)) {
-            // Bot admin already counts as allowed; otherwise check thread admin.
-            let allowed = isAdmin;
+            // Per-thread admin-only is on — resolve caller's privilege level.
+            // isSystemAdmin is checked first; a true result bypasses the thread
+            // check entirely (same as the session-wide gate above).
+            // Both checks use the request-scoped cache for instant re-use.
+            const isSysAdmin = senderID
+              ? await cachedIsSystemAdmin(ctx, senderID)
+              : false;
+
+            let allowed = isSysAdmin;
+            if (!allowed && senderID && sessionUserId && sessionId) {
+              allowed = await cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID);
+            }
             if (!allowed && senderID) {
-              allowed = await isThreadAdmin(threadID, senderID);
+              allowed = await cachedIsThreadAdmin(ctx, threadID, senderID);
             }
             if (!allowed) {
               const hideNoti = settings['hideNoti'] as boolean | null;
@@ -436,6 +518,9 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
             }
           }
         }
+      } else if (sessionUserId && sessionId) {
+        // Collection absent → adminbox definitively off for this thread; cache it.
+        setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, false);
       }
     } catch {
       // fail-open — DB outage must not lock out the entire thread
@@ -455,6 +540,9 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
  *
  * Fail-open: isUserBanned / isThreadBanned return false on any DB error so a
  * temporary outage never locks out legitimate users.
+ *
+ * All auth/ban lookups use the request-scoped cache so values resolved here are
+ * free hits for enforceAdminOnly / enforcePermission later in the same chain.
  */
 export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   ctx,
@@ -479,7 +567,8 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   // Bypass ban checks for bot admins so they retain full command control
   // even if they or the thread they are operating within is currently banned.
   if (senderID) {
-    const isAdmin = await isBotAdmin(
+    const isAdmin = await cachedIsBotAdmin(
+      ctx,
       sessionUserId,
       platform,
       sessionId,
@@ -487,7 +576,9 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
     );
     // System admins carry global authority equivalent to bot admin for ban bypass purposes —
     // only checked when isAdmin is false to avoid an unnecessary DB call when already allowed.
-    const isSysAdmin = isAdmin ? false : await isSystemAdmin(senderID);
+    const isSysAdmin = isAdmin
+      ? false
+      : await cachedIsSystemAdmin(ctx, senderID);
     if (isAdmin || isSysAdmin) {
       await next();
       return;
@@ -500,10 +591,10 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   // Promise.all sees a uniform element type without branching on the call site.
   const [userBanned, threadBanned] = await Promise.all([
     senderID
-      ? isUserBanned(sessionUserId, platform, sessionId, senderID)
+      ? cachedIsUserBanned(ctx, sessionUserId, platform, sessionId, senderID)
       : Promise.resolve(false),
     threadID
-      ? isThreadBanned(sessionUserId, platform, sessionId, threadID)
+      ? cachedIsThreadBanned(ctx, sessionUserId, platform, sessionId, threadID)
       : Promise.resolve(false),
   ]);
 

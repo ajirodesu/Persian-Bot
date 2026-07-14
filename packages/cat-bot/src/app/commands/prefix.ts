@@ -36,6 +36,12 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import { triggerSlashSync } from '@/engine/modules/prefix/slash-sync.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import {
+  getCachedSessionAdminOnly,
+  setCachedSessionAdminOnly,
+  getCachedThreadAdminBox,
+  setCachedThreadAdminBox,
+} from '@/engine/lib/admin-only-state.lib.js';
 
 export const meta: CommandMeta = {
   name: 'prefix',
@@ -254,42 +260,68 @@ export const onChat = async ({
     const senderID = (event['senderID'] as string | undefined) ?? '';
     const now = Date.now();
 
-    // ── Session-wide admin-only gate (mirrors enforceAdminOnly middleware) ──
-    // System admins bypass both gates unconditionally.
-    const isSysAdmin = senderID ? await isSystemAdmin(senderID) : false;
+    // ── Admin-only gates (mirrors enforceAdminOnly middleware) ─────────────
+    //
+    // Fast-path: if the LRU already tells us both modes are off (populated by
+    // enforceAdminOnly on the command path, or by a previous onChat pass here),
+    // skip all async DB reads with zero Promise overhead.
+    const sessOff =
+      sessionUserId && sessionId
+        ? getCachedSessionAdminOnly(sessionUserId, platform, sessionId) === false
+        : false;
+    const threadOff =
+      !threadID ||
+      (sessionUserId && sessionId
+        ? getCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID) === false
+        : false);
 
-    if (!isSysAdmin) {
-      const isAdmin =
-        senderID && sessionUserId && sessionId
-          ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
-          : false;
-
+    if (!sessOff || !threadOff) {
+      // ── Session-wide admin-only ───────────────────────────────────────────
+      // Read settings FIRST — admin status is only resolved when the mode is on,
+      // so callers on the public-message path pay no auth-lookup cost when it's off.
       try {
         const botColl = db.bot;
         if (await botColl.isCollectionExist('session_settings')) {
           const h = await botColl.getCollection('session_settings');
           const settings = await h.getAll();
           const enabled = settings['adminOnlyEnabled'] as boolean | null;
-          if (enabled === true && !isAdmin) {
-            const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
-            if (hideNoti !== true) {
-              const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
-              if (cooldownStore.check(key, now) === null) {
-                await chat.replyMessage({
-                  message:
-                    '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
-                });
-                cooldownStore.record(key, now, 15000);
+          // Populate the LRU flag for future fast-path skips.
+          if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+            setCachedSessionAdminOnly(sessionUserId, platform, sessionId, enabled === true);
+          }
+          if (enabled === true) {
+            // Admin-only is on — now check the caller's privilege level.
+            const isSysAdmin = senderID ? await isSystemAdmin(senderID) : false;
+            if (!isSysAdmin) {
+              const isAdmin =
+                senderID && sessionUserId && sessionId
+                  ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
+                  : false;
+              if (!isAdmin) {
+                const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
+                if (hideNoti !== true) {
+                  const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+                  if (cooldownStore.check(key, now) === null) {
+                    await chat.replyMessage({
+                      message:
+                        '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
+                    });
+                    cooldownStore.record(key, now, 15000);
+                  }
+                }
+                return;
               }
             }
-            return;
           }
+        } else if (sessionUserId && sessionId) {
+          // Collection absent → definitively off; cache it.
+          setCachedSessionAdminOnly(sessionUserId, platform, sessionId, false);
         }
       } catch {
         // fail-open — DB outage must not lock out the session
       }
 
-      // ── Per-thread admin-only gate ──────────────────────────────────────
+      // ── Per-thread admin-only ─────────────────────────────────────────────
       if (threadID) {
         try {
           const threadColl = db.threads.collection(threadID);
@@ -297,8 +329,20 @@ export const onChat = async ({
             const h = await threadColl.getCollection('adminbox_settings');
             const settings = await h.getAll();
             const enabled = settings['enabled'] as boolean | null;
+            // Populate the LRU flag for future fast-path skips.
+            if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+              setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, enabled === true);
+            }
             if (enabled === true) {
-              let allowed = isAdmin;
+              // Check caller privilege only when the mode is on.
+              const isSysAdmin = senderID ? await isSystemAdmin(senderID) : false;
+              let allowed = isSysAdmin;
+              if (!allowed) {
+                allowed =
+                  senderID && sessionUserId && sessionId
+                    ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
+                    : false;
+              }
               if (!allowed && senderID) {
                 allowed = await isThreadAdmin(threadID, senderID);
               }
@@ -317,6 +361,9 @@ export const onChat = async ({
                 return;
               }
             }
+          } else if (sessionUserId && sessionId) {
+            // Collection absent → definitively off for this thread; cache it.
+            setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, false);
           }
         } catch {
           // fail-open — DB outage must not lock out the thread

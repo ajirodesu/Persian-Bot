@@ -10,6 +10,12 @@ import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import {
+  getCachedSessionAdminOnly,
+  setCachedSessionAdminOnly,
+  getCachedThreadAdminBox,
+  setCachedThreadAdminBox,
+} from '@/engine/lib/admin-only-state.lib.js';
 
 export const meta: CommandMeta = {
   name: 'ai',
@@ -73,37 +79,57 @@ async function isBlockedByAdminRestrictions(
   const sessionId     = ctx.native.sessionId ?? '';
   const platform      = ctx.native.platform;
 
-  // System admins bypass all restrictions unconditionally.
-  if (senderID && (await isSystemAdmin(senderID))) {
-    return { blocked: false, reason: null, hideNoti: false };
-  }
-
-  // Resolve bot-admin status once — reused by both gates below.
-  const isAdmin =
-    senderID && sessionUserId && sessionId
-      ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
-      : false;
-
-  if (isAdmin) {
-    return { blocked: false, reason: null, hideNoti: false };
+  // ── Fast-path: skip all async DB reads when both modes are known to be off ──
+  // The LRU flags are populated by enforceAdminOnly (command path) and by the
+  // settings read below (onChat path). On the first onChat invocation per session
+  // the flags are absent (undefined) so we fall through to the full check.
+  if (sessionUserId && sessionId) {
+    const sessOff =
+      getCachedSessionAdminOnly(sessionUserId, platform, sessionId) === false;
+    const threadOff =
+      !threadID ||
+      getCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID) === false;
+    if (sessOff && threadOff) {
+      return { blocked: false, reason: null, hideNoti: false };
+    }
   }
 
   // ── 1. Session-wide admin-only (adminonly command) ─────────────────────────
+  // Read settings FIRST — admin status checks are deferred until we confirm the
+  // mode is on, so public-path calls pay no auth-lookup cost when it's disabled.
   try {
     const botColl = ctx.db.bot;
     if (await botColl.isCollectionExist('session_settings')) {
       const h        = await botColl.getCollection('session_settings');
       const settings = await h.getAll();
       const enabled  = settings['adminOnlyEnabled'] as boolean | null;
+      // Populate the LRU flag for future fast-path skips.
+      if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+        setCachedSessionAdminOnly(sessionUserId, platform, sessionId, enabled === true);
+      }
 
       if (enabled === true) {
         const ignoreList = (settings['adminOnlyIgnoreList'] as string[] | null) ?? [];
         // 'ai' is the canonical command name — honour per-command ignore list entries.
         if (!ignoreList.includes('ai')) {
-          const hideNoti = (settings['adminOnlyHideNoti'] as boolean | null) === true;
-          return { blocked: true, reason: 'adminonly', hideNoti };
+          // Admin-only is on — now check if caller is privileged enough to bypass.
+          if (senderID && (await isSystemAdmin(senderID))) {
+            // System admins bypass both gates unconditionally.
+          } else {
+            const callerIsAdmin =
+              senderID && sessionUserId && sessionId
+                ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
+                : false;
+            if (!callerIsAdmin) {
+              const hideNoti = (settings['adminOnlyHideNoti'] as boolean | null) === true;
+              return { blocked: true, reason: 'adminonly', hideNoti };
+            }
+          }
         }
       }
+    } else if (sessionUserId && sessionId) {
+      // Collection absent → admin-only definitively off; cache it.
+      setCachedSessionAdminOnly(sessionUserId, platform, sessionId, false);
     }
   } catch {
     // Fail-open — DB outage must not silently lock out the session
@@ -117,6 +143,10 @@ async function isBlockedByAdminRestrictions(
         const h        = await threadColl.getCollection('adminbox_settings');
         const settings = await h.getAll();
         const enabled  = settings['enabled'] as boolean | null;
+        // Populate the LRU flag for future fast-path skips.
+        if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+          setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, enabled === true);
+        }
 
         if (enabled === true) {
           const ignoreList = (settings['ignoreList'] as string[] | null) ?? [];
@@ -130,6 +160,9 @@ async function isBlockedByAdminRestrictions(
             }
           }
         }
+      } else if (sessionUserId && sessionId) {
+        // Collection absent → adminbox definitively off for this thread; cache it.
+        setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, false);
       }
     } catch {
       // Fail-open

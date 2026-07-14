@@ -31,6 +31,10 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import {
+  invalidateSessionAdminOnly,
+  invalidateThreadAdminBox,
+} from '@/engine/lib/admin-only-state.lib.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -153,6 +157,17 @@ async function runToggle(ctx: AppCtx, config: AdminOnlyConfig): Promise<void> {
     });
   } else {
     await handle.set(config.enabledField, value);
+    // Immediately clear the LRU fast-path flag so the NEXT enforceAdminOnly
+    // invocation reads the fresh setting rather than serving the stale cached value.
+    const sessionUserId = ctx.native.userId ?? '';
+    const sessionId = ctx.native.sessionId ?? '';
+    const platform = ctx.native.platform;
+    if (config.name === 'adminonly') {
+      invalidateSessionAdminOnly(sessionUserId, platform, sessionId);
+    } else {
+      const threadID = (ctx.event['threadID'] as string | undefined) ?? '';
+      if (threadID) invalidateThreadAdminBox(sessionUserId, platform, sessionId, threadID);
+    }
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: value
