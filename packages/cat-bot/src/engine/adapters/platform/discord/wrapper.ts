@@ -42,6 +42,7 @@ import { setGroupImage as setGroupImageLib } from './lib/setGroupImage.js';
 import { removeGroupImage as removeGroupImageLib } from './lib/removeGroupImage.js';
 import { replyMessage as replyMessageLib } from './lib/replyMessage.js';
 import { reactToMessage as reactToMessageLib } from './lib/reactToMessage.js';
+import { sendTypingIndicator as sendTypingIndicatorLib } from './lib/sendTypingIndicator.js';
 import { editMessage as editMessageLib } from './lib/editMessage.js';
 import { setNickname as setNicknameLib } from './lib/setNickname.js';
 import { getBotID as getBotIDLib } from './lib/getBotID.js';
@@ -328,6 +329,15 @@ class DiscordApi extends UnifiedApi {
       this.#interaction.channel as TextChannel,
       messageID,
       emoji,
+    );
+  }
+
+  override sendTypingIndicator(_threadID: string): Promise<void> {
+    logger.debug('[discord] sendTypingIndicator called', {
+      threadID: _threadID,
+    });
+    return sendTypingIndicatorLib(
+      this.#interaction.channel as TextChannel | null,
     );
   }
 
@@ -671,6 +681,10 @@ export function createDiscordChannelApi(
       emoji,
     });
     return reactToMessageLib(channel, mid, emoji, rawMessage);
+  };
+  api.sendTypingIndicator = (_tid) => {
+    logger.debug('[discord] sendTypingIndicator called', { threadID: _tid });
+    return sendTypingIndicatorLib(channel);
   };
   api.editMessage = (mid, options) => {
     logger.debug('[discord] editMessage called', { messageID: mid });

@@ -59,6 +59,14 @@ interface EnvConfig {
    * starts normally when absent but AI features will gracefully reject.
    */
   readonly GROQ_API_KEY?: string | undefined;
+
+  /**
+   * Emoji the bot reacts with on the triggering message when a command
+   * finishes successfully. Optional — falls back to the default defined in
+   * command-reaction.constants.ts when unset, so operators can override the
+   * reaction without touching source code.
+   */
+  readonly COMMAND_REACT_EMOJI?: string | undefined;
   // Derived boolean helpers
   readonly isDevelopment: boolean;
   readonly isProduction: boolean;
@@ -231,6 +239,8 @@ export const env: EnvConfig = {
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),
   // Groq API — optional; only needed for AI-powered commands/agent
   GROQ_API_KEY: getOptionalEnv('GROQ_API_KEY'),
+  // Command-success reaction emoji — optional override, see command-reaction.constants.ts
+  COMMAND_REACT_EMOJI: getOptionalEnv('COMMAND_REACT_EMOJI'),
 
   // Derived boolean helpers for convenience
   isDevelopment: nodeEnv === 'development',

@@ -163,6 +163,21 @@ export class UnifiedApi {
   }
 
   /**
+   * Signals a "bot is typing" indicator to the thread.
+   * Unlike most UnifiedApi methods, this defaults to a silent no-op rather than
+   * throwing — not every platform exposes a native typing signal (e.g. WebChat
+   * drives its typing bubble entirely from client-side send/receive state), so
+   * callers should be able to invoke this unconditionally on any platform.
+   * Platforms that do support a native indicator (Discord, Telegram) override it.
+   */
+  async sendTypingIndicator(_threadID: string): Promise<void> {
+    logger.debug('[UnifiedApi] sendTypingIndicator called', {
+      platform: this.platform,
+      threadID: _threadID,
+    });
+  }
+
+  /**
    * Remove the group chat or server image (set it back to default/no image).
    */
   async removeGroupImage(_threadID: string): Promise<void> {

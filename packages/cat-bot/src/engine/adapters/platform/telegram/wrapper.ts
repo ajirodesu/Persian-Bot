@@ -41,6 +41,7 @@ import { removeGroupImage } from './lib/removeGroupImage.js';
 import { removeUserFromGroup } from './lib/removeUserFromGroup.js';
 import { replyMessage } from './lib/replyMessage.js';
 import { reactToMessage } from './lib/reactToMessage.js';
+import { sendTypingIndicator } from './lib/sendTypingIndicator.js';
 import { getBotID } from './lib/getBotID.js';
 import { setNickname } from './lib/setNickname.js';
 import { editMessage } from './lib/editMessage.js';
@@ -155,6 +156,11 @@ class TelegramApi extends UnifiedApi {
       emoji,
     });
     return reactToMessage(this.#ctx, threadID, messageID, emoji);
+  }
+
+  override sendTypingIndicator(threadID: string): Promise<void> {
+    logger.debug('[telegram] sendTypingIndicator called', { threadID });
+    return sendTypingIndicator(this.#ctx, threadID);
   }
 
   override getBotID(): Promise<string> {
