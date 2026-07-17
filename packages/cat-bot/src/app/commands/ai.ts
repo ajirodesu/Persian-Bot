@@ -9,6 +9,7 @@ import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
+import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
   getCachedSessionAdminOnly,
@@ -301,7 +302,9 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   const prompt = message;
 
   try {
-    const result = await runAgent(prompt, ctx, nickname, userName);
+    const result = await withTypingIndicator(ctx.api, threadID, () =>
+      runAgent(prompt, ctx, nickname, userName),
+    );
     if (result) {
       await ctx.chat.replyMessage({
         style: MessageStyle.MARKDOWN,
