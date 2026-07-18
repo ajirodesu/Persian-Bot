@@ -231,12 +231,11 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     const caption = [
       `🎥  **Shoti**`,
       '',
-      `👤  **Creator**    ${nickname} (@${username})`,
-      `✍️  **Author**     ${author}`,
-      `📝  **Title**      ${displayTitle}`,
-      `🌍  **Region**     ${region}`,
-      `⏱️  **Duration**   ${formatDuration(duration)}`,
-      `📊  **Total Vids** ${total_vids.toLocaleString()}`,
+      `👤  **Creator**: ${nickname} (@${username})`,
+      `📝  **Title**: ${displayTitle}`,
+      `🌍  **Region**: ${region}`,
+      `⏱️  **Duration**: ${formatDuration(duration)}`,
+      `📊  **Total Vids**: ${total_vids.toLocaleString()}`,
     ].join('\n');
 
     // Reuse the active button instance ID when refreshing via button so the
