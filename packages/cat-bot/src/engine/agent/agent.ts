@@ -24,10 +24,48 @@ const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
 );
 
 // ============================================================================
+// GROQ CLIENT SINGLETON
+// ============================================================================
+// Creating a new Groq instance on every runAgent call is wasteful — the
+// client is stateless (just holds the API key and base URL) and safe to
+// reuse across calls.  Lazy-initialise once and reuse for the process lifetime.
+let _groqInstance: Groq | null = null;
+function getGroq(): Groq {
+  if (!_groqInstance) {
+    const key = env.GROQ_API_KEY;
+    if (!key) {
+      throw new Error(
+        'GROQ_API_KEY environment variable is not set. AI capabilities are disabled.',
+      );
+    }
+    _groqInstance = new Groq({ apiKey: key });
+  }
+  return _groqInstance;
+}
+
+// ============================================================================
 // MODULAR TOOL LOADER
 // ============================================================================
 
+// Use the SDK's own type for the cached descriptor array so assignment to
+// groq.chat.completions.create({ tools }) satisfies TypeScript without casting.
+type GroqTool = Groq.Chat.Completions.ChatCompletionTool;
+
 let cachedTools: AgentTool[] | null = null;
+/** Pre-built Groq-API-shaped tool descriptors — derived once from cachedTools. */
+let cachedGroqTools: GroqTool[] | null = null;
+/** O(1) name→tool lookup — replaces the O(n) Array.find() on every tool call. */
+let cachedToolsMap: Map<string, AgentTool> | null = null;
+
+// ============================================================================
+// COMMAND LIST CACHE
+// ============================================================================
+// Building + sorting the available-commands list is O(n·log n) over all
+// registered commands and happens on EVERY runAgent call.  Since the command
+// registry is static after boot (commands are loaded once), the result is
+// identical for the same platform across all calls.  Cache it per platform so
+// the work is done exactly once per platform, not once per message.
+const availableCommandsCache = new Map<string, string>();
 
 /**
  * Dynamically loads agent tools from the tools/ directory.
@@ -42,6 +80,8 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
 
   if (!fs.existsSync(dir)) {
     cachedTools = [];
+    cachedGroqTools = [];
+    cachedToolsMap = new Map();
     return cachedTools;
   }
 
@@ -66,6 +106,16 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
   }
 
   cachedTools = tools;
+  // Derive O(1) lookup map and pre-built Groq descriptors once, reuse forever.
+  cachedToolsMap = new Map(tools.map((t) => [t.config.name, t]));
+  cachedGroqTools = tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.config.name,
+      description: t.config.description,
+      parameters: t.config.parameters,
+    },
+  }));
   return cachedTools;
 }
 
@@ -81,27 +131,14 @@ export async function runAgent(
   ctx: AppCtx,
   nickname?: string | null,
   userName?: string | null,
+  systemPromptOverride?: string | null,
 ): Promise<string> {
-  const groqApiKey = env.GROQ_API_KEY;
-  if (!groqApiKey) {
-    throw new Error(
-      'GROQ_API_KEY environment variable is not set. AI capabilities are disabled.',
-    );
-  }
+  const groq = getGroq();
 
-  const groq = new Groq({ apiKey: groqApiKey });
-
-  // Dynamically fetch modular tools instead of generating hard-coded ones
-  const tools = await loadAgentTools();
-
-  const groqTools = tools.map((t) => ({
-    type: 'function' as const,
-    function: {
-      name: t.config.name,
-      description: t.config.description,
-      parameters: t.config.parameters,
-    },
-  }));
+  // loadAgentTools() is idempotent and returns the cached list after the first call.
+  // cachedGroqTools and cachedToolsMap are populated in the same call — safe to use directly.
+  await loadAgentTools();
+  const groqTools = cachedGroqTools!;
 
   // Inject dynamic context variables into the structured system prompt template.
   const { senderID, threadID, sessionUserId, sessionId, platform } =
@@ -129,41 +166,50 @@ export async function runAgent(
   // Group commands by category so the system prompt exposes domain structure to the LLM.
   // A flat alphabetical list gives no signal about which commands belong together;
   // category grouping lets the model pick the right command family before calling help().
-  const commandsByCategory = new Map<string, string[]>();
-  const seenCmdNames = new Set<string>();
-  for (const mod of ctx.commands.values()) {
-    const cfg = mod['config'] as {
-      name?: string;
-      category?: string;
-    } | undefined;
-    if (cfg?.name && isPlatformAllowed(mod, platform)) {
-      const cmdName = cfg.name.toLowerCase();
-      // Deduplicate aliases — CommandMap stores one entry per name AND per alias key;
-      // seenCmdNames ensures each canonical command name appears exactly once per category,
-      // mirroring the getCanonicalMods() deduplication pattern used in help.ts.
-      if (seenCmdNames.has(cmdName)) continue;
-      seenCmdNames.add(cmdName);
-      const category = cfg.category ?? 'Uncategorized';
-      if (!commandsByCategory.has(category)) commandsByCategory.set(category, []);
-      commandsByCategory.get(category)!.push(cmdName);
+  //
+  // The command registry is static after boot — cache the sorted result per platform
+  // so the O(n·log n) build+sort runs once per platform, not once per message.
+  let availableCommandsList = availableCommandsCache.get(platform);
+  if (availableCommandsList === undefined) {
+    const commandsByCategory = new Map<string, string[]>();
+    const seenCmdNames = new Set<string>();
+    for (const mod of ctx.commands.values()) {
+      const cfg = mod['meta'] as {
+        name?: string;
+        category?: string;
+      } | undefined;
+      if (cfg?.name && isPlatformAllowed(mod, platform)) {
+        const cmdName = cfg.name.toLowerCase();
+        // Deduplicate aliases — CommandMap stores one entry per name AND per alias key;
+        // seenCmdNames ensures each canonical command name appears exactly once per category,
+        // mirroring the getCanonicalMods() deduplication pattern used in help.ts.
+        if (seenCmdNames.has(cmdName)) continue;
+        seenCmdNames.add(cmdName);
+        const category = cfg.category ?? 'Uncategorized';
+        if (!commandsByCategory.has(category)) commandsByCategory.set(category, []);
+        commandsByCategory.get(category)!.push(cmdName);
+      }
     }
+    // Sort categories and their commands alphabetically — deterministic ordering prevents
+    // the LLM from seeing a shuffled list on each turn, which would cause inconsistent
+    // tool selection across otherwise identical conversational prompts.
+    availableCommandsList = Array.from(commandsByCategory.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([cat, cmds]) => `${cat}: ${cmds.sort().join(', ')}`)
+      .join('\n');
+    availableCommandsCache.set(platform, availableCommandsList);
   }
-  // Sort categories and their commands alphabetically — deterministic ordering prevents
-  // the LLM from seeing a shuffled list on each turn, which would cause inconsistent
-  // tool selection across otherwise identical conversational prompts.
-  const availableCommandsList = Array.from(commandsByCategory.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([cat, cmds]) => `${cat}: ${cmds.sort().join(', ')}`)
-    .join('\n');
 
-  const systemContent = SYSTEM_PROMPT_TEMPLATE.replace(
-    '{{BOT_NAME}}',
-    nickname || 'Cat-Bot',
-  )
-    .replace('{{USER_NAME}}', userName || 'User')
-    .replace('{{COMMAND_PREFIX}}', ctx.prefix || '/')
-    .replace('{{USER_ROLE}}', userRoleLabel)
-    .replace('{{AVAILABLE_COMMANDS}}', availableCommandsList);
+  const systemContent = systemPromptOverride
+    ? systemPromptOverride
+    : SYSTEM_PROMPT_TEMPLATE.replace(
+        '{{BOT_NAME}}',
+        nickname || 'Cat-Bot',
+      )
+        .replace('{{USER_NAME}}', userName || 'User')
+        .replace('{{COMMAND_PREFIX}}', ctx.prefix || '/')
+        .replace('{{USER_ROLE}}', userRoleLabel)
+        .replace('{{AVAILABLE_COMMANDS}}', availableCommandsList);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
@@ -201,7 +247,7 @@ export async function runAgent(
     // 🔧 TOOL EXECUTION
     // =========================
     for (const toolCall of message.tool_calls) {
-      const tool = tools.find((t) => t.config.name === toolCall.function.name);
+      const tool = cachedToolsMap!.get(toolCall.function.name);
 
       if (!tool) {
         messages.push({

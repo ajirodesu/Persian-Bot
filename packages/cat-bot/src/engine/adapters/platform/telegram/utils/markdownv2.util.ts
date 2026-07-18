@@ -30,10 +30,17 @@
  *
  * Supported formatting patterns (Telegram MarkdownV2, Bot API 9.6):
  *   *bold*        _italic_    __underline__    ~strikethrough~
- *   ||spoiler||   `inline`    ```block```      [text](url)
+ *   ||spoiler||   `inline`    ```block```      [text](url)   >blockquote
  *
  * CommonMark **bold** (double asterisk) is auto-converted to *bold* because
  * command modules in this codebase use the more familiar CommonMark syntax.
+ *
+ * LLM/CommonMark preprocessing:
+ *   # Header / ## Header → *Header*  (Telegram has no native header element)
+ *   Setext headers (underlined with === or ---) → *Header*
+ *   Horizontal rules (---, ***, ___) → em-dash separator line
+ *   Unordered list markers (-, *, +) → Unicode bullet • (avoids reserved-char escaping)
+ *   > blockquote at line-start → kept verbatim (Telegram MarkdownV2 blockquote)
  *
  * Three exports — same surface as before, no import changes needed in callers:
  *   escapeMarkdownV2   — full escape for literal plain text (no formatting)
@@ -104,6 +111,99 @@ function convertCommonMarkBold(text: string): string {
 }
 
 /**
+ * Preprocesses CommonMark / LLM-output markdown into forms that
+ * sanitizeMarkdownV2 can preserve as Telegram MarkdownV2 formatting.
+ *
+ * Conversions applied (line-by-line, in order):
+ *   1. <br> / <br/> / <br /> HTML tags → newline
+ *   2. Markdown table separator rows (|---|---| etc.) → dropped entirely
+ *   3. Markdown table data rows (| cell | cell |) → bullet list items
+ *   4. Setext headers (=== / ---) → bold text
+ *   5. ATX headers (# / ## / ###) → bold text  (Telegram has no native header)
+ *   6. Horizontal rules (---, ***, ___) → em-dash separator
+ *   7. Unordered list markers (-, *, +) → Unicode bullet  (avoids escaping -)
+ *
+ * Blockquotes (>) are intentionally NOT transformed here; the state machine
+ * detects them at line-start and keeps the > as a Telegram MarkdownV2 blockquote
+ * marker instead of escaping it.
+ */
+function preprocessMarkdown(text: string): string {
+  // Replace <br>, <br/>, <br /> with newlines before splitting
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+
+  const lines = normalized.split('\n');
+  const out: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+
+    // Table separator row: |---|---| or |:---|:---:| — drop silently
+    if (/^\s*\|[\s|:\-]+\|\s*$/.test(line)) {
+      continue;
+    }
+
+    // Table data row: | cell | cell | — convert to bullet list
+    if (/^\s*\|(.+\|)+\s*$/.test(line)) {
+      const cells = line
+        .split('|')
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+      if (cells.length > 0) {
+        out.push('\u2022 ' + cells.join(' \u2014 '));
+      }
+      continue;
+    }
+
+    // Setext-style header: next line is all = signs
+    if (
+      i + 1 < lines.length &&
+      /^[=]{2,}\s*$/.test(lines[i + 1]!) &&
+      line.trim().length > 0
+    ) {
+      out.push(`*${line.trim()}*`);
+      i++; // skip the underline row
+      continue;
+    }
+
+    // Setext-style header: next line is all - signs (but current line is not itself a rule)
+    if (
+      i + 1 < lines.length &&
+      /^[-]{2,}\s*$/.test(lines[i + 1]!) &&
+      line.trim().length > 0 &&
+      !/^[-*_]{3,}\s*$/.test(line)
+    ) {
+      out.push(`*${line.trim()}*`);
+      i++;
+      continue;
+    }
+
+    // ATX header: # H1 / ## H2 / ### H3 etc.
+    const headerMatch = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (headerMatch) {
+      out.push(`*${headerMatch[2]!.trim()}*`);
+      continue;
+    }
+
+    // Horizontal rule (---, ***, ___) — replace with a visible separator
+    if (/^(\s*[-*_]){3,}\s*$/.test(line)) {
+      out.push('\u2014\u2014\u2014\u2014\u2014');
+      continue;
+    }
+
+    // Unordered list: leading -, *, or + followed by space (Unicode bullet avoids reserved - char)
+    const ulMatch = /^(\s*)[-*+]\s+(.*)$/.exec(line);
+    if (ulMatch) {
+      out.push(`${ulMatch[1]!}\u2022 ${ulMatch[2]!}`);
+      continue;
+    }
+
+    out.push(line);
+  }
+
+  return out.join('\n');
+}
+
+/**
  * Scans forward from `start` and returns the index of the first unescaped
  * occurrence of `marker`. Returns -1 when:
  *   - a newline is crossed and `crossNewline` is false (inline spans can't span lines)
@@ -149,7 +249,7 @@ function findClosingMarker(
  *
  * Example:
  *   escapeInner('Load avg (1/5/15 min):', '*')
- *   → 'Load avg \(1/5/15 min\):'    ( ( and ) escaped; : not reserved; * untouched )
+ *   => 'Load avg \(1/5/15 min\):'    ( ( and ) escaped; : not reserved; * untouched )
  */
 function escapeInner(content: string, exceptChar: string): string {
   let result = '';
@@ -203,29 +303,44 @@ function escapeInner(content: string, exceptChar: string): string {
  * formatting-span recognition and plain-text escaping. The central contract:
  *
  *   FORMATTING MARKERS (*, _, __, ~, ||, `, ```) → kept verbatim (they ARE the syntax)
+ *   BLOCKQUOTE MARKER (> at line-start) → kept verbatim (Telegram MarkdownV2 blockquote)
  *   SPAN CONTENT (everything between markers) → escapeInner() (Bot API requires all
  *     18 reserved chars escaped here too, including ( ) . !)
  *   PLAIN TEXT (outside any span) → all 18 reserved chars + '\' escaped
  *   EXISTING \X SEQUENCES → copied verbatim in all contexts (idempotency)
  *
- * Step 1: convertCommonMarkBold — **bold** → *bold* so the single-asterisk form is
- *         recognised as a formatting span in step 2.
- * Step 2: state machine — processes spans in priority order (``` before `, __ before _,
- *         || before bare |) to avoid partial matches.
+ * Step 1: preprocessMarkdown — converts LLM/CommonMark constructs (headers, list
+ *         bullets, horizontal rules) to Telegram-compatible equivalents.
+ * Step 2: convertCommonMarkBold — **bold** → *bold* so the single-asterisk form is
+ *         recognised as a formatting span in step 3.
+ * Step 3: state machine — processes spans in priority order (``` before `, __ before _,
+ *         || before bare |) to avoid partial matches. Tracks atLineStart to detect
+ *         blockquote markers.
  *
  * Idempotent: running on already-sanitized MarkdownV2 text returns the same string.
  */
 export function sanitizeMarkdownV2(text: string): string {
-  // Step 1: Normalise **bold** → *bold* so the single-asterisk form is matched below
-  const src = convertCommonMarkBold(text);
+  // Step 1: Preprocess LLM/CommonMark markdown, then normalise **bold** → *bold*
+  const src = convertCommonMarkBold(preprocessMarkdown(text));
 
   let result = '';
   let i = 0;
+  // Track whether we are at the very start of a line so > can be kept as a
+  // Telegram MarkdownV2 blockquote marker rather than escaped as \>.
+  let atLineStart = true;
 
   while (i < src.length) {
     const ch = src[i]!;
 
-    // ── Preserve existing \X escape sequences (idempotency) ───────────────────
+    // ── Newline — reset line-start tracker ───────────────────────────────────
+    if (ch === '\n') {
+      result += '\n';
+      atLineStart = true;
+      i++;
+      continue;
+    }
+
+    // ── Preserve existing \X escape sequences (idempotency) ──────────────────
     if (
       ch === '\\' &&
       i + 1 < src.length &&
@@ -233,23 +348,43 @@ export function sanitizeMarkdownV2(text: string): string {
       src[i + 1]!.charCodeAt(0) <= 126
     ) {
       result += '\\' + src[i + 1]!;
+      atLineStart = false;
       i += 2;
       continue;
     }
 
+    // ── Blockquote: > at line-start ───────────────────────────────────────────
+    // Telegram MarkdownV2 treats > at the start of a line as a blockquote marker.
+    // Keep it verbatim instead of escaping. Consume an optional trailing space too
+    // (standard CommonMark blockquote style: "> text").
+    // atLineStart is intentionally left true so a second > on the same prefix
+    // (nested blockquotes like ">> text") is also recognised.
+    if (ch === '>' && atLineStart) {
+      result += '>';
+      if (src[i + 1] === ' ') {
+        result += ' ';
+        i += 2;
+      } else {
+        i++;
+      }
+      continue;
+    }
+
     // ── Triple-backtick code block: ```...``` ─────────────────────────────────
-    // Must be checked BEFORE single backtick to avoid partial match
+    // Must be checked BEFORE single backtick to avoid partial match.
     if (src.startsWith('```', i)) {
       const closeIdx = src.indexOf('```', i + 3);
       if (closeIdx !== -1) {
         // Inside code blocks: only ` and \ need escaping (Bot API pre-block rules)
         const inner = src.slice(i + 3, closeIdx);
-        result += '```' + inner.replace(/[`\\]/g, '\\$&') + '```';
+        result += '```' + inner.replace(/[`\\]/g, (m) => '\\' + m) + '```';
         i = closeIdx + 3;
+        atLineStart = false;
         continue;
       }
-      // No closing ```: treat first ` as bare reserved char, reprocess remaining
+      // No closing ```: treat first ` as bare reserved char
       result += '\\`';
+      atLineStart = false;
       i++;
       continue;
     }
@@ -260,12 +395,14 @@ export function sanitizeMarkdownV2(text: string): string {
       if (closeIdx !== -1 && closeIdx > i + 1) {
         // Inside inline code: only ` and \ need escaping (Bot API code-entity rules)
         const inner = src.slice(i + 1, closeIdx);
-        result += '`' + inner.replace(/[`\\]/g, '\\$&') + '`';
+        result += '`' + inner.replace(/[`\\]/g, (m) => '\\' + m) + '`';
         i = closeIdx + 1;
+        atLineStart = false;
         continue;
       }
       // No closing ` on this line: bare backtick → escape
       result += '\\`';
+      atLineStart = false;
       i++;
       continue;
     }
@@ -277,13 +414,14 @@ export function sanitizeMarkdownV2(text: string): string {
       const closeIdx = findClosingMarker(src, i + 1, '*', false);
       if (closeIdx !== -1 && closeIdx > i + 1) {
         const inner = src.slice(i + 1, closeIdx);
-        // Markers kept; content passed through escapeInner to fix ( ) . ! etc.
         result += '*' + escapeInner(inner, '*') + '*';
         i = closeIdx + 1;
+        atLineStart = false;
         continue;
       }
       // No matching closing * on this line → bare asterisk → escape
       result += '\\*';
+      atLineStart = false;
       i++;
       continue;
     }
@@ -295,6 +433,7 @@ export function sanitizeMarkdownV2(text: string): string {
         const inner = src.slice(i + 2, closeIdx);
         result += '__' + escapeInner(inner, '_') + '__';
         i = closeIdx + 2;
+        atLineStart = false;
         continue;
       }
     }
@@ -307,10 +446,12 @@ export function sanitizeMarkdownV2(text: string): string {
         const inner = src.slice(i + 1, closeIdx);
         result += '_' + escapeInner(inner, '_') + '_';
         i = closeIdx + 1;
+        atLineStart = false;
         continue;
       }
       // Bare underscore → escape
       result += '\\_';
+      atLineStart = false;
       i++;
       continue;
     }
@@ -322,9 +463,11 @@ export function sanitizeMarkdownV2(text: string): string {
         const inner = src.slice(i + 1, closeIdx);
         result += '~' + escapeInner(inner, '~') + '~';
         i = closeIdx + 1;
+        atLineStart = false;
         continue;
       }
       result += '\\~';
+      atLineStart = false;
       i++;
       continue;
     }
@@ -336,6 +479,7 @@ export function sanitizeMarkdownV2(text: string): string {
         const inner = src.slice(i + 2, closeIdx);
         result += '||' + escapeInner(inner, '|') + '||';
         i = closeIdx + 2;
+        atLineStart = false;
         continue;
       }
     }
@@ -352,6 +496,7 @@ export function sanitizeMarkdownV2(text: string): string {
           const url = src.slice(textClose + 2, urlClose);
           result += '[' + escapeInner(linkText, ']') + '](' + url + ')';
           i = urlClose + 1;
+          atLineStart = false;
           continue;
         }
       }
@@ -361,6 +506,7 @@ export function sanitizeMarkdownV2(text: string): string {
     // Bare '\' (no valid \X pair above) — escape it
     if (ch === '\\') {
       result += '\\\\';
+      atLineStart = false;
       i++;
       continue;
     }
@@ -370,6 +516,7 @@ export function sanitizeMarkdownV2(text: string): string {
     } else {
       result += ch;
     }
+    atLineStart = false;
     i++;
   }
 

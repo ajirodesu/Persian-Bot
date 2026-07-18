@@ -308,45 +308,45 @@ async function syncCommandsAndEvents(
     })),
   ];
 
-  for (const sess of allSessions) {
-    // Only sync commands that are structurally allowed to run on this specific platform session
-    const cmdList = new Set<string>();
-    for (const mod of commands.values()) {
-      if (isPlatformAllowed(mod, sess.platform)) {
-        const cfg = mod['meta'] as { name?: string } | undefined;
-        if (cfg?.name) cmdList.add(cfg.name.toLowerCase());
-      }
-    }
-
-    // Only sync events that are structurally allowed to run on this specific platform session
-    const evtList = new Set<string>();
-    for (const handlers of eventModules.values()) {
-      for (const mod of handlers) {
+  // All sessions are independent — sync them concurrently instead of sequentially.
+  // Within each session, the command and event upserts are also independent, so both
+  // fire together. For N sessions this cuts the total await chain from N×2 serial DB
+  // calls to a single Promise.all round-trip regardless of session count.
+  await Promise.all(
+    allSessions.map(async (sess) => {
+      // Only sync commands that are structurally allowed to run on this specific platform session
+      const cmdList = new Set<string>();
+      for (const mod of commands.values()) {
         if (isPlatformAllowed(mod, sess.platform)) {
           const cfg = mod['meta'] as { name?: string } | undefined;
-          if (cfg?.name) evtList.add(cfg.name.toLowerCase());
+          if (cfg?.name) cmdList.add(cfg.name.toLowerCase());
         }
       }
-    }
 
-    const cmdArr = [...cmdList];
-    const evtArr = [...evtList];
+      // Only sync events that are structurally allowed to run on this specific platform session
+      const evtList = new Set<string>();
+      for (const handlers of eventModules.values()) {
+        for (const mod of handlers) {
+          if (isPlatformAllowed(mod, sess.platform)) {
+            const cfg = mod['meta'] as { name?: string } | undefined;
+            if (cfg?.name) evtList.add(cfg.name.toLowerCase());
+          }
+        }
+      }
 
-    if (cmdArr.length > 0)
-      await upsertSessionCommands(
-        sess.userId,
-        sess.platform,
-        sess.sessionId,
-        cmdArr,
-      );
-    if (evtArr.length > 0)
-      await upsertSessionEvents(
-        sess.userId,
-        sess.platform,
-        sess.sessionId,
-        evtArr,
-      );
-  }
+      const cmdArr = [...cmdList];
+      const evtArr = [...evtList];
+
+      await Promise.all([
+        cmdArr.length > 0
+          ? upsertSessionCommands(sess.userId, sess.platform, sess.sessionId, cmdArr)
+          : Promise.resolve(),
+        evtArr.length > 0
+          ? upsertSessionEvents(sess.userId, sess.platform, sess.sessionId, evtArr)
+          : Promise.resolve(),
+      ]);
+    }),
+  );
 
   logger.info(
     `[app] Synced commands and events for ${allSessions.length} session(s)`,
@@ -421,6 +421,59 @@ async function main(): Promise<void> {
   };
   const platform = createUnifiedPlatformListener(botConfig);
 
+  // ── Shared helper — thread prefix restoration ──────────────────────────────
+  // Restores a thread's custom prefix from DB into prefixManager on the first
+  // message seen for that thread after a process restart.  Extracted here so the
+  // identical 20-line block that previously appeared in BOTH 'message' and
+  // 'message_reply' handlers lives in exactly one place.
+  async function restoreThreadPrefix(
+    threadID: string,
+    native: import('@/engine/types/controller.types.js').NativeContext,
+  ): Promise<void> {
+    if (!native.userId || !native.sessionId) return;
+    // Already restored this session — nothing to do.
+    if (prefixManager.getThreadPrefix(threadID) !== undefined) return;
+    try {
+      const threadColl = createThreadCollectionManager(
+        native.userId,
+        native.platform,
+        native.sessionId,
+      )(threadID);
+      if (await threadColl.isCollectionExist('settings')) {
+        const settings = await threadColl.getCollection('settings');
+        const stored = (await settings.get('prefix')) as string | undefined;
+        if (stored) prefixManager.setThreadPrefix(threadID, stored);
+      }
+    } catch {
+      /* fail-open — livePrefix falls back to session prefix on DB error */
+    }
+  }
+
+  // ── Shared helper — compute effective prefix for a message payload ─────────
+  // On Discord and Telegram, slash commands are registered globally per-session
+  // and cannot be scoped to individual threads.  When the session prefix is '/'
+  // and a group admin has set a custom thread prefix (e.g. '!'), both must work
+  // simultaneously: '!ping' uses the thread prefix, '/help' uses the slash menu.
+  function resolveLivePrefix(
+    payload: Record<string, unknown>,
+    native: import('@/engine/types/controller.types.js').NativeContext,
+    sessionPrefix: string,
+    threadPrefix: string | undefined,
+  ): string {
+    if (
+      sessionPrefix === '/' &&
+      threadPrefix !== undefined &&
+      threadPrefix !== '/' &&
+      (native.platform === Platforms.Discord ||
+        native.platform === Platforms.Telegram)
+    ) {
+      const body = ((payload.event as Record<string, unknown>)['message'] ??
+        '') as string;
+      if (body.startsWith('/')) return '/';
+    }
+    return threadPrefix ?? sessionPrefix;
+  }
+
   // ── Wire event handlers once for all platforms ─────────────────────────────
   // Transports that do not support a given event type simply never emit it;
   // no platform branching or special-casing needed here.
@@ -437,50 +490,11 @@ async function main(): Promise<void> {
     );
     // Restore thread prefix from DB before computing livePrefix — guarantees the correct
     // stored prefix is used on the FIRST message after a process restart.
-    // prefix.ts onChat previously did this lazily inside middleware, but livePrefix was
-    // already computed by then, making the restoration arrive one message too late.
-    if (
-      threadID &&
-      native.userId &&
-      native.sessionId &&
-      prefixManager.getThreadPrefix(threadID) === undefined
-    ) {
-      try {
-        const threadColl = createThreadCollectionManager(
-          native.userId,
-          native.platform,
-          native.sessionId,
-        )(threadID);
-        if (await threadColl.isCollectionExist('settings')) {
-          const settings = await threadColl.getCollection('settings');
-          const stored = (await settings.get('prefix')) as string | undefined;
-          if (stored) prefixManager.setThreadPrefix(threadID, stored);
-        }
-      } catch {
-        /* fail-open — livePrefix falls back to session prefix on DB error */
-      }
-    }
+    if (threadID) await restoreThreadPrefix(threadID, native);
     const threadPrefix = threadID
       ? prefixManager.getThreadPrefix(threadID)
       : undefined;
-    // On Discord and Telegram, slash commands are registered globally per-session and cannot be
-    // scoped to individual threads. When the session prefix is '/' and a group admin has set a
-    // custom thread prefix (e.g. '!'), both must work simultaneously: '!ping' uses the thread
-    // prefix and '/help' uses the registered slash menu. Detect by inspecting the message body.
-    const livePrefix = (() => {
-      if (
-        sessionPrefix === '/' &&
-        threadPrefix !== undefined &&
-        threadPrefix !== '/' &&
-        (native.platform === Platforms.Discord ||
-          native.platform === Platforms.Telegram)
-      ) {
-        const body = ((payload.event as Record<string, unknown>)['message'] ??
-          '') as string;
-        if (body.startsWith('/')) return '/';
-      }
-      return threadPrefix ?? sessionPrefix;
-    })();
+    const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
     await handleMessage(
       payload.api as UnifiedApi,
       payload.event as Record<string, unknown>,
@@ -505,47 +519,11 @@ async function main(): Promise<void> {
     // Same thread prefix restoration as the 'message' handler — message_reply events
     // carry the same threadID and must resolve the stored prefix before livePrefix
     // is computed so quoted-message reply flows also honour thread-level overrides.
-    if (
-      threadID &&
-      native.userId &&
-      native.sessionId &&
-      prefixManager.getThreadPrefix(threadID) === undefined
-    ) {
-      try {
-        const threadColl = createThreadCollectionManager(
-          native.userId,
-          native.platform,
-          native.sessionId,
-        )(threadID);
-        if (await threadColl.isCollectionExist('settings')) {
-          const settings = await threadColl.getCollection('settings');
-          const stored = (await settings.get('prefix')) as string | undefined;
-          if (stored) prefixManager.setThreadPrefix(threadID, stored);
-        }
-      } catch {
-        /* fail-open */
-      }
-    }
+    if (threadID) await restoreThreadPrefix(threadID, native);
     const threadPrefix = threadID
       ? prefixManager.getThreadPrefix(threadID)
       : undefined;
-    // message_reply: same dual-prefix logic as 'message' — on Discord and Telegram when the
-    // session prefix is '/' and a thread has a custom prefix, inspect the message body to
-    // select the correct routing prefix so slash commands remain functional in all threads.
-    const livePrefix = (() => {
-      if (
-        sessionPrefix === '/' &&
-        threadPrefix !== undefined &&
-        threadPrefix !== '/' &&
-        (native.platform === Platforms.Discord ||
-          native.platform === Platforms.Telegram)
-      ) {
-        const body = ((payload.event as Record<string, unknown>)['message'] ??
-          '') as string;
-        if (body.startsWith('/')) return '/';
-      }
-      return threadPrefix ?? sessionPrefix;
-    })();
+    const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
     // message_reply shares handleMessage — command modules read event.messageReply for the quoted message.
     await handleMessage(
       payload.api as UnifiedApi,

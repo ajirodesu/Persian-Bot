@@ -224,30 +224,35 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   const message = ((ctx.event['message'] as string | undefined) || '').trim();
   if (!message) return;
 
-  const nickname =
-    ctx.native.userId && ctx.native.sessionId
-      ? await getBotNickname(
-          ctx.native.userId as string,
-          ctx.native.platform,
-          ctx.native.sessionId as string,
-        )
-      : null;
-
+  // Resolve IDs synchronously — no await needed.
   const senderID = (ctx.event['senderID'] ??
     ctx.event['userID'] ??
     '') as string;
   const threadID = (ctx.event['threadID'] ?? '') as string;
-  const userName = senderID ? await ctx.user.getName(senderID) : null;
 
-  // webchatNickname is injected by the web chat room socket handler so the user's
-  // custom bot nickname (stored client-side) triggers the AI without a DB lookup.
+  // Fetch nickname and display name in parallel — both are needed for the
+  // match check, and neither depends on the other.
+  const [nickname, userName] = await Promise.all([
+    ctx.native.userId && ctx.native.sessionId
+      ? getBotNickname(
+          ctx.native.userId as string,
+          ctx.native.platform,
+          ctx.native.sessionId as string,
+        )
+      : Promise.resolve(null),
+    senderID ? ctx.user.getName(senderID) : Promise.resolve(null),
+  ]);
+
+  // webchatNickname is injected by the web chat room socket handler so the
+  // user's custom bot nickname (stored client-side) triggers the AI without a
+  // DB lookup.
   const webchatNickname = ctx.native['webchatNickname'] as string | null | undefined;
   const targetName = nickname || webchatNickname || 'Cat-Bot';
 
-  // On Telegram, ignore "@..." mention tokens when checking for the nickname so an
-  // @username mention (e.g. attached to a command like "/help@ShiaBot", or typed
-  // standalone) never conflicts with a nickname that's identical or similar to the
-  // bot's actual @username. See stripTelegramMentions() above for details.
+  // On Telegram, ignore "@..." mention tokens when checking for the nickname so
+  // an @username mention (e.g. attached to a command like "/help@ShiaBot", or
+  // typed standalone) never conflicts with a nickname that's identical or
+  // similar to the bot's actual @username.  See stripTelegramMentions() above.
   const nicknameMatchSource =
     ctx.native.platform === Platforms.Telegram
       ? stripTelegramMentions(message)
@@ -256,61 +261,66 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   if (!nicknameMatchSource.toLowerCase().includes(targetName.toLowerCase()))
     return;
 
-  // ── Admin restriction gate ─────────────────────────────────────────────────
-  // Must mirror enforceAdminOnly because onChat bypasses the command middleware chain.
+  // ── Typing indicator + admin gate + agent ──────────────────────────────────
+  // The typing indicator now wraps the admin check as well as the agent call.
+  // Admin restriction reads can involve cold DB lookups on the first invocation
+  // (the LRU cache is empty); wrapping them keeps the "bot is typing" signal
+  // alive for the full processing window rather than starting it only after the
+  // DB reads complete.
   try {
-    const { blocked, reason, hideNoti } = await isBlockedByAdminRestrictions(
-      ctx,
-      senderID,
-      threadID,
-    );
+    await withTypingIndicator(ctx.api, threadID, async () => {
+      // ── Admin restriction gate ───────────────────────────────────────────
+      // Must mirror enforceAdminOnly because onChat bypasses the command
+      // middleware chain.
+      try {
+        const { blocked, reason, hideNoti } = await isBlockedByAdminRestrictions(
+          ctx,
+          senderID,
+          threadID,
+        );
 
-    if (blocked) {
-      if (!hideNoti) {
-        // Rate-limit the notification to once per 15 s so a chatty user doesn't
-        // flood the thread with rejection messages.
-        const sessionUserId = ctx.native.userId ?? '';
-        const sessionId     = ctx.native.sessionId ?? '';
-        const platform      = ctx.native.platform;
-        const now           = Date.now();
+        if (blocked) {
+          if (!hideNoti) {
+            // Rate-limit the notification to once per 15 s so a chatty user
+            // doesn't flood the thread with rejection messages.
+            const sessionUserId = ctx.native.userId ?? '';
+            const sessionId     = ctx.native.sessionId ?? '';
+            const platform      = ctx.native.platform;
+            const now           = Date.now();
 
-        const noticeKey =
-          reason === 'adminonly'
-            ? `ai_adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`
-            : `ai_adminbox_noti:${sessionUserId}:${platform}:${sessionId}:${threadID}:${senderID}`;
+            const noticeKey =
+              reason === 'adminonly'
+                ? `ai_adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`
+                : `ai_adminbox_noti:${sessionUserId}:${platform}:${sessionId}:${threadID}:${senderID}`;
 
-        if (cooldownStore.check(noticeKey, now) === null) {
-          const noticeMsg =
-            reason === 'adminonly'
-              ? `🤖 Sorry, the AI assistant is currently **restricted to bot admins only**.\nIf you believe this is a mistake, please contact a bot admin.`
-              : `🤖 Sorry, the AI assistant is currently **restricted to group admins** in this thread.\nIf you believe this is a mistake, please contact a group admin.`;
+            if (cooldownStore.check(noticeKey, now) === null) {
+              const noticeMsg =
+                reason === 'adminonly'
+                  ? `🤖 Sorry, the AI assistant is currently **restricted to bot admins only**.\nIf you believe this is a mistake, please contact a bot admin.`
+                  : `🤖 Sorry, the AI assistant is currently **restricted to group admins** in this thread.\nIf you believe this is a mistake, please contact a group admin.`;
 
-          await ctx.chat.replyMessage({
-            style: MessageStyle.MARKDOWN,
-            message: noticeMsg,
-          });
-          cooldownStore.record(noticeKey, now, 15_000);
+              await ctx.chat.replyMessage({
+                style: MessageStyle.MARKDOWN,
+                message: noticeMsg,
+              });
+              cooldownStore.record(noticeKey, now, 15_000);
+            }
+          }
+          return; // Abort — do NOT run the agent
         }
+      } catch {
+        // Fail-open — a DB outage must not silently prevent the AI from responding
       }
-      return; // Abort — do NOT run the agent
-    }
-  } catch {
-    // Fail-open — a DB outage must not silently prevent the AI from responding
-  }
 
-  // ── Agent invocation ───────────────────────────────────────────────────────
-  const prompt = message;
-
-  try {
-    const result = await withTypingIndicator(ctx.api, threadID, () =>
-      runAgent(prompt, ctx, nickname, userName),
-    );
-    if (result) {
-      await ctx.chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: result,
-      });
-    }
+      // ── Agent invocation ─────────────────────────────────────────────────
+      const result = await runAgent(message, ctx, nickname, userName);
+      if (result) {
+        await ctx.chat.replyMessage({
+          style: MessageStyle.MARKDOWN,
+          message: result,
+        });
+      }
+    });
   } catch (err) {
     ctx.logger.error('[ai.ts] onChat agent execution failed', { error: err });
   }

@@ -11,6 +11,11 @@
  * interval for as long as the promise is still pending, and is torn down
  * the instant it settles — so its lifetime always tracks real processing
  * time rather than a fixed, guessed duration.
+ *
+ * STABILITY: An in-flight guard prevents overlapping sendTypingIndicator
+ * calls. Without it, a slow network leg can cause the interval to fire
+ * again before the previous request has resolved, stacking up concurrent
+ * HTTP calls that provide no benefit and add noise to the platform API.
  */
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
@@ -23,20 +28,39 @@ const TYPING_REFRESH_INTERVAL_MS = 4000;
  * Runs `fn` while keeping a typing indicator alive on `threadID` for its
  * entire duration. Indicator failures are logged and swallowed — they must
  * never fail or delay the underlying command execution.
+ *
+ * If `threadID` is empty the function runs `fn` without any indicator,
+ * since there is no thread to address.
  */
 export async function withTypingIndicator<T>(
   api: UnifiedApi,
   threadID: string,
   fn: () => Promise<T>,
 ): Promise<T> {
+  // No thread → skip indicator entirely; nothing to address it to.
+  if (!threadID) return fn();
+
+  // In-flight guard: skip if a sendTypingIndicator call is already in
+  // progress.  Prevents overlapping HTTP requests when the interval fires
+  // faster than the previous request resolves (e.g. on a slow network).
+  let inFlight = false;
+
   const trigger = (): void => {
-    void api.sendTypingIndicator(threadID).catch((err: unknown) => {
-      logger.debug('[typing-indicator] sendTypingIndicator failed', {
-        platform: api.platform,
-        threadID,
-        error: err,
+    if (inFlight) return;
+    inFlight = true;
+    void api
+      .sendTypingIndicator(threadID)
+      .then(() => {
+        inFlight = false;
+      })
+      .catch((err: unknown) => {
+        inFlight = false;
+        logger.debug('[typing-indicator] sendTypingIndicator failed', {
+          platform: api.platform,
+          threadID,
+          error: err,
+        });
       });
-    });
   };
 
   // Fire immediately so the indicator appears the instant processing starts,
