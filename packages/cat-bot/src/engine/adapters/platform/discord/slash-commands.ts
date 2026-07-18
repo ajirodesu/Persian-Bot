@@ -105,6 +105,11 @@ function buildSlashCommandPayloads(
       options?: SlashOption[];
     };
 
+    // Discord's displayed ('/') command list is intentionally restricted to the "help"
+    // command only — every other command is still invocable via text prefix, it's simply
+    // omitted from the displayed slash-command menu.
+    if (cfg.name.toLowerCase() !== 'help') continue;
+
     // Exclude commands disabled by the bot admin
     if (disabledNames?.has(cfg.name.toLowerCase())) continue;
 

@@ -110,6 +110,9 @@ export async function registerSlashMenu(
         | { name?: string; description?: string }
         | undefined;
       if (!cfg?.name || !cfg?.description) continue;
+      // Telegram's command menu is intentionally restricted to the "help" command only —
+      // every other command is still invocable, it's simply omitted from the menu listing.
+      if (cfg.name.toLowerCase() !== 'help') continue;
       // Exclude commands disabled by the bot admin — they must not appear in Telegram's command menu
       if (disabledNames?.has(cfg.name.toLowerCase())) continue;
 

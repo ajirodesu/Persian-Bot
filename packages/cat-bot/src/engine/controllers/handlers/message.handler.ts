@@ -19,7 +19,10 @@ import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import { runOnChat } from '../on-chat-runner.js';
 import { dispatchOnReply } from '../dispatchers/reply.dispatcher.js';
 import { dispatchCommand } from '../dispatchers/command.dispatcher.js';
-import { parseCommand } from '@/engine/modules/command/command-parser.util.js';
+import {
+  parseCommand,
+  isCommandForDifferentBot,
+} from '@/engine/modules/command/command-parser.util.js';
 import {
   middlewareRegistry,
   runMiddlewareChain,
@@ -147,6 +150,13 @@ export async function handleMessage(
   // Prefix commands vs. Prefix-less commands
   const botUsername = resolveTelegramBotUsername(native);
   if (body.startsWith(prefix)) {
+    // A command carrying a stuck "@BotUsername" mention addressed to a different bot must be
+    // ignored in total silence — checked BEFORE parseCommand() so this case never falls through
+    // to the "Type {prefix}help for available commands" reply below, which would otherwise fire
+    // for every command meant for another bot in a shared multi-bot group.
+    if (isCommandForDifferentBot(args, prefix, botUsername)) {
+      return;
+    }
     isCommandInvocation = true;
     parsed = parseCommand(args, prefix, botUsername) ?? undefined;
     if (parsed) {

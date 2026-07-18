@@ -34,6 +34,44 @@ function stripBotMention(
 }
 
 /**
+ * Detects whether a prefixed invocation carries a stuck "@BotUsername" mention addressed
+ * to a *different* bot than `botUsername` — e.g. "+help@OtherBot" while we are "ShiaBot".
+ *
+ * This exists as a separate check (rather than relying solely on parseCommand() returning
+ * null) because `parseCommand` returning null is ambiguous: it could mean "malformed/unknown
+ * command" (which should get a "did you mean?" / usage reply) or "addressed to another bot"
+ * (which must be ignored in total silence — replying at all would make every bot in a
+ * multi-bot group chat noisily respond to commands meant for its neighbors). Callers should
+ * check this FIRST and bail out with no reply whatsoever before ever calling parseCommand().
+ */
+export function isCommandForDifferentBot(
+  args: string[],
+  prefix: string,
+  botUsername?: string,
+): boolean {
+  if (!botUsername || !args.length) return false;
+
+  let commandName: string | undefined;
+  if (args[0] === prefix) {
+    if (args.length === 1) return false;
+    commandName = args[1];
+  } else if (args[0]!.startsWith(prefix)) {
+    commandName = args[0]!.slice(prefix.length);
+  } else {
+    return false;
+  }
+  if (!commandName) return false;
+
+  const atIndex = commandName.indexOf('@');
+  if (atIndex === -1) return false;
+
+  const mentioned = commandName.slice(atIndex + 1);
+  if (!mentioned) return false;
+
+  return mentioned.toLowerCase() !== botUsername.toLowerCase();
+}
+
+/**
  * Strips the prefix from the first token and returns the command name + remaining args.
  * Returns null when the body does not start with the prefix.
  *
