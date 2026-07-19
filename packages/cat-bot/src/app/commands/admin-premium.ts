@@ -9,8 +9,18 @@
  * here as one runList() handler + a small config table.
  *
  * Commands:
- *   /admin   — manage bot admins for this session   (add | list | remove)
- *   /premium — manage premium users for this session (add | list | remove)
+ *   /admin   — manage bot admins for this session    (add | list | remove)
+ *   /premium — manage premium users for this session  (add | list | remove)
+ *              also reachable as /vip (alias)
+ *
+ * ── Reply-based targeting ─────────────────────────────────────────────────────
+ * `add`/`delete`/`remove` normally take the target's platform user ID as
+ * args[1]. As an alternative, the caller may instead reply to the target
+ * user's message — no ID needs to be typed at all: `/admin add` (or
+ * `/premium add`) sent as a reply resolves the target directly from
+ * event.messageReply.senderID. An explicit args[1] still wins when both are
+ * present, so replying while also typing a different ID does what it looks
+ * like — targets the typed ID, not the reply.
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
  * exporting `commands: Array<{ meta, onCommand, button? }>` and registers
@@ -39,6 +49,8 @@ import type { CommandMeta } from '@/engine/types/module-config.types.js';
 
 interface ListConfig {
   name: string;
+  /** Alternate command names that route to this same config. */
+  aliases: string[];
   description: string;
   /** Noun used in user-facing copy, e.g. "bot admin" / "premium user". */
   noun: string;
@@ -55,6 +67,7 @@ interface ListConfig {
 const LIST_CONFIGS: ListConfig[] = [
   {
     name: 'admin',
+    aliases: [],
     description: 'Manage bot admins for this session: add, list, or remove by user ID',
     noun: 'bot admin',
     pluralNoun: 'bot admins',
@@ -65,7 +78,8 @@ const LIST_CONFIGS: ListConfig[] = [
   },
   {
     name: 'premium',
-    description: 'Manage premium users for this session: add, list, or remove by user ID',
+    aliases: ['vip'],
+    description: 'Manage premium (VIP) users for this session: add, list, or remove by user ID',
     noun: 'premium user',
     pluralNoun: 'premium users',
     authFailureAction: 'add or remove premium users',
@@ -82,6 +96,16 @@ async function runList(ctx: AppCtx, config: ListConfig): Promise<void> {
   const { chat, user, args, event, native, usage } = ctx;
   const { userId, platform, sessionId } = native;
   const senderID = event['senderID'] as string | undefined;
+
+  // Reply-based target resolution: replying to a user's message lets the
+  // caller manage that user directly without typing their ID. An explicit
+  // args[1] still takes priority when both are present.
+  const replyEvent = event['messageReply'] as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const repliedSenderID = replyEvent?.['senderID'] as string | undefined;
+  const resolveTargetUid = (): string | undefined => args[1] || repliedSenderID;
 
   if (!userId || !platform || !sessionId) {
     await chat.replyMessage({
@@ -111,7 +135,7 @@ async function runList(ctx: AppCtx, config: ListConfig): Promise<void> {
   }
 
   if (sub === 'add') {
-    const uid = args[1];
+    const uid = resolveTargetUid();
     if (!uid) {
       await usage();
       return;
@@ -157,7 +181,7 @@ async function runList(ctx: AppCtx, config: ListConfig): Promise<void> {
 
   // Support both 'delete' and 'remove' keywords for better UX
   if (sub === 'delete' || sub === 'remove') {
-    const uid = args[1];
+    const uid = resolveTargetUid();
     if (!uid) {
       await usage();
       return;
@@ -184,13 +208,20 @@ interface CommandEntry {
 export const commands: CommandEntry[] = LIST_CONFIGS.map((config) => ({
   meta: {
     name: config.name,
-    aliases: [] as string[],
+    aliases: config.aliases,
     version: '1.1.0',
     role: Role.ANYONE,
     author: 'John Lester',
     description: config.description,
     category: 'Bot Admin',
     usage: '<add|list|remove> [uid]',
+    guide: [
+      'add <uid> — Add a user by ID',
+      '  reply to the target user\'s message instead of typing an ID',
+      'delete|remove <uid> — Remove a user by ID',
+      '  reply to the target user\'s message instead of typing an ID',
+      'list — Show the current list',
+    ],
     cooldown: 5,
     hasPrefix: true,
     platform: [Platforms.Discord, Platforms.Telegram],
@@ -204,7 +235,8 @@ export const commands: CommandEntry[] = LIST_CONFIGS.map((config) => ({
       {
         type: OptionType.string,
         name: 'uid',
-        description: 'Platform user ID (required for add, delete, and remove actions)',
+        description:
+          'Platform user ID for add/delete/remove — omit and reply to the target user\'s message instead',
         required: false,
       },
     ],

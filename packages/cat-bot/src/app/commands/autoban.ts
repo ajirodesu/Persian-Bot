@@ -1,5 +1,5 @@
 /**
- * autoban.ts — Keyword-triggered automatic ban, restricted to the system admin.
+ * autoban.ts — Keyword-triggered automatic ban, restricted to bot admins.
  *
  * Modeled on badwords.ts (per-message keyword scanning) and detect.ts
  * (session-wide db.bot storage), but the enforcement action is immediate:
@@ -8,7 +8,7 @@
  * same banUser() mechanism enforced by enforceNotBanned in
  * on-command.middleware.ts.
  *
- * ── Subcommands (SYSTEM_ADMIN only — enforced by meta.role) ──────────────────
+ * ── Subcommands (BOT_ADMIN only — enforced by meta.role) ─────────────────────
  *   autoban add <word[,word|word]>    — Add trigger keyword(s)
  *   autoban delete <word[,word|word]> — Remove trigger keyword(s)
  *   autoban list [hide]               — Show trigger keywords (masked if 'hide')
@@ -16,11 +16,12 @@
  *   autoban off                       — Disable enforcement for this session
  *   autoban (no args)                 — Show current status
  *
- * meta.role = Role.SYSTEM_ADMIN means enforcePermission in
- * on-command.middleware.ts denies every non-system-admin sender before
- * onCommand ever runs — no per-subcommand privilege check is needed here,
- * unlike badwords.ts (which gates per-thread admins, a role tier that has
- * no equivalent at the SYSTEM_ADMIN level).
+ * meta.role = Role.BOT_ADMIN means enforcePermission in on-command.middleware.ts
+ * denies every sender below bot-admin tier before onCommand ever runs — no
+ * per-subcommand privilege check is needed here, unlike badwords.ts (which
+ * gates per-thread admins, a role tier managed separately from BOT_ADMIN).
+ * System admins always inherit BOT_ADMIN-gated commands too (role.constants.ts),
+ * so this is a strict widening of who can configure it.
  *
  * ── Storage (db.bot → 'autoban_settings') ────────────────────────────────────
  *   words:   string[]  — trigger keyword list (default: [])
@@ -60,13 +61,13 @@ export const meta: CommandMeta = {
   name: 'autoban',
   aliases: [] as string[],
   version: '1.0.0',
-  role: Role.SYSTEM_ADMIN,
+  role: Role.BOT_ADMIN,
   author: 'AjiroDesu',
   description:
     'Manage a keyword trigger list — any user whose message matches a keyword is immediately banned from using the bot.',
-  category: 'System Admin',
+  category: 'Bot Admin',
   usage: [
-    'add <word[,word|word]> — Add trigger word(s) (system admin only)',
+    'add <word[,word|word]> — Add trigger word(s) (bot admin only)',
     'delete <word[,word|word]> — Remove trigger word(s)',
     'list [hide] — Show trigger keywords',
     'on — Enable auto-ban enforcement for this session',
