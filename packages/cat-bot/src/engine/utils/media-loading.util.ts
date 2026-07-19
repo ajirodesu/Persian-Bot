@@ -89,10 +89,23 @@ export async function withLoadingMedia(
         message_id_to_edit: loadingId,
       });
     } catch {
-      // Editing failed (e.g. text->media swap unsupported in this context).
-      // Fall back to delete+resend rather than leaving a stale message.
+      // Editing failed (e.g. text->media swap unsupported in this context, or the
+      // platform rejected the edit for any other reason). Fall back to delete+resend
+      // rather than leaving a stale message.
+      //
+      // IMPORTANT: use chat.reply() here, NOT chat.replyMessage(). On button-triggered
+      // refreshes (Telegram/Discord "Refresh"/"Next Meme" buttons), the chat context's
+      // implicit reply target (defaultMessageID) is the SAME id as `loadingId` — the
+      // button-bearing message we just deleted above. chat.replyMessage() always threads
+      // to that implicit id when no explicit override is given, so on Telegram it would
+      // try to set reply_parameters.message_id to a message that no longer exists,
+      // causing a hard "Bad Request: message to be replied not found" failure on every
+      // refresh where the edit-in-place happens to fail. chat.reply() only threads when
+      // an explicit messageID/reply_to_message_id is passed in opts (none is here), so it
+      // safely sends a plain new message instead — this keeps the refresh button working
+      // indefinitely, with no artificial limit on how many times it can be clicked.
       await chat.unsendMessage(loadingId).catch(() => {});
-      await chat.replyMessage(payload);
+      await chat.reply(payload);
     }
   };
 

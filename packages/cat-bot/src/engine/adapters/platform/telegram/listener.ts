@@ -27,6 +27,7 @@ import { createLogger } from '@/engine/modules/logger/logger.lib.js';
 import type { TelegramConfig, TelegramEmitter } from './types.js';
 import { registerSlashMenu } from './slash-commands.js';
 import { attachHandlers } from './handlers.js';
+import { createAutoRetryTransformer } from './lib/auto-retry.transformer.js';
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
 // isAuthError retained — still needed inside boot() to classify long-poll errors mid-session.
 // withRetry removed — runner (platform-runner.lib.ts) now owns the retry loop.
@@ -129,6 +130,15 @@ export function createTelegramListener(
         ? (botDetail.prefix ?? config.prefix)
         : config.prefix;
       activeBot = new Bot(botToken);
+
+      // Transparently absorb Telegram's flood-control (429) responses — e.g. a user
+      // rapidly clicking a "Refresh" button firing repeated editMessageText/editMessageMedia
+      // calls to the same chat. Without this, those calls throw a GrammyError that command
+      // handlers don't (and shouldn't have to) catch individually, leaving refresh buttons
+      // appearing to silently stop working under fast repeated clicks. This must be
+      // registered before attachHandlers()/start() so it wraps every API call this bot
+      // instance ever makes, matching grammY's documented transformer lifecycle.
+      activeBot.api.config.use(createAutoRetryTransformer());
 
       // Validate bot token before registering handlers or starting.
       // bot.start() calls getMe() internally as part of init() — if it fails, the rejection
