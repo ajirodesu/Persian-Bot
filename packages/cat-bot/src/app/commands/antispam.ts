@@ -60,7 +60,7 @@ export const meta: CommandMeta = {
   name: 'antispam',
   version: '1.0.0',
   role: Role.ANYONE, // per-subcommand admin gate is inside onCommand
-  author: 'System',
+  author: 'AjiroDesu',
   description: `Auto-kick members who send too many messages in a short time (${windowSeconds}s window).`,
   category: 'Thread Admin',
   usage: [
