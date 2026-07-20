@@ -13,6 +13,12 @@ import type { EditMessageOptions } from '@/engine/adapters/models/api.model.js';
 import { sanitizeMarkdownV2 } from '../utils/markdownv2.util.js';
 import { streamToBuffer, urlToStream } from '@/engine/utils/streams.util.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import { callRawTelegramApi } from '../utils/raw-api.util.js';
+import type {
+  EditRichMessageTextPayload,
+  InputRichBlock,
+  InputRichMessage,
+} from './rich-message.types.js';
 
 /** Maps a file extension to a Telegram InputMedia `type` discriminant — used when replacing message media via editMessageMedia. */
 function getMediaType(ext: string): InputMedia['type'] {
@@ -65,6 +71,42 @@ export async function editMessage(
             ),
           }
         : { inline_keyboard: [] };
+  }
+
+  // ── Rich Message edit dispatch (Bot API 10.1+ InputRichMessage) ────────────
+  // editMessageText accepts either `text` or `rich_message` — never both — so
+  // rich styles are routed here before the legacy attachment/MarkdownV2 paths.
+  // Note: InputRichBlockThinking cannot be persisted this way (or at all outside
+  // sendRichMessageDraft), so thinking placeholders never flow through editMessage.
+  if (style === MessageStyle.RICH_MARKDOWN || style === MessageStyle.RICH_HTML) {
+    const mId = parseInt(messageID, 10);
+    if (!Number.isFinite(mId) || mId <= 0) {
+      throw new Error(`[telegram] editMessage: invalid messageID "${messageID}"`);
+    }
+    const richOpts = typeof options === 'object' ? options.rich : undefined;
+    const rich_message: InputRichMessage = {
+      ...(style === MessageStyle.RICH_MARKDOWN ? { markdown: text } : { html: text }),
+      ...(richOpts?.blocks
+        ? { blocks: richOpts.blocks as unknown as InputRichBlock[] }
+        : {}),
+      ...(richOpts?.isRtl !== undefined ? { is_rtl: richOpts.isRtl } : {}),
+      ...(richOpts?.skipEntityDetection !== undefined
+        ? { skip_entity_detection: richOpts.skipEntityDetection }
+        : {}),
+      ...(richOpts?.media ? { media: richOpts.media } : {}),
+    };
+    const payload: EditRichMessageTextPayload = {
+      chat_id: ctx.chat?.id as number,
+      message_id: mId,
+      rich_message,
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    };
+    await callRawTelegramApi<EditRichMessageTextPayload, unknown>(
+      ctx,
+      'editMessageText',
+      payload,
+    );
+    return;
   }
 
   // Telegram's Bot API separates text editing from media editing:

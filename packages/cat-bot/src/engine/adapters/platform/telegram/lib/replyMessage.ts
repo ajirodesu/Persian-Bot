@@ -12,7 +12,6 @@
  * Telegram displays one caption per group.
  */
 import type { Context } from 'grammy';
-import type { Readable } from 'stream';
 import { InputFile } from 'grammy';
 import type { MessageEntity } from 'grammy/types';
 import {
@@ -24,10 +23,8 @@ import { buildTelegramMentionEntities } from '../utils/helper.util.js';
 import { sanitizeMarkdownV2 } from '../utils/markdownv2.util.js';
 import type { ReplyMessageOptions } from '@/engine/adapters/models/api.model.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-// Augment Readable to carry a path property for extension-based routing
-interface AttachmentStream extends Readable {
-  path?: string;
-}
+import { sendRichMessage } from './sendRichMessage.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export async function replyMessage(
   ctx: Context,
@@ -40,8 +37,47 @@ export async function replyMessage(
     button = [],
     mentions = [],
     style,
+    rich,
   }: ReplyMessageOptions = {},
 ): Promise<string | undefined> {
+  // ── Rich Message dispatch (Bot API 10.1+ InputRichMessage) ─────────────────
+  // Routed before the legacy attachment/MarkdownV2 pipeline entirely — rich
+  // messages carry their own inline-media syntax (markdown/html/blocks) and
+  // Bot API 10.2's InputRichMessageMedia field, so they don't share the
+  // stream/URL attachment-buffering path below. If stream/URL attachments are
+  // supplied alongside a rich style, they're dropped with a warning rather than
+  // silently mixed into a request shape InputRichMessage doesn't support —
+  // callers should use `rich.media` (InputRichMessageMedia) instead.
+  if (style === MessageStyle.RICH_MARKDOWN || style === MessageStyle.RICH_HTML) {
+    if (attachment.length > 0 || attachment_url.length > 0) {
+      logger.debug(
+        '[telegram] replyMessage: stream/URL attachments are ignored for rich styles — use rich.media instead',
+        { attachmentCount: attachment.length, urlCount: attachment_url.length },
+      );
+    }
+    const text =
+      typeof msgBody === 'string'
+        ? msgBody
+        : ((msgBody as { message?: string })?.message ??
+          (msgBody as { body?: string })?.body ??
+          '');
+    return sendRichMessage(ctx, _threadID, {
+      ...(style === MessageStyle.RICH_MARKDOWN
+        ? { markdown: text }
+        : { html: text }),
+      ...(rich?.blocks
+        ? { blocks: rich.blocks as unknown as import('./rich-message.types.js').InputRichBlock[] }
+        : {}),
+      ...(rich?.isRtl !== undefined ? { isRtl: rich.isRtl } : {}),
+      ...(rich?.skipEntityDetection !== undefined
+        ? { skipEntityDetection: rich.skipEntityDetection }
+        : {}),
+      ...(rich?.media ? { media: rich.media } : {}),
+      ...(reply_to_message_id ? { reply_to_message_id } : {}),
+      button,
+    });
+  }
+
   // Guard: Telegram's sendMediaGroup API silently ignores reply_markup (inline keyboards)
   // when the message carries multiple media items. Rather than silently stripping buttons,
   // we reject the combination here so callers receive a clear constraint violation instead

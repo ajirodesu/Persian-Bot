@@ -77,6 +77,36 @@ export interface ButtonItem {
 }
 
 /**
+ * Telegram-only options that accompany style: RICH_MARKDOWN / RICH_HTML.
+ * Ignored on every other platform (Discord/FB fall back to native markdown
+ * rendering of `message` — see message-style.constants.ts for the rationale).
+ */
+export interface RichMessageOptions {
+  /** True if the rich message must be shown right-to-left. */
+  isRtl?: boolean;
+  /**
+   * Skip automatic detection of URLs, emails, @mentions, #hashtags,
+   * $cashtags, /bot_commands, and phone/bank-card numbers in `message`.
+   */
+  skipEntityDetection?: boolean;
+  /**
+   * Bot API 10.2 structured block construction (InputRichMessage.blocks).
+   * When provided, `message` is ignored and this takes over as the sole
+   * content source — used for content that must be built programmatically
+   * (e.g. RichBlockThinking) rather than authored as markdown/html text.
+   * Loosely typed here (kept generic) so this shared interface file doesn't
+   * need to import the full Telegram rich-message type surface; see
+   * adapters/platform/telegram/lib/rich-message.types.ts for the real shape.
+   */
+  blocks?: Array<Record<string, unknown>>;
+  /** Bot API 10.2 — explicit media referenced by markdown/html content. */
+  media?: Array<{
+    type: 'photo' | 'video' | 'audio' | 'voice_note' | 'animation';
+    media: string;
+  }>;
+}
+
+/**
  * Payload accepted by sendMessage() and replyMessage().
  * Platforms that do not support a given field silently ignore it.
  */
@@ -94,6 +124,8 @@ export interface SendPayload {
   attachment?: Readable | NamedStreamAttachment[];
   /** Named URL array; downloaded before send by the platform wrapper. */
   attachment_url?: NamedUrlAttachment[];
+  /** Telegram-only: options for style RICH_MARKDOWN / RICH_HTML. */
+  rich?: RichMessageOptions;
 }
 
 /**
@@ -115,6 +147,8 @@ export interface EditMessageOptions {
   attachment_url?: NamedUrlAttachment[];
   /** Thread ID implicitly injected by chat.editMessage for fallback use by platforms that do not support native editing. */
   threadID?: string;
+  /** Telegram-only: options for style RICH_MARKDOWN / RICH_HTML — edits via rich_message instead of text. */
+  rich?: RichMessageOptions;
 }
 
 /**
@@ -134,9 +168,13 @@ export interface ReplyMessageOptions {
   mentions?: MentionEntry[];
   /**
    * Controls how the message text is rendered.
-   * 'text'     → raw plain text; markdown syntax is escaped / not applied.
-   * 'markdown' → formatted text; each platform uses its native mechanism.
+   * 'text'          → raw plain text; markdown syntax is escaped / not applied.
+   * 'markdown'      → formatted text; each platform uses its native mechanism.
+   * 'rich_markdown' → Telegram-only: InputRichMessage.markdown via sendRichMessage.
+   * 'rich_html'     → Telegram-only: InputRichMessage.html via sendRichMessage.
    * Omitting this field preserves the historic default for that platform.
    */
   style?: MessageStyleValue;
+  /** Telegram-only: options for style RICH_MARKDOWN / RICH_HTML. */
+  rich?: RichMessageOptions;
 }

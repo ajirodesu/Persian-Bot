@@ -402,6 +402,7 @@ export function createChatContext(
       attachment_url = [],
       button = [],
       style,
+      rich,
       ...opts
     } = {}) => {
       // Guard: platforms uniformly support at most 1 total attachment when button components
@@ -437,6 +438,7 @@ export function createChatContext(
           : {}),
         button: resolveButtons(button),
         ...(style !== undefined ? { style } : {}),
+        ...(rich !== undefined ? { rich } : {}),
       });
     },
 
@@ -450,6 +452,7 @@ export function createChatContext(
       attachment_url = [],
       button = [],
       style,
+      rich,
       ...opts
     } = {}) => {
       // Guard: same 1-attachment-maximum constraint as chat.reply — applied independently
@@ -483,6 +486,7 @@ export function createChatContext(
         ...(sendAsNewMessage ? {} : { reply_to_message_id: targetMessageID }),
         button: resolveButtons(button),
         ...(style !== undefined ? { style } : {}),
+        ...(rich !== undefined ? { rich } : {}),
       });
     },
 

@@ -15,6 +15,7 @@
 import type {
   NamedStreamAttachment,
   NamedUrlAttachment,
+  RichMessageOptions,
 } from './api.interfaces.js';
 import type { UnifiedThreadInfo } from '../thread.model.js';
 import type { UnifiedUserInfo } from '../user.model.js';
@@ -35,6 +36,8 @@ export interface EditOptions {
   attachment_url?: NamedUrlAttachment[];
   threadID?: string;
   thread_id?: string;
+  /** Telegram-only: options for style RICH_MARKDOWN / RICH_HTML. */
+  rich?: RichMessageOptions;
 }
 
 /** Shared thread override options for context functions */
@@ -99,11 +102,15 @@ export interface ReplyOptions {
   reply_to_message_id?: string;
   /**
    * Controls how the message text is rendered on the target platform.
-   * 'text'     → raw plain text (escapes markdown characters on Discord).
-   * 'markdown' → formatted text (MarkdownV2 on Telegram; Unicode styled on FB platforms).
+   * 'text'          → raw plain text (escapes markdown characters on Discord).
+   * 'markdown'      → formatted text (MarkdownV2 on Telegram; Unicode styled on FB platforms).
+   * 'rich_markdown' → Telegram-only: InputRichMessage.markdown via sendRichMessage.
+   * 'rich_html'     → Telegram-only: InputRichMessage.html via sendRichMessage.
    * Omitting preserves the historic default behavior for each platform.
    */
   style?: MessageStyleValue;
+  /** Telegram-only: options for style RICH_MARKDOWN / RICH_HTML. */
+  rich?: RichMessageOptions;
 }
 
 /**

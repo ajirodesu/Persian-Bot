@@ -178,6 +178,29 @@ export class UnifiedApi {
   }
 
   /**
+   * Streams/refreshes a "Thinking…" rich-message draft to the thread.
+   * Telegram-only capability (Bot API 10.1+ sendRichMessageDraft +
+   * RichBlockThinking) — defaults to a silent no-op like sendTypingIndicator
+   * so callers (engine/lib/thinking-indicator.lib.ts) can invoke this
+   * unconditionally on any platform without branching on `this.platform`
+   * themselves. Only the Telegram wrapper overrides it.
+   *
+   * `draftId` must stay the same across successive calls for the same
+   * in-flight generation — the Bot API animates same-ID updates client-side
+   * instead of flashing a new placeholder each time.
+   */
+  async sendThinkingDraft(
+    _threadID: string,
+    _text: string,
+    _draftId: number,
+  ): Promise<void> {
+    logger.debug('[UnifiedApi] sendThinkingDraft called', {
+      platform: this.platform,
+      threadID: _threadID,
+    });
+  }
+
+  /**
    * Remove the group chat or server image (set it back to default/no image).
    */
   async removeGroupImage(_threadID: string): Promise<void> {

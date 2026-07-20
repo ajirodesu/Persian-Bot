@@ -13,7 +13,7 @@ import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
-import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
+import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { env } from '@/engine/config/env.config.js';
 import {
@@ -340,7 +340,10 @@ async function runAndReply(
   // The message send result (msgID) is needed by the caller to register reply state;
   // the history save has no return value the caller cares about.
   const [msgID] = await Promise.all([
-    ctx.chat.replyMessage({ style: MessageStyle.MARKDOWN, message: reply }),
+    ctx.chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: reply,
+    }),
     senderID
       ? saveLansHistory(ctx, senderID, appendToHistory(history, userInput, reply))
       : Promise.resolve(undefined),
@@ -379,8 +382,14 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     return;
   }
 
+  const threadID = (ctx.event['threadID'] ?? '') as string;
+
   try {
-    const botMsgID = await runAndReply(rawInput, ctx, senderID);
+    const botMsgID = await withThinkingIndicator<string | undefined>(
+      ctx,
+      threadID,
+      () => runAndReply(rawInput, ctx, senderID),
+    );
     if (botMsgID && senderID) {
       registerReplyState(ctx, botMsgID, senderID);
     }
@@ -439,8 +448,8 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
 
   // ── Typing indicator + admin gate + conversation ───────────────────────────
   try {
-    const botMsgID = await withTypingIndicator<string | undefined>(
-      ctx.api,
+    const botMsgID = await withThinkingIndicator<string | undefined>(
+      ctx,
       threadID,
       async () => {
         // Admin restriction gate
@@ -519,8 +528,8 @@ export const onReply = {
     }
 
     try {
-      const botMsgID = await withTypingIndicator<string | undefined>(
-        ctx.api,
+      const botMsgID = await withThinkingIndicator<string | undefined>(
+        ctx,
         threadID,
         async () => runAndReply(userInput, ctx, senderID),
       );

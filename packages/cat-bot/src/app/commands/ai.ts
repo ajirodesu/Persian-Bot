@@ -9,7 +9,7 @@ import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
-import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
+import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
   getCachedSessionAdminOnly,
@@ -198,8 +198,12 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       : null;
   const userName = senderID ? await ctx.user.getName(senderID) : null;
 
+  const threadID = (ctx.event['threadID'] ?? '') as string;
+
   try {
-    const result = await runAgent(prompt, ctx, nickname, userName);
+    const result = await withThinkingIndicator(ctx, threadID, () =>
+      runAgent(prompt, ctx, nickname, userName),
+    );
     if (result) {
       await ctx.chat.replyMessage({
         style: MessageStyle.MARKDOWN,
@@ -268,7 +272,7 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   // alive for the full processing window rather than starting it only after the
   // DB reads complete.
   try {
-    await withTypingIndicator(ctx.api, threadID, async () => {
+    await withThinkingIndicator(ctx, threadID, async () => {
       // ── Admin restriction gate ───────────────────────────────────────────
       // Must mirror enforceAdminOnly because onChat bypasses the command
       // middleware chain.

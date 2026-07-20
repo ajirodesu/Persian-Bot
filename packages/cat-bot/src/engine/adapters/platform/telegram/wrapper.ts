@@ -42,6 +42,7 @@ import { removeUserFromGroup } from './lib/removeUserFromGroup.js';
 import { replyMessage } from './lib/replyMessage.js';
 import { reactToMessage } from './lib/reactToMessage.js';
 import { sendTypingIndicator } from './lib/sendTypingIndicator.js';
+import { sendThinkingDraft } from './lib/sendRichMessageDraft.js';
 import { getBotID } from './lib/getBotID.js';
 import { setNickname } from './lib/setNickname.js';
 import { editMessage } from './lib/editMessage.js';
@@ -161,6 +162,26 @@ class TelegramApi extends UnifiedApi {
   override sendTypingIndicator(threadID: string): Promise<void> {
     logger.debug('[telegram] sendTypingIndicator called', { threadID });
     return sendTypingIndicator(this.#ctx, threadID);
+  }
+
+  /**
+   * Streams a "Thinking…" RichBlockThinking draft (Bot API 10.1+
+   * sendRichMessageDraft). Private chats only — the Bot API rejects
+   * draft_id/rich_message payloads targeting groups/channels, so callers
+   * (thinking-indicator.lib.ts) are expected to gate on chat type before
+   * invoking this; a failure here is swallowed by the caller either way.
+   */
+  override sendThinkingDraft(
+    threadID: string,
+    text: string,
+    draftId: number,
+  ): Promise<void> {
+    logger.debug('[telegram] sendThinkingDraft called', {
+      threadID,
+      draftId,
+    });
+    const chatId = Number(threadID) || (this.#ctx.chat?.id as number);
+    return sendThinkingDraft(this.#ctx, { chatId, draftId, text });
   }
 
   override getBotID(): Promise<string> {
