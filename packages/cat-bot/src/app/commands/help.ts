@@ -54,7 +54,12 @@ import type { CommandMeta } from '@/engine/types/module-config.types.js';
 
 export const meta: CommandMeta = {
   name: 'help',
-  aliases: ['start'] as string[],
+  // 'start' used to be an alias here, but /start is now its own dedicated
+  // onboarding command (start.ts) — keeping both would race for the same
+  // CommandMap key at load time (app.ts's registration loop has no
+  // collision detection; last write to `commands.set()` wins, and file
+  // load order isn't guaranteed). /start links back to /help itself.
+  aliases: [] as string[],
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'John Lester',

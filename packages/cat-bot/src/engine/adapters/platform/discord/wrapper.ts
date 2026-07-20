@@ -49,6 +49,10 @@ import { getBotID as getBotIDLib } from './lib/getBotID.js';
 import { getFullThreadInfo as getFullThreadInfoLib } from './lib/getFullThreadInfo.js';
 import { getFullUserInfo as getFullUserInfoLib } from './lib/getFullUserInfo.js';
 import { removeUserFromGroup as removeUserFromGroupLib } from './lib/removeUserFromGroup.js';
+import {
+  restrictUser as restrictUserLib,
+  unrestrictUser as unrestrictUserLib,
+} from './lib/restrictUser.js';
 import { getAvatarUrl as getAvatarUrlLib } from './lib/getAvatarUrl.js';
 
 // Unsupported operations consolidated into single file
@@ -241,6 +245,25 @@ class DiscordApi extends UnifiedApi {
       userID,
     });
     return removeUserFromGroupLib(this.#interaction.guild, userID);
+  }
+  override restrictUser(
+    _threadID: string,
+    userID: string,
+    durationMs?: number,
+  ): Promise<void> {
+    logger.debug('[discord] restrictUser called', {
+      threadID: _threadID,
+      userID,
+      durationMs,
+    });
+    return restrictUserLib(this.#interaction.guild, userID, durationMs);
+  }
+  override unrestrictUser(_threadID: string, userID: string): Promise<void> {
+    logger.debug('[discord] unrestrictUser called', {
+      threadID: _threadID,
+      userID,
+    });
+    return unrestrictUserLib(this.#interaction.guild, userID);
   }
   override setGroupReaction(_threadID: string, _emoji: string): Promise<void> {
     logger.debug('[discord] setGroupReaction called', {
