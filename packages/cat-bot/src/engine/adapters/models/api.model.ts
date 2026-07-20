@@ -242,47 +242,6 @@ export class UnifiedApi {
   }
 
   /**
-   * Restrict a member's ability to send messages/media in the group, without
-   * removing them from it.
-   *
-   * `durationMs` is optional — when omitted, the restriction is indefinite
-   * (until explicitly lifted via unrestrictUser). When provided, platforms
-   * that support a native expiry (Discord's timeout, Telegram's until_date)
-   * apply it directly; platforms that don't may ignore it and require an
-   * explicit unrestrictUser call instead.
-   */
-  async restrictUser(
-    _threadID: string,
-    _userID: string,
-    _durationMs?: number,
-  ): Promise<void> {
-    logger.debug('[UnifiedApi] restrictUser called', {
-      platform: this.platform,
-      threadID: _threadID,
-      userID: _userID,
-      durationMs: _durationMs,
-    });
-    throw new Error(
-      `restrictUser is not supported on platform: ${this.platform}`,
-    );
-  }
-
-  /**
-   * Lifts a restriction previously applied via restrictUser, restoring the
-   * member's default ability to send messages/media in the group.
-   */
-  async unrestrictUser(_threadID: string, _userID: string): Promise<void> {
-    logger.debug('[UnifiedApi] unrestrictUser called', {
-      platform: this.platform,
-      threadID: _threadID,
-      userID: _userID,
-    });
-    throw new Error(
-      `unrestrictUser is not supported on platform: ${this.platform}`,
-    );
-  }
-
-  /**
    * Set the group's quick-reaction emoji (the default "like" button emoji).
    * Some platforms may not support this.
    */

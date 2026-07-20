@@ -18,6 +18,7 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
     "allowJs": true,
+    /* Path Mapping */
     "baseUrl": "./src",
     "paths": {
       "@/*": ["./*"],

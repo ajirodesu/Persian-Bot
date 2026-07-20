@@ -39,10 +39,6 @@ import { setGroupName } from './lib/setGroupName.js';
 import { setGroupImage } from './lib/setGroupImage.js';
 import { removeGroupImage } from './lib/removeGroupImage.js';
 import { removeUserFromGroup } from './lib/removeUserFromGroup.js';
-import {
-  restrictUser as restrictUserLib,
-  unrestrictUser as unrestrictUserLib,
-} from './lib/restrictUser.js';
 import { replyMessage } from './lib/replyMessage.js';
 import { reactToMessage } from './lib/reactToMessage.js';
 import { sendTypingIndicator } from './lib/sendTypingIndicator.js';
@@ -140,20 +136,6 @@ class TelegramApi extends UnifiedApi {
   ): Promise<void> {
     logger.debug('[telegram] removeUserFromGroup called', { threadID, userID });
     return removeUserFromGroup(this.#ctx, threadID, userID);
-  }
-
-  override restrictUser(
-    threadID: string,
-    userID: string,
-    durationMs?: number,
-  ): Promise<void> {
-    logger.debug('[telegram] restrictUser called', { threadID, userID, durationMs });
-    return restrictUserLib(this.#ctx, threadID, userID, durationMs);
-  }
-
-  override unrestrictUser(threadID: string, userID: string): Promise<void> {
-    logger.debug('[telegram] unrestrictUser called', { threadID, userID });
-    return unrestrictUserLib(this.#ctx, threadID, userID);
   }
 
   override replyMessage(
