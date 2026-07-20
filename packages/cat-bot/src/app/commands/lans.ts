@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
@@ -31,13 +31,34 @@ const LANS_SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
   'utf-8',
 );
 
-// ── Groq singleton for Lans ───────────────────────────────────────────────────
-let _groqInstance: Groq | null = null;
-function getGroq(): Groq {
+// ── Template placeholder substitution ─────────────────────────────────────────
+/**
+ * Replaces every `{{KEY}}` placeholder found in `template` with the matching
+ * value from `vars`, wrapped in Markdown bold so the substituted value stands
+ * out to the model. Placeholders with no matching key are left as-is but are
+ * still wrapped in bold, so every `{{...}}` in the template is always
+ * highlighted either way.
+ */
+function applyTemplateVars(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    const value = vars[key];
+    return `**${value !== undefined ? value : match}**`;
+  });
+}
+
+// ── OpenRouter singleton for Lans ─────────────────────────────────────────────
+let _groqInstance: OpenAI | null = null;
+function getGroq(): OpenAI {
   if (!_groqInstance) {
-    const key = env.GROQ_API_KEY;
-    if (!key) throw new Error('GROQ_API_KEY is not set. Lans is unavailable.');
-    _groqInstance = new Groq({ apiKey: key });
+    const key = env.OPENROUTER_API_KEY;
+    if (!key) throw new Error('OPENROUTER_API_KEY is not set. Lans is unavailable.');
+    _groqInstance = new OpenAI({
+      apiKey: key,
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
   }
   return _groqInstance;
 }
@@ -48,7 +69,7 @@ const STATE = {
 } as const;
 
 // ── Conversation history constants ────────────────────────────────────────────
-const LANS_MODEL = 'openai/gpt-oss-120b';
+const LANS_MODEL = 'tencent/hy3:free';
 /**
  * Maximum messages (user + assistant) retained per user.
  * 20 messages = 10 full exchanges. Oldest are trimmed from the front.
@@ -282,9 +303,10 @@ async function isBlockedByAdminRestrictions(
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
 function buildLansSystemPrompt(userName: string | null, botNickname: string | null): string {
-  return LANS_SYSTEM_PROMPT_TEMPLATE
-    .replace(/\{\{USER_NAME\}\}/g, userName ?? 'User')
-    .replace(/\{\{BOT_NAME\}\}/g, botNickname ?? 'Cat-Bot');
+  return applyTemplateVars(LANS_SYSTEM_PROMPT_TEMPLATE, {
+    USER_NAME: userName ?? 'User',
+    BOT_NAME: botNickname ?? 'Cat-Bot',
+  });
 }
 
 // ── Nickname / username resolver ──────────────────────────────────────────────
@@ -421,24 +443,15 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
       ? stripTelegramMentions(message)
       : message;
 
-  // If the user is replying directly to one of Lans's messages, continue
-  // the conversation without requiring them to say her name again.
-  const messageReply = ctx.event['messageReply'] as
-    | Record<string, unknown>
-    | null
-    | undefined;
-  const repliedToSenderID = messageReply?.['senderID'] as string | undefined;
-  let isReplyToBot = false;
-  if (repliedToSenderID) {
-    try {
-      const botID = await ctx.bot.getID();
-      isReplyToBot = !!botID && repliedToSenderID === botID;
-    } catch {
-      // Fail-open: if we can't resolve the bot ID, fall through to name check.
-    }
-  }
-
-  if (!isReplyToBot && !/\blans\b/i.test(matchSource)) return;
+  // Continuing a conversation by replying directly to one of Lans's own
+  // messages is handled exclusively by the onReply state handler below,
+  // which is scoped precisely to her immediately-preceding message ID via
+  // registerReplyState. We must NOT treat "this message is a reply to some
+  // bot message" as reason enough to respond here — that would incorrectly
+  // fire for replies to any other command's output that happens to be from
+  // the bot but has nothing to do with Lans. So onChat only reacts to an
+  // explicit mention of her name.
+  if (!/\blans\b/i.test(matchSource)) return;
 
   // ── Reset intent ───────────────────────────────────────────────────────────
   if (/^\s*lans\s+reset\s*[!.]?\s*$/i.test(matchSource)) {

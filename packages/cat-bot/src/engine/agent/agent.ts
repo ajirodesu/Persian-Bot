@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import Groq from 'groq-sdk';
+import OpenAI from 'openai';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { resolveAgentContext } from '@/engine/agent/agent.util.js';
 import { env } from '@/engine/config/env.config.js';
@@ -24,21 +24,44 @@ const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
 );
 
 // ============================================================================
-// GROQ CLIENT SINGLETON
+// TEMPLATE PLACEHOLDER SUBSTITUTION
 // ============================================================================
-// Creating a new Groq instance on every runAgent call is wasteful — the
+/**
+ * Replaces every `{{KEY}}` placeholder found in `template` with the matching
+ * value from `vars`, wrapped in Markdown bold so the substituted value stands
+ * out to the model. Placeholders with no matching key are left as-is but are
+ * still wrapped in bold, so every `{{...}}` in the template is always
+ * highlighted either way.
+ */
+function applyTemplateVars(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    const value = vars[key];
+    return `**${value !== undefined ? value : match}**`;
+  });
+}
+
+// ============================================================================
+// OPENROUTER CLIENT SINGLETON
+// ============================================================================
+// Creating a new OpenAI instance on every runAgent call is wasteful — the
 // client is stateless (just holds the API key and base URL) and safe to
 // reuse across calls.  Lazy-initialise once and reuse for the process lifetime.
-let _groqInstance: Groq | null = null;
-function getGroq(): Groq {
+let _groqInstance: OpenAI | null = null;
+function getGroq(): OpenAI {
   if (!_groqInstance) {
-    const key = env.GROQ_API_KEY;
+    const key = env.OPENROUTER_API_KEY;
     if (!key) {
       throw new Error(
-        'GROQ_API_KEY environment variable is not set. AI capabilities are disabled.',
+        'OPENROUTER_API_KEY environment variable is not set. AI capabilities are disabled.',
       );
     }
-    _groqInstance = new Groq({ apiKey: key });
+    _groqInstance = new OpenAI({
+      apiKey: key,
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
   }
   return _groqInstance;
 }
@@ -49,7 +72,7 @@ function getGroq(): Groq {
 
 // Use the SDK's own type for the cached descriptor array so assignment to
 // groq.chat.completions.create({ tools }) satisfies TypeScript without casting.
-type GroqTool = Groq.Chat.Completions.ChatCompletionTool;
+type GroqTool = OpenAI.Chat.Completions.ChatCompletionTool;
 
 let cachedTools: AgentTool[] | null = null;
 /** Pre-built Groq-API-shaped tool descriptors — derived once from cachedTools. */
@@ -202,14 +225,13 @@ export async function runAgent(
 
   const systemContent = systemPromptOverride
     ? systemPromptOverride
-    : SYSTEM_PROMPT_TEMPLATE.replace(
-        '{{BOT_NAME}}',
-        nickname || 'Cat-Bot',
-      )
-        .replace('{{USER_NAME}}', userName || 'User')
-        .replace('{{COMMAND_PREFIX}}', ctx.prefix || '/')
-        .replace('{{USER_ROLE}}', userRoleLabel)
-        .replace('{{AVAILABLE_COMMANDS}}', availableCommandsList);
+    : applyTemplateVars(SYSTEM_PROMPT_TEMPLATE, {
+        BOT_NAME: nickname || 'Cat-Bot',
+        USER_NAME: userName || 'User',
+        COMMAND_PREFIX: ctx.prefix || '/',
+        USER_ROLE: userRoleLabel,
+        AVAILABLE_COMMANDS: availableCommandsList,
+      });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
@@ -224,7 +246,7 @@ export async function runAgent(
 
   while (turns-- > 0) {
     const response = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'tencent/hy3:free',
       messages,
       tools: groqTools,
       tool_choice: 'auto',
@@ -247,6 +269,20 @@ export async function runAgent(
     // 🔧 TOOL EXECUTION
     // =========================
     for (const toolCall of message.tool_calls) {
+      // This agent only ever registers function-type tools (see cachedGroqTools
+      // above), so the model can never legitimately return a custom tool call.
+      // Narrowing here keeps this compiling against SDK versions that model
+      // ChatCompletionMessageToolCall as a function/custom union, and fails
+      // gracefully rather than crashing if one ever slips through.
+      if (toolCall.type !== 'function') {
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: `Error: Unsupported tool call type '${toolCall.type}'.`,
+        });
+        continue;
+      }
+
       const tool = cachedToolsMap!.get(toolCall.function.name);
 
       if (!tool) {
