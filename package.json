@@ -22,8 +22,8 @@
     "packages/cat-bot",
     "packages/database",
     "packages/database/adapters/neondb",
- "packages/database/adapters/mongodb",
- "packages/web"
+    "packages/database/adapters/mongodb",
+    "packages/web"
   ],
-  "devDependencies": {}
+  "dependencies": {}
 }

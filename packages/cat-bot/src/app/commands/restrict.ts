@@ -19,11 +19,14 @@
  * exactly like a standalone command module.
  *
  * ── Target resolution ─────────────────────────────────────────────────────
- * Same priority as kick.ts: reply > @mention > raw ID argument. When the
- * target comes from a reply or mention, every remaining arg is free to be
- * read as the optional duration; when the target comes from a raw ID
- * argument, the first arg is consumed as the target and duration parsing
- * starts from the next one.
+ * Priority (highest → lowest):
+ *   1. ctx.options.get('user') — Discord slash commands and key:value text
+ *      options both land here after validateCommandOptions pre-resolves them.
+ *      This is the ONLY reliable path for Discord slash commands because
+ *      `event.mentions` is always empty ({}) for slash interactions.
+ *   2. event.messageReply.senderID — reply to a message targets its author.
+ *   3. event.mentions — first @mention in a text-prefix message.
+ *   4. args[0] — raw numeric ID typed by the user.
  *
  * ── Underlying capability ─────────────────────────────────────────────────
  * ctx.api.restrictUser() / ctx.api.unrestrictUser() (see api.model.ts):
@@ -60,28 +63,56 @@ function parseDuration(str: string): number | null {
   return ms > 0 ? Math.min(ms, MAX_DURATION_MS) : null;
 }
 
-// ── Target resolution (reply > @mention > raw ID argument, same as kick.ts) ──
+// ── Target resolution ─────────────────────────────────────────────────────────
+//
+// WHY ctx.options is checked first:
+//   Discord slash commands set mentions:{} unconditionally (see normalizers.util.ts
+//   normalizeInteractionEvent). The user ID for a slash-command user option is
+//   pre-resolved by event-handlers.ts into optionsRecord and then into ctx.options
+//   by validateCommandOptions middleware. Without this check, every slash command
+//   invocation falls through to args[0] — which can be empty or wrong depending on
+//   option resolution order, triggering a false "no target" error even when the user
+//   correctly selected a target from Discord's native user picker.
 
+/**
+ * Resolves the target user ID from the command context.
+ * Checks sources in priority order: named option → reply → mention → raw arg.
+ */
 function resolveTargetID(ctx: AppCtx): string | undefined {
+  // 1. Named 'user' option — most reliable for slash commands (Discord) and
+  //    for any platform using key:value style (user:12345). validateCommandOptions
+  //    has already populated ctx.options from optionsRecord (slash) or body text (others).
+  const optUser = ctx.options.get('user');
+  if (optUser) return optUser;
+
+  // 2. Reply — replying to a message targets its author
   const reply = ctx.event['messageReply'] as Record<string, unknown> | undefined;
   const fromReply = reply?.['senderID'] as string | undefined;
   if (fromReply) return fromReply;
 
+  // 3. @mention — first mentioned user in a text-prefix message
   const mentions = ctx.event['mentions'] as Record<string, string> | undefined;
   const mentionIDs = Object.keys(mentions ?? {});
   if (mentionIDs.length > 0) return mentionIDs[0];
 
+  // 4. Raw ID argument — bare numeric/alphanumeric ID typed by the user
   return ctx.args[0];
 }
 
-/** True when the target came from a reply or mention rather than args[0]. */
+/**
+ * True when the target came from a named option, reply, or mention —
+ * i.e. NOT from args[0]. Used to decide whether args[0] is still
+ * available as the first duration token.
+ */
 function hasExplicitTarget(ctx: AppCtx): boolean {
+  // Named option covers Discord slash commands and key:value text usage
+  if (ctx.options.has('user')) return true;
   const reply = ctx.event['messageReply'] as Record<string, unknown> | undefined;
   const mentions = ctx.event['mentions'] as Record<string, string> | undefined;
   return Boolean(reply?.['senderID']) || Object.keys(mentions ?? {}).length > 0;
 }
 
-// ── Config ─────────────────────────────────────────────────────────────────
+// ── Config ────────────────────────────────────────────────────────────────────
 
 interface RestrictionConfig {
   name: string;
@@ -126,9 +157,6 @@ async function runRestriction(ctx: AppCtx, config: RestrictionConfig): Promise<v
 
   const explicitTarget = hasExplicitTarget(ctx);
   const targetID = resolveTargetID(ctx);
-  // Raw-ID path consumes args[0] as the target; reply/mention paths leave
-  // every arg free to be read as the duration.
-  const durationArgs = explicitTarget ? args : args.slice(1);
 
   if (!targetID) {
     await chat.replyMessage({
@@ -157,6 +185,27 @@ async function runRestriction(ctx: AppCtx, config: RestrictionConfig): Promise<v
       message: `❌ You cannot ${config.name} yourself.`,
     });
     return;
+  }
+
+  // ── Duration resolution ────────────────────────────────────────────────────
+  //
+  // For slash commands (and key:value text options), ctx.options.get('duration')
+  // holds the pre-resolved value — use it directly so the positional-args path
+  // (which would re-read args[0] as the duration when explicitTarget=true and
+  // args[0] is the user ID) doesn't misparse the user ID as a duration.
+  //
+  // For text-prefix commands without key:value options, fall back to positional:
+  //   — explicitTarget (reply/mention): every arg is free → durationArgs = args
+  //   — raw-ID path: args[0] was the target → durationArgs = args.slice(1)
+
+  let durationArgs: string[];
+  const namedDuration = ctx.options.get('duration');
+  if (namedDuration !== undefined) {
+    // Named option path (slash command or explicit key:value) — use directly
+    durationArgs = namedDuration ? [namedDuration] : [];
+  } else {
+    // Positional path — skip args[0] only when it was consumed as the target ID
+    durationArgs = explicitTarget ? args : args.slice(1);
   }
 
   // Optional duration — only meaningful for /restrict

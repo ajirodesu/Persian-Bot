@@ -38,6 +38,7 @@ const BotConsolePage = lazy(() => import('@/pages/dashboard/bot/index'))
 const BotCommandsPage = lazy(() => import('@/pages/dashboard/bot/commands'))
 const BotEventsPage = lazy(() => import('@/pages/dashboard/bot/events'))
 const BotSettingsPage = lazy(() => import('@/pages/dashboard/bot/settings'))
+const BotDatabasePage = lazy(() => import('@/pages/dashboard/bot/database'))
 const AdminLoginPage = lazy(() => import('@/pages/admin'))
 const AdminForgotPasswordPage = lazy(() => import('@/pages/admin/ForgotPassword'))
 const AdminResetPasswordPage = lazy(() => import('@/pages/admin/ResetPassword'))
@@ -135,6 +136,10 @@ export const router = createBrowserRouter([
               {
                 path: ROUTE_SEGMENTS.EVENTS,
                 element: withSuspense(<BotEventsPage />),
+              },
+              {
+                path: ROUTE_SEGMENTS.DATABASE,
+                element: withSuspense(<BotDatabasePage />),
               },
               {
                 path: ROUTE_SEGMENTS.SETTINGS,

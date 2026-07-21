@@ -107,6 +107,7 @@ export default function BotLayout() {
           <Tabs.Tab value="console">Console</Tabs.Tab>
           <Tabs.Tab value="commands">Commands</Tabs.Tab>
           <Tabs.Tab value="events">Events</Tabs.Tab>
+          <Tabs.Tab value="database">Database</Tabs.Tab>
           <Tabs.Tab value="settings">Settings</Tabs.Tab>
         </Tabs.List>
       </Tabs.Root>

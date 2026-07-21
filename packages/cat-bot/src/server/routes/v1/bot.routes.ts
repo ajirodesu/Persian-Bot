@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { botController } from '@/server/controllers/v1/bot.controller.js';
 // Commands/events toggle endpoints share the /:id base path with the bot routes
 import { botSessionConfigController } from '@/server/controllers/v1/bot-session-config.controller.js';
+import { botDatabaseController } from '@/server/controllers/v1/bot-database.controller.js';
 
 const botRouter = Router();
 
@@ -71,6 +72,48 @@ botRouter.get('/:id/events', (req, res) => {
 // PUT /api/v1/bots/:id/events/:name — toggles a single event module on/off.
 botRouter.put('/:id/events/:name', (req, res) => {
   void botSessionConfigController.toggleEvent(req, res);
+});
+
+// ── Database panel ─────────────────────────────────────────────────────────
+
+// GET /api/v1/bots/:id/database/users — list users for this bot session (paginated + searchable)
+botRouter.get('/:id/database/users', (req, res) => {
+  void botDatabaseController.listUsers(req, res);
+});
+
+// DELETE /api/v1/bots/:id/database/users/:userId — remove user session record
+botRouter.delete('/:id/database/users/:userId', (req, res) => {
+  void botDatabaseController.deleteUser(req, res);
+});
+
+// POST /api/v1/bots/:id/database/users/:userId/ban — ban a user
+botRouter.post('/:id/database/users/:userId/ban', (req, res) => {
+  void botDatabaseController.banUser(req, res);
+});
+
+// DELETE /api/v1/bots/:id/database/users/:userId/ban — unban a user
+botRouter.delete('/:id/database/users/:userId/ban', (req, res) => {
+  void botDatabaseController.unbanUser(req, res);
+});
+
+// GET /api/v1/bots/:id/database/groups — list groups for this bot session (paginated + searchable)
+botRouter.get('/:id/database/groups', (req, res) => {
+  void botDatabaseController.listGroups(req, res);
+});
+
+// DELETE /api/v1/bots/:id/database/groups/:groupId — remove group session record
+botRouter.delete('/:id/database/groups/:groupId', (req, res) => {
+  void botDatabaseController.deleteGroup(req, res);
+});
+
+// POST /api/v1/bots/:id/database/groups/:groupId/ban — ban a group
+botRouter.post('/:id/database/groups/:groupId/ban', (req, res) => {
+  void botDatabaseController.banGroup(req, res);
+});
+
+// DELETE /api/v1/bots/:id/database/groups/:groupId/ban — unban a group
+botRouter.delete('/:id/database/groups/:groupId/ban', (req, res) => {
+  void botDatabaseController.unbanGroup(req, res);
 });
 
 export default botRouter;

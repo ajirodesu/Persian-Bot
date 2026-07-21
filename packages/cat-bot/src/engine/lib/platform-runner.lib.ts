@@ -22,7 +22,9 @@
  *
  * Lifecycle ownership — platforms MUST NOT call these directly:
  *   markRetrying / markNotRetrying  — retry slot management
- *   markInactive                    — fired on entry and on every failed attempt
+ *   markInactiveTransient           — fired on entry and on every failed attempt (no DB write,
+ *                                     preserves isRunning=true so sessions resume on restart)
+ *   markInactive                    — fired ONLY after all retries are exhausted (writes DB)
  *   markActive                      — fired ONLY after boot() resolves without throwing
  *   markLocked / markUnlocked       — transition guard around each boot() invocation
  */
@@ -87,8 +89,12 @@ export async function runManagedSession(
     controller.abort(),
   );
 
-  // Signal the dashboard offline immediately; markActive fires on successful boot only.
-  void sessionManager.markInactive(smKey);
+  // Update in-memory state and dashboard without writing isRunning=false to the DB.
+  // Using markInactiveTransient here is critical for session persistence across restarts:
+  // if the process is killed between this call and markActive completing, isRunning
+  // stays true in the DB so session-loader.util.ts auto-resumes the session on next boot.
+  // markInactive (DB write) is reserved for permanent failures only (see .catch below).
+  sessionManager.markInactiveTransient(smKey);
 
   let isFirstAttempt = true;
 
@@ -130,8 +136,9 @@ export async function runManagedSession(
             `${label} Start attempt ${attempt}/10 failed — retrying with backoff`,
             { error: err },
           );
-          // Keep the dashboard in sync: session remains offline during back-off sleep.
-          void sessionManager.markInactive(smKey);
+          // Keep dashboard in sync during back-off without writing false to the DB —
+          // same reasoning as the entry call above: transient only to preserve DB state.
+          sessionManager.markInactiveTransient(smKey);
         },
         // Auth errors (bad token, blocked session) are permanent — stop retrying immediately.
         shouldRetry: (err) => !isAuthError(err),

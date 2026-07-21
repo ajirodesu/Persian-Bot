@@ -26,6 +26,7 @@ export const ROUTES = {
     BOT_COMMANDS: '/dashboard/bot/commands',
     BOT_EVENTS: '/dashboard/bot/events',
     BOT_SETTINGS: '/dashboard/bot/settings',
+    BOT_DATABASE: '/dashboard/bot/database',
   },
   ADMIN: {
     ROOT: '/admin',
@@ -57,6 +58,7 @@ export const ROUTE_SEGMENTS = {
   CREATE_NEW_BOT: 'create-new-bot',
   CHAT_ROOM: 'chat-room',
   BOT: 'bot',
+  DATABASE: 'database',
   ADMIN: 'admin',
   ADMIN_LOGIN: 'login',
   ADMIN_FORGOT_PASSWORD: 'forgot-password',
