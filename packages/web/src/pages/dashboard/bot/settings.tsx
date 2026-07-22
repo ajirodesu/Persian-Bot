@@ -577,15 +577,15 @@ export default function BotSettingsPage() {
 
         <div
           className={[
-            'flex items-center justify-between gap-4 rounded-xl p-3.5 transition-colors duration-normal',
+            'flex items-start justify-between gap-2 rounded-xl p-3.5 transition-colors duration-normal',
             adminOnlyEnabled ? 'bg-primary/10' : 'bg-surface-container',
           ].join(' ')}
         >
-          <div className="min-w-0">
+          <div className="flex flex-col gap-1.5 min-w-0">
             <p className="text-body-md font-medium text-on-surface">
               Restrict the bot to bot admins only
             </p>
-            <p className="text-body-sm text-on-surface-variant">
+            <p className="text-body-sm text-on-surface-variant leading-relaxed">
               {adminOnlyEnabled
                 ? 'Non-admins are currently blocked from using commands in every thread.'
                 : 'All users can currently use the bot as normal.'}
@@ -602,6 +602,7 @@ export default function BotSettingsPage() {
             <Switch
               checked={adminOnlyEnabled}
               onChange={() => void handleToggleAdminOnly(!adminOnlyEnabled)}
+              className="shrink-0"
             />
           )}
         </div>

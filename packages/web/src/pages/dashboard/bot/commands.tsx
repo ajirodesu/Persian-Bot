@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Search, ChevronRight, ShieldOff, Terminal, Power, ShieldCheck } from 'lucide-react'
+import { Search, ChevronRight, ShieldOff, Terminal } from 'lucide-react'
 import Card from '@/components/ui/data-display/Card'
 import Badge from '@/components/ui/data-display/Badge'
 import DataList from '@/components/ui/data-display/DataList'
@@ -169,43 +169,34 @@ function CommandDetailDialog({
                     Settings
                   </p>
 
-                  {/* Switch row 1 — Command Enabled */}
-                  <div className="flex w-full items-center justify-between gap-4 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3.5 mb-2.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 shrink-0">
-                        <Power className="w-3.5 h-3.5 text-primary" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-body-sm font-semibold text-on-surface leading-snug">
-                          Commands
-                        </p>
-                        <p className="text-label-sm text-on-surface-variant leading-snug mt-0.5">
-                          Enable or disable this command during dispatch.
-                        </p>
-                      </div>
+                  {/* Switch row 1 — Commands (matches Events switch row style) */}
+                  <div className="flex items-start justify-between gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-4 mb-2.5">
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <p className="text-body-sm font-semibold text-on-surface leading-snug">
+                        Commands
+                      </p>
+                      <p className="text-label-sm text-on-surface-variant leading-relaxed">
+                        Enable or disable this command during dispatch.
+                      </p>
                     </div>
                     <Switch
                       checked={command.isEnable}
                       onChange={() =>
                         onToggleEnabled(command.commandName, !command.isEnable)
                       }
+                      className="shrink-0"
                     />
                   </div>
 
-                  {/* Switch row 2 — Bot Admin Only */}
-                  <div className="flex w-full items-center justify-between gap-4 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-warning/10 shrink-0">
-                        <ShieldCheck className="w-3.5 h-3.5 text-warning" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-body-sm font-semibold text-on-surface leading-snug">
-                          Bot Admin Only
-                        </p>
-                        <p className="text-label-sm text-on-surface-variant leading-snug mt-0.5">
-                          Exempt this command from session-wide admin-only mode.
-                        </p>
-                      </div>
+                  {/* Switch row 2 — Bot Admin Only (matches Events switch row style) */}
+                  <div className="flex items-start justify-between gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-4">
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <p className="text-body-sm font-semibold text-on-surface leading-snug">
+                        Bot Admin Only
+                      </p>
+                      <p className="text-label-sm text-on-surface-variant leading-relaxed">
+                        Exempt this command from session-wide admin-only mode.
+                      </p>
                     </div>
                     <Switch
                       checked={command.ignoresAdminOnly}
@@ -215,6 +206,7 @@ function CommandDetailDialog({
                           !command.ignoresAdminOnly,
                         )
                       }
+                      className="shrink-0"
                     />
                   </div>
                 </div>
