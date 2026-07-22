@@ -48,7 +48,7 @@ export interface ThinkingIndicatorOptions {
  * Telegram private chats only — additionally streaming an animated
  * RichBlockThinking draft for the duration.
  *
- * Safe to call unconditionally from cross-platform code (agent.ts, lans.ts):
+ * Safe to call unconditionally from cross-platform code (agent.ts):
  * on Discord/WebChat, and on Telegram groups, this behaves identically to
  * withTypingIndicator — the thinking-draft branch is simply skipped.
  */
