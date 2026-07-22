@@ -201,7 +201,7 @@ function DatabaseToolbar({
 
 // ── Users tab ─────────────────────────────────────────────────────────────────
 
-function UsersTab({ sessionId }: { sessionId: string }) {
+function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
   const {
     users,
     total,
@@ -221,7 +221,7 @@ function UsersTab({ sessionId }: { sessionId: string }) {
     deleteUser,
     banUser,
     unbanUser,
-  } = useBotDatabaseUsers(sessionId)
+  } = useBotDatabaseUsers(sessionId, sessionKey)
   const { snackbar, setPosition } = useSnackbar()
 
   const notify = (message: string, color: 'success' | 'warning') => {
@@ -657,7 +657,7 @@ function UsersTab({ sessionId }: { sessionId: string }) {
 
 // ── Groups tab ────────────────────────────────────────────────────────────────
 
-function GroupsTab({ sessionId }: { sessionId: string }) {
+function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
   const {
     groups,
     total,
@@ -677,7 +677,7 @@ function GroupsTab({ sessionId }: { sessionId: string }) {
     deleteGroup,
     banGroup,
     unbanGroup,
-  } = useBotDatabaseGroups(sessionId)
+  } = useBotDatabaseGroups(sessionId, sessionKey)
   const { snackbar, setPosition } = useSnackbar()
 
   const notify = (message: string, color: 'success' | 'warning') => {
@@ -1132,8 +1132,11 @@ function GroupsTab({ sessionId }: { sessionId: string }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BotDatabasePage() {
-  const { id: sessionId } = useBotContext()
+  const { bot, id: sessionId } = useBotContext()
   const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users')
+  // Full session key for the real-time Socket.IO room — matches the server's
+  // `${userId}:${platform}:${sessionId}` convention (banned.repo.ts / bot-database.socket.ts).
+  const sessionKey = bot ? `${bot.userId}:${bot.platform}:${bot.sessionId}` : undefined
 
   return (
     <div className="flex flex-col gap-6">
@@ -1167,9 +1170,9 @@ export default function BotDatabasePage() {
       </Tabs.Root>
 
       {activeTab === 'users' ? (
-        <UsersTab sessionId={sessionId} />
+        <UsersTab sessionId={sessionId} sessionKey={sessionKey} />
       ) : (
-        <GroupsTab sessionId={sessionId} />
+        <GroupsTab sessionId={sessionId} sessionKey={sessionKey} />
       )}
     </div>
   )

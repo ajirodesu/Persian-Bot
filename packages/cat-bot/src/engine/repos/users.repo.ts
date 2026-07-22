@@ -27,6 +27,7 @@ import {
   getUserSessionUpdatedAt as _getUserSessionUpdatedAt,
 } from 'database';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
+import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 
 // ── Cache key builders ────────────────────────────────────────────────────────
 
@@ -124,6 +125,16 @@ export async function upsertUserSession(
     userSessionUpdatedAtKey(userId, platform, sessionId, botUserId),
     new Date(),
   );
+  // Live-refresh the dashboard Database panel — a user's `last_seen` (and their
+  // first appearance in the list) should update the instant the bot processes
+  // their message, not only after a manual refresh.
+  dbChangeEmitter.publish({
+    key: `${userId}:${platform}:${sessionId}`,
+    type: 'user',
+    action: 'upsert',
+    id: botUserId,
+    patch: { last_seen: new Date().toISOString() },
+  });
 }
 
 export async function getUserName(userId: string): Promise<string> {

@@ -14,6 +14,7 @@ import { createApp } from './app.js';
 import { initSocketIO } from './socket/socket.lib.js';
 import { registerValidationHandlers } from './socket/validation.socket.js';
 import { registerBotMonitorHandlers } from './socket/bot-monitor.socket.js';
+import { registerBotDatabaseHandlers } from './socket/bot-database.socket.js';
 import { registerChatRoomHandlers } from './socket/chat-room.socket.js';
 
 /**
@@ -31,6 +32,7 @@ export function startServer(): void {
   const io = initSocketIO(httpServer, corsOrigin);
   registerValidationHandlers(io);
   registerBotMonitorHandlers(io);
+  registerBotDatabaseHandlers(io);
   registerChatRoomHandlers(io);
 
   // Bind explicitly to 0.0.0.0 — without this Node.js defaults to '::' (IPv6 dual-stack),

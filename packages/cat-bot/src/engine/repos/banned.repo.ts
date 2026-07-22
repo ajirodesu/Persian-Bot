@@ -16,6 +16,7 @@ import {
   isThreadBanned as _isThreadBanned,
 } from 'database';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
+import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 
 // ── Cache key builders ─────────────────────────────────────────────────────────
 // Colon-separated segments make prefix scanning unambiguous and human-readable in
@@ -35,6 +36,10 @@ const threadBanKey = (
   botThreadId: string,
 ): string => `${userId}:${platform}:${sessionId}:banned:thread:${botThreadId}`;
 
+/** Session key used to scope real-time change events — matches sessionManager's convention. */
+const sessionKey = (userId: string, platform: string, sessionId: string): string =>
+  `${userId}:${platform}:${sessionId}`;
+
 // ── User Bans ─────────────────────────────────────────────────────────────────
 
 export async function banUser(
@@ -48,6 +53,15 @@ export async function banUser(
   // Write true immediately so the next isUserBanned call within the TTL window
   // doesn't see a stale false from a pre-ban read that's still in cache.
   lruCache.set(userBanKey(userId, platform, sessionId, botUserId), true);
+  // Push the change to any dashboard tab watching this session's Database panel —
+  // fires whether the ban came from the dashboard or a live chat command (e.g. autoban.ts).
+  dbChangeEmitter.publish({
+    key: sessionKey(userId, platform, sessionId),
+    type: 'user',
+    action: 'ban',
+    id: botUserId,
+    patch: { is_banned: true, ban_reason: reason ?? null },
+  });
 }
 
 export async function unbanUser(
@@ -58,6 +72,13 @@ export async function unbanUser(
 ): Promise<void> {
   await _unbanUser(userId, platform, sessionId, botUserId);
   lruCache.set(userBanKey(userId, platform, sessionId, botUserId), false);
+  dbChangeEmitter.publish({
+    key: sessionKey(userId, platform, sessionId),
+    type: 'user',
+    action: 'unban',
+    id: botUserId,
+    patch: { is_banned: false, ban_reason: null },
+  });
 }
 
 export async function isUserBanned(
@@ -85,6 +106,13 @@ export async function banThread(
 ): Promise<void> {
   await _banThread(userId, platform, sessionId, botThreadId, reason);
   lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), true);
+  dbChangeEmitter.publish({
+    key: sessionKey(userId, platform, sessionId),
+    type: 'group',
+    action: 'ban',
+    id: botThreadId,
+    patch: { is_banned: true, ban_reason: reason ?? null },
+  });
 }
 
 export async function unbanThread(
@@ -95,6 +123,13 @@ export async function unbanThread(
 ): Promise<void> {
   await _unbanThread(userId, platform, sessionId, botThreadId);
   lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), false);
+  dbChangeEmitter.publish({
+    key: sessionKey(userId, platform, sessionId),
+    type: 'group',
+    action: 'unban',
+    id: botThreadId,
+    patch: { is_banned: false, ban_reason: null },
+  });
 }
 
 export async function isThreadBanned(

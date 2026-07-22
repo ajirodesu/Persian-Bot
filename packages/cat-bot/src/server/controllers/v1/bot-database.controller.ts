@@ -25,6 +25,7 @@ import {
   banThread,
   unbanThread,
 } from '@/engine/repos/banned.repo.js';
+import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,11 @@ function parseSortDir(raw: unknown): SortDir {
 function resolveSortColumn(raw: unknown, allowed: Record<string, string>, fallback: string): string {
   const key = String(raw ?? '');
   return Object.prototype.hasOwnProperty.call(allowed, key) ? (allowed[key] ?? fallback) : fallback;
+}
+
+/** Session key used to scope real-time change events — matches banned.repo.ts's convention. */
+function sessionKey(ctx: { userId: string; platform: string; sessionId: string }): string {
+  return `${ctx.userId}:${ctx.platform}:${ctx.sessionId}`;
 }
 
 // ── Controller ────────────────────────────────────────────────────────────────
@@ -279,6 +285,12 @@ export class BotDatabaseController {
          WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_user_id = $4`,
         [ctx.userId, ctx.platformId, ctx.sessionId, botUserId],
       );
+      dbChangeEmitter.publish({
+        key: sessionKey(ctx),
+        type: 'user',
+        action: 'delete',
+        id: botUserId,
+      });
       res.json({ success: true });
     } catch (err) {
       console.error('[BotDatabaseController.deleteUser]', err);
@@ -355,6 +367,12 @@ export class BotDatabaseController {
          WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
         [ctx.userId, ctx.platformId, ctx.sessionId, botThreadId],
       );
+      dbChangeEmitter.publish({
+        key: sessionKey(ctx),
+        type: 'group',
+        action: 'delete',
+        id: botThreadId,
+      });
       res.json({ success: true });
     } catch (err) {
       console.error('[BotDatabaseController.deleteGroup]', err);

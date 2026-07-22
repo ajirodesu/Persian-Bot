@@ -41,6 +41,7 @@ import {
 } from 'database';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 
 // ── Cache key builders ────────────────────────────────────────────────────────
 
@@ -211,6 +212,13 @@ export async function upsertThreadSession(
         new Date(),
       );
       lruCache.del(threadGroupsKey(userId, platform, sessionId));
+      dbChangeEmitter.publish({
+        key: `${userId}:${platform}:${sessionId}`,
+        type: 'group',
+        action: 'upsert',
+        id: serverId,
+        patch: { last_seen: new Date().toISOString() },
+      });
       return;
     }
     // If not found (either DM or a newly discovered channel awaiting full sync),
@@ -230,6 +238,13 @@ export async function upsertThreadSession(
   // A newly tracked session-thread pair may belong to a group — evict the cached group ID
   // list so the next getAllGroupThreadIds returns the complete set including this thread.
   lruCache.del(threadGroupsKey(userId, platform, sessionId));
+  dbChangeEmitter.publish({
+    key: `${userId}:${platform}:${sessionId}`,
+    type: 'group',
+    action: 'upsert',
+    id: threadId,
+    patch: { last_seen: new Date().toISOString() },
+  });
 }
 
 export async function isThreadAdmin(

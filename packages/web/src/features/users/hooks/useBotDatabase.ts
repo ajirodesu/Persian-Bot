@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { getSocket } from '@/lib/socket.lib'
 import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
@@ -15,6 +16,60 @@ import type {
   BotDatabaseSortBy,
   BotDatabaseSortDir,
 } from '@/features/users/services/bot.service'
+
+// ── Real-time change events ──────────────────────────────────────────────────
+//
+// Mirrors the server's DbChangeEvent shape (bot-database.socket.ts). Pushed
+// whenever a user/group session record changes anywhere — a dashboard ban/unban/
+// delete action, or the bot itself banning/seeing someone mid-conversation
+// (e.g. autoban.ts, or a plain incoming message refreshing last_seen).
+interface DbChangeEvent {
+  key: string
+  type: 'user' | 'group'
+  action: 'ban' | 'unban' | 'delete' | 'upsert'
+  id: string
+  patch?: Record<string, unknown>
+}
+
+/**
+ * Subscribes to the Socket.IO room for `sessionKey` and invokes `onEvent` for
+ * every change pushed for the given record `type`. Reference-stable via a
+ * ref so callers can pass an inline closure without re-subscribing.
+ */
+function useDbChangeSubscription(
+  sessionKey: string | undefined,
+  type: 'user' | 'group',
+  onEvent: (event: DbChangeEvent) => void,
+) {
+  const onEventRef = useRef(onEvent)
+  onEventRef.current = onEvent
+
+  useEffect(() => {
+    if (!sessionKey) return
+
+    const socket = getSocket()
+    if (!socket.connected) socket.connect()
+
+    const handleChange = (event: DbChangeEvent) => {
+      // The singleton socket may be subscribed to other sessions' rooms
+      // simultaneously (multiple bot tabs) — filter defensively, same as useBotLogs.
+      if (event.key !== sessionKey || event.type !== type) return
+      onEventRef.current(event)
+    }
+
+    const subscribe = () => socket.emit('bot:database:subscribe', sessionKey)
+
+    socket.on('connect', subscribe)
+    socket.on('bot:database:change', handleChange)
+    if (socket.connected) subscribe()
+
+    return () => {
+      socket.off('connect', subscribe)
+      socket.off('bot:database:change', handleChange)
+      socket.emit('bot:database:unsubscribe', sessionKey)
+    }
+  }, [sessionKey, type])
+}
 
 // ── Users hook ────────────────────────────────────────────────────────────────
 
@@ -40,7 +95,10 @@ export interface UseBotDatabaseUsersReturn {
   unbanUser: (userId: string) => Promise<void>
 }
 
-export function useBotDatabaseUsers(sessionId: string): UseBotDatabaseUsersReturn {
+export function useBotDatabaseUsers(
+  sessionId: string,
+  sessionKey?: string,
+): UseBotDatabaseUsersReturn {
   const [users, setUsers] = useState<BotDatabaseUser[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -101,6 +159,56 @@ export function useBotDatabaseUsers(sessionId: string): UseBotDatabaseUsersRetur
   useEffect(() => {
     fetch()
   }, [fetch])
+
+  // ── Real-time sync ──────────────────────────────────────────────────────────
+  // Two-tier: patch the currently loaded rows instantly for zero-flicker feedback,
+  // then reconcile with the server on a short trailing debounce so totals, sorting,
+  // pagination, and status-filter membership stay accurate even when a change
+  // originates outside this tab (a live chat ban, another admin, autoban.ts, etc.).
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    refetchTimer.current = setTimeout(() => {
+      refetchTimer.current = null
+      fetch()
+    }, 600)
+  }, [fetch])
+
+  useEffect(() => {
+    return () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    }
+  }, [])
+
+  useDbChangeSubscription(sessionKey, 'user', (event) => {
+    if (event.action === 'ban' || event.action === 'unban') {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === event.id
+            ? {
+                ...u,
+                is_banned: Boolean(event.patch?.is_banned),
+                ban_reason: (event.patch?.ban_reason as string | null) ?? null,
+              }
+            : u,
+        ),
+      )
+    } else if (event.action === 'delete') {
+      setUsers((prev) => prev.filter((u) => u.id !== event.id))
+      setTotal((t) => Math.max(0, t - 1))
+    } else if (event.action === 'upsert' && event.patch?.last_seen) {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === event.id
+            ? { ...u, last_seen: event.patch?.last_seen as string }
+            : u,
+        ),
+      )
+    }
+    // Reconcile with the server shortly after — covers newly-seen users entering
+    // the list, status-filter membership changes, and pagination/total drift.
+    scheduleRefetch()
+  })
 
   const addPending = (id: string) => setPending((s) => new Set([...s, id]))
   const removePending = (id: string) =>
@@ -205,7 +313,10 @@ export interface UseBotDatabaseGroupsReturn {
   unbanGroup: (groupId: string) => Promise<void>
 }
 
-export function useBotDatabaseGroups(sessionId: string): UseBotDatabaseGroupsReturn {
+export function useBotDatabaseGroups(
+  sessionId: string,
+  sessionKey?: string,
+): UseBotDatabaseGroupsReturn {
   const [groups, setGroups] = useState<BotDatabaseGroup[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -265,6 +376,56 @@ export function useBotDatabaseGroups(sessionId: string): UseBotDatabaseGroupsRet
   useEffect(() => {
     fetch()
   }, [fetch])
+
+  // ── Real-time sync ──────────────────────────────────────────────────────────
+  // Two-tier: patch the currently loaded rows instantly for zero-flicker feedback,
+  // then reconcile with the server on a short trailing debounce so totals, sorting,
+  // pagination, and status-filter membership stay accurate even when a change
+  // originates outside this tab (a live chat ban, another admin, group activity, etc.).
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    refetchTimer.current = setTimeout(() => {
+      refetchTimer.current = null
+      fetch()
+    }, 600)
+  }, [fetch])
+
+  useEffect(() => {
+    return () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    }
+  }, [])
+
+  useDbChangeSubscription(sessionKey, 'group', (event) => {
+    if (event.action === 'ban' || event.action === 'unban') {
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.id === event.id
+            ? {
+                ...g,
+                is_banned: Boolean(event.patch?.is_banned),
+                ban_reason: (event.patch?.ban_reason as string | null) ?? null,
+              }
+            : g,
+        ),
+      )
+    } else if (event.action === 'delete') {
+      setGroups((prev) => prev.filter((g) => g.id !== event.id))
+      setTotal((t) => Math.max(0, t - 1))
+    } else if (event.action === 'upsert' && event.patch?.last_seen) {
+      setGroups((prev) =>
+        prev.map((g) =>
+          g.id === event.id
+            ? { ...g, last_seen: event.patch?.last_seen as string }
+            : g,
+        ),
+      )
+    }
+    // Reconcile with the server shortly after — covers newly-seen groups entering
+    // the list, status-filter membership changes, and pagination/total drift.
+    scheduleRefetch()
+  })
 
   const addPending = (id: string) => setPending((s) => new Set([...s, id]))
   const removePending = (id: string) =>
