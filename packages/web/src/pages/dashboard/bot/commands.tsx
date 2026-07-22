@@ -8,7 +8,6 @@ import Switch from '@/components/ui/forms/Switch'
 import Input from '@/components/ui/forms/Input'
 import Divider from '@/components/ui/layout/Divider'
 import Dialog from '@/components/ui/overlay/Dialog'
-import Button from '@/components/ui/buttons/Button'
 import { useBotContext } from '@/features/users/components/DashboardBotLayout'
 import { useBotCommands } from '@/features/users/hooks/useBotCommands'
 import type { BotCommandItemDto } from '@/features/users/dtos/bot.dto'
@@ -253,15 +252,6 @@ function CommandDetailDialog({
                   </div>
                 </div>
               </Dialog.Body>
-
-              {/* ── Footer ──────────────────────────────────────────────────── */}
-              <Dialog.Footer className="shrink-0">
-                <Dialog.CloseTrigger asChild>
-                  <Button variant="text" color="neutral" size="sm">
-                    Close
-                  </Button>
-                </Dialog.CloseTrigger>
-              </Dialog.Footer>
 
               {/*
                * SAFE-AREA SPACER (mobile only)

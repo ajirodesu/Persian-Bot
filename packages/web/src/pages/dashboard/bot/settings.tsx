@@ -520,92 +520,94 @@ export default function BotSettingsPage() {
           'transition-colors duration-normal',
           adminOnlyEnabled
             ? 'border border-primary/30 bg-primary/5'
-            : 'border border-transparent',
+            : 'border border-outline-variant/60',
         ].join(' ')}
       >
-        <Card.Header>
-          <div className="flex items-start gap-3 min-w-0">
-            <div
-              className={[
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-normal',
-                adminOnlyEnabled
-                  ? 'bg-primary/15 text-primary'
-                  : 'bg-on-surface/8 text-on-surface-variant',
-              ].join(' ')}
-            >
-              {adminOnlyEnabled ? (
-                <ShieldCheck className="h-5 w-5" />
-              ) : (
-                <ShieldOff className="h-5 w-5" />
+        {/* ── Main row: icon · info · switch ── */}
+        <div className="flex items-start gap-4">
+          {/* Status icon */}
+          <div
+            className={[
+              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-normal',
+              adminOnlyEnabled
+                ? 'bg-primary/15 text-primary'
+                : 'bg-on-surface/8 text-on-surface-variant',
+            ].join(' ')}
+          >
+            {adminOnlyEnabled ? (
+              <ShieldCheck className="h-5 w-5" />
+            ) : (
+              <ShieldOff className="h-5 w-5" />
+            )}
+          </div>
+
+          {/* Title + live status description */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <p className="text-label-lg font-semibold text-on-surface">
+                Bot Admin Only
+              </p>
+              {!adminOnlyLoading && (
+                <Badge
+                  color={adminOnlyEnabled ? 'primary' : 'secondary'}
+                  size="sm"
+                  variant="tonal"
+                  pill
+                >
+                  {adminOnlyEnabled ? 'Active' : 'Inactive'}
+                </Badge>
               )}
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Card.Title as="h3">Bot Admin Only</Card.Title>
-                {!adminOnlyLoading && (
-                  <Badge
-                    color={adminOnlyEnabled ? 'primary' : 'secondary'}
-                    size="sm"
-                    variant="tonal"
-                    pill
-                  >
-                    {adminOnlyEnabled ? 'Active' : 'Inactive'}
-                  </Badge>
-                )}
-              </div>
-              <Card.Description>
-                Restrict every command to bot admins only, across all
-                threads — identical to{' '}
-                <code className="font-mono text-label-sm">
-                  {bot.prefix}adminonly on
-                </code>{' '}
-                / <code className="font-mono text-label-sm">off</code>, and
-                takes effect immediately.
-              </Card.Description>
-            </div>
-          </div>
-        </Card.Header>
-
-        {adminOnlyError && (
-          <Alert
-            variant="tonal"
-            color="error"
-            title="Error"
-            message={adminOnlyError}
-          />
-        )}
-
-        <div
-          className={[
-            'flex items-start justify-between gap-2 rounded-xl p-3.5 transition-colors duration-normal',
-            adminOnlyEnabled ? 'bg-primary/10' : 'bg-surface-container',
-          ].join(' ')}
-        >
-          <div className="flex flex-col gap-1.5 min-w-0">
-            <p className="text-body-md font-medium text-on-surface">
-              Restrict the bot to bot admins only
-            </p>
             <p className="text-body-sm text-on-surface-variant leading-relaxed">
               {adminOnlyEnabled
                 ? 'Non-admins are currently blocked from using commands in every thread.'
-                : 'All users can currently use the bot as normal.'}
+                : 'All users can currently use the bot as normal. Enable to restrict commands to admins only.'}
             </p>
           </div>
-          {adminOnlyLoading ? (
-            <Skeleton
-              variant="rounded"
-              width="44px"
-              height="24px"
-              className="rounded-full shrink-0"
-            />
-          ) : (
-            <Switch
-              checked={adminOnlyEnabled}
-              onChange={() => void handleToggleAdminOnly(!adminOnlyEnabled)}
-              className="shrink-0"
-            />
-          )}
+
+          {/* Switch — aligned with icon top */}
+          <div className="shrink-0 pt-0.5">
+            {adminOnlyLoading ? (
+              <Skeleton
+                variant="rounded"
+                width="44px"
+                height="24px"
+                className="rounded-full"
+              />
+            ) : (
+              <Switch
+                checked={adminOnlyEnabled}
+                onChange={() => void handleToggleAdminOnly(!adminOnlyEnabled)}
+              />
+            )}
+          </div>
         </div>
+
+        {/* ── Divider + command reference ── */}
+        <div className="mt-4 pt-4 border-t border-outline-variant/40">
+          <p className="text-body-sm text-on-surface-variant leading-relaxed">
+            Equivalent to{' '}
+            <code className="font-mono text-label-sm bg-surface-container px-1 py-0.5 rounded">
+              {bot.prefix}adminonly on
+            </code>
+            {' / '}
+            <code className="font-mono text-label-sm bg-surface-container px-1 py-0.5 rounded">
+              off
+            </code>
+            {' '}— takes effect immediately across all threads.
+          </p>
+        </div>
+
+        {adminOnlyError && (
+          <div className="mt-3">
+            <Alert
+              variant="tonal"
+              color="error"
+              title="Error"
+              message={adminOnlyError}
+            />
+          </div>
+        )}
       </Card.Root>
 
       <div className="flex items-start gap-3">

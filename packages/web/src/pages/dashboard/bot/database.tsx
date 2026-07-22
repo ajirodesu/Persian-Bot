@@ -124,13 +124,6 @@ function DetailDialog({ open, onClose, title, isBanned, fields }: DetailDialogPr
               ))}
             </DataList.Root>
           </Dialog.Body>
-          <Dialog.Footer>
-            <Dialog.CloseTrigger asChild>
-              <Button variant="text" color="neutral" size="sm">
-                Close
-              </Button>
-            </Dialog.CloseTrigger>
-          </Dialog.Footer>
         </Dialog.Content>
       </Dialog.Positioner>
     </Dialog.Root>

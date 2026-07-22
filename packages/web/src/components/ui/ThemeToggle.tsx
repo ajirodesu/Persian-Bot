@@ -1,4 +1,4 @@
-import { Sparkles, TerminalSquare } from 'lucide-react'
+import { Snowflake, Sun } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
 import { useTheme, type AppTheme } from '@/contexts/ThemeContext'
 
@@ -10,15 +10,15 @@ const OPTIONS: Array<{
 }> = [
   {
     value: 'aurora',
-    label: 'Aurora',
-    description: 'New — cyan accent, glass surfaces',
-    icon: <Sparkles className="h-4 w-4" />,
+    label: 'Winter',
+    description: 'Crisp — cyan accent, glass surfaces',
+    icon: <Snowflake className="h-4 w-4" />,
   },
   {
     value: 'classic',
-    label: 'Classic',
-    description: 'Original Replit-orange theme',
-    icon: <TerminalSquare className="h-4 w-4" />,
+    label: 'Summer',
+    description: 'Warm — vibrant orange, high-contrast',
+    icon: <Sun className="h-4 w-4" />,
   },
 ]
 
