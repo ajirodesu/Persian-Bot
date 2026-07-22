@@ -95,9 +95,11 @@ export {
   banUser,
   unbanUser,
   isUserBanned,
+  getUserBanReason,
   banThread,
   unbanThread,
   isThreadBanned,
+  getThreadBanReason,
 } from '../adapters/neondb/src/cat-bot/banned.repo.js';
 
 // --- SERVER ---

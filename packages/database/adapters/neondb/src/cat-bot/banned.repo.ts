@@ -61,6 +61,29 @@ export async function isUserBanned(
   }
 }
 
+/**
+ * Returns the stored ban reason for a user, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getUserBanReason(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botUserId: string,
+): Promise<string | null> {
+  try {
+    const platformId = toPlatformNumericId(platform);
+    const res = await pool.query<{ reason: string | null }>(
+      `SELECT reason FROM bot_users_session_banned
+       WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_user_id = $4`,
+      [userId, platformId, sessionId, botUserId],
+    );
+    return res.rows[0]?.reason ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Thread Bans ───────────────────────────────────────────────────────────────
 
 /** Bans a thread. Idempotent — reason is updated on re-ban. */
@@ -114,5 +137,28 @@ export async function isThreadBanned(
     return res.rows[0]?.is_banned ?? false;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Returns the stored ban reason for a thread, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getThreadBanReason(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botThreadId: string,
+): Promise<string | null> {
+  try {
+    const platformId = toPlatformNumericId(platform);
+    const res = await pool.query<{ reason: string | null }>(
+      `SELECT reason FROM bot_threads_session_banned
+       WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
+      [userId, platformId, sessionId, botThreadId],
+    );
+    return res.rows[0]?.reason ?? null;
+  } catch {
+    return null;
   }
 }

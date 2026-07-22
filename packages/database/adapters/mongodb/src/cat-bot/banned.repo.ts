@@ -75,6 +75,31 @@ export async function isUserBanned(
   }
 }
 
+/**
+ * Returns the stored ban reason for a user, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getUserBanReason(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botUserId: string,
+): Promise<string | null> {
+  try {
+    const db = getMongoDb();
+    const platformId = toPlatformNumericId(platform);
+    const rec = await db
+      .collection<{ reason: string | null }>('botUserBanned')
+      .findOne(
+        { userId, platformId, sessionId, botUserId },
+        { projection: { reason: 1, _id: 0 } },
+      );
+    return rec?.reason ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Thread Bans ───────────────────────────────────────────────────────────────
 
 /** Bans a thread. Idempotent — reason is updated on re-ban. */
@@ -139,5 +164,30 @@ export async function isThreadBanned(
     return rec?.isBanned ?? false;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Returns the stored ban reason for a thread, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getThreadBanReason(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botThreadId: string,
+): Promise<string | null> {
+  try {
+    const db = getMongoDb();
+    const platformId = toPlatformNumericId(platform);
+    const rec = await db
+      .collection<{ reason: string | null }>('botThreadBanned')
+      .findOne(
+        { userId, platformId, sessionId, botThreadId },
+        { projection: { reason: 1, _id: 0 } },
+      );
+    return rec?.reason ?? null;
+  } catch {
+    return null;
   }
 }

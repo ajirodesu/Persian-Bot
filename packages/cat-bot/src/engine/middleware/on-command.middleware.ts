@@ -54,6 +54,14 @@ import {
   setCachedThreadAdminBox,
 } from '@/engine/lib/admin-only-state.lib.js';
 import { Role } from '@/engine/constants/role.constants.js';
+import {
+  getUserBanReason,
+  getThreadBanReason,
+} from '@/engine/repos/banned.repo.js';
+import {
+  formatUserBanMessage,
+  formatGroupBanMessage,
+} from '@/engine/lib/ban-message.lib.js';
 
 // ── Cooldown Enforcement ─────────────────────────────────────────────────────
 
@@ -602,7 +610,15 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   if (userBanned) {
     const key = `ban_u:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
     if (!cooldownStore.check(key, now)) {
-      await ctx.chat.replyMessage({ message: 'you are unable to use bot' });
+      const reason = await getUserBanReason(
+        sessionUserId,
+        platform,
+        sessionId,
+        senderID,
+      );
+      await ctx.chat.replyMessage({
+        message: formatUserBanMessage({ reason, userId: senderID }),
+      });
       cooldownStore.record(key, now, 15000);
     }
     return;
@@ -611,7 +627,15 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   if (threadBanned) {
     const key = `ban_t:${sessionUserId}:${platform}:${sessionId}:${threadID}`;
     if (!cooldownStore.check(key, now)) {
-      await ctx.chat.replyMessage({ message: 'This thread unable to use bot' });
+      const reason = await getThreadBanReason(
+        sessionUserId,
+        platform,
+        sessionId,
+        threadID,
+      );
+      await ctx.chat.replyMessage({
+        message: formatGroupBanMessage({ reason, threadId: threadID }),
+      });
       cooldownStore.record(key, now, 15000);
     }
     return;

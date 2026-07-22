@@ -94,9 +94,11 @@ export {
   banUser,
   unbanUser,
   isUserBanned,
+  getUserBanReason,
   banThread,
   unbanThread,
   isThreadBanned,
+  getThreadBanReason,
 } from '../adapters/mongodb/src/cat-bot/banned.repo.js';
 
 // --- SERVER ---

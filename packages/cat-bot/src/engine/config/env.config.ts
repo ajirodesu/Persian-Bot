@@ -67,6 +67,12 @@ interface EnvConfig {
    * reaction without touching source code.
    */
   readonly COMMAND_REACT_EMOJI?: string | undefined;
+  /**
+   * IANA timezone identifier used to format human-readable timestamps shown to
+   * end users (e.g. the ban notice's "Time:" line). Always set — defaults to
+   * "Asia/Manila" when TIMEZONE is unset. See ban-message.lib.ts.
+   */
+  readonly TIMEZONE: string;
   // Derived boolean helpers
   readonly isDevelopment: boolean;
   readonly isProduction: boolean;
@@ -241,6 +247,8 @@ export const env: EnvConfig = {
   GROQ_API_KEY: getOptionalEnv('GROQ_API_KEY'),
   // Command-success reaction emoji — optional override, see command-reaction.constants.ts
   COMMAND_REACT_EMOJI: getOptionalEnv('COMMAND_REACT_EMOJI'),
+  // Timezone for user-facing timestamps (ban notices, etc.) — defaults to Asia/Manila when unset.
+  TIMEZONE: getOptionalEnv('TIMEZONE') ?? 'Asia/Manila',
 
   // Derived boolean helpers for convenience
   isDevelopment: nodeEnv === 'development',

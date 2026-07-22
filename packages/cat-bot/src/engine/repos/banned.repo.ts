@@ -11,9 +11,11 @@ import {
   banUser as _banUser,
   unbanUser as _unbanUser,
   isUserBanned as _isUserBanned,
+  getUserBanReason as _getUserBanReason,
   banThread as _banThread,
   unbanThread as _unbanThread,
   isThreadBanned as _isThreadBanned,
+  getThreadBanReason as _getThreadBanReason,
 } from 'database';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
@@ -36,6 +38,20 @@ const threadBanKey = (
   botThreadId: string,
 ): string => `${userId}:${platform}:${sessionId}:banned:thread:${botThreadId}`;
 
+const userBanReasonKey = (
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botUserId: string,
+): string => `${userId}:${platform}:${sessionId}:banned:user:reason:${botUserId}`;
+
+const threadBanReasonKey = (
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botThreadId: string,
+): string => `${userId}:${platform}:${sessionId}:banned:thread:reason:${botThreadId}`;
+
 /** Session key used to scope real-time change events — matches sessionManager's convention. */
 const sessionKey = (userId: string, platform: string, sessionId: string): string =>
   `${userId}:${platform}:${sessionId}`;
@@ -53,6 +69,12 @@ export async function banUser(
   // Write true immediately so the next isUserBanned call within the TTL window
   // doesn't see a stale false from a pre-ban read that's still in cache.
   lruCache.set(userBanKey(userId, platform, sessionId, botUserId), true);
+  // Cache the reason too — enforceNotBanned's ban notice reads this on every
+  // rejected message, so caching here avoids a second DB roundtrip per hit.
+  lruCache.set(
+    userBanReasonKey(userId, platform, sessionId, botUserId),
+    reason ?? null,
+  );
   // Push the change to any dashboard tab watching this session's Database panel —
   // fires whether the ban came from the dashboard or a live chat command (e.g. autoban.ts).
   dbChangeEmitter.publish({
@@ -72,6 +94,7 @@ export async function unbanUser(
 ): Promise<void> {
   await _unbanUser(userId, platform, sessionId, botUserId);
   lruCache.set(userBanKey(userId, platform, sessionId, botUserId), false);
+  lruCache.set(userBanReasonKey(userId, platform, sessionId, botUserId), null);
   dbChangeEmitter.publish({
     key: sessionKey(userId, platform, sessionId),
     type: 'user',
@@ -95,6 +118,25 @@ export async function isUserBanned(
   return result;
 }
 
+/**
+ * Returns the stored ban reason for a user (null when unbanned or no reason given).
+ * Cache is populated on ban/unban; falls back to the DB on a cold cache (e.g. after
+ * a process restart) so the ban notice always reflects the true reason.
+ */
+export async function getUserBanReason(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botUserId: string,
+): Promise<string | null> {
+  const key = userBanReasonKey(userId, platform, sessionId, botUserId);
+  const cached = lruCache.get<string | null>(key);
+  if (cached !== undefined) return cached;
+  const result = await _getUserBanReason(userId, platform, sessionId, botUserId);
+  lruCache.set(key, result);
+  return result;
+}
+
 // ── Thread Bans ───────────────────────────────────────────────────────────────
 
 export async function banThread(
@@ -106,6 +148,10 @@ export async function banThread(
 ): Promise<void> {
   await _banThread(userId, platform, sessionId, botThreadId, reason);
   lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), true);
+  lruCache.set(
+    threadBanReasonKey(userId, platform, sessionId, botThreadId),
+    reason ?? null,
+  );
   dbChangeEmitter.publish({
     key: sessionKey(userId, platform, sessionId),
     type: 'group',
@@ -123,6 +169,10 @@ export async function unbanThread(
 ): Promise<void> {
   await _unbanThread(userId, platform, sessionId, botThreadId);
   lruCache.set(threadBanKey(userId, platform, sessionId, botThreadId), false);
+  lruCache.set(
+    threadBanReasonKey(userId, platform, sessionId, botThreadId),
+    null,
+  );
   dbChangeEmitter.publish({
     key: sessionKey(userId, platform, sessionId),
     type: 'group',
@@ -142,6 +192,30 @@ export async function isThreadBanned(
   const cached = lruCache.get<boolean>(key);
   if (cached !== undefined) return cached;
   const result = await _isThreadBanned(
+    userId,
+    platform,
+    sessionId,
+    botThreadId,
+  );
+  lruCache.set(key, result);
+  return result;
+}
+
+/**
+ * Returns the stored ban reason for a thread (null when unbanned or no reason given).
+ * Cache is populated on ban/unban; falls back to the DB on a cold cache (e.g. after
+ * a process restart) so the ban notice always reflects the true reason.
+ */
+export async function getThreadBanReason(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botThreadId: string,
+): Promise<string | null> {
+  const key = threadBanReasonKey(userId, platform, sessionId, botThreadId);
+  const cached = lruCache.get<string | null>(key);
+  if (cached !== undefined) return cached;
+  const result = await _getThreadBanReason(
     userId,
     platform,
     sessionId,

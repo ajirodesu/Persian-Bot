@@ -153,11 +153,15 @@ export const unbanUser = m.unbanUser;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const isUserBanned = m.isUserBanned;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getUserBanReason = m.getUserBanReason;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const banThread = m.banThread;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const unbanThread = m.unbanThread;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const isThreadBanned = m.isThreadBanned;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getThreadBanReason = m.getThreadBanReason;
 
 // --- MONGODB ---
 // mongoClient and getMongoDb are undefined at runtime when DATABASE_TYPE!='mongodb' —
