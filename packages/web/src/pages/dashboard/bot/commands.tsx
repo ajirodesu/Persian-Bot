@@ -62,13 +62,47 @@ function CommandDetailDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
-      <Dialog.Positioner position="center">
+      {/*
+       * POSITIONER
+       * Desktop  — centered with 16px perimeter padding (default).
+       * Mobile   — padding removed so the sheet can touch all four edges.
+       *            `max-sm:!p-0` uses Tailwind's `!` modifier to override
+       *            the hardcoded `p-4` in DialogPositioner (no tailwind-merge
+       *            in this project's cn util, so !important is required).
+       */}
+      <Dialog.Positioner position="center" className="max-sm:!p-0">
         <Dialog.Backdrop />
-        <Dialog.Content size="sm">
+
+        {/*
+         * CONTENT
+         * Desktop  — standard sm-width centered modal, max 90 vh tall,
+         *            flex-col so the body can scroll independently.
+         * Mobile   — full-screen using 100dvh (dynamic viewport height).
+         *            `dvh` updates as the browser's own chrome slides in/out,
+         *            so the card is never clipped under Brave's address bar or
+         *            bottom navigation bar.  `100vh` is static and would
+         *            overflow; `dvh` is the correct unit here.
+         *            `!rounded-none` removes the card radius so it tiles
+         *            edge-to-edge on mobile.
+         */}
+        <Dialog.Content
+          size="sm"
+          className={[
+            // Shared: flex column so header/footer stay fixed, body scrolls
+            'flex flex-col',
+            // Desktop (sm+): constrain height so body scrolls within 90 vh
+            'sm:max-h-[90vh]',
+            // Mobile (below sm): true full-screen, edge-to-edge
+            'max-sm:!max-w-full',       // override max-w-[28rem]
+            'max-sm:h-[100dvh]',        // dynamic viewport height — key Brave fix
+            'max-sm:!max-h-[100dvh]',   // cap matches height so flex works
+            'max-sm:!rounded-none',     // flush with all screen edges
+          ].join(' ')}
+        >
           {command && (
             <>
               {/* ── Header ──────────────────────────────────────────────────── */}
-              <Dialog.Header className="items-start gap-3 pb-3">
+              <Dialog.Header className="items-start gap-3 pb-3 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 shrink-0">
                     <Terminal className="w-4 h-4 text-primary" />
@@ -103,8 +137,16 @@ function CommandDetailDialog({
                 <Dialog.CloseTrigger />
               </Dialog.Header>
 
-              {/* ── Body ────────────────────────────────────────────────────── */}
-              <Dialog.Body className="flex flex-col gap-0 pt-0 pb-2">
+              {/*
+               * BODY
+               * `flex-1`      — fills all remaining height between header and footer.
+               * `!max-h-none` — overrides DialogBody's hardcoded max-h-[70vh] so the
+               *                 flex layout (not a fixed cap) controls the scroll area.
+               * `overflow-y-auto` — scrolls on both mobile and desktop.
+               * `-webkit-overflow-scrolling: touch` is applied via inline style for
+               *  smooth momentum scrolling on iOS/Brave.
+               */}
+              <Dialog.Body className="flex flex-col gap-0 pt-0 pb-2 flex-1 !max-h-none overflow-y-auto">
                 {/* Description */}
                 {command.description && (
                   <p className="text-body-sm text-on-surface-variant leading-relaxed mb-4">
@@ -213,13 +255,28 @@ function CommandDetailDialog({
               </Dialog.Body>
 
               {/* ── Footer ──────────────────────────────────────────────────── */}
-              <Dialog.Footer>
+              <Dialog.Footer className="shrink-0">
                 <Dialog.CloseTrigger asChild>
                   <Button variant="text" color="neutral" size="sm">
                     Close
                   </Button>
                 </Dialog.CloseTrigger>
               </Dialog.Footer>
+
+              {/*
+               * SAFE-AREA SPACER (mobile only)
+               * Accounts for the iOS home indicator and Android/Brave gesture-nav
+               * bar that sit below the last rendered pixel.  `env(safe-area-inset-bottom)`
+               * returns the exact height of that reserved zone; on devices without one
+               * it is 0px and this div collapses completely.
+               * Placed after the footer so the footer itself stays flush; the spacer
+               * just extends the surface color into the unsafe zone.
+               */}
+              <div
+                aria-hidden="true"
+                className="max-sm:block hidden shrink-0 bg-surface"
+                style={{ height: 'env(safe-area-inset-bottom, 0px)' }}
+              />
             </>
           )}
         </Dialog.Content>
