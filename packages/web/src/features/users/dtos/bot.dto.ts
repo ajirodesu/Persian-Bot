@@ -66,6 +66,9 @@ export interface BotCommandItemDto {
   aliases?: string[]
   cooldown?: number
   author?: string
+  // Whether this command is exempt from session-wide "Bot Admin Only" mode —
+  // mirrors `/ignoreonlyad` membership.
+  ignoresAdminOnly: boolean
 }
 
 export interface GetBotCommandsResponseDto {

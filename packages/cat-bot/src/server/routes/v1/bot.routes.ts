@@ -64,6 +64,23 @@ botRouter.put('/:id/commands/:name', (req, res) => {
   void botSessionConfigController.toggleCommand(req, res);
 });
 
+// PUT /api/v1/bots/:id/commands/:name/ignore-admin-only — adds/removes a command
+// from the session-wide admin-only ignore list (same list `/ignoreonlyad` manages).
+botRouter.put('/:id/commands/:name/ignore-admin-only', (req, res) => {
+  void botSessionConfigController.toggleCommandIgnoreAdminOnly(req, res);
+});
+
+// GET /api/v1/bots/:id/admin-only — reads the session-wide "Bot Admin Only" state.
+botRouter.get('/:id/admin-only', (req, res) => {
+  void botSessionConfigController.getAdminOnly(req, res);
+});
+
+// PUT /api/v1/bots/:id/admin-only — toggles the session-wide "Bot Admin Only" state,
+// identical logic/effect to the `/adminonly on|off` command.
+botRouter.put('/:id/admin-only', (req, res) => {
+  void botSessionConfigController.setAdminOnly(req, res);
+});
+
 // GET /api/v1/bots/:id/events — lists all registered event modules with their enabled status.
 botRouter.get('/:id/events', (req, res) => {
   void botSessionConfigController.getEvents(req, res);

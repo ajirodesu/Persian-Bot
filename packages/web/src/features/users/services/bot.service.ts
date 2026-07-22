@@ -120,6 +120,38 @@ export class BotService {
     })
   }
 
+  // Toggles a command's membership in the session-wide admin-only ignore list —
+  // identical effect to running `/ignoreonlyad add|del <commandName>`.
+  async toggleCommandIgnoreAdminOnly(
+    sessionId: string,
+    commandName: string,
+    ignored: boolean,
+  ): Promise<void> {
+    await apiClient.put(
+      `/api/v1/bots/${sessionId}/commands/${commandName}/ignore-admin-only`,
+      { ignored },
+    )
+  }
+
+  // Session-wide "Bot Admin Only" switch — identical logic/effect to `/adminonly on|off`.
+  async getAdminOnly(sessionId: string): Promise<{ enabled: boolean }> {
+    const response = await apiClient.get<{ enabled: boolean }>(
+      `/api/v1/bots/${sessionId}/admin-only`,
+    )
+    return response.data
+  }
+
+  async setAdminOnly(
+    sessionId: string,
+    enabled: boolean,
+  ): Promise<{ enabled: boolean }> {
+    const response = await apiClient.put<{ enabled: boolean }>(
+      `/api/v1/bots/${sessionId}/admin-only`,
+      { enabled },
+    )
+    return response.data
+  }
+
   // Events toggle — reads and mutates bot_session_events rows for this session
   async getEvents(
     sessionId: string,

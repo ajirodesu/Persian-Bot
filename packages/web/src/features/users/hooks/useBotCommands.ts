@@ -11,6 +11,8 @@ interface UseBotCommandsReturn {
   error: string | null
   // Optimistic update: toggles the local state immediately, calls API in background
   toggleCommand: (name: string, isEnable: boolean) => Promise<void>
+  // Optimistic update for the per-command "Ignore Admin-Only" switch
+  toggleIgnoreAdminOnly: (name: string, ignored: boolean) => Promise<void>
 }
 
 export function useBotCommands(
@@ -92,6 +94,46 @@ export function useBotCommands(
     [sessionId],
   )
 
+  const toggleIgnoreAdminOnly = useCallback(
+    async (name: string, ignored: boolean): Promise<void> => {
+      // Optimistic update so the toggle feels instant — revert on API error
+      setData((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          commands: prev.commands.map((cmd) =>
+            cmd.commandName === name
+              ? { ...cmd, ignoresAdminOnly: ignored }
+              : cmd,
+          ),
+        }
+      })
+
+      try {
+        await botService.toggleCommandIgnoreAdminOnly(sessionId, name, ignored)
+      } catch (err) {
+        // Revert the optimistic change if the API call failed
+        setData((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            commands: prev.commands.map((cmd) =>
+              cmd.commandName === name
+                ? { ...cmd, ignoresAdminOnly: !ignored }
+                : cmd,
+            ),
+          }
+        })
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to update admin-only ignore list',
+        )
+      }
+    },
+    [sessionId],
+  )
+
   return {
     commands: data?.commands ?? [],
     total: data?.total ?? 0,
@@ -99,5 +141,6 @@ export function useBotCommands(
     isLoading,
     error,
     toggleCommand,
+    toggleIgnoreAdminOnly,
   }
 }

@@ -29,6 +29,10 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import {
+  getSessionAdminOnlyIgnoreList,
+  setCommandIgnoredFromAdminOnly,
+} from '@/engine/repos/admin-only.repo.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -114,6 +118,18 @@ async function runIgnoreList(ctx: AppCtx, config: IgnoreListConfig): Promise<voi
 
   const sub = args[0]?.toLowerCase();
   const handle = await config.getHandle(ctx);
+  // /ignoreonlyad shares its ignore list with the web dashboard's per-command
+  // "Ignore Admin-Only" switches — read/write through the same functions so
+  // both surfaces stay identical and immediately consistent with each other.
+  const isSessionScope = config.name === 'ignoreonlyad';
+  const sessionUserId = ctx.native.userId ?? '';
+  const sessionId = ctx.native.sessionId ?? '';
+  const platform = ctx.native.platform;
+
+  const readIgnoreList = async (): Promise<string[]> =>
+    isSessionScope
+      ? getSessionAdminOnlyIgnoreList(sessionUserId, platform, sessionId)
+      : ((await handle.get(config.ignoreListField)) as string[] | null) ?? [];
 
   // ── add ───────────────────────────────────────────────────────────────────
   if (sub === 'add') {
@@ -125,7 +141,7 @@ async function runIgnoreList(ctx: AppCtx, config: IgnoreListConfig): Promise<voi
       return;
     }
     const commandName = args[1].toLowerCase();
-    const ignoreList = ((await handle.get(config.ignoreListField)) as string[] | null) ?? [];
+    const ignoreList = await readIgnoreList();
 
     if (ignoreList.includes(commandName)) {
       await chat.replyMessage({
@@ -135,8 +151,18 @@ async function runIgnoreList(ctx: AppCtx, config: IgnoreListConfig): Promise<voi
       return;
     }
 
-    ignoreList.push(commandName);
-    await handle.set(config.ignoreListField, ignoreList);
+    if (isSessionScope) {
+      await setCommandIgnoredFromAdminOnly(
+        sessionUserId,
+        platform,
+        sessionId,
+        commandName,
+        true,
+      );
+    } else {
+      ignoreList.push(commandName);
+      await handle.set(config.ignoreListField, ignoreList);
+    }
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: `✅ Added **${commandName}** to the ${config.scopeLabel} ignore list.`,
@@ -154,7 +180,7 @@ async function runIgnoreList(ctx: AppCtx, config: IgnoreListConfig): Promise<voi
       return;
     }
     const commandName = args[1].toLowerCase();
-    const ignoreList = ((await handle.get(config.ignoreListField)) as string[] | null) ?? [];
+    const ignoreList = await readIgnoreList();
     const idx = ignoreList.indexOf(commandName);
 
     if (idx === -1) {
@@ -165,8 +191,18 @@ async function runIgnoreList(ctx: AppCtx, config: IgnoreListConfig): Promise<voi
       return;
     }
 
-    ignoreList.splice(idx, 1);
-    await handle.set(config.ignoreListField, ignoreList);
+    if (isSessionScope) {
+      await setCommandIgnoredFromAdminOnly(
+        sessionUserId,
+        platform,
+        sessionId,
+        commandName,
+        false,
+      );
+    } else {
+      ignoreList.splice(idx, 1);
+      await handle.set(config.ignoreListField, ignoreList);
+    }
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: `✅ Removed **${commandName}** from the ${config.scopeLabel} ignore list.`,
@@ -176,7 +212,7 @@ async function runIgnoreList(ctx: AppCtx, config: IgnoreListConfig): Promise<voi
 
   // ── list ──────────────────────────────────────────────────────────────────
   if (sub === 'list') {
-    const ignoreList = ((await handle.get(config.ignoreListField)) as string[] | null) ?? [];
+    const ignoreList = await readIgnoreList();
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message:

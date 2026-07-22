@@ -16,6 +16,12 @@ export interface BotCommandItemDto {
   aliases?: string[];
   cooldown?: number;
   author?: string;
+  /**
+   * Whether this command is exempt from session-wide "Bot Admin Only" mode —
+   * mirrors `/ignoreonlyad` membership. Powers the "Ignore Admin-Only" switch
+   * shown next to each command's enable/disable switch on the Commands page.
+   */
+  ignoresAdminOnly: boolean;
 }
 
 export interface GetBotCommandsResponseDto {
@@ -45,4 +51,14 @@ export interface GetBotEventsResponseDto {
 /** PUT body for both command and event toggles */
 export interface ToggleEnabledRequestDto {
   isEnable: boolean;
+}
+
+/** GET/PUT response+body for the session-wide "Bot Admin Only" switch. */
+export interface AdminOnlyStateDto {
+  enabled: boolean;
+}
+
+/** PUT body for a command's "Ignore Admin-Only" switch. */
+export interface ToggleIgnoreAdminOnlyRequestDto {
+  ignored: boolean;
 }

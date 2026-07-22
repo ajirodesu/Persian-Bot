@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, Lock } from 'lucide-react'
+import { Plus, Trash2, Lock, ShieldCheck, ShieldOff } from 'lucide-react'
 import Card from '@/components/ui/data-display/Card'
+import Badge from '@/components/ui/data-display/Badge'
+import Skeleton from '@/components/ui/feedback/Skeleton'
 import Button from '@/components/ui/buttons/Button'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
+import Switch from '@/components/ui/forms/Switch'
 import Divider from '@/components/ui/layout/Divider'
 import Dialog from '@/components/ui/overlay/Dialog'
 import Alert from '@/components/ui/feedback/Alert'
 import { useBotUpdate } from '@/features/users/hooks/useBotUpdate'
 import { useBotValidation } from '@/features/users/hooks/useBotValidation'
+import { useBotAdminOnly } from '@/features/users/hooks/useBotAdminOnly'
 import type { PlatformCredentials } from '@/features/users/dtos/bot.dto'
 import {
   PlatformFieldInputs,
@@ -36,8 +40,26 @@ interface FormState {
  * Handles bot property updates and dangerous actions.
  */
 export default function BotSettingsPage() {
-  const { bot, setBot, isActive } = useBotContext()
+  const { bot, setBot, isActive, id: sessionId } = useBotContext()
   const { updateBot, isLoading, error } = useBotUpdate()
+  const {
+    enabled: adminOnlyEnabled,
+    isLoading: adminOnlyLoading,
+    error: adminOnlyError,
+    toggle: toggleAdminOnly,
+  } = useBotAdminOnly(sessionId)
+
+  const handleToggleAdminOnly = async (next: boolean): Promise<void> => {
+    await toggleAdminOnly(next)
+    setPosition('bottom-right')
+    snackbar({
+      message: next
+        ? 'Bot Admin Only mode enabled — non-admins are now restricted.'
+        : 'Bot Admin Only mode disabled — all users can use the bot again.',
+      color: 'success',
+      duration: 4000,
+    })
+  }
   const [savePhase, setSavePhase] = useState<'idle' | 'clearing' | 'saving'>(
     'idle',
   )
@@ -486,6 +508,101 @@ export default function BotSettingsPage() {
                 ? 'Verifying…'
                 : 'Verify Credentials'}
             </Button>
+          )}
+        </div>
+      </Card.Root>
+
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className={[
+          'transition-colors duration-normal',
+          adminOnlyEnabled
+            ? 'border border-primary/30 bg-primary/5'
+            : 'border border-transparent',
+        ].join(' ')}
+      >
+        <Card.Header>
+          <div className="flex items-start gap-3 min-w-0">
+            <div
+              className={[
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-normal',
+                adminOnlyEnabled
+                  ? 'bg-primary/15 text-primary'
+                  : 'bg-on-surface/8 text-on-surface-variant',
+              ].join(' ')}
+            >
+              {adminOnlyEnabled ? (
+                <ShieldCheck className="h-5 w-5" />
+              ) : (
+                <ShieldOff className="h-5 w-5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Card.Title as="h3">Bot Admin Only</Card.Title>
+                {!adminOnlyLoading && (
+                  <Badge
+                    color={adminOnlyEnabled ? 'primary' : 'secondary'}
+                    size="sm"
+                    variant="tonal"
+                    pill
+                  >
+                    {adminOnlyEnabled ? 'Active' : 'Inactive'}
+                  </Badge>
+                )}
+              </div>
+              <Card.Description>
+                Restrict every command to bot admins only, across all
+                threads — identical to{' '}
+                <code className="font-mono text-label-sm">
+                  {bot.prefix}adminonly on
+                </code>{' '}
+                / <code className="font-mono text-label-sm">off</code>, and
+                takes effect immediately.
+              </Card.Description>
+            </div>
+          </div>
+        </Card.Header>
+
+        {adminOnlyError && (
+          <Alert
+            variant="tonal"
+            color="error"
+            title="Error"
+            message={adminOnlyError}
+          />
+        )}
+
+        <div
+          className={[
+            'flex items-center justify-between gap-4 rounded-xl p-3.5 transition-colors duration-normal',
+            adminOnlyEnabled ? 'bg-primary/10' : 'bg-surface-container',
+          ].join(' ')}
+        >
+          <div className="min-w-0">
+            <p className="text-body-md font-medium text-on-surface">
+              Restrict the bot to bot admins only
+            </p>
+            <p className="text-body-sm text-on-surface-variant">
+              {adminOnlyEnabled
+                ? 'Non-admins are currently blocked from using commands in every thread.'
+                : 'All users can currently use the bot as normal.'}
+            </p>
+          </div>
+          {adminOnlyLoading ? (
+            <Skeleton
+              variant="rounded"
+              width="44px"
+              height="24px"
+              className="rounded-full shrink-0"
+            />
+          ) : (
+            <Switch
+              checked={adminOnlyEnabled}
+              onChange={() => void handleToggleAdminOnly(!adminOnlyEnabled)}
+            />
           )}
         </div>
       </Card.Root>

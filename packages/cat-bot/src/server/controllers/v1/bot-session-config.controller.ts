@@ -33,7 +33,17 @@ import {
   commandRegistry,
   eventRegistry,
 } from '@/engine/lib/module-registry.lib.js';
-import type { ToggleEnabledRequestDto } from '@/server/dtos/bot-session-config.dto.js';
+import type {
+  ToggleEnabledRequestDto,
+  AdminOnlyStateDto,
+  ToggleIgnoreAdminOnlyRequestDto,
+} from '@/server/dtos/bot-session-config.dto.js';
+import {
+  getSessionAdminOnlyEnabled,
+  setSessionAdminOnlyEnabled,
+  getSessionAdminOnlyIgnoreList,
+  setCommandIgnoredFromAdminOnly,
+} from '@/engine/repos/admin-only.repo.js';
 // Triggers slash command re-registration on live Discord/Telegram sessions when a command is toggled.
 // Resolves as a no-op for platforms without a registered sync (FB Messenger, FB Page) or stopped sessions.
 import { triggerSlashSync } from '@/engine/modules/prefix/slash-sync.lib.js';
@@ -97,6 +107,12 @@ export class BotSessionConfigController {
         platform,
         sessionId,
       );
+      // Fetched once per request — reused for every row instead of a per-command DB read.
+      const ignoreList = await getSessionAdminOnlyIgnoreList(
+        userId,
+        platform,
+        sessionId,
+      );
 
       const enriched = rawCommands
         // Filter out commands that are structurally disallowed on this session's platform
@@ -123,6 +139,9 @@ export class BotSessionConfigController {
             aliases: cfg?.['aliases'] as string[] | undefined,
             cooldown: cfg?.['cooldown'] as number | undefined,
             author: cfg?.['author'] as string | undefined,
+            ignoresAdminOnly: ignoreList.includes(
+              cmd.commandName.toLowerCase(),
+            ),
           };
         });
 
@@ -219,6 +238,131 @@ export class BotSessionConfigController {
     } catch (error) {
       console.error('[BotSessionConfigController.toggleCommand]', error);
       res.status(500).json({ error: 'Failed to toggle command' });
+    }
+  }
+
+  // GET /api/v1/bots/:id/admin-only
+  // Reads the session-wide "Bot Admin Only" state — same DB field the /adminonly
+  // command reads/writes, so the dashboard switch always reflects the live value.
+  async getAdminOnly(req: Request, res: Response): Promise<void> {
+    const userId = await requireSession(req, res);
+    if (!userId) return;
+
+    const sessionId = String(req.params['id']);
+    if (!sessionId) {
+      res.status(400).json({ error: 'Missing session ID' });
+      return;
+    }
+
+    const platform = await resolvePlatform(userId, sessionId, res);
+    if (!platform) return;
+
+    try {
+      const enabled = await getSessionAdminOnlyEnabled(
+        userId,
+        platform,
+        sessionId,
+      );
+      const body: AdminOnlyStateDto = { enabled };
+      res.status(200).json(body);
+    } catch (error) {
+      console.error('[BotSessionConfigController.getAdminOnly]', error);
+      res.status(500).json({ error: 'Failed to fetch admin-only state' });
+    }
+  }
+
+  // PUT /api/v1/bots/:id/admin-only
+  // Toggles session-wide "Bot Admin Only" mode — calls the exact same function
+  // the /adminonly command calls, so behavior and real-time cache invalidation
+  // are identical regardless of which surface flips the switch.
+  async setAdminOnly(req: Request, res: Response): Promise<void> {
+    const userId = await requireSession(req, res);
+    if (!userId) return;
+
+    const sessionId = String(req.params['id']);
+    if (!sessionId) {
+      res.status(400).json({ error: 'Missing session ID' });
+      return;
+    }
+
+    const platform = await resolvePlatform(userId, sessionId, res);
+    if (!platform) return;
+
+    const { enabled } = req.body as AdminOnlyStateDto;
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be a boolean' });
+      return;
+    }
+
+    try {
+      await setSessionAdminOnlyEnabled(userId, platform, sessionId, enabled);
+      res.status(200).json({ enabled });
+    } catch (error) {
+      console.error('[BotSessionConfigController.setAdminOnly]', error);
+      res.status(500).json({ error: 'Failed to update admin-only state' });
+    }
+  }
+
+  // PUT /api/v1/bots/:id/commands/:name/ignore-admin-only
+  // Adds/removes a command from the session-wide admin-only ignore list —
+  // calls the exact same function `/ignoreonlyad add|del` calls.
+  async toggleCommandIgnoreAdminOnly(
+    req: Request,
+    res: Response,
+  ): Promise<void> {
+    const userId = await requireSession(req, res);
+    if (!userId) return;
+    const isAdmin = await checkAdminSession(req);
+
+    const sessionId = String(req.params['id']);
+    const commandName = String(req.params['name']);
+    if (!sessionId || !commandName) {
+      res.status(400).json({ error: 'Missing session ID or command name' });
+      return;
+    }
+
+    const platform = await resolvePlatform(userId, sessionId, res);
+    if (!platform) return;
+
+    const { ignored } = req.body as ToggleIgnoreAdminOnlyRequestDto;
+    if (typeof ignored !== 'boolean') {
+      res.status(400).json({ error: 'ignored must be a boolean' });
+      return;
+    }
+
+    // Same platform/ownership + SYSTEM_ADMIN protections as toggleCommand above.
+    const mod = commandRegistry.get(commandName.toLowerCase());
+    if (!mod || !isPlatformAllowed(mod, platform)) {
+      res
+        .status(400)
+        .json({ error: 'Command not available for this platform' });
+      return;
+    }
+    if (!isAdmin) {
+      const cfg = mod['meta'] as Record<string, unknown> | undefined;
+      if (cfg?.['role'] === Role.SYSTEM_ADMIN) {
+        res.status(403).json({
+          error: 'Forbidden: system admin commands cannot be modified',
+        });
+        return;
+      }
+    }
+
+    try {
+      await setCommandIgnoredFromAdminOnly(
+        userId,
+        platform,
+        sessionId,
+        commandName,
+        ignored,
+      );
+      res.status(200).json({ commandName, ignored });
+    } catch (error) {
+      console.error(
+        '[BotSessionConfigController.toggleCommandIgnoreAdminOnly]',
+        error,
+      );
+      res.status(500).json({ error: 'Failed to update ignore list' });
     }
   }
 
