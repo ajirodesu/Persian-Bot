@@ -10,7 +10,7 @@
  *   use.onCommand([myAuthMiddleware, myRateLimitMiddleware]);
  *
  * Execution order per lifecycle (first registered = first executed):
- *   onCommand: enforcePermission → enforceCooldown → validateCommandOptions → [user-added] → onCommand handler
+ *   onCommand: enforceNotBanned → enforceCommandLimit → enforcePermission → enforceAdminOnly → enforceCooldown → validateCommandOptions → [user-added] → onCommand handler
  *   onChat:    chatPassthrough        → [user-added] → onChat fan-out (runOnChat)
  *   onReply:   replyStateValidation   → [user-added] → onReply handler
  *   onReact:   reactStateValidation   → [user-added] → onReact handler
@@ -35,6 +35,7 @@ import {
   enforcePermission,
   enforceNotBanned,
   enforceAdminOnly,
+  enforceCommandLimit,
 } from './on-command.middleware.js';
 import { chatPassthrough, chatLogThread } from './on-chat.middleware.js';
 import { replyStateValidation } from './on-reply.middleware.js';
@@ -48,7 +49,12 @@ use.onCommand([
   // Ban check is the outermost gate — banned users/threads never reach permission
   // checks, cooldown windows, or option parsing, eliminating all wasted processing.
   enforceNotBanned,
-  // Permission check runs first — an unauthorised user is rejected before their
+  // Per-message command limit: non-admin users may invoke at most MAX_COMMANDS_PER_WINDOW
+  // commands within a rolling window. System admins are unconditionally exempt.
+  // Runs after the ban check (banned users never consume a slot) and before permission /
+  // cooldown checks so over-limit requests are cheaply rejected before any DB work runs.
+  enforceCommandLimit,
+  // Permission check runs next — an unauthorised user is rejected before their
   // cooldown window is consumed or option parsing wastes CPU on a denied request.
   enforcePermission,
   // Enforces session-wide (adminonly) and per-thread (onlyadminbox) restriction
