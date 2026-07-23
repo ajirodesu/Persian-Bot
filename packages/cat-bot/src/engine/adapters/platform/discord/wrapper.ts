@@ -355,13 +355,33 @@ class DiscordApi extends UnifiedApi {
     );
   }
 
+  /**
+   * No-op for the interaction path — deliberately does NOT call
+   * channel.sendTyping().
+   *
+   * WHY: event-handlers.ts already calls interaction.deferReply() before this
+   * class is ever constructed, which shows Discord's own "Bot is thinking…"
+   * indicator. That indicator is managed entirely by Discord and is
+   * guaranteed to clear the instant editReply()/followUp() delivers the real
+   * reply (see #send above) — exactly the "typing while processing, gone the
+   * moment the message is sent" behaviour we want.
+   *
+   * The classic channel.sendTyping() bubble ("Bot is typing…") is a
+   * *separate* UI affordance, tracked independently by Discord with its own
+   * ~10s decay. Because slash-command replies are delivered via the
+   * interaction webhook (editReply/followUp), not a plain channel.send(),
+   * Discord does not reliably correlate that delivery with the typing-start
+   * signal — so calling sendTyping() here left the "typing…" bubble visibly
+   * lingering for several seconds after the command had already replied, on
+   * top of (and independent from) the interaction's own "thinking…" state.
+   * Skipping it entirely removes that second, uncontrollable indicator and
+   * relies solely on deferReply()'s native, instantly-clearing one.
+   */
   override sendTypingIndicator(_threadID: string): Promise<void> {
-    logger.debug('[discord] sendTypingIndicator called', {
+    logger.debug('[discord] sendTypingIndicator skipped (interaction path)', {
       threadID: _threadID,
     });
-    return sendTypingIndicatorLib(
-      this.#interaction.channel as TextChannel | null,
-    );
+    return Promise.resolve();
   }
 
   override editMessage(
