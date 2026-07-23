@@ -17,6 +17,11 @@
 import { stateStore } from '@/engine/lib/state.lib.js';
 import { buttonContextLib } from '@/engine/lib/button-context.lib.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
+// Instant-stop hook — invoked the moment a message is actually delivered so
+// the "bot is typing…" indicator never visibly lingers after the reply has
+// already appeared in the thread. See typing-indicator.lib.ts for the full
+// rationale; this is a no-op if no indicator happens to be active.
+import { stopTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import type { UnifiedUserInfo } from './user.model.js';
 
 // UnifiedApi is a class defined in api.model, not in the interfaces barrel.
@@ -429,7 +434,7 @@ export function createChatContext(
         hasMessage: !!message,
         buttonCount: button.length,
       });
-      return api.replyMessage(targetThreadID, {
+      const result = await api.replyMessage(targetThreadID, {
         message,
         attachment,
         attachment_url,
@@ -440,6 +445,11 @@ export function createChatContext(
         ...(style !== undefined ? { style } : {}),
         ...(rich !== undefined ? { rich } : {}),
       });
+      // Message is confirmed sent — kill any lingering typing/thinking
+      // indicator on this thread instantly, instead of leaving it to expire
+      // naturally or to wait for the rest of the command to finish running.
+      stopTypingIndicator(targetThreadID);
+      return result;
     },
 
     /**
@@ -479,7 +489,7 @@ export function createChatContext(
         buttonCount: button.length,
         sendAsNewMessage,
       });
-      return api.replyMessage(targetThreadID, {
+      const result = await api.replyMessage(targetThreadID, {
         message,
         attachment,
         attachment_url,
@@ -488,6 +498,10 @@ export function createChatContext(
         ...(style !== undefined ? { style } : {}),
         ...(rich !== undefined ? { rich } : {}),
       });
+      // Message is confirmed sent — kill any lingering typing/thinking
+      // indicator on this thread instantly. See ChatContext.reply above.
+      stopTypingIndicator(targetThreadID);
+      return result;
     },
 
     /**

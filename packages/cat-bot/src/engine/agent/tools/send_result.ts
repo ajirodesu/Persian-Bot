@@ -23,6 +23,15 @@
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { commandResultStore } from '../lib/command-result-store.lib.js';
+// This tool delivers the agent's actual reply via ctx.api.replyMessage
+// directly (bypassing ctx.chat), so it must fire the same instant-stop
+// signal that ctx.chat.reply/replyMessage fire — otherwise the
+// typing/thinking indicator started around the agent run keeps refreshing
+// after the message has already landed in the thread, since
+// withThinkingIndicator/withTypingIndicator only tear down once the whole
+// agent run (which may keep reasoning/calling more tools after this
+// delivery) finally settles.
+import { stopTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import type {
   NamedStreamAttachment,
   NamedUrlAttachment,
@@ -161,6 +170,10 @@ export const run = async (
     if (allBinaryAttachments.length > 0)
       replyOptions.attachment = allBinaryAttachments as NamedStreamAttachment[];
     await ctx.api.replyMessage(threadID, replyOptions);
+    // Delivered — kill any lingering typing/thinking indicator on this
+    // thread instantly rather than letting it keep refreshing while the
+    // agent potentially keeps reasoning or calling more tools afterward.
+    stopTypingIndicator(threadID);
 
     const parts: string[] = ['Message delivered.'];
     if (allAttachmentUrls.length > 0)

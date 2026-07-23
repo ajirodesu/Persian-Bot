@@ -11,6 +11,12 @@ import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
+import {
+  initAgentStatus,
+  setAgentStatus,
+  describeToolStatus,
+  DEFAULT_AGENT_STATUS_TEXT,
+} from '@/engine/agent/lib/agent-status.lib.js';
 
 // ============================================================================
 // PROMPT TEMPLATE
@@ -139,6 +145,11 @@ export async function runAgent(
 ): Promise<string> {
   const groq = getGroq();
 
+  // Live status ref, read by withThinkingIndicator's refresh loop so the
+  // "bot is typing/thinking" signal reflects the agent's actual current
+  // action instead of a generic placeholder for the whole turn.
+  initAgentStatus(ctx);
+
   // loadAgentTools() is idempotent and returns the cached list after the first call.
   // cachedGroqTools and cachedToolsMap are populated in the same call — safe to use directly.
   await loadAgentTools();
@@ -148,15 +159,20 @@ export async function runAgent(
   const { senderID, threadID, sessionUserId, sessionId, platform } =
     resolveAgentContext(ctx);
   let userRoleLabel = 'Regular User';
+  // Hoisted out of the try block below (not just a local) — reused by the
+  // agent command limit exemption further down, since "Bot Administrator"
+  // (the owner/admin of this specific bot session) is also meant to bypass
+  // the per-message command cap, not only a global System Admin.
+  let _isBotAdmin = false;
   if (senderID && sessionUserId && sessionId) {
     try {
-      const isAdmin = await isBotAdmin(
+      _isBotAdmin = await isBotAdmin(
         sessionUserId,
         platform,
         sessionId,
         senderID,
       );
-      if (isAdmin) {
+      if (_isBotAdmin) {
         userRoleLabel = 'Bot Administrator';
       } else if (threadID) {
         const isThreadAdm = await isThreadAdmin(threadID, senderID);
@@ -170,8 +186,12 @@ export async function runAgent(
   // ── Per-message agent command limit ──────────────────────────────────────────
   // Attach a mutable budget object to ctx before the tool loop. test_command reads
   // this to enforce the cap and trim/reject excess commands within a single agent run.
-  // System admins are unconditionally exempt — no budget is attached for them.
-  // Fail-open: if the system-admin check throws, treat as non-admin (budget applies).
+  // Exempt for BOTH global System Admins (isSystemAdmin — cross-session, dashboard-
+  // managed) AND this session's Bot Administrator (isBotAdmin — the bot's own
+  // owner/admin, who already bypasses bans and cooldowns in agent-command-guard.lib.ts).
+  // No budget is attached for either — unconditional exemption, not a higher limit.
+  // Fail-open: if a check throws, treat that check as non-admin (limit still applies
+  // unless the OTHER check independently grants the exemption).
   let _isSysAdmin = false;
   if (senderID) {
     try {
@@ -180,7 +200,8 @@ export async function runAgent(
       // Fail-open — apply limit on DB error
     }
   }
-  if (!_isSysAdmin) {
+  const _isExemptFromCommandLimit = _isSysAdmin || _isBotAdmin;
+  if (!_isExemptFromCommandLimit) {
     (ctx as unknown as Record<string, unknown>)['_agentCommandBudget'] = {
       used: 0,
       limit: AGENT_COMMAND_LIMIT,
@@ -224,6 +245,15 @@ export async function runAgent(
     availableCommandsCache.set(platform, availableCommandsList);
   }
 
+  // Mirror the exemption computed above: no budget was attached for System Admins
+  // or Bot Administrators, so the prompt should say so plainly rather than quoting
+  // a numeric cap that doesn't actually apply to this user.
+  const agentCommandLimitNote = _isExemptFromCommandLimit
+    ? `As ${_isSysAdmin ? 'a System Administrator' : 'this bot\'s Administrator'}, you are not subject to a per-message command limit.`
+    : `You may run at most ${AGENT_COMMAND_LIMIT} commands total per user message ` +
+      `(across all \`test_command\` calls combined). This is a hard limit — it cannot ` +
+      `be increased or bypassed for this user.`;
+
   const systemContent = systemPromptOverride
     ? systemPromptOverride
     : SYSTEM_PROMPT_TEMPLATE.replace(
@@ -233,7 +263,9 @@ export async function runAgent(
         .replace('{{USER_NAME}}', userName || 'User')
         .replace('{{COMMAND_PREFIX}}', ctx.prefix || '/')
         .replace('{{USER_ROLE}}', userRoleLabel)
-        .replace('{{AVAILABLE_COMMANDS}}', availableCommandsList);
+        .replace('{{AVAILABLE_COMMANDS}}', availableCommandsList)
+        .replace('{{AGENT_COMMAND_LIMIT_NOTE}}', agentCommandLimitNote)
+        .replaceAll('{{AGENT_COMMAND_LIMIT}}', String(AGENT_COMMAND_LIMIT));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
@@ -247,6 +279,11 @@ export async function runAgent(
   let turns = 20; // Safety limit — prevents runaway tool-call loops
 
   while (turns-- > 0) {
+    // Reasoning phase — reset to the generic "thinking" phrase before each
+    // model call; it will be overwritten with a specific action below the
+    // moment a tool call is actually dispatched.
+    setAgentStatus(ctx, DEFAULT_AGENT_STATUS_TEXT);
+
     const response = await groq.chat.completions.create({
       model: 'openai/gpt-oss-120b',
       messages,
@@ -288,6 +325,10 @@ export async function runAgent(
       } catch {
         args = {};
       }
+
+      // Reflect the specific action about to run in the live status text so
+      // the thinking indicator shows what the agent is actually doing.
+      setAgentStatus(ctx, describeToolStatus(toolCall.function.name, args));
 
       try {
         // Execute dynamic tool passing the requested args and the application context

@@ -23,16 +23,27 @@
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
-import { withTypingIndicator } from './typing-indicator.lib.js';
+import {
+  withTypingIndicator,
+  registerTypingStopper,
+} from './typing-indicator.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { getAgentStatus } from '@/engine/agent/lib/agent-status.lib.js';
 
 // Below sendRichMessageDraft's ~30s expiry so the placeholder never visibly
-// drops out while `fn` is still running. Matches TYPING_REFRESH_INTERVAL_MS's
-// margin-of-safety reasoning in typing-indicator.lib.ts.
-const THINKING_REFRESH_INTERVAL_MS = 8000;
+// drops out while `fn` is still running. Shorter than the old 8s value so the
+// draft catches up quickly with agent.ts's live status updates (tool calls
+// often resolve well under 8s, which previously left a stale phrase on screen).
+const THINKING_REFRESH_INTERVAL_MS = 3000;
 
-/** Rotates through a handful of phrases so a long-running generation doesn't look stuck. */
-const THINKING_PHRASES = [
+/**
+ * Fallback phrases used only before the agent has reported any specific
+ * action (e.g. the very first tick, fired before `fn` starts running) or for
+ * callers that never populate the live agent status. Once agent.ts is
+ * running it drives real, action-specific text via setAgentStatus — see
+ * engine/agent/lib/agent-status.lib.ts — and this rotation is bypassed.
+ */
+const FALLBACK_THINKING_PHRASES = [
   '🧠 Thinking…',
   '💭 Working it out…',
   '⚙️ Putting it together…',
@@ -74,8 +85,18 @@ export async function withThinkingIndicator<T>(
   const trigger = (): void => {
     if (inFlight) return;
     inFlight = true;
-    const text = THINKING_PHRASES[phraseIndex % THINKING_PHRASES.length]!;
-    phraseIndex += 1;
+    // Prefer the agent's live, action-specific status (set by agent.ts as it
+    // reasons and calls tools); only fall back to the generic rotation when
+    // no live status has been reported yet (e.g. the very first tick, which
+    // fires before `fn`/runAgent has started).
+    const liveText = getAgentStatus(ctx);
+    let text: string;
+    if (liveText) {
+      text = liveText;
+    } else {
+      text = FALLBACK_THINKING_PHRASES[phraseIndex % FALLBACK_THINKING_PHRASES.length]!;
+      phraseIndex += 1;
+    }
     void api
       .sendThinkingDraft(threadID, text, draftId)
       .then(() => {
@@ -91,6 +112,18 @@ export async function withThinkingIndicator<T>(
       });
   };
 
+  let draftStopped = false;
+  const stopDraft = (): void => {
+    if (draftStopped) return;
+    draftStopped = true;
+    clearInterval(interval);
+  };
+  // Registered independently of withTypingIndicator's own registration below —
+  // stopTypingIndicator(threadID) invokes every stopper registered for that
+  // thread, so both the draft refresh and the plain typing bubble get torn
+  // down together the instant the real reply is sent.
+  const unregisterDraft = registerTypingStopper(threadID, stopDraft);
+
   trigger();
   const interval = setInterval(trigger, THINKING_REFRESH_INTERVAL_MS);
 
@@ -99,6 +132,7 @@ export async function withThinkingIndicator<T>(
     // module docstring for why both stay active together.
     return await withTypingIndicator(api, threadID, fn);
   } finally {
-    clearInterval(interval);
+    stopDraft();
+    unregisterDraft();
   }
 }

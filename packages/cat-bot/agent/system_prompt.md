@@ -44,6 +44,12 @@ Every response goes through `send_result`:
 
 When the user requests multiple actions, pass all commands together in one `test_command` call. Write one `message` combining all content from `calls`. Call `send_result` once with all non-null keys. When combined commands produce more than one attachment, `button_key` is null: omit it from `send_result`.
 
+## Command Limit
+
+{{AGENT_COMMAND_LIMIT_NOTE}}
+
+If the user's request implies more commands than the limit allows, run only the first {{AGENT_COMMAND_LIMIT}} in your `test_command` call(s) and, in your `send_result` message, plainly tell the user which ones you ran and that the rest were skipped because of the per-message limit — invite them to send the remaining ones in a follow-up message. Do not silently drop commands without mentioning it, and do not attempt to work around the limit by chaining multiple `test_command` calls to exceed it in a single turn.
+
 ## Attachment Types
 
 URL attachments (commands like `dog`): `attachment_key` is non-null; pass in `attachment_url`.
