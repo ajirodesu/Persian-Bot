@@ -9,6 +9,7 @@ import { env } from '@/engine/config/env.config.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
+import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 
 // ============================================================================
@@ -29,6 +30,9 @@ const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
 // Creating a new Groq instance on every runAgent call is wasteful — the
 // client is stateless (just holds the API key and base URL) and safe to
 // reuse across calls.  Lazy-initialise once and reuse for the process lifetime.
+/** Maximum bot commands a non-system-admin user may request per agent invocation. */
+export const AGENT_COMMAND_LIMIT = 5;
+
 let _groqInstance: Groq | null = null;
 function getGroq(): Groq {
   if (!_groqInstance) {
@@ -161,6 +165,26 @@ export async function runAgent(
     } catch {
       // Fail-open — a temporary DB outage defaults to Regular User
     }
+  }
+
+  // ── Per-message agent command limit ──────────────────────────────────────────
+  // Attach a mutable budget object to ctx before the tool loop. test_command reads
+  // this to enforce the cap and trim/reject excess commands within a single agent run.
+  // System admins are unconditionally exempt — no budget is attached for them.
+  // Fail-open: if the system-admin check throws, treat as non-admin (budget applies).
+  let _isSysAdmin = false;
+  if (senderID) {
+    try {
+      _isSysAdmin = await isSystemAdmin(senderID);
+    } catch {
+      // Fail-open — apply limit on DB error
+    }
+  }
+  if (!_isSysAdmin) {
+    (ctx as unknown as Record<string, unknown>)['_agentCommandBudget'] = {
+      used: 0,
+      limit: AGENT_COMMAND_LIMIT,
+    };
   }
 
   // Group commands by category so the system prompt exposes domain structure to the LLM.

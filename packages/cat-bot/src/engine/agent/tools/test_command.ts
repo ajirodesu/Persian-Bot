@@ -283,9 +283,43 @@ export const run = async (
   const { senderID, threadID, sessionUserId, sessionId, platform } =
     resolveAgentContext(ctx);
 
-  const cmdsToRun = payload.commands ?? [];
+  // ── Per-message command limit ─────────────────────────────────────────────
+  // Budget is attached to ctx by runAgent for non-system-admin users.
+  // Absent budget (undefined) = system admin = unlimited.
+  type CommandBudget = { used: number; limit: number };
+  const budget = (ctx as unknown as Record<string, unknown>)[
+    '_agentCommandBudget'
+  ] as CommandBudget | undefined;
+
+  let cmdsToRun = payload.commands ?? [];
   if (cmdsToRun.length === 0) {
     return 'Error: You must provide a non-empty `commands` array.';
+  }
+
+  if (budget !== undefined) {
+    const remaining = budget.limit - budget.used;
+    if (remaining <= 0) {
+      return (
+        `⚠️ Command limit reached. You may only request up to ${budget.limit} ` +
+        `commands per message. No further commands will be executed.`
+      );
+    }
+    if (cmdsToRun.length > remaining) {
+      const rejected = cmdsToRun.slice(remaining).map((c) => c.command);
+      cmdsToRun = cmdsToRun.slice(0, remaining);
+      // Inform the LLM what was trimmed so it can explain to the user.
+      // Budget slots consumed below after guard checks pass.
+      const rejectedNote =
+        `Note: ${rejected.length} command(s) were trimmed to stay within the ` +
+        `${budget.limit}-command-per-message limit: ${rejected.join(', ')}.`;
+      // Prepend the note into the result by injecting a sentinel the execution block
+      // will append — simplest approach: adjust cmdsToRun and carry the note forward.
+      // We handle the note in the return path below via an outer variable.
+      (ctx as unknown as Record<string, unknown>)['_agentCommandTrimNote'] = rejectedNote;
+    }
+    // Reserve the slots now so concurrent tool calls within the same turn
+    // cannot collectively exceed the budget.
+    budget.used += cmdsToRun.length;
   }
 
   const execution = (async (): Promise<string> => {
@@ -499,6 +533,11 @@ export const run = async (
         formatCallForLLM(call, senderID, eventMessageID),
       );
 
+      const ctxMap = ctx as unknown as Record<string, unknown>;
+      const trimNote = ctxMap['_agentCommandTrimNote'] as string | undefined;
+      // Clear the trim note so it is only surfaced once per agent turn.
+      if (trimNote) delete ctxMap['_agentCommandTrimNote'];
+
       return JSON.stringify(
         {
           key,
@@ -507,6 +546,7 @@ export const run = async (
           button_key: buttonKey,
           callCount: storableCalls.length,
           calls: llmCalls,
+          ...(trimNote ? { limit_warning: trimNote } : {}),
           note:
             'Read the `calls` text to synthesize your reply message. Then call ' +
             '`send_result` once with your synthesized `message` text. Pass ' +
