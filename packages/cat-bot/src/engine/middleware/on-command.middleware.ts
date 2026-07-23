@@ -37,11 +37,6 @@ import { parseTextOptions } from '@/engine/modules/options/options.util.js';
 // Cooldown state delegated to lib/ — mirrors state.lib.ts pattern;
 // this middleware file stays free of mutable Map declarations.
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
-import {
-  commandLimitStore,
-  MAX_COMMANDS_PER_WINDOW,
-  COMMAND_LIMIT_WINDOW_MS,
-} from '@/engine/lib/command-limit.lib.js';
 // Request-scoped memoized wrappers — every auth check goes through these so each
 // DB/LRU lookup is performed at most once per middleware chain invocation.
 import {
@@ -67,71 +62,6 @@ import {
   formatUserBanMessage,
   formatGroupBanMessage,
 } from '@/engine/lib/ban-message.lib.js';
-
-// ── Per-Message Command Limit ─────────────────────────────────────────────────
-
-/**
- * Enforces a maximum of MAX_COMMANDS_PER_WINDOW commands per user within a
- * rolling COMMAND_LIMIT_WINDOW_MS window ("per-message command limit").
- *
- * Rules:
- *   - System admins are unconditionally exempt — they may invoke unlimited commands.
- *   - All other users are capped at MAX_COMMANDS_PER_WINDOW within the window.
- *   - First blocked invocation → sends ONE notice with the remaining wait time; latches
- *     the notified flag so subsequent blocked attempts are silently dropped (no spam).
- *   - Excess requests beyond the limit are rejected (chain halts, handler never runs).
- *
- * Registered as the second middleware (after enforceNotBanned) so banned users
- * never consume a counter slot, and so the limit check precedes permission/cooldown
- * logic — an over-limit request is cheaply rejected before any DB work runs.
- */
-export const enforceCommandLimit: MiddlewareFn<OnCommandCtx> = async function (
-  ctx,
-  next,
-): Promise<void> {
-  // Skip if no command is being invoked (bare prefix, unrecognised, etc.)
-  if (!ctx.parsed) {
-    await next();
-    return;
-  }
-
-  const senderID = (ctx.event['senderID'] ??
-    ctx.event['userID'] ??
-    '') as string;
-
-  // System admins are exempt from the command limit — unlimited invocations allowed.
-  if (senderID) {
-    const isSysAdmin = await cachedIsSystemAdmin(ctx, senderID);
-    if (isSysAdmin) {
-      await next();
-      return;
-    }
-  }
-
-  const now = Date.now();
-  commandLimitStore.pruneIfNeeded(now);
-
-  // Key scoped per-sender so different users never interfere with each other.
-  const key = `cmdlimit:${senderID || 'unknown'}`;
-  const entry = commandLimitStore.record(key, now);
-
-  if (entry.count > MAX_COMMANDS_PER_WINDOW) {
-    // Limit exceeded — send one notice per window, then silently drop.
-    if (!entry.notified) {
-      commandLimitStore.markNotified(key);
-      const remainingSec = Math.ceil((entry.windowExpiry - now) / 1000);
-      await ctx.chat.replyMessage({
-        message:
-          `⚠️ You've reached the limit of ${MAX_COMMANDS_PER_WINDOW} commands per message. ` +
-          `Please wait ${remainingSec} second${remainingSec !== 1 ? 's' : ''} before sending more commands.`,
-      });
-    }
-    // Do NOT call next() — request is rejected.
-    return;
-  }
-
-  await next();
-};
 
 // ── Cooldown Enforcement ─────────────────────────────────────────────────────
 
