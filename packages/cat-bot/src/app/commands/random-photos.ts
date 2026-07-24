@@ -28,6 +28,7 @@
  * each entry exactly like a standalone command module.
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -36,7 +37,6 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // 1) SIMPLE PHOTO FAMILY — /coffee, /picsum, /waifu
@@ -198,7 +198,29 @@ const SIMPLE_BUTTON_ID = { repeat: 'repeat' } as const;
 async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promise<void> {
   const { native, button, session } = ctx;
 
-  const loading = await withLoadingMedia(ctx, `📸 **Fetching ${config.label}...**`);
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const result = await config.fetch();
@@ -206,15 +228,15 @@ async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promis
     if (!result.ok) {
       // Non-error notice (e.g. NSFW-flagged) — plain message, no button.
       if (result.notice) {
-        await loading.fail(result.notice);
+        await fail(result.notice);
         return;
       }
 
-      await loading.fail(`⚠️ **Error:** Could not retrieve a ${config.label}.`);
+      await fail(`⚠️ **Error:** Could not retrieve a ${config.label}.`);
       return;
     }
 
-    const resolvedButtonId = loading.isButtonAction
+    const resolvedButtonId = isButtonAction
       ? session.id
       : button.generateID({ id: SIMPLE_BUTTON_ID.repeat, public: true });
 
@@ -223,7 +245,7 @@ async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promis
         ? { attachment_url: [{ name: result.attachment.name, url: result.attachment.url }] }
         : { attachment: [{ name: result.attachment.name, stream: result.attachment.buffer }] };
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: result.caption,
       ...attachmentField,
@@ -231,7 +253,7 @@ async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promis
     });
   } catch (err) {
     const error = err as { message?: string };
-    await loading.fail(
+    await fail(
       `⚠️ **System Error:** Failed to fetch a ${config.label}: \`${error.message ?? 'Unknown error'}\``,
     );
   }
@@ -308,14 +330,6 @@ async function renderLoremFlickr(ctx: AppCtx, tag: string): Promise<void> {
   const isButtonAction = event['type'] === 'button_action';
   const buttonGrid = hasNativeButtons(native.platform) ? buildTagButtonGrid(btn) : [];
 
-  let loadingId: string | undefined;
-  if (!isButtonAction) {
-    loadingId = (await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `🖼️ **Finding photo...**\n🏷️ Tag: _${tag || 'Random'}_`,
-    })) as string | undefined;
-  }
-
   try {
     const resolvedTag = tag || pickRandomTag();
     const image = await fetchLoremFlickr(resolvedTag);
@@ -330,15 +344,6 @@ async function renderLoremFlickr(ctx: AppCtx, tag: string): Promise<void> {
 
     if (isButtonAction) {
       await chat.editMessage({ ...payload, message_id_to_edit: event['messageID'] as string });
-      return;
-    }
-    if (loadingId) {
-      try {
-        await chat.editMessage({ ...payload, message_id_to_edit: loadingId });
-      } catch {
-        await chat.unsendMessage(loadingId).catch(() => {});
-        await chat.replyMessage(payload);
-      }
     } else {
       await chat.replyMessage(payload);
     }
@@ -352,10 +357,6 @@ async function renderLoremFlickr(ctx: AppCtx, tag: string): Promise<void> {
 
     if (isButtonAction) {
       await chat.editMessage({ ...errorPayload, message_id_to_edit: event['messageID'] as string });
-      return;
-    }
-    if (loadingId) {
-      await chat.editMessage({ ...errorPayload, message_id_to_edit: loadingId });
     } else {
       await chat.replyMessage(errorPayload);
     }
@@ -396,14 +397,6 @@ async function renderWallpaper(
   const isButtonAction = event['type'] === 'button_action';
   const buttonGrid = hasNativeButtons(native.platform) ? buildTagButtonGrid(btn) : [];
 
-  let loadingId: string | undefined;
-  if (!isButtonAction) {
-    loadingId = (await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `🖼️ **Finding wallpaper...**\n🔎 Query: _${query || 'Random'}_ (${width}×${height})`,
-    })) as string | undefined;
-  }
-
   try {
     let url: string;
     let sourceName: string;
@@ -437,15 +430,6 @@ async function renderWallpaper(
 
     if (isButtonAction) {
       await chat.editMessage({ ...wallpaperPayload, message_id_to_edit: event['messageID'] as string });
-      return;
-    }
-    if (loadingId) {
-      try {
-        await chat.editMessage({ ...wallpaperPayload, message_id_to_edit: loadingId });
-      } catch {
-        await chat.unsendMessage(loadingId).catch(() => {});
-        await chat.replyMessage(wallpaperPayload);
-      }
     } else {
       await chat.replyMessage(wallpaperPayload);
     }
@@ -464,10 +448,6 @@ async function renderWallpaper(
 
     if (isButtonAction) {
       await chat.editMessage({ ...errorPayload, message_id_to_edit: event['messageID'] as string });
-      return;
-    }
-    if (loadingId) {
-      await chat.editMessage({ ...errorPayload, message_id_to_edit: loadingId });
     } else {
       await chat.replyMessage(errorPayload);
     }

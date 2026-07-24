@@ -15,6 +15,7 @@
  *   hasNativeButtons() guards platforms that do not support interactive buttons.
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -22,7 +23,6 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -119,14 +119,36 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     return;
   }
 
-  const loading = await withLoadingMedia(ctx, '👗 **Fetching a cosplay video...**');
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     // ── Fetch video ───────────────────────────────────────────────────────
     const videoUrl = await fetchCosplayVideo();
 
     if (!videoUrl) {
-      await loading.fail(
+      await fail(
         [
           '⚠️ **No videos found.**',
           'The archive may be temporarily unavailable. Please try again in a moment.',
@@ -140,18 +162,18 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
     // Reuse the active instance ID when refreshing via button so the button
     // slot is updated in-place and never disappears between clicks.
-    const buttonId = loading.isButtonAction
+    const buttonId = isButtonAction
       ? session.id
       : button.generateID({ id: BUTTON_ID.next, public: true });
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: caption,
       attachment_url: [{ name: 'cosplay.mp4', url: videoUrl }],
       ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
     });
   } catch {
-    await loading.fail(
+    await fail(
       '⚠️ **Error:** Something went wrong while fetching a cosplay video. Please try again later.',
     );
   }

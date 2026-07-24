@@ -21,6 +21,7 @@
  * exactly like a standalone command module.
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -31,7 +32,6 @@ import { createUrl, type UrlParams } from '@/engine/lib/apis.lib.js';
 import { AttachmentType } from '@/engine/adapters/models/enums/index.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Shared attachment resolution (same convention as popcat.ts) ────────────────
 
@@ -440,10 +440,29 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
     params[config.autoTimestampParam] = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   }
 
-  const loading = await withLoadingMedia(
-    ctx,
-    `⏳ **Generating ${config.label}...**`,
-  );
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const requestUrl = createUrl('popcat', config.path, params);
@@ -453,14 +472,14 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
       config.label,
     );
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **${config.label}**`,
       attachment: [{ name: `${config.name}.${ext}`, stream: buffer }],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await loading.fail(`⚠️ Failed to generate the image: \`${message}\``);
+    await fail(`⚠️ Failed to generate the image: \`${message}\``);
   }
 }
 

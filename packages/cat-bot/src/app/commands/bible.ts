@@ -231,11 +231,6 @@ export const onCommand = async ({
     isRandom = true;
   }
 
-  const loadingId = await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: `📖 **Looking up:** ${text} (${version.toUpperCase()})...`,
-  });
-
   try {
     const { reference, translationName, passageText } = await fetchPassage(
       text,
@@ -254,26 +249,13 @@ export const onCommand = async ({
         `${reference} (${translationName})\n\n${passageText}`,
         'utf-8',
       );
-      const filePayload = {
+      await chat.reply({
         style: MessageStyle.MARKDOWN,
         message: `📄 **Passage too long** — here is **${reference}** as a file.`,
         attachment: [
           { name: `${reference.replace(/\s/g, '_')}.txt`, stream: buf },
         ],
-      };
-      if (loadingId) {
-        try {
-          await chat.editMessage({
-            ...filePayload,
-            message_id_to_edit: loadingId as string,
-          });
-        } catch {
-          await chat.unsendMessage(loadingId as string).catch(() => {});
-          await chat.reply(filePayload);
-        }
-      } else {
-        await chat.reply(filePayload);
-      }
+      });
       return;
     }
 
@@ -286,14 +268,11 @@ export const onCommand = async ({
     btn.update({ id: buttonId, label: `🔄 Switch to ${altVersion}` });
     btn.createContext({ id: buttonId, context: { reference, altVersion } });
 
-    if (loadingId) {
-      await chat.editMessage({
-        style: MessageStyle.MARKDOWN,
-        message_id_to_edit: loadingId as string,
-        message,
-        ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
-      });
-    }
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message,
+      ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
+    });
   } catch (err) {
     const error = err as {
       response?: { data?: { error?: string } };
@@ -302,12 +281,9 @@ export const onCommand = async ({
     const errorText =
       error.response?.data?.error ?? error.message ?? 'Unknown error';
 
-    if (loadingId) {
-      await chat.editMessage({
-        style: MessageStyle.MARKDOWN,
-        message_id_to_edit: loadingId as string,
-        message: `⚠️ **Error:** ${errorText}\n\nTry checking the spelling or the version.`,
-      });
-    }
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: `⚠️ **Error:** ${errorText}\n\nTry checking the spelling or the version.`,
+    });
   }
 };

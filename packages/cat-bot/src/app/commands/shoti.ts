@@ -173,21 +173,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
   const isButtonAction = event['type'] === 'button_action';
 
-  // Only show a standalone loading message on the initial command — button
-  // refreshes edit the existing (media-bearing) message directly, since
-  // Telegram cannot swap a media message to text-only mid-edit.
-  const loadingId = isButtonAction
-    ? undefined
-    : ((await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: '🎲  Fetching a random TikTok video...',
-      })) as string | undefined);
-
-  const dismissLoading = (): Promise<void> =>
-    loadingId
-      ? chat.unsendMessage(loadingId).catch(() => {})
-      : Promise.resolve();
-
   try {
     // ── Step 1: Resolve video metadata ─────────────────────────────────────
 
@@ -261,13 +246,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
         ...payload,
         message_id_to_edit: event['messageID'] as string,
       });
-    } else if (loadingId) {
-      try {
-        await chat.editMessage({ ...payload, message_id_to_edit: loadingId });
-      } catch {
-        await dismissLoading();
-        await chat.replyMessage(payload);
-      }
     } else {
       await chat.replyMessage(payload);
     }
@@ -286,11 +264,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       await chat.editMessage({
         ...errPayload,
         message_id_to_edit: event['messageID'] as string,
-      });
-    } else if (loadingId) {
-      await chat.editMessage({ ...errPayload, message_id_to_edit: loadingId }).catch(async () => {
-        await dismissLoading();
-        await chat.replyMessage(errPayload);
       });
     } else {
       await chat.replyMessage(errPayload);

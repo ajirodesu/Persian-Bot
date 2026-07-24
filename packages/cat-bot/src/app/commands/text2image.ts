@@ -12,12 +12,12 @@
  *   Bot:  [generated image + prompt caption]
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 const DEFAULT_RATIO = '1:1';
 
@@ -93,17 +93,39 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     return;
   }
 
-  const loading = await withLoadingMedia(ctx, `🖼️ **Generating image for:** ${prompt}`);
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const image = await fetchText2Image(prompt, ratio);
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}\n📐 **Ratio:** ${ratio}`,
       attachment: [{ name: 'text2image.png', stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };
-    await loading.fail(`⚠️ Failed to generate the image: \`${error.message ?? 'Unknown error'}\``);
+    await fail(`⚠️ Failed to generate the image: \`${error.message ?? 'Unknown error'}\``);
   }
 };

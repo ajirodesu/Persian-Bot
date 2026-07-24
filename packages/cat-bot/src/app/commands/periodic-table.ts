@@ -20,13 +20,13 @@
  * exactly like a standalone command module.
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 import type { CommandMeta, CommandOption } from '@/engine/types/module-config.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
@@ -156,7 +156,29 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
     query = { element };
   }
 
-  const loading = await withLoadingMedia(ctx, `🔬 **Looking up ${config.label}...**`);
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const info = await fetchElement(config.path, query);
@@ -167,13 +189,13 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
     const buttonRow =
       config.hasRerollButton && hasNativeButtons(native.platform)
         ? [
-            loading.isButtonAction
+            isButtonAction
               ? session.id
               : button.generateID({ id: REROLL_BUTTON_ID, public: true }),
           ]
         : [];
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message,
       attachment_url: [{ name: `${info.symbol.toLowerCase()}.png`, url: info.image }],
@@ -181,7 +203,7 @@ async function runEffect(ctx: AppCtx, config: EndpointConfig): Promise<void> {
     });
   } catch (err) {
     const messageText = err instanceof Error ? err.message : String(err);
-    await loading.fail(`⚠️ Failed to fetch element info: \`${messageText}\``);
+    await fail(`⚠️ Failed to fetch element info: \`${messageText}\``);
   }
 }
 

@@ -33,17 +33,14 @@
  *   }
  *
  * ── Delivery ────────────────────────────────────────────────────────────
- * Deliberately does NOT use withLoadingMedia()'s edit-in-place swap:
- * Telegram's editMessageMedia can only ever replace a message with a
- * SINGLE media item (a real Bot API constraint, not a bug here) — so
- * editing the loading message into the result would silently truncate a
- * 7-photo set down to 1, no error thrown. Instead the loading message is
- * dismissed and the full set is sent as a fresh reply via
- * chat.replyMessage(), whose Telegram adapter batches multiple photo
- * attachment_url entries into one sendMediaGroup album call (see
- * replyMessage.ts). `media` is capped at MAX_IMAGES (10) — Telegram's own
- * sendMediaGroup / Discord's per-message attachment ceiling — before
- * sending, so a larger response never gets rejected by the platform.
+ * No loading placeholder message is sent — the typing indicator (started
+ * automatically for the command's full processing duration and cleared the
+ * instant the reply is sent) already covers that. The photo set is sent
+ * directly as a single reply via chat.replyMessage(), whose Telegram adapter
+ * batches multiple photo attachment_url entries into one sendMediaGroup
+ * album call (see replyMessage.ts). `media` is capped at MAX_IMAGES (10) —
+ * Telegram's own sendMediaGroup / Discord's per-message attachment ceiling —
+ * before sending, so a larger response never gets rejected by the platform.
  *
  * No refresh button — a fresh /ishoti invocation is the only way to get
  * another set. Caption is just the creator's @username.
@@ -137,11 +134,6 @@ export const meta: CommandMeta = {
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
   const { chat } = ctx;
 
-  const loadingId = (await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: '🎲 **Fetching a random Shoti photo set...**',
-  })) as string | undefined;
-
   try {
     const { user, media } = await fetchShotiPhotos();
 
@@ -153,10 +145,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       name: `shoti_${idx + 1}.jpg`,
       url,
     }));
-
-    // Dismiss the loading message and send the set fresh — editing it in
-    // place would cap the result at 1 photo (see file header).
-    if (loadingId) await chat.unsendMessage(loadingId).catch(() => {});
 
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
@@ -170,13 +158,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       message: `⚠️ Failed to fetch a Shoti photo set: \`${message}\``,
     };
 
-    if (loadingId) {
-      await chat.editMessage({ ...errPayload, message_id_to_edit: loadingId }).catch(async () => {
-        await chat.unsendMessage(loadingId).catch(() => {});
-        await chat.replyMessage(errPayload);
-      });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+    await chat.replyMessage(errPayload);
   }
 };

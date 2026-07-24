@@ -8,11 +8,11 @@
  * Usage: /movies <movie title>
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +69,29 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   const apiKey = 'ec7115';
   const url = `https://www.omdbapi.com/?t=${encodeURIComponent(query)}&plot=full&apikey=${apiKey}`;
 
-  const loading = await withLoadingMedia(ctx, `🎬 **Looking up "${query}"...**`);
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   let movie: OmdbMovie;
   try {
@@ -79,14 +101,14 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     movie = (await response.json()) as OmdbMovie;
   } catch (err) {
     const error = err as { message?: string };
-    await loading.fail(
+    await fail(
       `❌ Failed to fetch movie data.\n\`${error.message ?? 'Unknown error'}\``,
     );
     return;
   }
 
   if (movie.Response === 'False') {
-    await loading.fail(`🔍 No movie found for **${query}**.`);
+    await fail(`🔍 No movie found for **${query}**.`);
     return;
   }
 
@@ -102,16 +124,16 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
   if (movie.Poster && movie.Poster !== 'N/A') {
     try {
-      await loading.finish({
+      await finish({
         style: MessageStyle.MARKDOWN,
         message: caption,
         attachment_url: [{ name: 'movie_poster.jpg', url: movie.Poster }],
       });
     } catch {
       // Poster fetch failed — fall back to text-only
-      await loading.finish({ style: MessageStyle.MARKDOWN, message: caption });
+      await finish({ style: MessageStyle.MARKDOWN, message: caption });
     }
   } else {
-    await loading.finish({ style: MessageStyle.MARKDOWN, message: caption });
+    await finish({ style: MessageStyle.MARKDOWN, message: caption });
   }
 };

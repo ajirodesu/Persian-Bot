@@ -4,6 +4,7 @@
  * Includes a "New Recipe" button to refresh without re-issuing the command.
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -11,7 +12,6 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 const TIMEOUT = 8000;
 const API_URL = 'https://www.themealdb.com/api/json/v1/1/random.php';
@@ -83,7 +83,29 @@ const BUTTON_ID = { newRecipe: 'new_recipe' } as const;
 async function fetchAndSendRecipe(ctx: AppCtx): Promise<void> {
   const { native, button, session } = ctx;
 
-  const loading = await withLoadingMedia(ctx, '🍽️ **Cooking up a recipe...**');
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const meal = await fetchRecipe();
@@ -93,11 +115,11 @@ async function fetchAndSendRecipe(ctx: AppCtx): Promise<void> {
     const caption = formatRecipe(meal);
 
     // Reuse active instance ID if triggered via button; generate new one for fresh command
-    const buttonId = loading.isButtonAction
+    const buttonId = isButtonAction
       ? session.id
       : button.generateID({ id: BUTTON_ID.newRecipe, public: true });
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: caption,
       ...(meal.strMealThumb
@@ -107,7 +129,7 @@ async function fetchAndSendRecipe(ctx: AppCtx): Promise<void> {
     });
   } catch (err) {
     const error = err as { message?: string };
-    await loading.fail(`⚠️ **Error:** ${error.message ?? 'Unknown error'}`);
+    await fail(`⚠️ **Error:** ${error.message ?? 'Unknown error'}`);
   }
 }
 

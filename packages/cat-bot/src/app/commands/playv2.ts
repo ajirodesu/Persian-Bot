@@ -34,6 +34,7 @@
  * Author: AjiroDesu
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -42,7 +43,6 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // ── Meta ──────────────────────────────────────────────────────────────────────
@@ -238,10 +238,29 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   }
 
   const sourceLabel = source === 'spotify' ? 'Spotify' : 'YouTube';
-  const loading = await withLoadingMedia(
-    ctx,
-    `🔍 **Searching ${sourceLabel} for "${input}"...**`,
-  );
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const track =
@@ -255,7 +274,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       `❖ **URL**: ${track.url}`,
     ].join('\n');
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: caption,
       attachment_url: [{ name: safeFilename(track.title), url: track.download }],
@@ -263,6 +282,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn(`[playv2] ${source} search failed: ${message}`);
-    await loading.fail(`⚠️ Failed to fetch audio: \`${message}\``);
+    await fail(`⚠️ Failed to fetch audio: \`${message}\``);
   }
 };

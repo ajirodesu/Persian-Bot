@@ -12,11 +12,11 @@
  *   Bot:  Full anime details with image
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -190,8 +190,30 @@ export const onReply = {
     // Send image first with a short caption to stay within Telegram's
     // 1024-character caption limit, then send full details separately.
     if (imageUrl) {
-      const loading = await withLoadingMedia(ctx, `🎬 **Loading ${anime.title}...**`);
-      await loading.finish({
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
+      await finish({
         style: MessageStyle.MARKDOWN,
         message: `🎬 **${anime.title}**`,
         attachment_url: [{ name: 'anime_cover.jpg', url: imageUrl }],

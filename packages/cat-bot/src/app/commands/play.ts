@@ -199,33 +199,6 @@ export const onCommand = async ({
    */
   const displayLabel = isUrl ? `youtu.be/${videoId}` : input;
 
-  // ── Loading indicator ──────────────────────────────────────────────────────
-
-  const loadingId = (await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: isUrl
-      ? `🔗  Fetching audio from **${displayLabel}**...`
-      : `🔍  Searching for **${displayLabel}**...`,
-  })) as string | undefined;
-
-  // Cleans up the loading message; never throws.
-  const dismissLoading = (): Promise<void> =>
-    loadingId
-      ? chat.unsendMessage(loadingId).catch(() => {})
-      : Promise.resolve();
-
-  // Edits the loading message (for progress updates).
-  const updateLoading = (msg: string): Promise<void> => {
-    if (!loadingId) return Promise.resolve();
-    return chat
-      .editMessage({
-        style: MessageStyle.MARKDOWN,
-        message_id_to_edit: loadingId,
-        message: msg,
-      })
-      .catch(() => {});
-  };
-
   try {
     // ── Step 1: Resolve media URLs ─────────────────────────────────────────
     // The API uses a valueless query key: /api/v2/q?=<input>
@@ -233,15 +206,7 @@ export const onCommand = async ({
 
     const apiUrl = `${API_BASE}?=${encodeURIComponent(input)}`;
 
-    const searchRes = await fetchWithRetry(apiUrl, SEARCH_TIMEOUT_MS).catch(
-      async (err) => {
-        // If first attempt takes a while, inform user the server is warming up
-        await updateLoading(
-          `⏳  Server is warming up, please wait for **${displayLabel}**...`,
-        );
-        throw err;
-      },
-    );
+    const searchRes = await fetchWithRetry(apiUrl, SEARCH_TIMEOUT_MS);
 
     if (!searchRes.ok) {
       throw new Error(
@@ -264,8 +229,6 @@ export const onCommand = async ({
     const serverMs = apiData.ms ?? 0;
 
     // ── Step 2: Download audio binary ─────────────────────────────────────
-
-    await updateLoading(`⬇️  Downloading audio for **${displayLabel}**...`);
 
     const audioRes = await fetchWithRetry(mp3Url, DOWNLOAD_TIMEOUT_MS);
 
@@ -304,16 +267,7 @@ export const onCommand = async ({
       ],
     };
 
-    if (loadingId) {
-      try {
-        await chat.editMessage({ ...resultPayload, message_id_to_edit: loadingId });
-      } catch {
-        await dismissLoading();
-        await chat.replyMessage(resultPayload);
-      }
-    } else {
-      await chat.replyMessage(resultPayload);
-    }
+    await chat.replyMessage(resultPayload);
   } catch (err) {
     const error = err as { message?: string };
 
@@ -325,13 +279,6 @@ export const onCommand = async ({
       ].join('\n'),
     };
 
-    if (loadingId) {
-      await chat.editMessage({ ...errPayload, message_id_to_edit: loadingId }).catch(async () => {
-        await dismissLoading();
-        await chat.replyMessage(errPayload);
-      });
-    } else {
-      await chat.replyMessage(errPayload);
-    }
+    await chat.replyMessage(errPayload);
   }
 };

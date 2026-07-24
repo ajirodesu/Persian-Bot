@@ -12,6 +12,7 @@
  * r/memes and /animeme's "Refresh" button always re-rolls from r/animemes.
  */
 
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -19,7 +20,6 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { withLoadingMedia } from '@/engine/utils/media-loading.util.js';
 
 // ── Shared fetch ──────────────────────────────────────────────────────────────
 
@@ -92,21 +92,43 @@ const BUTTON_ID = { refresh: 'refresh' } as const;
 async function runMeme(ctx: AppCtx, config: MemeConfig): Promise<void> {
   const { native, button, session } = ctx;
 
-  const loading = await withLoadingMedia(ctx, `😂 **Fetching a random meme...**`);
+  const isButtonAction = ctx.event['type'] === 'button_action';
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
+  // Delivers the final result: edits the existing (button-bearing) message
+  // in place on a button refresh, or sends a plain reply otherwise. No
+  // loading placeholder is sent — the typing indicator covers processing
+  // feedback for the whole command duration.
+  const deliver = async (payload: ReplyOptions): Promise<void> => {
+    if (!loadingId) {
+      await ctx.chat.replyMessage(payload);
+      return;
+    }
+    try {
+      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
+    } catch {
+      await ctx.chat.unsendMessage(loadingId).catch(() => {});
+      await ctx.chat.reply(payload);
+    }
+  };
+  const finish = deliver;
+  const fail = (errorMessage: string): Promise<void> =>
+    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
     const meme = await fetchRandomMeme(config.endpoint);
 
     // Reuse the active button instance ID on refresh so the button stays live;
     // otherwise mint a fresh one for the initial send.
-    const buttonId = loading.isButtonAction
+    const buttonId = isButtonAction
       ? session.id
       : button.generateID({ id: BUTTON_ID.refresh, public: true });
 
     const extMatch = meme.url.match(/\.(jpe?g|png|gif|webp)(\?|$)/i);
     const ext = extMatch?.[1] ?? 'jpg';
 
-    await loading.finish({
+    await finish({
       style: MessageStyle.MARKDOWN,
       message: `${config.titlePrefix}**${meme.title}**`,
       attachment_url: [
@@ -116,7 +138,7 @@ async function runMeme(ctx: AppCtx, config: MemeConfig): Promise<void> {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    await loading.fail(`⚠️ Failed to fetch a meme: ${message}`);
+    await fail(`⚠️ Failed to fetch a meme: ${message}`);
   }
 }
 
