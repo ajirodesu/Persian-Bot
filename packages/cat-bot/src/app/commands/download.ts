@@ -55,6 +55,12 @@ import { createUrl } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+// onCommand already gets a typing indicator for free from the command
+// dispatcher. The onChat auto-detect path bypasses that dispatcher entirely,
+// so it needs its own — started only once we know a download is actually
+// about to run (see onChat below), not for every message that merely passes
+// through this handler.
+import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 
 // ── Meta ──────────────────────────────────────────────────────────────────────
 
@@ -507,5 +513,10 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   const matched = extractSupportedLink(message);
   if (!matched) return;
 
-  await runDownload(ctx, matched, { isAutoDetect: true });
+  // Only now — every gate above has passed, so a download is actually about
+  // to run — start the typing indicator. Anyone posting an unrelated message,
+  // or a link with auto-detect off, never sees the bot "typing".
+  await withTypingIndicator(ctx.api, threadID, () =>
+    runDownload(ctx, matched, { isAutoDetect: true }),
+  );
 };

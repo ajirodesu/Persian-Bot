@@ -114,5 +114,14 @@ export async function runOnChat(
   // allSettled (not all) as belt-and-suspenders: individual .catch() handlers above absorb
   // per-module errors, but allSettled guarantees we wait for every task even if one throws
   // synchronously before returning a Promise — preventing silent fire-and-forget behaviour.
+  //
+  // No typing indicator is started here. This fan-out runs on EVERY message for EVERY
+  // registered onChat handler (logger, autoban, badwords, antispam, afk, etc.) whether or
+  // not the message is actually addressed to the bot — most onChat handlers are passive
+  // observers that never reply. Starting an indicator at this level would show "bot is
+  // typing…" for any message at all, including ones nobody is using the bot for. Handlers
+  // that DO decide to respond (e.g. ai.ts's onChat, which only proceeds once it confirms
+  // the message mentions/triggers the bot) are responsible for starting their own indicator
+  // at that point — see withThinkingIndicator in ai.ts, gated behind its own trigger check.
   await Promise.allSettled(tasks);
 }
