@@ -17,8 +17,8 @@ export interface GetAdminBotListItemDto {
   prefix: string;
   isRunning: boolean;
   // Optional — absent only when the owning user account no longer exists in the auth DB.
-  userName?: string;
-  userEmail?: string;
+  userName?: string | undefined;
+  userEmail?: string | undefined;
 }
 
 export interface GetAdminBotListResponseDto {

@@ -42,7 +42,9 @@ function useDbChangeSubscription(
   onEvent: (event: DbChangeEvent) => void,
 ) {
   const onEventRef = useRef(onEvent)
-  onEventRef.current = onEvent
+  useEffect(() => {
+    onEventRef.current = onEvent
+  })
 
   useEffect(() => {
     if (!sessionKey) return

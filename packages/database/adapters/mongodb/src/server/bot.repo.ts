@@ -88,7 +88,7 @@ export class BotRepo {
         commandHash: null,
       });
     } else {
-      throw new Error(`Unknown platform ${creds.platform}`);
+      throw new Error(`Unknown platform: ${JSON.stringify(creds)}`);
     }
 
     return {
@@ -254,7 +254,7 @@ export class BotRepo {
         },
       );
     } else {
-      throw new Error(`Unknown platform ${creds.platform}`);
+      throw new Error(`Unknown platform: ${JSON.stringify(creds)}`);
     }
   }
 

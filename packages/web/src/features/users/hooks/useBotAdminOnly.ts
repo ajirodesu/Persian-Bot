@@ -12,12 +12,11 @@ interface UseBotAdminOnlyReturn {
 
 export function useBotAdminOnly(sessionId: string): UseBotAdminOnlyReturn {
   const [enabled, setEnabled] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => !!sessionId)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!sessionId) {
-      setIsLoading(false)
       return
     }
     let cancelled = false

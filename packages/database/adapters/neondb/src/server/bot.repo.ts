@@ -71,7 +71,7 @@ export class BotRepo {
           [userId, platformId, sessionId, encrypt(credentials.telegramToken)],
         );
       } else {
-        throw new Error(`Unknown platform ${credentials.platform}`);
+        throw new Error(`Unknown platform: ${JSON.stringify(credentials)}`);
       }
 
       await client.query('COMMIT');
@@ -247,7 +247,7 @@ export class BotRepo {
           [userId, platformId, sessionId, encrypt(credentials.telegramToken)],
         );
       } else {
-        throw new Error(`Unknown platform ${credentials.platform}`);
+        throw new Error(`Unknown platform: ${JSON.stringify(credentials)}`);
       }
 
       await client.query('COMMIT');

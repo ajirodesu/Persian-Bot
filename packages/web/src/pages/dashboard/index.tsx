@@ -14,7 +14,7 @@ import { useBotList } from '@/features/users/hooks/useBotList'
 import { useBotStatus } from '@/features/users/hooks/useBotStatus'
 import type { GetBotListItemDto } from '@/features/users/dtos/bot.dto'
 import { getPlatformLabel } from '@/utils/bot.util'
-import { getPlatformIcon, getPlatformColors } from '@/components/icons/PlatformIcons'
+import { getPlatformIcon, getPlatformColors } from '@/components/icons/platform-icon.util'
 
 // ============================================================================
 // BotCard

@@ -120,7 +120,6 @@ export async function withTypingIndicator<T>(
   // faster than the previous request resolves (e.g. on a slow network).
   let inFlight = false;
   let stopped = false;
-  let interval: ReturnType<typeof setInterval> | undefined;
 
   const trigger = (): void => {
     // Once stopped, never issue another signal — this is what guarantees the
@@ -146,7 +145,7 @@ export async function withTypingIndicator<T>(
   const stop = (): void => {
     if (stopped) return;
     stopped = true;
-    if (interval) clearInterval(interval);
+    clearInterval(interval);
   };
 
   const unregister = registerStopper(threadID, stop);
@@ -155,7 +154,10 @@ export async function withTypingIndicator<T>(
   // then keep refreshing it dynamically for as long as `fn` is still running
   // (or until stopTypingIndicator(threadID) cuts it short — see above).
   trigger();
-  interval = setInterval(trigger, TYPING_REFRESH_INTERVAL_MS);
+  const interval: ReturnType<typeof setInterval> = setInterval(
+    trigger,
+    TYPING_REFRESH_INTERVAL_MS,
+  );
 
   try {
     return await fn();

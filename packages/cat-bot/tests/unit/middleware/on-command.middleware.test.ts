@@ -12,7 +12,7 @@ describe('On-Command Middleware: Cooldown Enforcement', () => {
     // WHY: Ensures zero overhead for commands that aren't rate limited
     const ctx = {
       event: createMockEvent(),
-      mod: { config: {} }, // No cooldown
+      mod: { meta: {} }, // No cooldown
       parsed: { name: 'ping' },
     } as unknown as import('@/engine/types/middleware.types.js').OnCommandCtx;
     const next = vi.fn();
@@ -25,7 +25,7 @@ describe('On-Command Middleware: Cooldown Enforcement', () => {
   it('should set cooldown and proceed on first invocation', async () => {
     const ctx = {
       event: createMockEvent({ senderID: 'user-1' }),
-      mod: { config: { cooldown: 5 } },
+      mod: { meta: { cooldown: 5 } },
       parsed: { name: 'ping' },
     } as unknown as import('@/engine/types/middleware.types.js').OnCommandCtx;
     const next = vi.fn();
@@ -41,7 +41,7 @@ describe('On-Command Middleware: Cooldown Enforcement', () => {
     const chatMock = { replyMessage: vi.fn() };
     const ctx = {
       event: createMockEvent({ senderID: 'user-2' }),
-      mod: { config: { cooldown: 5 } },
+      mod: { meta: { cooldown: 5 } },
       parsed: { name: 'heavycmd' },
       chat: chatMock,
     } as unknown as import('@/engine/types/middleware.types.js').OnCommandCtx;

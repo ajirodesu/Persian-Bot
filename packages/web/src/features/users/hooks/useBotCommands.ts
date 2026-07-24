@@ -22,12 +22,11 @@ export function useBotCommands(
   search = '',
 ): UseBotCommandsReturn {
   const [data, setData] = useState<GetBotCommandsResponseDto | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => !!sessionId)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!sessionId) {
-      setIsLoading(false)
       return
     }
     let cancelled = false

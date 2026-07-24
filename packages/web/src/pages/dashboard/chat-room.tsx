@@ -120,6 +120,10 @@ const MESSAGES_KEY    = 'catbot-chatroom-messages'
 
 const DEFAULT_PREFIX   = '/'
 const DEFAULT_NICKNAME = 'Cat-Bot'
+// Caps how large a single attachment can be before we refuse to send it —
+// data: URLs are ~33% bigger than the source file and socket.io messages
+// aren't meant to carry huge payloads.
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8MB
 
 function getOrCreateSessionId(): string {
   let id = localStorage.getItem(SESSION_ID_KEY)
@@ -1543,7 +1547,7 @@ const MessageBubble = memo(function MessageBubble({
     }
     setSwipeReplyVisible(false)
     if (triggered) onReply({ id: msg.id, text: msg.text, type: msg.type })
-  }, [isBot, msg.id, msg.text, msg.type, onReply])
+  }, [msg.id, msg.text, msg.type, onReply])
   const hasButtons = (msg.buttons?.length ?? 0) > 0
   const hasText = !!msg.text?.trim()
   const imageAttachments = (msg.attachments ?? []).filter(
@@ -2447,7 +2451,7 @@ const Composer = memo(function Composer({
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 50)
     return () => clearTimeout(t)
-  }, [])
+  }, [inputRef])
 
   // Single source of truth for both the visible textarea's height and the
   // wrap-mode flag, driven off inputText itself rather than off individual
@@ -3285,11 +3289,6 @@ export default function ChatRoomPage() {
       reader.onerror = () => reject(reader.error)
       reader.readAsDataURL(file)
     })
-
-  // Caps how large a single attachment can be before we refuse to send it —
-  // data: URLs are ~33% bigger than the source file and socket.io messages
-  // aren't meant to carry huge payloads.
-  const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8MB
 
   /** Builds the wire-safe attachment payload (real bytes via data: URL when a
    *  File is pending, or the already-resolved url otherwise). */

@@ -19,12 +19,11 @@ export function useBotEvents(
   search = '',
 ): UseBotEventsReturn {
   const [data, setData] = useState<GetBotEventsResponseDto | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => !!sessionId)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!sessionId) {
-      setIsLoading(false)
       return
     }
     let cancelled = false

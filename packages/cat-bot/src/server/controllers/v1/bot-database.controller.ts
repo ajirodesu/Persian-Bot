@@ -312,7 +312,7 @@ export class BotDatabaseController {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+     
     const reason = typeof req.body?.reason === 'string' ? (req.body.reason as string) : undefined;
 
     try {
@@ -394,7 +394,7 @@ export class BotDatabaseController {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+     
     const reason = typeof req.body?.reason === 'string' ? (req.body.reason as string) : undefined;
 
     try {

@@ -6,7 +6,7 @@ describe('Event Dispatcher', () => {
     // WHY: Validates the central pub/sub mechanism for thread events (joins/leaves)
     const mockHandler = vi.fn();
     const eventModules = new Map([
-      ['log:subscribe', [{ config: { name: 'join' }, onEvent: mockHandler }]],
+      ['log:subscribe', [{ meta: { name: 'join' }, onEvent: mockHandler }]],
     ]);
 
     const ctx = { native: { platform: 'discord' }, event: {} };
@@ -35,7 +35,7 @@ describe('Event Dispatcher', () => {
         'log:subscribe',
         [
           {
-            config: { name: 'join', platform: ['telegram'] },
+            meta: { name: 'join', platform: ['telegram'] },
             onEvent: mockHandler,
           },
         ],

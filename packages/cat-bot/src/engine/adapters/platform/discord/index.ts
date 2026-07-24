@@ -114,10 +114,14 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
       // requiring a process restart.
       const botDetail = await botRepo.getById(config.userId, config.sessionId);
       const token = botDetail
-        ? ((botDetail.credentials as any).discordToken ?? config.token)
+        ? (botDetail.credentials.platform === 'discord'
+            ? botDetail.credentials.discordToken
+            : undefined) ?? config.token
         : config.token;
       const clientId = botDetail
-        ? ((botDetail.credentials as any).discordClientId ?? config.clientId)
+        ? (botDetail.credentials.platform === 'discord'
+            ? botDetail.credentials.discordClientId
+            : undefined) ?? config.clientId
         : config.clientId;
       const prefix = botDetail
         ? (botDetail.prefix ?? config.prefix)

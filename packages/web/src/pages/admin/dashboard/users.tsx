@@ -1,5 +1,5 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { authAdminClient } from '@/lib/better-auth-admin-client.lib'
 import Table from '@/components/ui/data-display/Table'
@@ -37,9 +37,14 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearch = useDebounce(searchQuery, 300)
 
-  useEffect(() => {
+  // Reset to page 1 whenever the debounced search term changes. Adjusting state
+  // during render (rather than in an effect) avoids an extra render + effect
+  // round-trip — see https://react.dev/learn/you-might-not-need-an-effect
+  const [prevSearch, setPrevSearch] = useState(debouncedSearch)
+  if (debouncedSearch !== prevSearch) {
+    setPrevSearch(debouncedSearch)
     setPage(1)
-  }, [debouncedSearch])
+  }
 
   const { users, total, isLoading, error, refetch } = useAdminUsers(
     page,

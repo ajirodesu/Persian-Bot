@@ -4,7 +4,8 @@ import { ArrowRight, Zap, Bot, LayoutDashboard, Globe, ChevronRight, MessageSqua
 import Button from '@/components/ui/buttons/Button'
 import { ROUTES } from '@/constants/routes.constants'
 import { useUserAuth } from '@/contexts/UserAuthContext'
-import { DiscordIcon, TelegramIcon, getPlatformColors } from '@/components/icons/PlatformIcons'
+import { DiscordIcon, TelegramIcon } from '@/components/icons/PlatformIcons'
+import { getPlatformColors } from '@/components/icons/platform-icon.util'
 import { Platforms } from '@/constants/platform.constants'
 
 // ── Static data ─────────────────────────────────────────────────────────────

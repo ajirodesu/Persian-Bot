@@ -138,7 +138,7 @@ function preprocessMarkdown(text: string): string {
     const line = lines[i]!;
 
     // Table separator row: |---|---| or |:---|:---:| — drop silently
-    if (/^\s*\|[\s|:\-]+\|\s*$/.test(line)) {
+    if (/^\s*\|[\s|:-]+\|\s*$/.test(line)) {
       continue;
     }
 

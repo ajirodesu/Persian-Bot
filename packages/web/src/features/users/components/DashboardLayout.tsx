@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import ScrollToTop from '@/components/ScrollToTop'
-import { getPlatformIconComponent } from '@/components/icons/PlatformIcons'
+import { getPlatformIconComponent } from '@/components/icons/platform-icon.util'
 import { botService } from '@/features/users/services/bot.service'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useSnackbar } from '@/contexts/SnackbarContext'
@@ -419,9 +419,17 @@ export default function DashboardLayout() {
     platform: string
   } | null>(null)
 
+  // Clear the sidebar entry the instant the route stops pointing at a bot —
+  // adjusting state during render (rather than in the effect below) avoids an
+  // extra render + effect round-trip. See https://react.dev/learn/you-might-not-need-an-effect
+  const [prevOpenBotId, setPrevOpenBotId] = useState(openBotId)
+  if (openBotId !== prevOpenBotId) {
+    setPrevOpenBotId(openBotId)
+    if (!openBotId) setOpenBot(null)
+  }
+
   useEffect(() => {
     if (!openBotId) {
-      setOpenBot(null)
       return
     }
 

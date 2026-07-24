@@ -19,11 +19,10 @@ export default function AccountVerificationPage() {
 
   const [emailStatus, setEmailStatus] = useState<
     'loading' | 'not-found' | 'already-verified' | 'pending'
-  >('loading')
+  >(() => (email ? 'loading' : 'not-found'))
 
   useEffect(() => {
     if (!email) {
-      setEmailStatus('not-found')
       return
     }
     let isMounted = true

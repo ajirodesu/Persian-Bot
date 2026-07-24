@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
   }>({})
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isValidating, setIsValidating] = useState(true)
+  const [isValidating, setIsValidating] = useState(() => !!token)
   const [isTokenValid, setIsTokenValid] = useState(false)
 
   const [isResending, setIsResending] = useState(false)
@@ -33,7 +33,6 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     if (!token) {
-      setIsValidating(false)
       return
     }
 

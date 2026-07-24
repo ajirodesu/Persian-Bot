@@ -124,7 +124,9 @@ export function createTelegramListener(
       // covers credential-update auto-restarts triggered via the dashboard.
       const botDetail = await botRepo.getById(config.userId, config.sessionId);
       const botToken = botDetail
-        ? ((botDetail.credentials as any).telegramToken ?? config.botToken)
+        ? (botDetail.credentials.platform === 'telegram'
+            ? botDetail.credentials.telegramToken
+            : undefined) ?? config.botToken
         : config.botToken;
       const prefix = botDetail
         ? (botDetail.prefix ?? config.prefix)
