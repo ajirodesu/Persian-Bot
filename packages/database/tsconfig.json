@@ -8,7 +8,6 @@
     "rootDir": "..",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "ignoreDeprecations": "6.0",
     "target": "esnext",
     "lib": ["esnext"],
     "types": ["node"],
@@ -24,7 +23,6 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
     /* Path Mapping */
-    "baseUrl": ".",
     "paths": {
       /* @/ resolves to database's own src first; falls back to cat-bot/src so that
          cat-bot files pulled in via rootDirs can resolve their own @/ imports without TS2307. */

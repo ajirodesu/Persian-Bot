@@ -38,6 +38,7 @@ export function useAdminUsers(
   }, [page, limit, search])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to .then/.catch microtasks
     void fetchUsers()
   }, [fetchUsers])
 

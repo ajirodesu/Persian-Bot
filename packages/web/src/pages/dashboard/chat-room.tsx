@@ -2475,6 +2475,7 @@ const Composer = memo(function Composer({
     // This is decided BEFORE the height read below, since the height
     // read depends on it — see the comment there.
     if (!inputText) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- layout-effect DOM measurement requires synchronous state sync to avoid flicker
       setIsComposerMultiline(false)
       if (mirrorRef.current) mirrorRef.current.textContent = ''
       // Emptied out (backspaced to nothing, cleared on send, etc.) —

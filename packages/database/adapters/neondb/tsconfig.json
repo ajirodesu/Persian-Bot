@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "rootDir": "./src",
+    "rootDir": "../../..",
     "outDir": "./dist",
     "module": "nodenext",
     "moduleResolution": "nodenext",
@@ -19,13 +19,14 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
     /* Path Mapping */
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      /* @cat-bot/* mirrors the alias in the mongodb adapter's tsconfig so repo files
-         can cross-import @cat-bot/engine/... and @cat-bot/server/... without TS2307. */
       "@cat-bot/*": ["../../../cat-bot/src/*"]
-    }
+    },
+    "rootDirs": [
+      "./src",
+      "../../../cat-bot/src"
+    ]
   },
   "include": ["src"]
 }

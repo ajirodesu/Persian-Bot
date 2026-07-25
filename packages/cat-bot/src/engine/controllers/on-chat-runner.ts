@@ -36,6 +36,7 @@ import type { BaseCtx, CommandMap } from '@/engine/types/controller.types.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 // Ban enforcement — silently skip banned senders and threads in the onChat fan-out
 import { isUserBanned, isThreadBanned } from '@/engine/repos/banned.repo.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 /**
  * Fans out to every command's onChat handler — used for passive middleware
@@ -107,6 +108,12 @@ export async function runOnChat(
 
       tasks.push(
         (mod['onChat'] as (ctx: BaseCtx) => Promise<void>)(ctx).catch(
+          (err: unknown) => {
+            logger.debug('[on-chat] onChat handler error', {
+              command: (mod['meta'] as { name?: string } | undefined)?.name,
+              error: err,
+            });
+          },
         ),
       );
     }

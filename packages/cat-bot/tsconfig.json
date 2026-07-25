@@ -19,10 +19,9 @@
     "skipLibCheck": true,
     "allowJs": true,
     /* Path Mapping */
-    "baseUrl": "./src",
     "paths": {
-      "@/*": ["./*"],
-      "@cat-bot/*": ["./*"]
+      "@/*": ["./src/*"],
+      "@cat-bot/*": ["./src/*"]
     }
   },
   "include": ["src"]

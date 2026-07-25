@@ -37,6 +37,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 // have the same ctx.usage() API available as onCommand handlers.
 import { createUsage } from '@/engine/utils/usage.util.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 /**
  * Button Dispatch — routes interactive button clicks and text-menu fallbacks
@@ -175,9 +176,9 @@ export async function dispatchButtonFallback(
   // State is intentionally NOT deleted — the numbered menu remains persistently re-selectable,
   // equivalent to how button components on Discord and Telegram stay clickable.
   await Promise.resolve(handler.onClick(buttonCtx)).catch((err: unknown) => {
-    console.error(
+    logger.error(
       `❌ Button fallback "${stored.command}:${matched!.id}" failed`,
-      err,
+      { error: err },
     );
   });
 
@@ -310,7 +311,7 @@ export async function handleButtonAction(
       };
 
       await Promise.resolve(handler.onClick(ctx)).catch((err: unknown) => {
-        console.error(`❌ Button action "${buttonIdStr}" failed`, err);
+        logger.error(`❌ Button action "${buttonIdStr}" failed`, { error: err });
       });
     },
   );

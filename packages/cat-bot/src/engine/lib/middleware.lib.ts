@@ -32,53 +32,69 @@ class MiddlewareRegistry implements MiddlewareUse {
   #onButtonClick: MiddlewareFn<OnButtonClickCtx>[] = [];
   #onEvent: MiddlewareFn<OnEventCtx>[] = [];
 
+  // Cached snapshots — middleware is only registered at boot time (side-effect import
+  // in middleware/index.ts) and never mutated afterward. Caching avoids allocating a
+  // new array copy on every message/event dispatch (the hot path).
+  #snapCommand: MiddlewareFn<OnCommandCtx>[] | null = null;
+  #snapChat: MiddlewareFn<OnChatCtx>[] | null = null;
+  #snapReply: MiddlewareFn<OnReplyCtx>[] | null = null;
+  #snapReact: MiddlewareFn<OnReactCtx>[] | null = null;
+  #snapButtonClick: MiddlewareFn<OnButtonClickCtx>[] | null = null;
+  #snapEvent: MiddlewareFn<OnEventCtx>[] | null = null;
+
   onCommand(middlewares: MiddlewareFn<OnCommandCtx>[]): void {
     this.#onCommand.push(...middlewares);
+    this.#snapCommand = null;
   }
 
   onChat(middlewares: MiddlewareFn<OnChatCtx>[]): void {
     this.#onChat.push(...middlewares);
+    this.#snapChat = null;
   }
 
   onReply(middlewares: MiddlewareFn<OnReplyCtx>[]): void {
     this.#onReply.push(...middlewares);
+    this.#snapReply = null;
   }
 
   onReact(middlewares: MiddlewareFn<OnReactCtx>[]): void {
     this.#onReact.push(...middlewares);
+    this.#snapReact = null;
   }
 
   onButtonClick(middlewares: MiddlewareFn<OnButtonClickCtx>[]): void {
     this.#onButtonClick.push(...middlewares);
+    this.#snapButtonClick = null;
   }
 
   onEvent(middlewares: MiddlewareFn<OnEventCtx>[]): void {
     this.#onEvent.push(...middlewares);
+    this.#snapEvent = null;
   }
 
-  /** Snapshot copy — callers cannot mutate the registry's internal array mid-chain. */
+  /** Snapshot copy — cached after first call; invalidated on registration. */
   getOnCommand(): MiddlewareFn<OnCommandCtx>[] {
-    return [...this.#onCommand];
+    return (this.#snapCommand ??= [...this.#onCommand]);
   }
 
   getOnChat(): MiddlewareFn<OnChatCtx>[] {
-    return [...this.#onChat];
+    return (this.#snapChat ??= [...this.#onChat]);
   }
 
   getOnReply(): MiddlewareFn<OnReplyCtx>[] {
-    return [...this.#onReply];
+    return (this.#snapReply ??= [...this.#onReply]);
   }
 
   getOnReact(): MiddlewareFn<OnReactCtx>[] {
-    return [...this.#onReact];
+    return (this.#snapReact ??= [...this.#onReact]);
   }
 
   getOnButtonClick(): MiddlewareFn<OnButtonClickCtx>[] {
-    return [...this.#onButtonClick];
+    return (this.#snapButtonClick ??= [...this.#onButtonClick]);
   }
 
   getOnEvent(): MiddlewareFn<OnEventCtx>[] {
-    return [...this.#onEvent];
+    return (this.#snapEvent ??= [...this.#onEvent]);
   }
 }
 

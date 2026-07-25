@@ -90,7 +90,7 @@ export function stopTypingIndicator(threadID: string): void {
   if (!threadID) return;
   const stoppers = activeStoppers.get(threadID);
   if (!stoppers || stoppers.size === 0) return;
-  for (const stop of Array.from(stoppers)) stop();
+  for (const stop of stoppers) stop();
   activeStoppers.delete(threadID);
 }
 

@@ -109,7 +109,7 @@ export async function dispatchCommand(
     );
   } catch (err: unknown) {
     // Command failed or threw — no reaction is added, per the "no reaction on error" contract.
-    console.error(`❌ Command "${parsed.name}" failed`, err);
+    logger.error(`❌ Command "${parsed.name}" failed`, { error: err });
     return;
   }
 

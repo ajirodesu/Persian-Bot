@@ -17,6 +17,7 @@ import {
   describeToolStatus,
   DEFAULT_AGENT_STATUS_TEXT,
 } from '@/engine/agent/lib/agent-status.lib.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // ============================================================================
 // PROMPT TEMPLATE
@@ -111,7 +112,7 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
         tools.push(mod);
       }
     } catch (err) {
-      console.error(`[Agent] Failed to load tool ${file}`, err);
+      logger.error(`[Agent] Failed to load tool ${file}`, { error: err });
     }
   }
 

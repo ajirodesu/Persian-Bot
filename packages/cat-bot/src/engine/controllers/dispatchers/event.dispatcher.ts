@@ -19,6 +19,7 @@ import {
   runMiddlewareChain,
 } from '@/engine/lib/middleware.lib.js';
 import type { OnEventCtx } from '@/engine/types/middleware.types.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 /**
  * Fires every registered handler for the given unified event type.
@@ -60,9 +61,9 @@ export async function dispatchEvent(
         eventCtx,
         async () => {
           try {
-            await (mod['onEvent'] as (ctx: BaseCtx) => unknown)(ctx);
+            await (mod['onEvent'] as (ctx: OnEventCtx) => unknown)(eventCtx);
           } catch (err: unknown) {
-            console.error(`❌ Event handler "${eventType}" failed`, err);
+            logger.error(`❌ Event handler "${eventType}" failed`, { error: err });
           }
         },
       );

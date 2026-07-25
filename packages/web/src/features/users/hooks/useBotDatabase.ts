@@ -159,6 +159,7 @@ export function useBotDatabaseUsers(
   }, [sessionId, page, search, status, sortBy, sortDir])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to .then/.catch microtasks
     fetch()
   }, [fetch])
 
@@ -376,6 +377,7 @@ export function useBotDatabaseGroups(
   }, [sessionId, page, search, status, sortBy, sortDir])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to .then/.catch microtasks
     fetch()
   }, [fetch])
 
