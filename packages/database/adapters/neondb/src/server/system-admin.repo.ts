@@ -148,20 +148,16 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
     await client.query(`DELETE FROM bot_session_events WHERE user_id <> $1`, [
       excludeUserId,
     ]);
-    await client.query(
-      `DELETE FROM bot_users_session_banned WHERE user_id <> $1`,
-      [excludeUserId],
-    );
-    await client.query(
-      `DELETE FROM bot_threads_session_banned WHERE user_id <> $1`,
-      [excludeUserId],
-    );
-    await client.query(`DELETE FROM bot_users_session WHERE user_id <> $1`, [
-      excludeUserId,
-    ]);
-    await client.query(`DELETE FROM bot_threads_session WHERE user_id <> $1`, [
-      excludeUserId,
-    ]);
+    // bot_users_session_banned / bot_threads_session_banned carry no FK, but bot_users_session
+    // and bot_threads_session hold a non-cascading FK into bot_users / bot_threads, both of
+    // which step 3 wipes globally (including rows owned by excludeUserId). So these four are
+    // cleared unconditionally rather than scoped to non-excluded users — otherwise the excluded
+    // admin's leftover rows still point at bot_users/bot_threads ids step 3 is about to delete,
+    // which trips "bot_threads_session_bot_thread_id_fkey" / the analogous bot_users_session FK.
+    await client.query(`DELETE FROM bot_users_session_banned`);
+    await client.query(`DELETE FROM bot_threads_session_banned`);
+    await client.query(`DELETE FROM bot_users_session`);
+    await client.query(`DELETE FROM bot_threads_session`);
     await client.query(
       `DELETE FROM bot_discord_server_session WHERE user_id <> $1`,
       [excludeUserId],

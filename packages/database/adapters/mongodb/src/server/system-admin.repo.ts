@@ -126,10 +126,14 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
   // ── Step 1: user-scoped collections with no cascade relation ────────────────
   await db.collection('botSessionCommands').deleteMany(notAdmin);
   await db.collection('botSessionEvents').deleteMany(notAdmin);
-  await db.collection('botUserBanned').deleteMany(notAdmin);
-  await db.collection('botThreadBanned').deleteMany(notAdmin);
-  await db.collection('botUserSessions').deleteMany(notAdmin);
-  await db.collection('botThreadSessions').deleteMany(notAdmin);
+  // botUserBanned/botThreadBanned/botUserSessions/botThreadSessions reference
+  // botUsers/botThreads, which step 4 wipes globally regardless of owner — so these
+  // are cleared unconditionally rather than scoped to non-excluded users, or the
+  // excluded admin's docs are left orphaned, pointing at ids deleted in step 4.
+  await db.collection('botUserBanned').deleteMany({});
+  await db.collection('botThreadBanned').deleteMany({});
+  await db.collection('botUserSessions').deleteMany({});
+  await db.collection('botThreadSessions').deleteMany({});
   await db.collection('botDiscordServerSessions').deleteMany(notAdmin);
 
   // ── Step 2: collections that would cascade automatically in a relational adapter ──
