@@ -112,6 +112,7 @@ export {
   isSystemAdmin,
   listAllUsers,
   deleteUser,
+  resetAllDatabase,
 } from '../adapters/mongodb/src/server/system-admin.repo.js';
 // getMongoDb  — factory returning the Db instance for MONGO_DATABASE_NAME.
 export { mongoClient, getMongoDb } from '../adapters/mongodb/src/client.js';

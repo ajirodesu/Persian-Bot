@@ -119,4 +119,5 @@ export {
   isSystemAdmin,
   listAllUsers,
   deleteUser,
+  resetAllDatabase,
 } from '../adapters/neondb/src/server/system-admin.repo.js';

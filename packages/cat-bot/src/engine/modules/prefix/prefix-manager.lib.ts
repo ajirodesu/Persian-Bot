@@ -85,6 +85,17 @@ class PrefixManager {
       if (key.startsWith(`${userId}:`)) this.prefixes.delete(key);
     }
   }
+
+  /**
+   * Evicts every session-level AND thread-level prefix entry, regardless of owner.
+   * Called as part of a full database reset — every session/thread not belonging
+   * to the admin performing the reset no longer exists, and the admin's own
+   * surviving entries are harmlessly repopulated from the DB on next use.
+   */
+  clearAll(): void {
+    this.prefixes.clear();
+    this.threadPrefixes.clear();
+  }
 }
 
 export const prefixManager = new PrefixManager();

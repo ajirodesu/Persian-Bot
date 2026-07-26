@@ -5,6 +5,7 @@ import { spawnDynamicSession } from '@/engine/adapters/platform/index.js';
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
 import { logger, createLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
+import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { triggerSlashSync } from '@/engine/modules/prefix/slash-sync.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
@@ -592,6 +593,27 @@ export class BotService {
 
     logger.info(
       `[bot.service] Started ${bots.length} session(s) for unbanned user ${userId}`,
+    );
+  }
+
+  /**
+   * Reset-all-database orchestrator: tears down every live transport NOT owned by
+   * excludeUserId (the admin performing the reset), then clears every in-memory
+   * cache/registry wholesale. Must run BEFORE the database wipe so no in-flight
+   * event can write through stale credentials for a session whose DB rows are
+   * about to disappear.
+   *
+   * A full cache clear (rather than per-user eviction) is intentional: after a
+   * reset, every other user's data is gone, and the admin's own cached entries
+   * are simply repopulated from the DB on next read — harmless and correct.
+   */
+  async stopAllSessionsExcept(excludeUserId: string): Promise<void> {
+    await sessionManager.stopAllExcludingUserId(excludeUserId);
+    await sessionManager.unregisterAllExcludingUserId(excludeUserId);
+    lruCache.clear();
+    prefixManager.clearAll();
+    logger.info(
+      `[bot.service] Stopped all bot sessions except user ${excludeUserId} ahead of database reset`,
     );
   }
 }

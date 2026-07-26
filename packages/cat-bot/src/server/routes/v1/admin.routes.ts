@@ -67,4 +67,11 @@ adminRouter.post('/users/:userId/verify', (req, res) => {
   void adminController.verifyUser(req, res);
 });
 
+// POST /api/v1/admin/reset-database — permanently wipes all database records and
+// system data except the executing admin's own account and associated data.
+// Requires an exact confirmation-phrase match in the body; see admin.controller.ts.
+adminRouter.post('/reset-database', (req, res) => {
+  void adminController.resetAllDatabase(req, res);
+});
+
 export default adminRouter;

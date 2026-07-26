@@ -100,6 +100,62 @@ export async function deleteUser(userId: string): Promise<void> {
   });
 }
 
+/**
+ * Permanently wipes every database record and system-wide setting, with a single
+ * exception: the account and all associated data belonging to `excludeUserId` —
+ * the currently authenticated admin who triggered the reset. That admin's "user"
+ * document (and everything scoped to it) is left untouched.
+ *
+ * MongoDB Atlas free tier does not support multi-document transactions, so this
+ * is a sequential deleteMany series — same non-transactional pattern as deleteUser
+ * above and BotRepo.deleteById in bot.repo.ts.
+ *
+ * Ordering:
+ *   1. Purge collections scoped by userId but with no cross-collection cascade
+ *      (MongoDB has none), for every user EXCEPT excludeUserId.
+ *   2. Purge collections that a relational adapter would cascade automatically —
+ *      deleted explicitly here since MongoDB enforces no FK relationships.
+ *   3. Remove every "user" document except excludeUserId's own row.
+ *   4. Fully clear global, non-owner-scoped bot-identity/system collections —
+ *      these hold no per-admin ownership, so there is nothing to selectively keep.
+ */
+export async function resetAllDatabase(excludeUserId: string): Promise<void> {
+  const db = getMongoDb();
+  const notAdmin = { userId: { $ne: excludeUserId } };
+
+  // ── Step 1: user-scoped collections with no cascade relation ────────────────
+  await db.collection('botSessionCommands').deleteMany(notAdmin);
+  await db.collection('botSessionEvents').deleteMany(notAdmin);
+  await db.collection('botUserBanned').deleteMany(notAdmin);
+  await db.collection('botThreadBanned').deleteMany(notAdmin);
+  await db.collection('botUserSessions').deleteMany(notAdmin);
+  await db.collection('botThreadSessions').deleteMany(notAdmin);
+  await db.collection('botDiscordServerSessions').deleteMany(notAdmin);
+
+  // ── Step 2: collections that would cascade automatically in a relational adapter ──
+  await db.collection('session').deleteMany(notAdmin);
+  await db.collection('account').deleteMany(notAdmin);
+  await db.collection('botSessions').deleteMany(notAdmin);
+  await db.collection('botAdmins').deleteMany(notAdmin);
+  await db.collection('botPremiums').deleteMany(notAdmin);
+  await db.collection('botCredentialDiscord').deleteMany(notAdmin);
+  await db.collection('botCredentialTelegram').deleteMany(notAdmin);
+
+  // ── Step 3: every other user account. Mirrors deleteUser's $or lookup so both
+  // the better-auth-generated `id` field and the raw `_id` are honoured. ──────────
+  await db.collection('user').deleteMany({
+    $nor: [{ id: excludeUserId }, { _id: excludeUserId as never }],
+  });
+
+  // ── Step 4: global bot-identity + system collections, no owner scoping ─────
+  await db.collection('botThreads').deleteMany({});
+  await db.collection('botDiscordServers').deleteMany({});
+  await db.collection('botDiscordChannels').deleteMany({});
+  await db.collection('botUsers').deleteMany({});
+  await db.collection('systemAdmin').deleteMany({});
+  await db.collection('verification').deleteMany({});
+}
+
 export async function listAllUsers(
   search: string = '',
   page: number = 1,

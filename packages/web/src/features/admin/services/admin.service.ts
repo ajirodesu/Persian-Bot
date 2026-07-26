@@ -61,6 +61,17 @@ export interface GetSystemAdminsResponseDto {
   admins: SystemAdminDto[]
 }
 
+// Must exactly match RESET_ALL_DATABASE_CONFIRMATION_PHRASE on the server —
+// duplicated here (rather than imported) since the web package cannot import
+// from the cat-bot server package. The server independently re-verifies this
+// phrase, so a stale/mismatched client-side copy only fails closed, never open.
+export const RESET_ALL_DATABASE_CONFIRMATION_PHRASE = 'RESET ALL DATA'
+
+export interface ResetAllDatabaseResponseDto {
+  status: 'reset'
+  preservedAdminId: string
+}
+
 // ── Service class ──────────────────────────────────────────────────────────────
 
 export class AdminService {
@@ -156,6 +167,22 @@ export class AdminService {
     await apiClient.delete(
       `/api/v1/admin/bots/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
     )
+  }
+
+  /**
+   * Permanently wipes all database records and system data except the executing
+   * admin's own account and associated data. The server independently re-verifies
+   * confirmationPhrase against RESET_ALL_DATABASE_CONFIRMATION_PHRASE — this is a
+   * defense-in-depth check, not a substitute for that server-side guard.
+   */
+  async resetAllDatabase(
+    confirmationPhrase: string,
+  ): Promise<ResetAllDatabaseResponseDto> {
+    const response = await apiClient.post<ResetAllDatabaseResponseDto>(
+      '/api/v1/admin/reset-database',
+      { confirmationPhrase },
+    )
+    return response.data
   }
 }
 

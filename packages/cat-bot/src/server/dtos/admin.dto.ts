@@ -73,3 +73,17 @@ export interface GetAdminUserListResponseDto {
     bannedCount: number;
   };
 }
+
+// Reset All Database — destructive, admin-only, requires exact phrase match server-side
+// (not just client-side UI gating) so the endpoint can never be triggered by a bare
+// POST with no body, e.g. from a replayed request or a scripted/curl call.
+export const RESET_ALL_DATABASE_CONFIRMATION_PHRASE = 'RESET ALL DATA' as const;
+
+export interface ResetAllDatabaseRequestDto {
+  confirmationPhrase: string;
+}
+
+export interface ResetAllDatabaseResponseDto {
+  status: 'reset';
+  preservedAdminId: string;
+}

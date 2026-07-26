@@ -200,3 +200,7 @@ export const isSystemAdmin = m.isSystemAdmin;
 export const listAllUsers = m.listAllUsers;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const deleteUser = m.deleteUser;
+// Permanently wipes all database records and system data except the account and
+// associated data of the admin userId passed in — adapter-agnostic interface.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const resetAllDatabase = m.resetAllDatabase;

@@ -79,4 +79,14 @@ export const lruCache = {
       if (prefixes.some((p) => key.startsWith(p))) cache.delete(key);
     }
   },
+
+  /**
+   * Evicts every entry in the shared cache. Used for wide-blast-radius operations
+   * (full database reset) where surgically identifying every affected key is
+   * impractical — subsequent reads simply repopulate from the DB, which is safe
+   * and correct even for entries that are still valid (e.g. the admin's own).
+   */
+  clear(): void {
+    cache.clear();
+  },
 };

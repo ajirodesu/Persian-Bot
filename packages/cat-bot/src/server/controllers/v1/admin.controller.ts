@@ -9,9 +9,18 @@ import {
   removeSystemAdmin,
   listAllUsers,
   deleteUser,
+  resetAllDatabase,
 } from 'database';
-import type { AddSystemAdminRequestDto } from '@/server/dtos/admin.dto.js';
+import type {
+  AddSystemAdminRequestDto,
+  ResetAllDatabaseRequestDto,
+  ResetAllDatabaseResponseDto,
+} from '@/server/dtos/admin.dto.js';
+import { RESET_ALL_DATABASE_CONFIRMATION_PHRASE } from '@/server/dtos/admin.dto.js';
 export class AdminController {
+  // In-process re-entrancy guard — see resetAllDatabase() safeguard #3.
+  #resetInProgress = false;
+
   // GET /api/v1/admin/users — fetches all users, delegating pagination and search directly to the database.
   async listUsers(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
@@ -253,6 +262,61 @@ export class AdminController {
     } catch (error) {
       console.error('[AdminController.deleteUser]', error);
       res.status(500).json({ error: 'Failed to delete user' });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/reset-database
+   *
+   * Permanently deletes and resets ALL database records and system data, with the
+   * sole exception of the account and associated data belonging to the currently
+   * authenticated admin executing the reset — that admin's data is preserved intact.
+   *
+   * Safeguards against accidental or unauthorized use:
+   *   1. requireAdmin() — only a session-authenticated user with role==='admin' may call this.
+   *   2. Exact confirmation-phrase match, verified server-side (not merely gated in the UI),
+   *      so no bare/automated/replayed POST can trigger a wipe without deliberate intent.
+   *   3. #resetInProgress guard — rejects concurrent invocations (e.g. an accidental
+   *      double-submit) so two overlapping resets can never race against each other.
+   *   4. Live bot transports for every OTHER user are stopped before the DB is touched,
+   *      preventing in-flight writes to rows that are about to be deleted.
+   */
+  async resetAllDatabase(req: Request, res: Response): Promise<void> {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    if (this.#resetInProgress) {
+      res
+        .status(409)
+        .json({ error: 'A database reset is already in progress' });
+      return;
+    }
+
+    const { confirmationPhrase } = req.body as ResetAllDatabaseRequestDto;
+    if (confirmationPhrase !== RESET_ALL_DATABASE_CONFIRMATION_PHRASE) {
+      res.status(400).json({
+        error: `Confirmation phrase mismatch. Type "${RESET_ALL_DATABASE_CONFIRMATION_PHRASE}" exactly to proceed.`,
+      });
+      return;
+    }
+
+    this.#resetInProgress = true;
+    try {
+      // Halt every other user's live bot transports first so nothing writes through
+      // stale credentials while their rows are being deleted below.
+      await botService.stopAllSessionsExcept(admin.id);
+      await resetAllDatabase(admin.id);
+
+      const response: ResetAllDatabaseResponseDto = {
+        status: 'reset',
+        preservedAdminId: admin.id,
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      console.error('[AdminController.resetAllDatabase]', error);
+      res.status(500).json({ error: 'Failed to reset database' });
+    } finally {
+      this.#resetInProgress = false;
     }
   }
 

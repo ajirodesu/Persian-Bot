@@ -315,6 +315,51 @@ class SessionManager extends EventEmitter {
   }
 
   /**
+   * Stops every transport session NOT owned by excludeUserId, run in parallel.
+   * Called immediately before a full database reset so every other user's live
+   * bot transports halt before their DB rows are wiped — the excluded userId
+   * (the admin performing the reset) is left running untouched.
+   * Keys follow `userId:platform:sessionId`; prefix match is O(registered sessions).
+   */
+  async stopAllExcludingUserId(
+    excludeUserId: string,
+    signal?: string,
+  ): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const [key, session] of this.#sessions.entries()) {
+      if (!key.startsWith(`${excludeUserId}:`)) {
+        promises.push(
+          session
+            .stop(signal)
+            .catch((err) =>
+              console.error(
+                `[session-manager] Failed to stop ${key} during database reset:`,
+                err,
+              ),
+            ),
+        );
+      }
+    }
+    await Promise.all(promises);
+  }
+
+  /**
+   * Removes all session registrations NOT owned by excludeUserId, after
+   * stopAllExcludingUserId completes. Mirrors unregisterAllByUserId but inverted —
+   * prevents stale closures for every deleted user's session from lingering in memory.
+   */
+  async unregisterAllExcludingUserId(excludeUserId: string): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const key of [...this.#sessions.keys()]) {
+      if (!key.startsWith(`${excludeUserId}:`)) {
+        this.#sessions.delete(key);
+        if (this.#active.has(key)) promises.push(this.markInactive(key));
+      }
+    }
+    await Promise.all(promises);
+  }
+
+  /**
    * Stops all active sessions. Used gracefully during process shutdown (SIGINT/SIGTERM).
    *
    * Passes persist=false to every lifecycle's stop() — a restart must tear down

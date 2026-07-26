@@ -115,6 +115,85 @@ export async function deleteUser(userId: string): Promise<void> {
   }
 }
 
+/**
+ * Permanently wipes every database record and system-wide setting, with a single
+ * exception: the account and all associated data belonging to `excludeUserId` —
+ * the currently authenticated admin who triggered the reset. That admin's row in
+ * "user" (and everything that cascades from or is scoped to it) is left untouched.
+ *
+ * Runs inside one transaction so the reset is all-or-nothing — a failure partway
+ * through rolls back rather than leaving the database in a half-wiped state.
+ *
+ * Ordering:
+ *   1. Explicitly purge rows in tables carrying a user_id column but no FK/cascade
+ *      relationship to "user", scoped to everyone EXCEPT excludeUserId.
+ *   2. Delete every "user" row except excludeUserId — Postgres cascades this to
+ *      session, account, bot_session, bot_admin, bot_premium, bot_credential_discord,
+ *      and bot_credential_telegram automatically via their ON DELETE CASCADE FKs.
+ *   3. Fully clear global, non-owner-scoped bot-identity/system tables (bot_users,
+ *      bot_threads, Discord server/channel mappings, system_admin, verification) —
+ *      these hold no per-admin ownership, so there is nothing to selectively keep
+ *      beyond what already survives via step 1/2 for the excluded admin's rows.
+ */
+export async function resetAllDatabase(excludeUserId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // ── Step 1: user-scoped tables with no cascading FK to "user" ──────────────
+    await client.query(
+      `DELETE FROM bot_session_commands WHERE user_id <> $1`,
+      [excludeUserId],
+    );
+    await client.query(`DELETE FROM bot_session_events WHERE user_id <> $1`, [
+      excludeUserId,
+    ]);
+    await client.query(
+      `DELETE FROM bot_users_session_banned WHERE user_id <> $1`,
+      [excludeUserId],
+    );
+    await client.query(
+      `DELETE FROM bot_threads_session_banned WHERE user_id <> $1`,
+      [excludeUserId],
+    );
+    await client.query(`DELETE FROM bot_users_session WHERE user_id <> $1`, [
+      excludeUserId,
+    ]);
+    await client.query(`DELETE FROM bot_threads_session WHERE user_id <> $1`, [
+      excludeUserId,
+    ]);
+    await client.query(
+      `DELETE FROM bot_discord_server_session WHERE user_id <> $1`,
+      [excludeUserId],
+    );
+
+    // ── Step 2: every other user account — cascades to session, account,
+    // bot_session, bot_admin, bot_premium, bot_credential_discord, bot_credential_telegram
+    await client.query(`DELETE FROM "user" WHERE id <> $1`, [excludeUserId]);
+
+    // ── Step 3: global bot-identity + system tables, no owner scoping ──────────
+    // Deleted in FK-dependency order (children before parents) for clarity, even
+    // though ON DELETE CASCADE on these tables would also handle it.
+    await client.query(`DELETE FROM bot_thread_participants`);
+    await client.query(`DELETE FROM bot_thread_admins`);
+    await client.query(`DELETE FROM bot_discord_server_participants`);
+    await client.query(`DELETE FROM bot_discord_server_admins`);
+    await client.query(`DELETE FROM bot_discord_channel`);
+    await client.query(`DELETE FROM bot_discord_server`);
+    await client.query(`DELETE FROM bot_threads`);
+    await client.query(`DELETE FROM bot_users`);
+    await client.query(`DELETE FROM system_admin`);
+    await client.query(`DELETE FROM verification`);
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function listAllUsers(
   search: string = '',
   page: number = 1,

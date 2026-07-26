@@ -11,9 +11,11 @@ import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import { authAdminClient } from '@/lib/better-auth-admin-client.lib'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, TriangleAlert } from 'lucide-react'
+import Dialog from '@/components/ui/overlay/Dialog'
 import { adminService } from '@/features/admin/services/admin.service'
 import type { SystemAdminDto } from '@/features/admin/services/admin.service'
+import { RESET_ALL_DATABASE_CONFIRMATION_PHRASE } from '@/features/admin/services/admin.service'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
@@ -183,6 +185,49 @@ export default function AdminSettingsPage() {
       )
     } finally {
       setAdminSaving(false)
+    }
+  }
+
+  // ── Reset All Database — destructive, admin-only ─────────────────────────────
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [resetConfirmInput, setResetConfirmInput] = useState('')
+  const [isResetting, setIsResetting] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
+  const [resetSuccess, setResetSuccess] = useState(false)
+
+  const openResetDialog = () => {
+    setResetDialogOpen(true)
+    setResetConfirmInput('')
+    setResetError(null)
+  }
+
+  const closeResetDialog = () => {
+    if (isResetting) return
+    setResetDialogOpen(false)
+    setResetConfirmInput('')
+    setResetError(null)
+  }
+
+  const isResetConfirmed =
+    resetConfirmInput === RESET_ALL_DATABASE_CONFIRMATION_PHRASE
+
+  const handleResetAllDatabase = async (): Promise<void> => {
+    if (!isResetConfirmed) return
+    setIsResetting(true)
+    setResetError(null)
+    try {
+      await adminService.resetAllDatabase(resetConfirmInput)
+      setResetDialogOpen(false)
+      setResetConfirmInput('')
+      setResetSuccess(true)
+    } catch (err) {
+      const e = err as { response?: { data?: { error?: string } } }
+      setResetError(
+        e.response?.data?.error ||
+          (err instanceof Error ? err.message : 'Failed to reset database'),
+      )
+    } finally {
+      setIsResetting(false)
     }
   }
 
@@ -509,6 +554,140 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </Card.Root>
+
+      {/* ── Danger Zone ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-error/40"
+      >
+        <Card.Header>
+          <div className="flex items-center gap-2">
+            <TriangleAlert className="h-5 w-5 text-error flex-shrink-0" />
+            <div>
+              <Card.Title as="h2">Danger Zone</Card.Title>
+              <Card.Description>
+                Irreversible, destructive actions. Proceed with caution.
+              </Card.Description>
+            </div>
+          </div>
+        </Card.Header>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-xl border border-outline-variant/50">
+          <div>
+            <p className="text-label-lg font-medium text-on-surface">
+              Reset All Database
+            </p>
+            <p className="text-body-sm text-on-surface-variant max-w-md">
+              Permanently deletes and resets every database record and system
+              setting — every other admin/user account, bot session,
+              credential, and configuration. Only your own admin account and
+              its associated data are preserved. This cannot be undone.
+            </p>
+          </div>
+          <Button
+            variant="tonal"
+            color="error"
+            size="sm"
+            className="flex-shrink-0"
+            onClick={openResetDialog}
+          >
+            Reset All Database
+          </Button>
+        </div>
+        {resetSuccess && (
+          <Alert
+            variant="tonal"
+            color="success"
+            title="Database reset complete."
+            message="All records were wiped except your own admin account and data. Reload the page to see the updated state."
+            size="sm"
+          />
+        )}
+      </Card.Root>
+
+      {/* Reset All Database Dialog */}
+      <Dialog.Root
+        open={resetDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeResetDialog()
+        }}
+        closeOnEsc={!isResetting}
+        closeOnOverlayClick={!isResetting}
+      >
+        <Dialog.Positioner position="center">
+          <Dialog.Backdrop />
+          <Dialog.Content size="sm">
+            <Dialog.Header>
+              <Dialog.Title>Reset All Database</Dialog.Title>
+              <Dialog.CloseTrigger />
+            </Dialog.Header>
+            <Dialog.Body>
+              <p className="text-body-md text-on-surface-variant mb-3">
+                This will{' '}
+                <span className="font-semibold text-on-surface">
+                  permanently delete every database record and system setting
+                </span>
+                — every other admin/user account, bot session, credential,
+                thread, and configuration. Only your own admin account (
+                {session?.user?.email ?? 'this account'}) and its associated
+                data will remain intact. This action cannot be undone.
+              </p>
+              <Field.Root>
+                <Field.Label>
+                  Type{' '}
+                  <span className="font-mono font-semibold text-on-surface">
+                    {RESET_ALL_DATABASE_CONFIRMATION_PHRASE}
+                  </span>{' '}
+                  to confirm
+                </Field.Label>
+                <Input
+                  value={resetConfirmInput}
+                  onChange={(e) => {
+                    setResetConfirmInput(e.target.value)
+                    setResetError(null)
+                  }}
+                  placeholder={RESET_ALL_DATABASE_CONFIRMATION_PHRASE}
+                  disabled={isResetting}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </Field.Root>
+              {resetError !== null && (
+                <div className="mt-3">
+                  <Alert
+                    variant="tonal"
+                    color="error"
+                    title={resetError}
+                    size="sm"
+                  />
+                </div>
+              )}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Dialog.CloseTrigger asChild>
+                <Button
+                  variant="text"
+                  color="neutral"
+                  size="sm"
+                  disabled={isResetting}
+                >
+                  Cancel
+                </Button>
+              </Dialog.CloseTrigger>
+              <Button
+                className="!bg-[#e7000b] !text-white"
+                size="sm"
+                onClick={() => void handleResetAllDatabase()}
+                isLoading={isResetting}
+                disabled={isResetting || !isResetConfirmed}
+              >
+                Reset All Database
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </div>
   )
 }
