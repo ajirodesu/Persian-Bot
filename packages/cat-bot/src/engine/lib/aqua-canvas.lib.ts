@@ -4,7 +4,7 @@
  * Centralises everything that would otherwise be duplicated across those three
  * modules:
  *
- *   - the approved random-background pool + selection logic
+ *   - the default background mode/theme sent to the Aqua API
  *   - the strict platform allowlist ("Telegram" | "Discord")
  *   - input validation / sanitisation (string-only, non-empty)
  *   - the `createUrl('aqua', ...)` request + binary-image download flow
@@ -18,7 +18,7 @@
  * selection logic "in multiple places" and asks for platform-specific code to
  * stay shared — a single fetch helper per endpoint, both built on one
  * `downloadCanvasImage` primitive, is what keeps rankup/welcome/goodbye from
- * re-implementing the same random-pick + fetch + validate flow three times.
+ * re-implementing the same default + fetch + validate flow three times.
  */
 
 import axios from 'axios';
@@ -50,45 +50,26 @@ export function normalizeCanvasPlatform(
   return PLATFORM_ALLOWLIST[platform.trim().toLowerCase()] ?? null;
 }
 
-// ─── Background pool ────────────────────────────────────────────────────────
+// ─── Background defaults ────────────────────────────────────────────────────
 
 /**
- * Full approved pool of random canvas background images.
+ * Default background mode + theme sent on every canvas call that doesn't
+ * explicitly override them.
  *
- * NOTE: the original task spec listed `imgs.search.brave.com/...` proxy
- * links. Those are Brave Search's dynamic image-resize proxy — confirmed
- * (via direct fetch) to actively bot-detect and reject non-browser/
- * server-side requests, which is exactly why a background picked from that
- * pool never rendered: the canvas backend's own server-side fetch of the
- * background gets blocked, so the card silently renders without one. Each
- * Brave URL base64-encodes the original image it proxies; those originals
- * are used directly below instead, since they don't carry Brave's
- * anti-bot/hotlink protection.
+ * The Aqua canvas API now generates backgrounds itself: `background=Dynamic`
+ * fetches a themed photo server-side (trying Pixabay → Unsplash → Picsum in
+ * order, actually attempting to load each candidate before falling through),
+ * so it never renders blank and never needs a client-supplied image URL.
+ *
+ * This replaces the old hardcoded `CANVAS_BACKGROUND_POOL` +
+ * `pickRandomBackground()` workaround, which only existed because the API
+ * previously required a raw image URL and some proxied sources (e.g. Brave's
+ * image-resize proxy) silently failed the backend's own server-side fetch.
+ * That workaround is now obsolete and has been removed — one less thing to
+ * keep in sync with the Aqua API's own image sourcing.
  */
-export const CANVAS_BACKGROUND_POOL: readonly string[] = [
-  'https://cdn.wallpapersafari.com/78/64/wkRlQI.png',
-  'https://static.vecteezy.com/system/resources/thumbnails/033/982/951/smal/beautiful-landscape-background-cartoon-summer-sunset-with-clouds-mountain-and-lake-anime-style-photo.jpg',
-  'https://static.vecteezy.com/system/resources/thumbnails/033/350/304/smal/sky-spring-sunset-sunrise-landscape-ai-generated-photo.jpg',
-  'https://cdn.wallpapersafari.com/46/62/5OHzFB.png',
-  'https://cdn.wallpapersafari.com/47/49/oKU02l.png',
-  'https://img.magnific.com/premium-photo/river-sunset-meadow-anime-landscape-wallpaper_776894-104256.jpg?ga=GA1.1.1761711694.1783197603&semt=ais_hybrid&w=740&q=80',
-  'https://wallpapers.com/images/hd/beautiful-sunrise-anime-scenery-jf6f0baxzkkia2ki.jpg',
-  'https://cdn.wallpapersafari.com/81/98/f8rIAD.png',
-  'https://cdn.wallpapersafari.com/48/52/Jm0F59.png',
-  'https://cdn.wallpapersafari.com/12/1/I1ADak.png',
-] as const;
-
-/**
- * Picks a stable, safe random background from the full approved pool.
- * The ONLY place background selection happens — every canvas call routes
- * through here (directly or via the `fetchRankupCanvas`/`fetchGreetCanvas`
- * defaults below) so there is exactly one implementation to reason about.
- */
-export function pickRandomBackground(): string {
-  const index = Math.floor(Math.random() * CANVAS_BACKGROUND_POOL.length);
-  // Non-null assertion is safe: index is always within [0, length).
-  return CANVAS_BACKGROUND_POOL[index]!;
-}
+export const DEFAULT_CANVAS_BACKGROUND = 'Dynamic' as const;
+export const DEFAULT_CANVAS_BACKGROUND_THEME = 'Futuristic' as const;
 
 // ─── Validation ─────────────────────────────────────────────────────────────
 
@@ -194,8 +175,10 @@ export interface RankupCanvasParams {
   previousLevel: number | string;
   xpText: string;
   rank: number | string;
-  /** Explicit background override. Omit to get a random pick from the approved pool. */
+  /** Explicit background mode/URL override. Omit to use the default: "Dynamic" (see DEFAULT_CANVAS_BACKGROUND). */
   background?: string;
+  /** Explicit background theme override — only relevant when background="Dynamic". Omit to use the default: "Futuristic". */
+  backgroundTheme?: string;
 }
 
 /**
@@ -221,7 +204,10 @@ export async function fetchRankupCanvas(params: RankupCanvasParams): Promise<Can
     rank: requireParamString(params.rank, 'rank'),
     background: params.background
       ? requireParamString(params.background, 'background')
-      : pickRandomBackground(),
+      : DEFAULT_CANVAS_BACKGROUND,
+    backgroundTheme: params.backgroundTheme
+      ? requireParamString(params.backgroundTheme, 'backgroundTheme')
+      : DEFAULT_CANVAS_BACKGROUND_THEME,
   };
 
   const url = createUrl('aqua', '/canvas/rankup', query);
@@ -241,8 +227,10 @@ export interface GreetCanvasParams {
   serverName: string;
   message: string;
   memberCount: number | string;
-  /** Explicit background override. Omit to get a random pick from the approved pool. */
+  /** Explicit background mode/URL override. Omit to use the default: "Dynamic" (see DEFAULT_CANVAS_BACKGROUND). */
   background?: string;
+  /** Explicit background theme override — only relevant when background="Dynamic". Omit to use the default: "Futuristic". */
+  backgroundTheme?: string;
 }
 
 /**
@@ -273,7 +261,10 @@ export async function fetchGreetCanvas(params: GreetCanvasParams): Promise<Canva
     memberCount: requireParamString(params.memberCount, 'memberCount'),
     background: params.background
       ? requireParamString(params.background, 'background')
-      : pickRandomBackground(),
+      : DEFAULT_CANVAS_BACKGROUND,
+    backgroundTheme: params.backgroundTheme
+      ? requireParamString(params.backgroundTheme, 'backgroundTheme')
+      : DEFAULT_CANVAS_BACKGROUND_THEME,
   };
 
   const url = createUrl('aqua', '/canvas/greet', query);
