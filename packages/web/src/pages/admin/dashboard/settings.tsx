@@ -207,8 +207,7 @@ export default function AdminSettingsPage() {
           <div>
             <Card.Title as="h2">Appearance</Card.Title>
             <Card.Description>
-              Choose the interface theme. Aurora is the new default; Classic
-              is the original look.
+              Select the interface theme. Choose only one option: Winter or Summer.
             </Card.Description>
           </div>
         </Card.Header>

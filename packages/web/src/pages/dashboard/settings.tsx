@@ -125,8 +125,7 @@ export default function SettingsPage() {
           <div>
             <Card.Title as="h2">Appearance</Card.Title>
             <Card.Description>
-              Choose the interface theme. Winter is the new default; Summer
-              is the original look.
+              Select the interface theme. Choose only one option: Winter or Summer.
             </Card.Description>
           </div>
         </Card.Header>
