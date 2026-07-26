@@ -12,13 +12,14 @@ import Divider from '@/components/ui/layout/Divider'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import apiClient from '@/lib/api-client.lib'
+import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
 // ============================================================================
 // Page
 // ============================================================================
 
 export default function SettingsPage() {
-  const isEmailEnabled = import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true'
+  const { isEmailEnabled } = useEmailServiceEnabled()
 
   const { data: session, isPending: sessionLoading } =
     authUserClient.useSession()

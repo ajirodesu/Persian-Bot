@@ -11,6 +11,7 @@ import { authUserClient } from '@/lib/better-auth-client.lib'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import apiClient from '@/lib/api-client.lib'
 import Logo from '@/components/ui/Logo'
+import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
 interface SignupForm {
   name: string
@@ -29,6 +30,7 @@ interface SignupErrors {
 export default function SignupPage() {
   const navigate = useNavigate()
   const { login } = useUserAuth()
+  const { isEmailEnabled } = useEmailServiceEnabled()
   const [form, setForm] = useState<SignupForm>({
     name: '',
     email: '',
@@ -86,7 +88,7 @@ export default function SignupPage() {
             signInErr instanceof Error ? signInErr.message.toLowerCase() : ''
 
           if (signInMsg.includes('verif')) {
-            if (import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true') {
+            if (isEmailEnabled) {
               navigate(
                 `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`,
               )
@@ -126,7 +128,7 @@ export default function SignupPage() {
         throw new Error(result.error.message ?? 'Registration failed')
       }
 
-      if (import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true') {
+      if (isEmailEnabled) {
         navigate(
           `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`,
         )

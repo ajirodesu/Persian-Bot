@@ -15,6 +15,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { adminService } from '@/features/admin/services/admin.service'
 import type { SystemAdminDto } from '@/features/admin/services/admin.service'
 import apiClient from '@/lib/api-client.lib'
+import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
 /**
  * AdminSettingsPage
@@ -23,7 +24,7 @@ import apiClient from '@/lib/api-client.lib'
  * so registered IDs survive server restarts and are visible to all admin accounts.
  */
 export default function AdminSettingsPage() {
-  const isEmailEnabled = import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true'
+  const { isEmailEnabled } = useEmailServiceEnabled()
 
   const { data: session, isPending: sessionLoading } =
     authAdminClient.useSession()

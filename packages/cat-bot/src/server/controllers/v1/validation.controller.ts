@@ -219,6 +219,39 @@ export async function validateEmailForPasswordReset(
   }
 }
 
+// ── Email Service Availability ─────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/validate/email-service-status
+ *
+ * Returns whether transactional email (verification + password reset) is
+ * actually deliverable right now, based on the SAME condition mailer.lib.ts
+ * uses to decide whether to send or silently skip: GMAIL_USER and
+ * GOOGLE_APP_PASSWORD must both be present.
+ *
+ * WHY THIS ENDPOINT EXISTS: the web app previously gated these flows behind
+ * VITE_EMAIL_SERVICES_ENABLE, a build-time Vite variable baked into the
+ * frontend bundle at `npm run build` time. That created a foot-gun — an
+ * admin could configure GMAIL_USER/GOOGLE_APP_PASSWORD, restart the bot, and
+ * still see "Feature Unavailable" because the *already-built* web assets
+ * still had the old (false) value baked in, requiring a full frontend
+ * rebuild to pick up the change. Checking real credential presence here, at
+ * request time, on the server that actually sends the mail, removes that
+ * split-brain entirely: flipping GMAIL_USER/GOOGLE_APP_PASSWORD and
+ * restarting the bot process is now sufficient — no frontend rebuild
+ * required.
+ *
+ * VITE_EMAIL_SERVICES_ENABLE is still honored as an explicit kill switch —
+ * setting it to 'false' forces the feature off even when credentials are
+ * present — but its absence no longer disables a fully-configured mailer.
+ */
+export function getEmailServiceStatus(_req: Request, res: Response): void {
+  const hasCredentials = Boolean(env.GMAIL_USER && env.GOOGLE_APP_PASSWORD);
+  const explicitlyDisabled = env.VITE_EMAIL_SERVICES_ENABLE === 'false';
+
+  res.status(200).json({ enabled: hasCredentials && !explicitlyDisabled });
+}
+
 // ── Email Status Check ────────────────────────────────────────────────────────
 
 /**

@@ -13,6 +13,7 @@ import {
   verifyResetTokenCustom,
   confirmPasswordResetCustom,
   checkEmailStatus,
+  getEmailServiceStatus,
 } from '@/server/controllers/v1/validation.controller.js';
 
 const validationRouter = Router();
@@ -35,6 +36,13 @@ validationRouter.post('/email-reset', (req, res) => {
 // POST /api/v1/validate/email-status — check email existence and verification status
 validationRouter.post('/email-status', (req, res) => {
   void checkEmailStatus(req, res);
+});
+
+// GET /api/v1/validate/email-service-status — is email actually deliverable right now?
+// Public/unauthenticated: only exposes a boolean, no PII, needed pre-login on the
+// forgot-password screens as well as post-login on account settings pages.
+validationRouter.get('/email-service-status', (req, res) => {
+  getEmailServiceStatus(req, res);
 });
 
 // POST /api/v1/validate/reset-password/request — generate in-memory reset token

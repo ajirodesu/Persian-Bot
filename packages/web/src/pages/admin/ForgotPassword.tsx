@@ -7,9 +7,11 @@ import Input from '@/components/ui/forms/Input'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import apiClient from '@/lib/api-client.lib'
+import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
 export default function AdminForgotPasswordPage() {
-  const isEmailEnabled = import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true'
+  const { isEmailEnabled, isLoading: isEmailStatusLoading } =
+    useEmailServiceEnabled()
 
   const [searchParams] = useSearchParams()
   const [email, setEmail] = useState(searchParams.get('email') || '')
@@ -64,6 +66,19 @@ export default function AdminForgotPasswordPage() {
 
   const wrapperClass =
     'min-h-screen flex items-center justify-center bg-surface-container-highest px-4 py-12 relative overflow-hidden'
+
+  if (isEmailStatusLoading) {
+    return (
+      <div className={wrapperClass}>
+        <Helmet>
+          <title>Admin Recovery · Cat-Bot</title>
+        </Helmet>
+        <p className="text-body-sm text-on-surface-variant animate-pulse">
+          Checking account status…
+        </p>
+      </div>
+    )
+  }
 
   if (!isEmailEnabled) {
     return (

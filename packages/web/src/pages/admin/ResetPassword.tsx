@@ -7,13 +7,15 @@ import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import apiClient from '@/lib/api-client.lib'
+import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
 /**
  * Admin Reset Password page — requires token authorization in the URL.
  * Handles isolated admin password updates.
  */
 export default function AdminResetPasswordPage() {
-  const isEmailEnabled = import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true'
+  const { isEmailEnabled, isLoading: isEmailStatusLoading } =
+    useEmailServiceEnabled()
 
   const [searchParams] = useSearchParams()
   // Safely trim any trailing whitespace or newline characters injected by strict email clients
@@ -127,6 +129,19 @@ export default function AdminResetPasswordPage() {
     } finally {
       setIsResending(false)
     }
+  }
+
+  if (isEmailStatusLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-container-high px-4 py-12">
+        <Helmet>
+          <title>Admin Reset Password · Cat-Bot</title>
+        </Helmet>
+        <p className="text-body-sm text-on-surface-variant animate-pulse">
+          Checking account status…
+        </p>
+      </div>
+    )
   }
 
   if (!isEmailEnabled) {

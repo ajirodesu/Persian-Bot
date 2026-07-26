@@ -7,9 +7,11 @@ import { ROUTES } from '@/constants/routes.constants'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import { MailCheck } from 'lucide-react'
 import apiClient from '@/lib/api-client.lib'
+import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 
 export default function AccountVerificationPage() {
-  const isEmailEnabled = import.meta.env.VITE_EMAIL_SERVICES_ENABLE === 'true'
+  const { isEmailEnabled, isLoading: isEmailStatusLoading } =
+    useEmailServiceEnabled()
   const [searchParams] = useSearchParams()
   const email = searchParams.get('email') || ''
 
@@ -80,6 +82,19 @@ export default function AccountVerificationPage() {
 
   const wrapperClass =
     'flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16'
+
+  if (isEmailStatusLoading) {
+    return (
+      <div className={wrapperClass}>
+        <Helmet>
+          <title>Account Verification · Cat-Bot</title>
+        </Helmet>
+        <p className="text-body-sm text-on-surface-variant animate-pulse">
+          Checking account status…
+        </p>
+      </div>
+    )
+  }
 
   if (!isEmailEnabled) {
     return (
