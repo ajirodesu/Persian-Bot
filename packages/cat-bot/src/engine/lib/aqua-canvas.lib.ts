@@ -71,6 +71,31 @@ export function normalizeCanvasPlatform(
 export const DEFAULT_CANVAS_BACKGROUND = 'Dynamic' as const;
 export const DEFAULT_CANVAS_BACKGROUND_THEME = 'Futuristic' as const;
 
+// ─── Rankup accent color ────────────────────────────────────────────────────
+
+/**
+ * The full accent-color palette `/canvas/rankup` accepts (see NAMED_COLORS in
+ * the Aqua API's rankup.ts) — used to pick a random accent color for every
+ * rank-up card that doesn't explicitly request one.
+ */
+export const RANKUP_COLOR_POOL: readonly string[] = [
+  'Cyan',
+  'Blue',
+  'Purple',
+  'Pink',
+  'Red',
+  'Orange',
+  'Yellow',
+  'Green',
+] as const;
+
+/** Picks a random accent color from the full rankup palette. */
+export function pickRandomRankupColor(): string {
+  const index = Math.floor(Math.random() * RANKUP_COLOR_POOL.length);
+  // Non-null assertion is safe: index is always within [0, length).
+  return RANKUP_COLOR_POOL[index]!;
+}
+
 // ─── Validation ─────────────────────────────────────────────────────────────
 
 /** Thrown when a canvas request is missing a required param or fails the platform allowlist. */
@@ -179,6 +204,8 @@ export interface RankupCanvasParams {
   background?: string;
   /** Explicit background theme override — only relevant when background="Dynamic". Omit to use the default: "Futuristic". */
   backgroundTheme?: string;
+  /** Explicit accent color override. Omit to get a random pick from RANKUP_COLOR_POOL. */
+  color?: string;
 }
 
 /**
@@ -208,6 +235,7 @@ export async function fetchRankupCanvas(params: RankupCanvasParams): Promise<Can
     backgroundTheme: params.backgroundTheme
       ? requireParamString(params.backgroundTheme, 'backgroundTheme')
       : DEFAULT_CANVAS_BACKGROUND_THEME,
+    color: params.color ? requireParamString(params.color, 'color') : pickRandomRankupColor(),
   };
 
   const url = createUrl('aqua', '/canvas/rankup', query);
