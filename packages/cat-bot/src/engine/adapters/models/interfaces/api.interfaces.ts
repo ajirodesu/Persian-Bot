@@ -43,8 +43,18 @@ export interface NamedStreamAttachment {
 }
 
 /**
- * Named URL attachment — downloaded by the platform wrapper before sending.
- * `name` sets the download filename so MIME detection derives from the extension.
+ * Named URL attachment. `name` sets the filename used for extension-based
+ * MIME/media-type routing (photo vs video vs audio vs document).
+ *
+ * Handling is platform-specific:
+ *   - Telegram: the URL is forwarded directly to the Bot API (sendPhoto /
+ *     sendMediaGroup / etc). Telegram's own servers fetch it — the bot never
+ *     downloads the bytes.
+ *   - Discord: photo URLs are sent as an embed image (Discord's servers fetch
+ *     it for the preview — the bot never downloads it). Discord has no
+ *     server-side-fetch equivalent for non-image attachments (video/audio/
+ *     document), so those are downloaded by the bot before upload, same as
+ *     before.
  */
 export interface NamedUrlAttachment {
   name: string;

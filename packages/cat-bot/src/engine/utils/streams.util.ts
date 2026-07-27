@@ -10,8 +10,8 @@ import { PassThrough } from 'stream';
 import axios from 'axios';
 
 /**
- * PassThrough stream with the `.path` property that Telegram's Input.fromBuffer()
- * requires for MIME-type detection.
+ * PassThrough stream with the `.path` property that fca-unofficial and
+ * Telegram's Input.fromBuffer() require for MIME-type detection.
  * The extension in `path` determines the content-type sent to the platform API.
  */
 export interface StreamWithPath extends PassThrough {
@@ -39,8 +39,9 @@ export function streamToBuffer(stream: Readable): Promise<Buffer> {
 }
 
 /**
- * Converts a Buffer into a PassThrough stream with a `.path` property for
- * MIME-type detection. Attach the filename before returning.
+ * Converts a Buffer into a PassThrough stream that fca-unofficial can consume.
+ * fca-unofficial detects file type via the stream's .path property, so we
+ * attach the filename before returning.
  *
  * @param filename - e.g. "tts_123.mp3" or "qr_456.png"
  */
@@ -49,6 +50,7 @@ export function bufferToStream(
   filename: string,
 ): StreamWithPath {
   const stream = new PassThrough() as StreamWithPath;
+  // fca-unofficial reads .path to determine MIME type for the Graph API upload
   stream.path = filename;
   stream.end(buffer);
   return stream;
@@ -62,25 +64,17 @@ export function bufferToStream(
  */
 export function getMediaTypeFromPath(pathOrUrl = ''): MediaType {
   const ext = pathOrUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
-  if (['jpg', 'jpeg', 'png', 'webp', 'bmp', 'avif', 'heic', 'heif', 'ico', 'tiff', 'tif'].includes(ext)) return 'photo';
+  if (['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(ext)) return 'photo';
   if (ext === 'gif') return 'gif';
-  if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', 'mpeg', 'mpg', '3gp', '3g2'].includes(ext)) return 'video';
-  if ([
-    'mp3', 'aac', 'ogg', 'oga', 'opus', 'weba', 'wma', 'amr', 'ra', 'rm', 'spx', 'mp2', 'ac3', 'eac3',
-    'wav', 'flac', 'aiff', 'aif', 'alac', 'ape', 'au', 'dsd',
-    'm4a', 'm4b', 'mka', 'mid', 'midi', 'caf', 'dts',
-  ].includes(ext)) return 'audio';
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
+  if (['mp3', 'ogg', 'wav', 'aac', 'opus', 'm4a'].includes(ext)) return 'audio';
   return 'file';
 }
 
 /**
  * Downloads a public static URL to a PassThrough stream whose .path matches the
- * original filename so downstream MIME-detection (Telegram Input.fromBuffer)
+ * original filename so downstream MIME-detection (fca-unofficial, Telegram Input.fromBuffer)
  * derives the correct content type from the extension.
- *
- * Prefer `urlToBuffer` for parallel multi-attachment downloads — it uses
- * `arraybuffer` mode so all bandwidth consumption is captured inside the single
- * axios call (no secondary `streamToBuffer` pass needed).
  *
  * @param url      - Direct media URL (not an HTML embed page)
  * @param filename - Explicit filename override; when omitted the URL tail is used
@@ -105,12 +99,10 @@ export async function urlToStream(
 }
 
 /**
- * Downloads a URL directly into a Buffer using Axios `arraybuffer` mode.
- *
- * Unlike `urlToStream + streamToBuffer`, this is a single-pass download:
- * Axios writes directly into a contiguous ArrayBuffer — no PassThrough
- * allocation, no chunk-by-chunk accumulation.  Use this whenever you need
- * to parallelize multiple attachment downloads with `Promise.all`.
+ * Downloads a public static URL directly into a Buffer using a single-pass
+ * arraybuffer request — no intermediate PassThrough stream and no secondary
+ * streamToBuffer pass. Used by platform wrappers (Discord, Telegram) to
+ * pre-buffer attachment_url[] entries in parallel via Promise.all.
  *
  * @param url      - Direct media URL (not an HTML embed page)
  * @param filename - Explicit filename override; when omitted the URL tail is used
@@ -119,11 +111,14 @@ export async function urlToBuffer(
   url: string,
   filename?: string,
 ): Promise<{ buffer: Buffer; filename: string }> {
+  // Prefer caller-supplied filename so {name, url} attachment objects control the download filename
   const tail =
     filename ?? url.split('/').pop()?.split('?')[0] ?? `file_${Date.now()}.bin`;
+
   const response = await axios.get<ArrayBuffer>(url, {
     responseType: 'arraybuffer',
     timeout: 15_000,
   });
+
   return { buffer: Buffer.from(response.data), filename: tail };
 }

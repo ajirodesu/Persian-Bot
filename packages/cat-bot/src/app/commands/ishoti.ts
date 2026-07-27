@@ -33,14 +33,32 @@
  *   }
  *
  * ── Delivery ────────────────────────────────────────────────────────────
+ * `media` URLs are passed straight through via attachment_url[] — the bot
+ * never downloads them. Telegram forwards attachment_url entries to the Bot
+ * API as plain URL strings, so Telegram's own servers fetch each image.
+ * Discord routes them into embeds referencing the URL directly, so Discord's
+ * own servers fetch the image for the preview. Either way, the image bytes
+ * never pass through this process — no axios call, no buffering, no
+ * IMAGE_DOWNLOAD_TIMEOUT_MS to tune.
+ *
+ * CAVEAT: imgbox (which hosts `media`) previously appeared to stall/hang
+ * requests that arrive without a browser-like User-Agent when *this bot*
+ * downloaded them directly. Whether Telegram's/Discord's own fetchers send a
+ * User-Agent imgbox accepts is untested — if photos start showing up broken
+ * or missing, that's the first thing to check; the fallback is downloading
+ * with an explicit User-Agent locally (as this file used to) and sending via
+ * attachment[] instead of attachment_url[].
+ *
  * No loading placeholder message is sent — the typing indicator (started
  * automatically for the command's full processing duration and cleared the
  * instant the reply is sent) already covers that. The photo set is sent
  * directly as a single reply via chat.replyMessage(), whose Telegram adapter
  * batches multiple photo attachment_url entries into one sendMediaGroup
- * album call (see replyMessage.ts). `media` is capped at MAX_IMAGES (10) —
- * Telegram's own sendMediaGroup / Discord's per-message attachment ceiling —
- * before sending, so a larger response never gets rejected by the platform.
+ * album call (see replyMessage.ts).
+ *
+ * No cap is applied to `media` — every photo URL the API returns is passed
+ * through. A response with only 1 photo is a normal, valid result (confirmed
+ * against a live sample) and is sent as-is — it is not treated as an error.
  *
  * No refresh button — a fresh /ishoti invocation is the only way to get
  * another set. Caption is just the creator's @username.
@@ -61,16 +79,8 @@ import { createUrl } from '@/engine/lib/apis.lib.js';
 
 const API_URL = createUrl('aqua', '/random/shoti', { type: 'photo' });
 
-/** Maximum wait for the fetch (ms). */
+/** Maximum wait for the metadata fetch (ms). */
 const FETCH_TIMEOUT_MS = 20_000;
-
-/** The set sent to the user must always have at least this many photos. */
-const MIN_IMAGES = 2;
-
-/** Telegram's sendMediaGroup album cap — also Discord's per-message
- *  attachment cap — the hard ceiling on how many photos a single send can
- *  ever contain, regardless of platform. */
-const MAX_IMAGES = 10;
 
 // ── API response type ────────────────────────────────────────────────────────
 
@@ -119,7 +129,7 @@ async function fetchShotiPhotos(): Promise<ShotiImageResponse> {
 export const meta: CommandMeta = {
   name: 'ishoti',
   aliases: ['shotiimg', 'shotipic'] as string[],
-  version: '1.0.0',
+  version: '1.2.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
   description: 'Sends a random TikTok photo-mode image set (Aqua API).',
@@ -137,11 +147,9 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   try {
     const { user, media } = await fetchShotiPhotos();
 
-    if (media.length < MIN_IMAGES) {
-      throw new Error('The API returned a single-photo set. Try again in a moment.');
-    }
-
-    const attachments: NamedUrlAttachment[] = media.slice(0, MAX_IMAGES).map((url, idx) => ({
+    // Pass every URL straight through — no cap, no local download. The platform
+    // adapter (Telegram Bot API / Discord embed) fetches each image itself.
+    const attachments: NamedUrlAttachment[] = media.map((url, idx) => ({
       name: `shoti_${idx + 1}.jpg`,
       url,
     }));

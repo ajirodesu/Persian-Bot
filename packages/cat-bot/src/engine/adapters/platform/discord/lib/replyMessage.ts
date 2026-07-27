@@ -3,9 +3,15 @@
  * reply_to_message_id is forwarded to sendFn — the interaction path silently ignores it
  * (slash command interactions reply via editReply/followUp, not message references),
  * while the channel path creates a Discord quote-thread link.
+ *
+ * attachment_url[] entries that look like images are sent as embeds referencing
+ * the URL directly — Discord's own servers fetch the image for the preview, so
+ * the bot never downloads it. Non-image URL attachments have no server-side-fetch
+ * equivalent on Discord, so those are still downloaded and uploaded as files.
  */
 import {
   AttachmentBuilder,
+  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -16,11 +22,16 @@ import type { ButtonItem } from '@/engine/adapters/models/api.model.js';
 import type { MessageStyleValue } from '@/engine/constants/message-style.constants.js';
 import { streamToBuffer, urlToBuffer } from '../utils/helper.util.js';
 
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
+const extOf = (nameOrUrl: string): string =>
+  nameOrUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
+
 type SendFn = (
   content: string,
   files: AttachmentBuilder[],
   replyId?: string,
   components?: ActionRowBuilder<ButtonBuilder>[],
+  embeds?: EmbedBuilder[],
 ) => Promise<string | undefined>;
 
 interface ReplyOptions {
@@ -68,9 +79,16 @@ export async function replyMessage(
   // style='markdown' (or omitted) passes through unchanged — Discord auto-renders.
   const finalContent = style === 'text' ? escapeMarkdown(content) : content;
   const files: AttachmentBuilder[] = [];
+  const embeds: EmbedBuilder[] = [];
 
-  // Build all AttachmentBuilders in parallel — stream buffering and URL downloads
-  // run concurrently so N attachments take ~max(individual times) instead of their sum.
+  const imageUrls = attachment_url.filter((a) => IMAGE_EXTS.includes(extOf(a.name || a.url)));
+  const nonImageUrls = attachment_url.filter((a) => !IMAGE_EXTS.includes(extOf(a.name || a.url)));
+
+  // Image URLs → embeds, sent directly with zero bot-side download
+  for (const { url } of imageUrls) embeds.push(new EmbedBuilder().setImage(url));
+
+  // Build all AttachmentBuilders in parallel — stream buffering and non-image URL
+  // downloads run concurrently so N attachments take ~max(individual times) instead of their sum.
   const [streamFiles, urlFiles] = await Promise.all([
     // Parallel: convert every stream/buffer attachment to a Discord AttachmentBuilder
     Promise.all(
@@ -81,10 +99,10 @@ export async function replyMessage(
         return new AttachmentBuilder(buf, { name: name || 'file.bin' });
       }),
     ),
-    // Parallel: download every URL attachment directly into a buffer (single-pass arraybuffer,
-    // no intermediate PassThrough stream) and wrap in an AttachmentBuilder
+    // Parallel: download every non-image URL attachment directly into a buffer (single-pass
+    // arraybuffer, no intermediate PassThrough stream) and wrap in an AttachmentBuilder
     Promise.all(
-      attachment_url.map(async ({ name, url }) => {
+      nonImageUrls.map(async ({ name, url }) => {
         const { buffer, filename } = await urlToBuffer(url, name);
         return new AttachmentBuilder(buffer, { name: filename });
       }),
@@ -120,5 +138,5 @@ export async function replyMessage(
     }
   }
 
-  return sendFn(finalContent, files, reply_to_message_id, components);
+  return sendFn(finalContent, files, reply_to_message_id, components, embeds);
 }

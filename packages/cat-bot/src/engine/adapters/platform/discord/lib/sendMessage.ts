@@ -3,14 +3,25 @@
  * sendFn abstracts the interaction reply vs channel.send difference so both
  * DiscordApi (slash commands) and createDiscordChannelApi (message events)
  * share the same attachment-handling logic.
+ *
+ * attachment_url[] entries that look like images are sent as embeds referencing
+ * the URL directly — Discord's own servers fetch the image for the preview, so
+ * the bot never downloads it. Non-image URL attachments (video/audio/document)
+ * have no server-side-fetch equivalent on Discord, so those are still downloaded
+ * here and uploaded as a real file attachment, same as before.
  */
-import { AttachmentBuilder } from 'discord.js';
+import { AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import type { SendPayload } from '@/engine/adapters/models/api.model.js';
 import { streamToBuffer, urlToBuffer } from '../utils/helper.util.js';
+
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
+const extOf = (nameOrUrl: string): string =>
+  nameOrUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
 
 type SendFn = (
   content: string,
   files: AttachmentBuilder[],
+  embeds: EmbedBuilder[],
 ) => Promise<{ id: string } | undefined>;
 
 export async function sendMessage(
@@ -23,10 +34,18 @@ export async function sendMessage(
       ? msg
       : (msg.message ?? (msg as unknown as { body?: string }).body ?? '');
   const files: AttachmentBuilder[] = [];
+  const embeds: EmbedBuilder[] = [];
 
   if (typeof msg !== 'string') {
-    // Build all AttachmentBuilders in parallel — stream buffering and URL downloads
-    // run concurrently so N attachments take ~max(individual times) instead of their sum.
+    const urlAttachments = msg.attachment_url ?? [];
+    const imageUrls = urlAttachments.filter((a) => IMAGE_EXTS.includes(extOf(a.name || a.url)));
+    const nonImageUrls = urlAttachments.filter((a) => !IMAGE_EXTS.includes(extOf(a.name || a.url)));
+
+    // Image URLs → embeds, sent directly with zero bot-side download
+    for (const { url } of imageUrls) embeds.push(new EmbedBuilder().setImage(url));
+
+    // Build all AttachmentBuilders in parallel — stream buffering and non-image URL
+    // downloads run concurrently so N attachments take ~max(individual times) instead of their sum.
     const [streamFiles, urlFiles] = await Promise.all([
       // Parallel: convert every stream/buffer attachment to a Discord AttachmentBuilder
       (async () => {
@@ -43,11 +62,11 @@ export async function sendMessage(
           }),
         );
       })(),
-      // Parallel: download every URL attachment directly into a buffer (single-pass arraybuffer)
+      // Parallel: download every non-image URL attachment directly into a buffer (single-pass arraybuffer)
       (async () => {
-        if (!msg.attachment_url) return [];
+        if (!nonImageUrls.length) return [];
         return Promise.all(
-          msg.attachment_url.map(async ({ name, url }) => {
+          nonImageUrls.map(async ({ name, url }) => {
             const { buffer, filename } = await urlToBuffer(url, name);
             return new AttachmentBuilder(buffer, { name: filename });
           }),
@@ -56,6 +75,6 @@ export async function sendMessage(
     ]);
     files.push(...streamFiles, ...urlFiles);
   }
-  const sent = await sendFn(content, files);
+  const sent = await sendFn(content, files, embeds);
   return sent?.id;
 }

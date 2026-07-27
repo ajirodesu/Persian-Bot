@@ -20,6 +20,7 @@ import type {
   AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
+  EmbedBuilder,
 } from 'discord.js';
 
 import { UnifiedApi } from '@/engine/adapters/models/api.model.js';
@@ -95,14 +96,16 @@ class DiscordApi extends UnifiedApi {
     content: string,
     files: AttachmentBuilder[] = [],
     components: ActionRowBuilder<ButtonBuilder>[] = [],
+    embeds: EmbedBuilder[] = [],
   ): Promise<{ id: string } | undefined> {
     const i = this.#interaction;
-    // Only spread components into the payload when present — passing an empty array
+    // Only spread components/embeds into the payload when present — passing an empty array
     // triggers a Discord API validation warning on some interaction types.
     const payload: Record<string, unknown> = {
       content,
       files,
       ...(components.length ? { components } : {}),
+      ...(embeds.length ? { embeds } : {}),
     };
     // Button interactions: deferUpdate() has already been called, so i.deferred === true.
     // Calling editReply() here would OVERWRITE the original button message — not what
@@ -171,8 +174,8 @@ class DiscordApi extends UnifiedApi {
         return (sent as import('discord.js').Message).id;
       }
       return sendMessageLib(
-        async (c, f) => {
-          const idInfo = await this.#send(c, f);
+        async (c, f, e) => {
+          const idInfo = await this.#send(c, f, undefined, e);
           return idInfo ? { id: idInfo.id } : undefined;
         },
         buildDiscordMentionMsg(msg) as string | SendPayload,
@@ -313,7 +316,7 @@ class DiscordApi extends UnifiedApi {
       };
       if (crossCh) {
         // Cross-channel reply (e.g. callad relaying to admin DM) — bypass the interaction API
-        return replyMessageLib(async (content, files, replyId, components) => {
+        return replyMessageLib(async (content, files, replyId, components, embeds) => {
           const sOpts: Record<string, unknown> = { content };
           if (replyId)
             sOpts['reply'] = {
@@ -323,6 +326,7 @@ class DiscordApi extends UnifiedApi {
           if (files.length > 0) sOpts['files'] = files;
           if (components && components.length > 0)
             sOpts['components'] = components;
+          if (embeds && embeds.length > 0) sOpts['embeds'] = embeds;
           const sent = await (crossCh as import('discord.js').TextChannel).send(
             sOpts as Parameters<import('discord.js').TextChannel['send']>[0],
           );
@@ -331,8 +335,8 @@ class DiscordApi extends UnifiedApi {
       }
       // Same-channel: forward button components from lib to #send so they appear on reply/followUp
       return replyMessageLib(
-        (content, files, _replyId, components) =>
-          this.#send(content, files, components).then((r) => r?.id),
+        (content, files, _replyId, components, embeds) =>
+          this.#send(content, files, components, embeds).then((r) => r?.id),
         resolvedOpts,
       );
     })();
@@ -556,10 +560,15 @@ export function createDiscordChannelApi(
   const channelSendFn = async (
     content: string,
     files: AttachmentBuilder[],
+    embeds: EmbedBuilder[] = [],
   ): Promise<{ id: string } | undefined> => {
     const sent =
-      files.length > 0
-        ? await channel.send({ content, files })
+      files.length > 0 || embeds.length > 0
+        ? await channel.send({
+            content,
+            ...(files.length > 0 ? { files } : {}),
+            ...(embeds.length > 0 ? { embeds } : {}),
+          })
         : await channel.send(content);
     return sent as unknown as { id: string };
   };
@@ -700,7 +709,7 @@ export function createDiscordChannelApi(
     };
     // Skip thread-pinning when sending cross-channel — the reply_to_message_id references a
     // message in the originating channel which does not exist in the target DM/channel.
-    return replyMessageLib(async (content, files, replyId, components) => {
+    return replyMessageLib(async (content, files, replyId, components, embeds) => {
       const sOpts: Record<string, unknown> = { content };
       // Apply reply threading whenever replyId is present, regardless of whether the target is
       // the originating channel or a cross-channel DM/relay. The Discord API requires only that
@@ -710,6 +719,7 @@ export function createDiscordChannelApi(
         sOpts['reply'] = { messageReference: replyId, failIfNotExists: false };
       if (files.length > 0) sOpts['files'] = files;
       if (components && components.length > 0) sOpts['components'] = components;
+      if (embeds && embeds.length > 0) sOpts['embeds'] = embeds;
       const sent = await (targetCh as import('discord.js').TextChannel).send(
         sOpts as Parameters<import('discord.js').TextChannel['send']>[0],
       );
