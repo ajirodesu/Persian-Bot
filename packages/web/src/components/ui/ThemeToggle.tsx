@@ -8,24 +8,33 @@ const OPTIONS: Array<{
   label: string
   description: string
   icon: React.ReactNode
+  /** Theme's own primary accent, as an "R G B" triple — used to tint the
+   *  option's icon chip so each choice previews its actual hue, regardless
+   *  of which theme is currently active. Kept as literal values (rather
+   *  than referencing e.g. `--aqua-color-primary`) because those tokens
+   *  only exist while that theme's `data-theme` attribute is applied. */
+  accent: string
 }> = [
   {
     value: 'aqua',
     label: 'Aqua',
     description: 'Cool — cyan/mint accent, glass surfaces',
     icon: <Droplets className="h-4 w-4" strokeWidth={2.25} />,
+    accent: '52 224 190',
   },
   {
     value: 'burnt',
     label: 'Burnt',
     description: 'Claude-inspired — warm charcoal, terracotta accent',
     icon: <Flame className="h-4 w-4" strokeWidth={2.25} />,
+    accent: '218 119 86',
   },
   {
     value: 'indigo',
     label: 'Indigo',
     description: 'Midnight — amethyst purple, nocturnal',
     icon: <Moon className="h-4 w-4" strokeWidth={2.25} />,
+    accent: '156 135 245',
   },
 ]
 
@@ -87,18 +96,21 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
       role="radiogroup"
       aria-label="Interface theme"
       className={cn(
-        'relative inline-flex items-center rounded-full p-1 gap-0.5',
+        'relative inline-flex items-center rounded-full p-1.5 gap-1',
         'bg-surface-container-high border border-[var(--color-hairline-border,transparent)]',
-        'shadow-[inset_0_1px_2px_rgb(0_0_0/0.18)]',
+        // Inset groove for depth + a soft outer shadow so the whole shell
+        // reads as a raised, considered object rather than a flat strip.
+        'shadow-[inset_0_1px_2px_rgb(0_0_0/0.18),0_1px_2px_rgb(0_0_0/0.08),0_4px_12px_rgb(0_0_0/0.10)]',
         className,
       )}
     >
       {/* Sliding indicator — pixel-measured, theme-colored gradient fill with
-          a soft signature glow so the active state reads as premium, not flat. */}
+          a soft signature glow and a thin top-edge sheen so the active state
+          reads as a glossy, pressed button rather than a flat color block. */}
       <span
         aria-hidden="true"
         className={cn(
-          'absolute inset-y-1 rounded-full',
+          'absolute inset-y-1.5 rounded-full',
           'transition-[transform,width] duration-medium-2 ease-standard',
           'will-change-transform',
         )}
@@ -106,7 +118,7 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
           width: indicator.width,
           transform: `translateX(${indicator.left}px)`,
           background: 'var(--color-gradient-primary)',
-          boxShadow: 'var(--shadow-cta-glow)',
+          boxShadow: `var(--shadow-cta-glow), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 1px rgba(0,0,0,0.12)`,
         }}
       />
 
@@ -124,7 +136,7 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
             title={option.description}
             onClick={() => setTheme(option.value)}
             className={cn(
-              'relative z-10 flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5',
+              'relative z-10 flex items-center justify-center gap-2 rounded-full pl-1.5 pr-4 py-1.5',
               'text-label-md font-semibold transition-colors duration-medium-2 ease-standard',
               'tactile-press select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-high',
@@ -133,15 +145,29 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
                 : 'text-on-surface-variant hover:text-on-surface',
             )}
           >
+            {/* Icon "cube" — a small squared color chip previewing the
+                theme's own accent, with a frosted glass treatment when
+                active so it reads as inset into the glossy indicator
+                rather than floating flatly on top of it. */}
             <span
               className={cn(
-                'transition-transform duration-medium-2 ease-standard',
+                'flex items-center justify-center h-6 w-6 rounded-[0.4rem] shrink-0',
+                'transition-all duration-medium-2 ease-standard',
                 isActive && 'scale-105',
               )}
+              style={{
+                background: isActive
+                  ? 'rgba(255,255,255,0.2)'
+                  : `rgba(${option.accent}, 0.14)`,
+                boxShadow: isActive
+                  ? 'inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -1px 2px rgba(0,0,0,0.16)'
+                  : 'inset 0 1px 1px rgba(255,255,255,0.05)',
+                color: isActive ? undefined : `rgb(${option.accent})`,
+              }}
             >
               {option.icon}
             </span>
-            <span>{option.label}</span>
+            <span className="hidden sm:inline">{option.label}</span>
           </button>
         )
       })}

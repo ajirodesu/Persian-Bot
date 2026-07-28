@@ -153,13 +153,20 @@ export default function BotConsolePage() {
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="w-full lg:flex-1 min-w-0">
-          {/* Terminal — same surface, radius, hairline and elevation as every
-             other card in the dashboard (see InfoCard below), so it reads as
-             a themed panel rather than a separate "black box" widget. */}
+          {/* Terminal — identical surface, radius, hairline and elevation to
+             every Card.Root in the dashboard (see InfoCard below), so it
+             reads as a themed panel rather than a separate "black box"
+             widget. `bg-surface` matches Card.Root's default surfaceLevel
+             exactly (Card.Root defaults to `bg-surface`, not
+             `bg-surface-container` — using the container shade here made
+             the terminal a visibly different tone from every InfoCard next
+             to it). Radius fallback matches Card.Root's own hardcoded
+             fallback (0.75rem) so the two never drift if the CSS var is
+             ever unset. */}
           <div
             className={cn(
-              'flex flex-col overflow-hidden bg-surface-container text-on-surface',
-              'rounded-[var(--radius-card,1.25rem)]',
+              'flex flex-col overflow-hidden bg-surface text-on-surface',
+              'rounded-[var(--radius-card,0.75rem)]',
               'outline outline-1 outline-offset-[-1px] outline-[var(--color-hairline-border,transparent)]',
               'shadow-elevation-1',
             )}
@@ -177,7 +184,32 @@ export default function BotConsolePage() {
             </div>
 
             <ScrollArea.Root style={{ height: '26rem' }}>
-              <ScrollArea.Viewport className="p-4 flex flex-col gap-1">
+              {/*
+               * `[&_span]:!bg-transparent` strips the background-color that
+               * ansi-to-react inlines onto each span for ANSI background
+               * (bg*) codes — e.g. a library printing a colored highlight
+               * block behind a warning/error line. That inline
+               * background-color is what shows up as a "highlight mark" on
+               * individual log lines, clashing with the themed panel
+               * surface behind it. The Tailwind `!` important beats the
+               * library's inline style, while foreground `color` (set via
+               * a separate `style` property) is left untouched so log
+               * colors are unaffected.
+               */}
+              <ScrollArea.Viewport
+                className={cn(
+                  'p-4 flex flex-col gap-1',
+                  // Kill the ANSI-inlined background on each colored span…
+                  '[&_span]:!bg-transparent',
+                  // …and the global `code { background / border / padding /
+                  // border-radius }` rule from base.css (meant for inline
+                  // markdown code snippets), which otherwise draws a boxed
+                  // highlight — background fill *and* a 1px outline — around
+                  // every single log line, since ansi-to-react renders each
+                  // line as a bare <code> element.
+                  '[&_code]:!bg-transparent [&_code]:!border-0 [&_code]:!p-0 [&_code]:!rounded-none',
+                )}
+              >
                 {logs.length === 0 ? (
                   <p className="text-body-sm text-on-surface-variant/50 italic">
                     Waiting for log entries…

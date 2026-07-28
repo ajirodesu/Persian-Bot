@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search, Zap } from 'lucide-react'
 import Card from '@/components/ui/data-display/Card'
 import Badge from '@/components/ui/data-display/Badge'
 import Alert from '@/components/ui/feedback/Alert'
@@ -71,23 +71,23 @@ export default function BotEventsPage() {
               key={i}
               padding="sm"
               bordered
-              className="flex flex-col gap-3"
+              className="flex flex-col gap-2"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <Skeleton variant="text" width="60%" height="24px" />
-                  <Skeleton variant="text" width="40%" height="20px" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Skeleton variant="rounded" width="16px" height="16px" />
+                  <Skeleton variant="text" width="60%" height="22px" />
                 </div>
                 <Skeleton
                   variant="rounded"
-                  width="44px"
-                  height="24px"
+                  width="36px"
+                  height="20px"
                   className="rounded-full"
                 />
               </div>
               <Skeleton variant="text" count={2} />
-              <div className="pt-2 border-t border-outline-variant mt-auto">
-                <Skeleton variant="text" width="50%" />
+              <div className="flex gap-1.5 pt-0.5">
+                <Skeleton variant="rounded" width="44px" height="20px" />
               </div>
             </Card.Root>
           ))}
@@ -106,31 +106,22 @@ export default function BotEventsPage() {
             <Card.Root
               key={evt.eventName}
               padding="sm"
+              bordered
               className={[
-                'flex flex-col gap-3 transition-opacity duration-fast',
+                // Same grid-tile treatment as the Commands cards (padding,
+                // gap, bordered surface) — but intentionally no
+                // `interactive`/`onClick` here, since events stay
+                // switch-only and never open a detail popup.
+                'flex flex-col gap-2 transition-all duration-fast',
                 !evt.isEnable ? 'opacity-60' : '',
               ].join(' ')}
-              bordered
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-col gap-1.5 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Zap className="h-4 w-4 text-on-surface-variant shrink-0" />
                   <span className="font-mono text-label-lg font-semibold text-on-surface truncate">
                     {evt.eventName}
                   </span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <Badge
-                      color={evt.isEnable ? 'success' : 'secondary'}
-                      size="sm"
-                      variant="tonal"
-                    >
-                      {evt.isEnable ? 'ON' : 'OFF'}
-                    </Badge>
-                    {evt.version && (
-                      <span className="text-label-sm text-on-surface-variant">
-                        v{evt.version}
-                      </span>
-                    )}
-                  </div>
                 </div>
                 <Switch
                   checked={evt.isEnable}
@@ -141,10 +132,26 @@ export default function BotEventsPage() {
               </div>
 
               {evt.description && (
-                <p className="text-body-sm text-on-surface-variant leading-relaxed line-clamp-3">
+                <p className="text-body-sm text-on-surface-variant leading-relaxed line-clamp-2">
                   {evt.description}
                 </p>
               )}
+
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <Badge
+                  color={evt.isEnable ? 'success' : 'secondary'}
+                  size="sm"
+                  variant="tonal"
+                  pill
+                >
+                  {evt.isEnable ? 'ON' : 'OFF'}
+                </Badge>
+                {evt.version && (
+                  <Badge color="primary" size="sm" variant="outlined" pill>
+                    v{evt.version}
+                  </Badge>
+                )}
+              </div>
 
               {evt.author && (
                 <div className="flex gap-1 pt-2 border-t border-outline-variant text-label-sm text-on-surface-variant">

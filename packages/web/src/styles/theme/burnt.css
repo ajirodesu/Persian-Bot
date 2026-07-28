@@ -50,28 +50,40 @@ html[data-theme='burnt'] {
   --burnt-color-on-tertiary-container: 214 227 197;
 
   /* ==================== SURFACE SYSTEM (warm charcoal, Claude.ai dark mode) ==================== */
-  /* Base background: warm near-black #262624 */
-  --burnt-color-surface: 38 38 36;
+  /* Base background: deep warm near-black #111110 — a second, deliberate
+     darkening pass on top of the previous #1b1b19 (itself already darker
+     than the original #262624). Still keeps the warm-charcoal hue ratio
+     (R >= G >= B, never a cold gray) and the same *relative* spacing
+     between elevation steps as before, so the card/hover hierarchy reads
+     identically, just lower on the brightness scale. Outline and hairline
+     tokens are bumped up slightly (not scaled down) so hairlines, borders,
+     and dividers stay clearly legible against the deeper background rather
+     than sinking into it — that trade-off is what keeps this "much darker"
+     pass eye-comfortable instead of just crushed and flat. */
+  --burnt-color-surface: 17 17 16;
   --burnt-color-on-surface: 250 249 245;
-  --burnt-color-surface-variant: 82 79 73;
+  --burnt-color-surface-variant: 46 44 40;
   --burnt-color-on-surface-variant: 176 174 167;
-  --burnt-color-surface-container-lowest: 26 26 24;
-  --burnt-color-surface-container-low: 33 33 31;
+  --burnt-color-surface-container-lowest: 10 10 9;
+  --burnt-color-surface-container-low: 13 13 12;
   /* Card/surface background */
-  --burnt-color-surface-container: 48 48 46;
-  --burnt-color-surface-container-high: 59 58 54;
-  --burnt-color-surface-container-highest: 70 68 64;
+  --burnt-color-surface-container: 22 22 20;
+  --burnt-color-surface-container-high: 28 27 25;
+  --burnt-color-surface-container-highest: 35 34 31;
   --burnt-color-surface-bright: 176 174 167;
-  --burnt-color-surface-dim: 26 26 24;
+  --burnt-color-surface-dim: 10 10 9;
 
   /* ==================== INVERSE ==================== */
   --burnt-color-inverse-surface: 250 249 245;
-  --burnt-color-inverse-on-surface: 38 38 36;
+  --burnt-color-inverse-on-surface: 27 27 25;
   --burnt-color-inverse-primary: 74 40 27;
 
   /* ==================== OUTLINE ==================== */
-  --burnt-color-outline: 142 140 134;
-  --burnt-color-outline-variant: 69 67 62;
+  /* Kept brighter than a straight scale-down of the surfaces above so
+     hairlines and dividers stay clearly defined against the deeper
+     background instead of disappearing into it. */
+  --burnt-color-outline: 138 136 130;
+  --burnt-color-outline-variant: 56 54 49;
 
   /* ==================== SCRIM & SHADOW ==================== */
   --burnt-color-scrim: 0 0 0;
@@ -112,17 +124,17 @@ html[data-theme='burnt'] {
 
   /* ==================== HAIRLINE BORDERS ====================
      Warm cream at 8% opacity — mirrors Aqua's hairline treatment */
-  --color-hairline-border: rgba(250, 249, 245, 0.08);
+  --color-hairline-border: rgba(250, 249, 245, 0.1);
 
   /* ==================== FROSTED GLASS ==================== */
-  --glass-bg: rgba(48, 48, 46, 0.55);
+  --glass-bg: rgba(32, 32, 30, 0.55);
   --glass-blur: 20px;
   --glass-saturate: 160%;
-  --glass-border: rgba(250, 249, 245, 0.08);
+  --glass-border: rgba(250, 249, 245, 0.1);
 
   /* ==================== INPUT SURFACES ==================== */
-  --color-input-bg: rgba(48, 48, 46, 0.55);
-  --color-input-border: rgba(250, 249, 245, 0.08);
+  --color-input-bg: rgba(32, 32, 30, 0.55);
+  --color-input-border: rgba(250, 249, 245, 0.1);
 
   /* ==================== SOFT iOS-STYLE SHADOW SCALE ==================== */
   --shadow-soft-sm:

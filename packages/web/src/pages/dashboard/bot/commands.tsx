@@ -63,41 +63,21 @@ function CommandDetailDialog({
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
       {/*
        * POSITIONER
-       * Desktop  — centered with 16px perimeter padding (default).
-       * Mobile   — padding removed so the sheet can touch all four edges.
-       *            `max-sm:!p-0` uses Tailwind's `!` modifier to override
-       *            the hardcoded `p-4` in DialogPositioner (no tailwind-merge
-       *            in this project's cn util, so !important is required).
+       * Standard centered modal with default perimeter padding on every
+       * viewport — matches the Database panel's DetailDialog and every
+       * other dialog in the app, so the command popup no longer expands
+       * to a full-screen sheet on mobile.
        */}
-      <Dialog.Positioner position="center" className="max-sm:!p-0">
+      <Dialog.Positioner position="center">
         <Dialog.Backdrop />
 
         {/*
          * CONTENT
-         * Desktop  — standard sm-width centered modal, max 90 vh tall,
-         *            flex-col so the body can scroll independently.
-         * Mobile   — full-screen using 100dvh (dynamic viewport height).
-         *            `dvh` updates as the browser's own chrome slides in/out,
-         *            so the card is never clipped under Brave's address bar or
-         *            bottom navigation bar.  `100vh` is static and would
-         *            overflow; `dvh` is the correct unit here.
-         *            `!rounded-none` removes the card radius so it tiles
-         *            edge-to-edge on mobile.
+         * Standard sm-width centered modal, max 90 vh tall, flex-col so
+         * the body can scroll independently of the fixed header/footer —
+         * same treatment on mobile and desktop.
          */}
-        <Dialog.Content
-          size="sm"
-          className={[
-            // Shared: flex column so header/footer stay fixed, body scrolls
-            'flex flex-col',
-            // Desktop (sm+): constrain height so body scrolls within 90 vh
-            'sm:max-h-[90vh]',
-            // Mobile (below sm): true full-screen, edge-to-edge
-            'max-sm:!max-w-full',       // override max-w-[28rem]
-            'max-sm:h-[100dvh]',        // dynamic viewport height — key Brave fix
-            'max-sm:!max-h-[100dvh]',   // cap matches height so flex works
-            'max-sm:!rounded-none',     // flush with all screen edges
-          ].join(' ')}
-        >
+        <Dialog.Content size="sm" className="flex flex-col max-h-[90dvh]">
           {command && (
             <>
               {/* ── Header ──────────────────────────────────────────────────── */}
@@ -252,21 +232,6 @@ function CommandDetailDialog({
                   </div>
                 </div>
               </Dialog.Body>
-
-              {/*
-               * SAFE-AREA SPACER (mobile only)
-               * Accounts for the iOS home indicator and Android/Brave gesture-nav
-               * bar that sit below the last rendered pixel.  `env(safe-area-inset-bottom)`
-               * returns the exact height of that reserved zone; on devices without one
-               * it is 0px and this div collapses completely.
-               * Placed after the footer so the footer itself stays flush; the spacer
-               * just extends the surface color into the unsafe zone.
-               */}
-              <div
-                aria-hidden="true"
-                className="max-sm:block hidden shrink-0 bg-surface"
-                style={{ height: 'env(safe-area-inset-bottom, 0px)' }}
-              />
             </>
           )}
         </Dialog.Content>

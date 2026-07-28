@@ -273,7 +273,18 @@ const DialogPositioner: React.FC<DialogPositionerProps> = ({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-modal flex justify-center p-4',
+        // `h-[100dvh]` (dynamic viewport height) instead of relying on
+        // `inset-0` alone keeps this overlay locked to the browser's
+        // *actual visible* viewport as chrome (address bar / bottom nav —
+        // e.g. Brave, Chrome, Safari on mobile) shows and hides, instead
+        // of sizing against the larger "layout viewport" that leaves the
+        // dialog's top/bottom edges hidden behind those bars.
+        'fixed inset-0 h-[100dvh] z-modal flex justify-center p-4',
+        // Safe-area padding stacked on top of the base 1rem padding so the
+        // dialog still clears notches/home-indicators without ever
+        // shrinking below the design system's minimum spacing.
+        '[padding-top:max(1rem,env(safe-area-inset-top))]',
+        '[padding-bottom:max(1rem,env(safe-area-inset-bottom))]',
         positionClasses[position],
         className,
       )}
@@ -297,14 +308,20 @@ export interface DialogContentProps {
   className?: string
 }
 
+// Below `sm` there is no width cap — the dialog fills the space the
+// Positioner's p-4 gutters leave it, which is the exact same 1rem gutter
+// the page content (and its card grids) use, so a mobile popup's left/
+// right edges land flush with the cards behind it instead of floating a
+// narrower, seemingly-random width in the middle of the screen. The cap
+// only kicks in from `sm` up, once there's room for a true centered modal.
 const sizeClasses: Record<DialogSize, string> = {
-  xs: 'max-w-[20rem]',
-  sm: 'max-w-[28rem]',
-  md: 'max-w-[32rem]',
-  lg: 'max-w-[42rem]',
-  xl: 'max-w-[56rem]',
-  full: 'max-w-[calc(100vw-1rem)] max-h-[calc(100vh-1rem)]',
-  cover: 'max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)]',
+  xs: 'sm:max-w-[20rem]',
+  sm: 'sm:max-w-[28rem]',
+  md: 'sm:max-w-[32rem]',
+  lg: 'sm:max-w-[42rem]',
+  xl: 'sm:max-w-[56rem]',
+  full: 'max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)]',
+  cover: 'max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)]',
 }
 
 /**
@@ -497,7 +514,7 @@ const DialogBody: React.FC<DialogBodyProps> = ({ children, className }) => {
   return (
     <div
       className={cn(
-        'px-6 pb-4 text-body-md text-on-surface overflow-y-auto max-h-[70vh]',
+        'px-6 pb-4 text-body-md text-on-surface overflow-y-auto max-h-[70dvh]',
         className,
       )}
     >
