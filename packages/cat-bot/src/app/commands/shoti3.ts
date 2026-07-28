@@ -1,5 +1,5 @@
 /**
- * /shotiv3 — Random TikTok Video + Pool Management (Aqua API, System Admin)
+ * /shotiv3 — Random TikTok Video + Pool Management (Aqua API)
  *
  * Third-generation "shoti" command, sourced from the Aqua API's
  * `/random/shoti2` endpoint — a distinct provider from the one /shotiv2
@@ -7,10 +7,12 @@
  * a separate command rather than replacing /shotiv2 so both endpoints stay
  * available as independent fallbacks for each other.
  *
- * Restricted to SYSTEM_ADMIN: unlike /shoti and /shotiv2, this endpoint's
- * video pool can be mutated via the `add` subcommand (password-gated on the
- * API side), so the whole command — including the plain random-fetch path —
- * is kept admin-only rather than splitting access per-subcommand.
+ * Mixed access: the plain random-fetch path is open to everyone, same as
+ * /shoti and /shotiv2. Only the `add` subcommand — which mutates the shared
+ * video pool (password-gated on the API side too) — is restricted to system
+ * admins. Because meta.role gates the whole command, meta.role is left at
+ * ANYONE and the `add` path checks `isSystemAdmin()` itself before calling
+ * the API.
  *
  * API: registered as 'aqua' in @/engine/lib/apis.lib.js
  *       (base https://aqua-api-w6dy.onrender.com)
@@ -43,8 +45,8 @@
  *   }
  *
  * ── Usage ─────────────────────────────────────────────────────────────────
- *   shotiv3              — Fetch and send a random TikTok video from the pool
- *   shotiv3 add <url>    — Add a new TikTok video URL to the pool
+ *   shotiv3              — Fetch and send a random TikTok video from the pool (anyone)
+ *   shotiv3 add <url>    — Add a new TikTok video URL to the pool (system admin only)
  *
  * Delivers the random-fetch result inline: a plain reply on the initial
  * command, or an in-place edit of the existing message on a button
@@ -55,7 +57,7 @@
  * subcommand has no button — it's a one-shot mutation.
  *
  * Aliases: /shotiv3
- * Access:  SYSTEM_ADMIN
+ * Access:  ANYONE (random fetch) / SYSTEM_ADMIN (add subcommand)
  * Cooldown: 10s
  */
 
@@ -67,6 +69,7 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 
 // ── API constants ──────────────────────────────────────────────────────────────
 
@@ -171,10 +174,10 @@ export const meta: CommandMeta = {
   name: 'shotiv3',
   aliases: [] as string[],
   version: '1.0.0',
-  role: Role.SYSTEM_ADMIN,
+  role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Sends a random TikTok video (Aqua API), or adds one to the pool.',
-  category: 'System Admin',
+  description: 'Sends a random TikTok video (Aqua API). `add <url>` (system admin only) adds one to the pool.',
+  category: 'Media',
   usage: ['', '[add <tiktok url>]'],
   cooldown: 10,
   hasPrefix: true,
@@ -258,7 +261,16 @@ async function runShotiV3Get(ctx: AppCtx): Promise<void> {
 // ── Add-subcommand handler ───────────────────────────────────────────────────
 
 async function runShotiV3Add(ctx: AppCtx, tiktokUrl: string): Promise<void> {
-  const { chat } = ctx;
+  const { chat, event } = ctx;
+
+  const senderID = event['senderID'] as string | undefined;
+  if (!senderID || !(await isSystemAdmin(senderID))) {
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: '⛔ Only system admins can add videos to the Shoti pool.',
+    });
+    return;
+  }
 
   if (!isValidHttpUrl(tiktokUrl)) {
     await chat.replyMessage({
