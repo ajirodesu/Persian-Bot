@@ -28,10 +28,13 @@
  * `isFacebookLink` / `isInstagramLink` / `isPinterestLink` / `isTikTokLink`.
  *
  * To avoid double-processing, onChat skips any message that is itself an
- * explicit invocation of this command (or one of its aliases) — that
- * invocation is already handled by onCommand. It also ignores the bot's own
- * messages so its reply captions (which contain the source URL) can never
- * re-trigger the scanner.
+ * explicit invocation of *any* registered command (this one included) — so a
+ * supported link posted as an argument to a different command (e.g.
+ * `/ishoti <tiktok-url>`) is left entirely to that command instead of also
+ * being grabbed by auto-detect, which would otherwise reply/download
+ * concurrently and interrupt the other command's own handling of the link.
+ * It also ignores the bot's own messages so its reply captions (which
+ * contain the source URL) can never re-trigger the scanner.
  *
  * ── DB schema (db.threads.collection(threadID) → 'download_autodetect') ───
  *   { enabled: boolean } — per-thread auto-detect toggle (default false)
@@ -322,6 +325,43 @@ async function runDownload(
   }
 }
 
+// ── Explicit command-invocation detection (used to yield onChat to any command) ─
+//
+// Mirrors the token-parsing rules message.handler.ts uses for real dispatch
+// (prefixed commands, prefix-less `hasPrefix: false` commands, and a stuck
+// "@BotUsername" mention glued onto the first token) closely enough to
+// reliably recognize "this message is a command invocation" without needing
+// to duplicate full parsing/validation. `commands` is keyed by both canonical
+// name and every alias (see app.ts loadCommands), so this automatically
+// covers every command's aliases — not just download's own.
+
+function firstTokenName(raw: string): string {
+  const atIndex = raw.indexOf('@');
+  return (atIndex === -1 ? raw : raw.slice(0, atIndex)).toLowerCase();
+}
+
+function isExplicitCommandInvocation(
+  message: string,
+  prefix: string | undefined,
+  commands: AppCtx['commands'],
+): boolean {
+  const p = prefix || '/';
+
+  if (message.startsWith(p)) {
+    const firstToken = message.slice(p.length).split(/\s+/)[0];
+    if (!firstToken) return false;
+    return commands.has(firstTokenName(firstToken));
+  }
+
+  // No prefix — only counts as an invocation if it names a command that's
+  // explicitly registered to run without one.
+  const firstToken = message.split(/\s+/)[0];
+  if (!firstToken) return false;
+  const mod = commands.get(firstTokenName(firstToken));
+  const cfg = mod?.['meta'] as Record<string, unknown> | undefined;
+  return cfg?.['hasPrefix'] === false;
+}
+
 // ── Auto-detect settings storage (db.threads.collection(threadID)) ─────────────
 
 async function getAutoDetectHandle(db: AppCtx['db'], threadID: string) {
@@ -475,11 +515,13 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 // ── onChat — passive auto-detect scanner ────────────────────────────────────────
 //
 // Runs on every incoming message. Only acts when auto-detect has been turned
-// on for the thread AND the message isn't itself an explicit invocation of
-// this command (that path is already handled by onCommand above).
+// on for the thread AND the message isn't an explicit invocation of *any*
+// registered command — not just this one. That keeps auto-detect from
+// double-processing (and interrupting) a link that was actually meant as an
+// argument to some other command, e.g. `/ishoti <tiktok-url>`.
 
 export const onChat = async (ctx: AppCtx): Promise<void> => {
-  const { event, db, prefix, bot } = ctx;
+  const { event, db, prefix, bot, commands } = ctx;
 
   const eventType = event['type'] as string | undefined;
   if (eventType && eventType !== 'message' && eventType !== 'message_reply') return;
@@ -500,11 +542,17 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
     // If bot ID can't be resolved, fall through — worst case is a missed skip.
   }
 
-  // Skip explicit `download`/alias invocations — onCommand already handles them.
-  const p = prefix || '/';
-  const escapedPrefix = p.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, String.raw`\$&`);
-  const commandNames = [meta.name, ...(meta.aliases ?? [])].join('|');
-  if (new RegExp(`^${escapedPrefix}(${commandNames})(\\s|$)`, 'i').test(message)) return;
+  // Skip ANY explicit command invocation — not just `download`/its own
+  // aliases. onChat runs concurrently with (not after) command dispatch
+  // (see message.handler.ts), so previously a supported link passed as an
+  // argument to a *different* command — e.g. `/ishoti <tiktok-url>` — would
+  // still trip this scanner. Auto-detect would then fire its own reply at
+  // the same time that other command was handling the link, effectively
+  // interrupting/duplicating it. Yielding to *any* recognized command name
+  // (checked against the same `commands` map used for real dispatch, so
+  // aliases are covered automatically) ensures a link is only auto-downloaded
+  // when it's posted on its own, never when it's an argument to something else.
+  if (isExplicitCommandInvocation(message, prefix, commands)) return;
 
   const handle = await getAutoDetectHandle(db, threadID);
   const enabled = (await handle.get('enabled')) as boolean | null;
