@@ -17,26 +17,34 @@
 
 /* -----------------------------------------------------------
   0. Web Fonts
-  Inter: humanist body typeface, used across both themes.
-  Sora: geometric extrabold display face used by the Aurora
-  theme for headings/brand.
+  Inter: humanist body typeface, used across every theme.
+  Sora: geometric extrabold display face used by the Aqua and
+  Indigo themes for headings/brand.
   JetBrains Mono: distinct developer-grade monospace used by
-  the Aurora theme for code/data.
+  every theme for code/data.
   ----------------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* -----------------------------------------------------------
   1. Theme Color Variables
 
-  Two selectable themes:
-   • aurora  — new theme (default), cyan/aqua accent, iOS-style
-               shape/glass/glow tokens. Lives on :root so it
-               applies even before the switcher JS runs.
-   • classic — the original Replit-orange theme, opt-in via
-               html[data-theme="classic"].
+  Three selectable themes:
+   • aqua   — default theme, cyan/mint accent, iOS-style
+              shape/glass/glow tokens. Lives on :root so it
+              applies even before the switcher JS runs.
+   • burnt  — the warm amber-orange theme, opt-in via
+              html[data-theme="burnt"].
+   • indigo — the midnight-purple theme, opt-in via
+              html[data-theme="indigo"].
+
+  Every theme shares the exact same shape (--radius-*), spacing,
+  and typography tokens from tokens.css below — only color, glow,
+  and blur values are theme-specific, so switching themes never
+  changes the size or layout of cards, buttons, or text.
   ----------------------------------------------------------- */
-@import './theme/aurora.css';
-@import './theme/classic.css';
+@import './theme/aqua.css';
+@import './theme/burnt.css';
+@import './theme/indigo.css';
 
 /* -----------------------------------------------------------
   2. Design Token Variables

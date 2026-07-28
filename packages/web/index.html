@@ -18,15 +18,16 @@
     />
     <title>Cat-Bot</title>
     <script>
-      // Applies the persisted theme (defaulting to the new "aurora" theme)
-      // before first paint so there's never a flash of the wrong theme.
+      // Applies the persisted theme (defaulting to "aqua") before first
+      // paint so there's never a flash of the wrong theme.
       (function () {
         try {
           var stored = window.localStorage.getItem('cat-bot-ui-theme')
-          var theme = stored === 'classic' ? 'classic' : 'aurora'
+          var theme =
+            stored === 'burnt' || stored === 'indigo' ? stored : 'aqua'
           document.documentElement.setAttribute('data-theme', theme)
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'aurora')
+          document.documentElement.setAttribute('data-theme', 'aqua')
         }
       })()
     </script>

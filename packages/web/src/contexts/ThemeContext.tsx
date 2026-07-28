@@ -13,18 +13,27 @@ import { applyFaviconTheme } from '../utils/favicon.util'
 
 /**
  * Available UI themes.
- * - 'aurora'  — the new default theme (dark navy + cyan accent, iOS-style
- *               shape/glass/glow tokens).
- * - 'classic' — the original Replit-orange theme, kept for anyone who
- *               prefers the previous look.
+ * - 'aqua'   — the default theme (formerly labeled "Winter"): dark
+ *              near-black + cyan/mint accent, iOS-style shape/glass/
+ *              glow tokens.
+ * - 'burnt'  — the warm amber-orange theme (formerly labeled
+ *              "Summer"), kept for anyone who prefers a warmer look.
+ * - 'indigo' — the midnight-purple theme (formerly labeled "Night"),
+ *              a nocturnal amethyst/magenta register.
+ *
+ * Every theme shares identical shape, spacing, and typography tokens
+ * (see tokens.css) — only color, glow, and blur values differ, so
+ * switching themes never changes the size or layout of cards,
+ * buttons, or text.
  */
-export type AppTheme = 'aurora' | 'classic'
+export type AppTheme = 'aqua' | 'burnt' | 'indigo'
 
 const STORAGE_KEY = 'cat-bot-ui-theme'
-const DEFAULT_THEME: AppTheme = 'aurora'
+const DEFAULT_THEME: AppTheme = 'aqua'
+const THEME_ORDER: readonly AppTheme[] = ['aqua', 'burnt', 'indigo']
 
 function isAppTheme(value: string | null): value is AppTheme {
-  return value === 'aurora' || value === 'classic'
+  return value === 'aqua' || value === 'burnt' || value === 'indigo'
 }
 
 /**
@@ -43,7 +52,7 @@ interface ThemeContextValue {
   theme: AppTheme
   /** Replace the active theme outright. */
   setTheme: (theme: AppTheme) => void
-  /** Convenience toggle between the two themes. */
+  /** Convenience cycle through all available themes, in order. */
   toggleTheme: () => void
 }
 
@@ -62,8 +71,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme])
 
   // Scrollbars stay invisible at rest and fade in only while the user is
-  // actively scrolling (Aurora only — Classic keeps them always visible via
-  // --scrollbar-idle-opacity: 1). Scroll events don't bubble reliably, so
+  // actively scrolling — identical across every theme, all of which set
+  // --scrollbar-idle-opacity: 0. Scroll events don't bubble reliably, so
   // this listens in the capture phase on window to catch scrolling inside
   // any nested overflow container.
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,7 +97,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === 'aurora' ? 'classic' : 'aurora'))
+    setThemeState((prev) => {
+      const nextIndex = (THEME_ORDER.indexOf(prev) + 1) % THEME_ORDER.length
+      return THEME_ORDER[nextIndex]
+    })
   }, [])
 
   const value = useMemo(

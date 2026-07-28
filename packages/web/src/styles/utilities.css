@@ -18,9 +18,8 @@
    * Translucent surface fill + heavy backdrop blur + saturation
    * boost + hairline border. Reserved for chrome-level surfaces
    * (sidebar, header) rather than content cards. Every value
-   * comes from theme tokens, so Classic renders this as a
-   * near-opaque, unblurred surface (preserving its original
-   * look) while Aurora renders true frosted glass.
+   * comes from theme tokens, so the frosted-glass look renders
+   * identically across Aqua, Burnt, and Indigo.
    */
   .glass-surface {
     background-color: var(--glass-bg);
@@ -35,9 +34,9 @@
    * A single large, heavily-blurred radial color blob, meant to
    * sit absolutely positioned and off-canvas behind hero-style
    * sections. Never used as a flat gradient fill on buttons or
-   * cards. Opacity is theme-controlled — Classic disables it
-   * entirely (--ambient-glow-opacity: 0) to preserve its flat
-   * original background.
+   * cards. Colors are theme-controlled, but every theme keeps
+   * --ambient-glow-opacity at 1 so the effect renders identically
+   * across Aqua, Burnt, and Indigo.
    */
   .ambient-glow {
     position: absolute;
@@ -62,9 +61,9 @@
    * Lays a faint top-edge light catch across a raised surface —
    * cards, sheets, pill buttons — via a pseudo-element so it never
    * fights the element's own background/border-radius. Theme-driven
-   * (see --specular-highlight in aurora.css / classic.css), so it
-   * reads as "glass catching light" in both themes without extra
-   * markup or JS.
+   * (see --specular-highlight in theme/aqua.css, theme/burnt.css,
+   * and theme/indigo.css), so it reads as "glass catching light" in
+   * every theme without extra markup or JS.
    */
   .surface-specular {
     position: relative;

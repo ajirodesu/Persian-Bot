@@ -366,9 +366,10 @@ const getSpinnerSize = (size: ButtonSize): number => {
  * Get border radius class based on variant and pill prop
  *
  * Non-link, non-unstyled buttons use the theme-driven --radius-button
- * token. Both Aurora and Classic render buttons fully pill-shaped by
- * default, keeping the shape language unified across themes. The
- * explicit `pill` prop still forces full rounding regardless of theme.
+ * token. Every theme (Aqua, Burnt, Indigo) renders buttons fully
+ * pill-shaped by default, keeping the shape language unified across
+ * themes. The explicit `pill` prop still forces full rounding
+ * regardless of theme.
  */
 function getBorderRadiusClass(variant: ButtonVariant, pill: boolean): string {
   if (variant === 'unstyled') return ''
@@ -379,8 +380,8 @@ function getBorderRadiusClass(variant: ButtonVariant, pill: boolean): string {
 
 /**
  * Signature glow shadow — reserved exclusively for the primary filled
- * button (the app's main call-to-action). Resolves to `none` on the
- * Classic theme via --shadow-cta-glow.
+ * button (the app's main call-to-action). Value comes from each
+ * theme's own --shadow-cta-glow (falls back to `none` if unset).
  */
 const ctaGlowClass = 'shadow-[var(--shadow-cta-glow,none)] hover:brightness-110'
 

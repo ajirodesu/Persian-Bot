@@ -301,8 +301,9 @@ const CardRoot = forwardRefWithAs<'div', CardRootOwnProps>((props, ref) => {
         // cards already carry their own semantic border color. Uses
         // `outline` rather than `border` so it never collides with a
         // card's own border-color override (e.g. a destructive-action
-        // card). Theme-controlled: transparent on Classic, 8% white on
-        // Aurora.
+        // card). Theme-controlled hairline color — a soft ~8% tint of
+        // each theme's "on-surface" color, so it reads consistently
+        // across Aqua, Burnt, and Indigo.
         showHairline &&
           'outline outline-1 outline-offset-[-1px] outline-[var(--color-hairline-border,transparent)]',
         // Variant-specific styles

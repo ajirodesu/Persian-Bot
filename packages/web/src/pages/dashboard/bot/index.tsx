@@ -48,10 +48,10 @@ function UptimeDisplay({ startedAt }: { startedAt: number }) {
  */
 function TrafficLights() {
   return (
-    <div className="flex items-center gap-1.5 shrink-0" aria-hidden="true">
-      <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
-      <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
-      <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+    <div className="flex items-center gap-2 shrink-0" aria-hidden="true">
+      <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F57] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]" />
+      <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]" />
+      <span className="h-2.5 w-2.5 rounded-full bg-[#28C840] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]" />
     </div>
   )
 }
@@ -136,13 +136,15 @@ export default function BotConsolePage() {
             Restart
           </Button>
           <Button
+            variant="filled"
+            color="error"
             onClick={() => {
               clearLogs()
               void botService.stopBot(id)
             }}
             disabled={!isActive}
             leftIcon={<Square className="h-4 w-4 shrink-0 fill-current" />}
-            className="!bg-[#e7000b] !text-white w-full justify-center"
+            className="w-full justify-center"
           >
             Stop
           </Button>
@@ -150,39 +152,50 @@ export default function BotConsolePage() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
-        <div className="w-full lg:flex-1 min-w-0 rounded-lg overflow-hidden">
-          {/* Terminal chrome bar — traffic lights on the left, title centred */}
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-black border-b border-gray-800">
-            <TrafficLights />
-            <div className="flex items-center gap-2 min-w-0">
-              <Terminal className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-              <span className="text-label-sm text-gray-400 font-mono truncate">
-                {bot.nickname} — live feed
-              </span>
+        <div className="w-full lg:flex-1 min-w-0">
+          {/* Terminal — same surface, radius, hairline and elevation as every
+             other card in the dashboard (see InfoCard below), so it reads as
+             a themed panel rather than a separate "black box" widget. */}
+          <div
+            className={cn(
+              'flex flex-col overflow-hidden bg-surface-container text-on-surface',
+              'rounded-[var(--radius-card,1.25rem)]',
+              'outline outline-1 outline-offset-[-1px] outline-[var(--color-hairline-border,transparent)]',
+              'shadow-elevation-1',
+            )}
+          >
+            {/* Chrome bar — traffic lights on the left, title centred. Same
+               surface as the feed below it, only a hairline divides them. */}
+            <div className="flex items-center gap-3 border-b border-[color:var(--color-hairline-border,transparent)] px-4 py-3">
+              <TrafficLights />
+              <div className="flex items-center gap-2 min-w-0">
+                <Terminal className="h-3.5 w-3.5 text-on-surface-variant/70 shrink-0" />
+                <span className="text-label-sm text-on-surface-variant/70 font-mono truncate">
+                  {bot.nickname} — live feed
+                </span>
+              </div>
             </div>
-          </div>
 
-          <ScrollArea.Root className="bg-black" style={{ height: '26rem' }}>
-            <ScrollArea.Viewport className="p-4 flex flex-col gap-0">
-              {logs.length === 0 ? (
-                <p className="text-body-sm text-gray-600 italic">
-                  Waiting for log entries…
-                </p>
-              ) : (
-                logs.map((line, i) => (
-                  <Ansi
-                    key={i}
-                    className={cn(
-                      'font-mono text-xs sm:text-sm leading-relaxed bg-black break-all whitespace-pre-wrap',
-                    )}
-                  >
-                    {line}
-                  </Ansi>
-                ))
-              )}
-              <div ref={bottomRef} />
-            </ScrollArea.Viewport>
-          </ScrollArea.Root>
+            <ScrollArea.Root style={{ height: '26rem' }}>
+              <ScrollArea.Viewport className="p-4 flex flex-col gap-1">
+                {logs.length === 0 ? (
+                  <p className="text-body-sm text-on-surface-variant/50 italic">
+                    Waiting for log entries…
+                  </p>
+                ) : (
+                  logs.map((line, i) => (
+                    <Ansi
+                      key={i}
+                      className="font-mono text-xs sm:text-sm leading-relaxed break-all whitespace-pre-wrap"
+                    >
+                      {line}
+                    </Ansi>
+                  ))
+                )}
+                <div ref={bottomRef} />
+              </ScrollArea.Viewport>
+            </ScrollArea.Root>
+          </div>
         </div>
 
         <div className="w-full lg:w-60 shrink-0 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-col gap-4">

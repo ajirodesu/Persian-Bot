@@ -1,0 +1,258 @@
+/* ============================================================
+   "AQUA" THEME — the new default theme (formerly labeled "Winter")
+
+   Mood: calm, premium, "iOS meets developer" — near-true-black
+   surfaces with a single vivid mint/spring-teal accent used
+   sparingly and purposefully for active states, links, primary
+   actions and focus rings only.
+
+   Retuned to match the reference profile (ajirodesu-alpha):
+   deep near-black canvas (#070E11), a bright mint-teal accent,
+   glowing avatar rings, and monospace uppercase "eyebrow" labels
+   with a glowing dot marker.
+
+   This is the DEFAULT theme. Values live on `:root` (unscoped)
+   so they apply before the theme switcher JS has a chance to
+   run, and are re-stated under the explicit attribute selector
+   for clarity/robustness once the switcher sets it.
+
+   NOTE: Shape tokens (--radius-card, --radius-button, etc.) are
+   NOT defined per-theme — they live once in tokens.css so every
+   theme (Aqua / Burnt / Indigo) renders identically-sized cards,
+   buttons, and text. Only color/glow/blur values vary by theme.
+   ============================================================ */
+
+:root,
+html[data-theme='aqua'] {
+  /* ==================== PRIMARY (mint/spring-teal) ====================
+     Scale reference: light #d8fff2 → mid #34E0BE → dark #062f27 */
+  --aqua-color-primary: 52 224 190;
+  --aqua-color-on-primary: 5 26 22;
+  --aqua-color-primary-container: 7 46 38;
+  --aqua-color-on-primary-container: 199 250 232;
+
+  /* ==================== SECONDARY (cool neutral — supporting actions) ==================== */
+  --aqua-color-secondary: 148 173 168;
+  --aqua-color-on-secondary: 13 22 20;
+  --aqua-color-secondary-container: 26 38 36;
+  --aqua-color-on-secondary-container: 205 224 219;
+
+  /* ==================== TERTIARY (soft indigo — data/code accent) ==================== */
+  --aqua-color-tertiary: 129 140 248;
+  --aqua-color-on-tertiary: 15 15 35;
+  --aqua-color-tertiary-container: 30 27 66;
+  --aqua-color-on-tertiary-container: 199 199 255;
+
+  /* ==================== SURFACE SYSTEM ==================== */
+  /* Base background: near-true-black #070e11 */
+  --aqua-color-surface: 7 14 17;
+  --aqua-color-on-surface: 240 247 245;
+  --aqua-color-surface-variant: 65 80 77;
+  --aqua-color-on-surface-variant: 152 168 164;
+  --aqua-color-surface-container-lowest: 3 7 9;
+  /* Secondary background */
+  --aqua-color-surface-container-low: 10 17 20;
+  /* Card/surface background */
+  --aqua-color-surface-container: 14 22 25;
+  --aqua-color-surface-container-high: 19 29 32;
+  --aqua-color-surface-container-highest: 26 38 41;
+  --aqua-color-surface-bright: 152 168 164;
+  --aqua-color-surface-dim: 3 7 9;
+
+  /* ==================== INVERSE ==================== */
+  --aqua-color-inverse-surface: 240 247 245;
+  --aqua-color-inverse-on-surface: 7 14 17;
+  --aqua-color-inverse-primary: 7 46 38;
+
+  /* ==================== OUTLINE ==================== */
+  --aqua-color-outline: 96 113 109;
+  --aqua-color-outline-variant: 42 54 52;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --aqua-color-scrim: 0 0 0;
+  --aqua-color-shadow: 2 6 8;
+
+  /* ==================== DANGER / ERROR (rose) ==================== */
+  --aqua-color-error: 244 63 94;
+  --aqua-color-on-error: 255 255 255;
+  --aqua-color-error-container: 46 16 26;
+  --aqua-color-on-error-container: 253 164 175;
+
+  /* ==================== SUCCESS (green — kept near the primary family) ==================== */
+  --aqua-color-success: 74 222 128;
+  --aqua-color-on-success: 4 26 15;
+  --aqua-color-success-container: 12 42 26;
+  --aqua-color-on-success-container: 166 244 190;
+
+  /* ==================== WARNING (amber) ==================== */
+  --aqua-color-warning: 245 158 11;
+  --aqua-color-on-warning: 38 22 0;
+  --aqua-color-warning-container: 46 32 10;
+  --aqua-color-on-warning-container: 252 211 120;
+
+  /* ==================== INFO (mint — same family as primary) ==================== */
+  --aqua-color-info: 52 224 190;
+  --aqua-color-on-info: 4 26 22;
+  --aqua-color-info-container: 8 35 30;
+  --aqua-color-on-info-container: 183 245 224;
+
+  /* ==================== GRADIENTS ====================
+     Reserved for large, heavily-blurred ambient background
+     glows only — never flat fills on buttons/cards. */
+  --aqua-color-gradient-primary: linear-gradient(135deg, rgb(52 224 190) 0%, rgb(7 46 38) 100%);
+  --aqua-color-gradient-secondary: linear-gradient(135deg, rgb(148 173 168) 0%, rgb(65 80 77) 100%);
+  --aqua-color-gradient-tertiary: linear-gradient(135deg, rgb(129 140 248) 0%, rgb(67 56 130) 100%);
+  --aqua-color-gradient-error: linear-gradient(135deg, rgb(244 63 94) 0%, rgb(46 16 26) 100%);
+  --aqua-color-gradient-success: linear-gradient(135deg, rgb(74 222 128) 0%, rgb(12 42 26) 100%);
+  --aqua-color-gradient-warning: linear-gradient(135deg, rgb(245 158 11) 0%, rgb(46 32 10) 100%);
+  --aqua-color-gradient-info: linear-gradient(135deg, rgb(52 224 190) 0%, rgb(8 35 30) 100%);
+
+  /* ==================== HAIRLINE BORDERS ====================
+     White at 8% opacity only — never solid gray */
+  --color-hairline-border: rgba(255, 255, 255, 0.08);
+
+  /* ==================== FROSTED GLASS ==================== */
+  --glass-bg: rgba(14, 22, 25, 0.55);
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: rgba(14, 22, 25, 0.55);
+  --color-input-border: rgba(255, 255, 255, 0.08);
+
+  /* ==================== SOFT iOS-STYLE SHADOW SCALE ==================== */
+  --shadow-soft-sm:
+    0 1px 2px rgba(0, 0, 0, 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.26);
+  --shadow-soft-md:
+    0 1px 2px rgba(0, 0, 0, 0.34),
+    0 8px 24px rgba(0, 0, 0, 0.38);
+  --shadow-soft-lg:
+    0 2px 4px rgba(0, 0, 0, 0.36),
+    0 16px 40px rgba(0, 0, 0, 0.42),
+    0 32px 64px rgba(0, 0, 0, 0.3);
+
+  --shadow-card-rest: var(--shadow-soft-sm);
+  --shadow-card-hover: var(--shadow-soft-md);
+
+  /* Signature glow — reserved exclusively for primary CTA buttons */
+  --shadow-cta-glow:
+    0 0 0 1px rgba(52, 224, 190, 0.4),
+    0 8px 28px rgba(52, 224, 190, 0.4),
+    0 2px 10px rgba(52, 224, 190, 0.32);
+
+  /* Wide, soft accent glow ring for focused inputs */
+  --shadow-focus-ring: 0 0 0 4px rgba(52, 224, 190, 0.24);
+
+  /* Avatar/portrait glow ring — the signature "glowing profile photo"
+     treatment from the reference design. Applied via .avatar-glow. */
+  --shadow-avatar-glow:
+    0 0 0 3px rgb(var(--aqua-color-surface) / 1),
+    0 0 0 5px rgba(52, 224, 190, 0.55),
+    0 0 32px rgba(52, 224, 190, 0.35);
+
+  /* ==================== MOTION ====================
+     Custom springy easing — replaces the default M3 standard
+     curve so every hover/press/focus transition feels bouncy */
+  --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ==================== TYPOGRAPHY ====================
+     Geometric extrabold for headings/brand, humanist for body,
+     distinct monospace for code/data */
+  --font-family-brand:
+    'Sora', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-plain:
+    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ==================== AMBIENT BACKGROUND GLOW ====================
+     Large, heavily-blurred radial blobs placed off-canvas behind
+     hero sections only — never as flat gradient fills. */
+  --ambient-glow-opacity: 1;
+  --ambient-glow-primary: rgba(52, 224, 190, 0.2);
+  --ambient-glow-secondary: rgba(129, 140, 248, 0.14);
+
+  /* ==================== SCROLLBAR ====================
+     Invisible at rest, fades in only while actively scrolling */
+  --scrollbar-idle-opacity: 0;
+
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     A faint top-edge highlight on raised surfaces (cards, sheets,
+     pill buttons) — the "glass catching light" detail that reads
+     as iOS-grade polish. Applied via the .surface-specular utility. */
+  --specular-highlight: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0) 14%
+  );
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--aqua-color-primary);
+  --color-on-primary: var(--aqua-color-on-primary);
+  --color-primary-container: var(--aqua-color-primary-container);
+  --color-on-primary-container: var(--aqua-color-on-primary-container);
+
+  --color-secondary: var(--aqua-color-secondary);
+  --color-on-secondary: var(--aqua-color-on-secondary);
+  --color-secondary-container: var(--aqua-color-secondary-container);
+  --color-on-secondary-container: var(--aqua-color-on-secondary-container);
+
+  --color-tertiary: var(--aqua-color-tertiary);
+  --color-on-tertiary: var(--aqua-color-on-tertiary);
+  --color-tertiary-container: var(--aqua-color-tertiary-container);
+  --color-on-tertiary-container: var(--aqua-color-on-tertiary-container);
+
+  --color-surface: var(--aqua-color-surface);
+  --color-on-surface: var(--aqua-color-on-surface);
+  --color-surface-variant: var(--aqua-color-surface-variant);
+  --color-on-surface-variant: var(--aqua-color-on-surface-variant);
+  --color-surface-container-lowest: var(--aqua-color-surface-container-lowest);
+  --color-surface-container-low: var(--aqua-color-surface-container-low);
+  --color-surface-container: var(--aqua-color-surface-container);
+  --color-surface-container-high: var(--aqua-color-surface-container-high);
+  --color-surface-container-highest: var(--aqua-color-surface-container-highest);
+  --color-surface-bright: var(--aqua-color-surface-bright);
+  --color-surface-dim: var(--aqua-color-surface-dim);
+
+  --color-inverse-surface: var(--aqua-color-inverse-surface);
+  --color-inverse-on-surface: var(--aqua-color-inverse-on-surface);
+  --color-inverse-primary: var(--aqua-color-inverse-primary);
+
+  --color-outline: var(--aqua-color-outline);
+  --color-outline-variant: var(--aqua-color-outline-variant);
+
+  --color-scrim: var(--aqua-color-scrim);
+  --color-shadow: var(--aqua-color-shadow);
+
+  --color-error: var(--aqua-color-error);
+  --color-on-error: var(--aqua-color-on-error);
+  --color-error-container: var(--aqua-color-error-container);
+  --color-on-error-container: var(--aqua-color-on-error-container);
+
+  --color-success: var(--aqua-color-success);
+  --color-on-success: var(--aqua-color-on-success);
+  --color-success-container: var(--aqua-color-success-container);
+  --color-on-success-container: var(--aqua-color-on-success-container);
+
+  --color-warning: var(--aqua-color-warning);
+  --color-on-warning: var(--aqua-color-on-warning);
+  --color-warning-container: var(--aqua-color-warning-container);
+  --color-on-warning-container: var(--aqua-color-on-warning-container);
+
+  --color-info: var(--aqua-color-info);
+  --color-on-info: var(--aqua-color-on-info);
+  --color-info-container: var(--aqua-color-info-container);
+  --color-on-info-container: var(--aqua-color-on-info-container);
+
+  --color-gradient-primary: var(--aqua-color-gradient-primary);
+  --color-gradient-secondary: var(--aqua-color-gradient-secondary);
+  --color-gradient-tertiary: var(--aqua-color-gradient-tertiary);
+  --color-gradient-error: var(--aqua-color-gradient-error);
+  --color-gradient-success: var(--aqua-color-gradient-success);
+  --color-gradient-warning: var(--aqua-color-gradient-warning);
+  --color-gradient-info: var(--aqua-color-gradient-info);
+
+  color-scheme: dark;
+}

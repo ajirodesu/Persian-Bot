@@ -1,0 +1,244 @@
+/* ============================================================
+   "INDIGO" THEME — the midnight-purple sibling of Aqua and Burnt
+   (formerly labeled "Night")
+
+   Mood: nocturnal, premium, a little mysterious — near-black
+   violet surfaces with a single vivid amethyst/periwinkle accent,
+   plus a soft magenta tertiary for contrast on code/data accents.
+   Same iOS-meets-developer finish quality as Aqua and Burnt —
+   frosted glass, soft layered shadows, glowing avatar rings,
+   springy motion — distinguished only by hue, never by polish.
+
+   Values live under the explicit attribute selector; the switcher
+   sets html[data-theme="indigo"] the same way it does for the
+   other two themes.
+
+   Shape tokens (--radius-card, --radius-button, etc.) live once
+   in tokens.css, not here — so sizing never drifts between themes.
+   ============================================================ */
+
+html[data-theme='indigo'] {
+  /* ==================== PRIMARY (vivid amethyst/periwinkle) ====================
+     Scale reference: light #ede9ff → mid #9C87F5 → dark #241a4d */
+  --indigo-color-primary: 156 135 245;
+  --indigo-color-on-primary: 20 14 43;
+  --indigo-color-primary-container: 44 32 92;
+  --indigo-color-on-primary-container: 224 217 255;
+
+  /* ==================== SECONDARY (muted lavender-gray — supporting actions) ==================== */
+  --indigo-color-secondary: 170 161 196;
+  --indigo-color-on-secondary: 25 20 36;
+  --indigo-color-secondary-container: 38 32 54;
+  --indigo-color-on-secondary-container: 224 218 240;
+
+  /* ==================== TERTIARY (soft magenta — data/code accent) ==================== */
+  --indigo-color-tertiary: 232 121 199;
+  --indigo-color-on-tertiary: 46 10 38;
+  --indigo-color-tertiary-container: 74 22 63;
+  --indigo-color-on-tertiary-container: 253 209 240;
+
+  /* ==================== SURFACE SYSTEM (midnight purple) ==================== */
+  /* Base background: near-black deep violet #0b0714 */
+  --indigo-color-surface: 11 7 20;
+  --indigo-color-on-surface: 240 236 250;
+  --indigo-color-surface-variant: 70 62 90;
+  --indigo-color-on-surface-variant: 168 159 188;
+  --indigo-color-surface-container-lowest: 6 4 12;
+  --indigo-color-surface-container-low: 15 11 27;
+  --indigo-color-surface-container: 20 15 35;
+  --indigo-color-surface-container-high: 27 20 45;
+  --indigo-color-surface-container-highest: 35 27 56;
+  --indigo-color-surface-bright: 168 159 188;
+  --indigo-color-surface-dim: 6 4 12;
+
+  /* ==================== INVERSE ==================== */
+  --indigo-color-inverse-surface: 240 236 250;
+  --indigo-color-inverse-on-surface: 11 7 20;
+  --indigo-color-inverse-primary: 44 32 92;
+
+  /* ==================== OUTLINE ==================== */
+  --indigo-color-outline: 111 100 138;
+  --indigo-color-outline-variant: 48 41 66;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --indigo-color-scrim: 0 0 0;
+  --indigo-color-shadow: 4 2 10;
+
+  /* ==================== DANGER / ERROR (rose) ==================== */
+  --indigo-color-error: 248 87 118;
+  --indigo-color-on-error: 255 255 255;
+  --indigo-color-error-container: 51 15 27;
+  --indigo-color-on-error-container: 255 197 207;
+
+  /* ==================== SUCCESS (green, kept crisp against violet) ==================== */
+  --indigo-color-success: 94 224 152;
+  --indigo-color-on-success: 4 30 18;
+  --indigo-color-success-container: 13 46 29;
+  --indigo-color-on-success-container: 178 246 202;
+
+  /* ==================== WARNING (amber) ==================== */
+  --indigo-color-warning: 250 176 60;
+  --indigo-color-on-warning: 40 24 0;
+  --indigo-color-warning-container: 51 35 10;
+  --indigo-color-on-warning-container: 253 220 158;
+
+  /* ==================== INFO (amethyst — same family as primary) ==================== */
+  --indigo-color-info: 156 135 245;
+  --indigo-color-on-info: 20 14 43;
+  --indigo-color-info-container: 34 25 71;
+  --indigo-color-on-info-container: 224 217 255;
+
+  /* ==================== GRADIENTS ====================
+     Reserved for large, heavily-blurred ambient background
+     glows only — never flat fills on buttons/cards. */
+  --indigo-color-gradient-primary: linear-gradient(135deg, rgb(156 135 245) 0%, rgb(44 32 92) 100%);
+  --indigo-color-gradient-secondary: linear-gradient(135deg, rgb(170 161 196) 0%, rgb(70 62 90) 100%);
+  --indigo-color-gradient-tertiary: linear-gradient(135deg, rgb(232 121 199) 0%, rgb(74 22 63) 100%);
+  --indigo-color-gradient-error: linear-gradient(135deg, rgb(248 87 118) 0%, rgb(51 15 27) 100%);
+  --indigo-color-gradient-success: linear-gradient(135deg, rgb(94 224 152) 0%, rgb(13 46 29) 100%);
+  --indigo-color-gradient-warning: linear-gradient(135deg, rgb(250 176 60) 0%, rgb(51 35 10) 100%);
+  --indigo-color-gradient-info: linear-gradient(135deg, rgb(156 135 245) 0%, rgb(34 25 71) 100%);
+
+  /* ==================== HAIRLINE BORDERS ====================
+     Cool white at 8% opacity — mirrors Aqua/Burnt's hairline treatment */
+  --color-hairline-border: rgba(232, 225, 255, 0.08);
+
+  /* ==================== FROSTED GLASS ==================== */
+  --glass-bg: rgba(20, 15, 35, 0.55);
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+  --glass-border: rgba(232, 225, 255, 0.08);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: rgba(20, 15, 35, 0.55);
+  --color-input-border: rgba(232, 225, 255, 0.08);
+
+  /* ==================== SOFT iOS-STYLE SHADOW SCALE ==================== */
+  --shadow-soft-sm:
+    0 1px 2px rgba(4, 2, 10, 0.34),
+    0 2px 8px rgba(4, 2, 10, 0.28);
+  --shadow-soft-md:
+    0 1px 2px rgba(4, 2, 10, 0.36),
+    0 8px 24px rgba(4, 2, 10, 0.4);
+  --shadow-soft-lg:
+    0 2px 4px rgba(4, 2, 10, 0.38),
+    0 16px 40px rgba(4, 2, 10, 0.44),
+    0 32px 64px rgba(4, 2, 10, 0.32);
+
+  --shadow-card-rest: var(--shadow-soft-sm);
+  --shadow-card-hover: var(--shadow-soft-md);
+
+  /* Signature glow — reserved exclusively for primary CTA buttons */
+  --shadow-cta-glow:
+    0 0 0 1px rgba(156, 135, 245, 0.4),
+    0 8px 28px rgba(156, 135, 245, 0.4),
+    0 2px 10px rgba(156, 135, 245, 0.32);
+
+  /* Wide, soft accent glow ring for focused inputs */
+  --shadow-focus-ring: 0 0 0 4px rgba(156, 135, 245, 0.24);
+
+  /* Avatar/portrait glow ring — amethyst counterpart to Aqua's mint glow */
+  --shadow-avatar-glow:
+    0 0 0 3px rgb(var(--indigo-color-surface) / 1),
+    0 0 0 5px rgba(156, 135, 245, 0.55),
+    0 0 32px rgba(156, 135, 245, 0.35);
+
+  /* ==================== MOTION ====================
+     Same springy easing as Aqua and Burnt — one unified motion feel */
+  --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ==================== TYPOGRAPHY ====================
+     Same geometric/humanist/mono pairing as Aqua, so Indigo reads
+     as a night-mode sibling rather than a different product. */
+  --font-family-brand:
+    'Sora', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-plain:
+    'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ==================== AMBIENT BACKGROUND GLOW ==================== */
+  --ambient-glow-opacity: 1;
+  --ambient-glow-primary: rgba(156, 135, 245, 0.2);
+  --ambient-glow-secondary: rgba(232, 121, 199, 0.14);
+
+  /* ==================== SCROLLBAR ====================
+     Invisible at rest, matching Aqua/Burnt's refined behavior */
+  --scrollbar-idle-opacity: 0;
+
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     Matches Aqua/Burnt's top-edge glass highlight on raised surfaces */
+  --specular-highlight: linear-gradient(
+    180deg,
+    rgba(232, 225, 255, 0.06) 0%,
+    rgba(232, 225, 255, 0) 14%
+  );
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--indigo-color-primary);
+  --color-on-primary: var(--indigo-color-on-primary);
+  --color-primary-container: var(--indigo-color-primary-container);
+  --color-on-primary-container: var(--indigo-color-on-primary-container);
+
+  --color-secondary: var(--indigo-color-secondary);
+  --color-on-secondary: var(--indigo-color-on-secondary);
+  --color-secondary-container: var(--indigo-color-secondary-container);
+  --color-on-secondary-container: var(--indigo-color-on-secondary-container);
+
+  --color-tertiary: var(--indigo-color-tertiary);
+  --color-on-tertiary: var(--indigo-color-on-tertiary);
+  --color-tertiary-container: var(--indigo-color-tertiary-container);
+  --color-on-tertiary-container: var(--indigo-color-on-tertiary-container);
+
+  --color-surface: var(--indigo-color-surface);
+  --color-on-surface: var(--indigo-color-on-surface);
+  --color-surface-variant: var(--indigo-color-surface-variant);
+  --color-on-surface-variant: var(--indigo-color-on-surface-variant);
+  --color-surface-container-lowest: var(--indigo-color-surface-container-lowest);
+  --color-surface-container-low: var(--indigo-color-surface-container-low);
+  --color-surface-container: var(--indigo-color-surface-container);
+  --color-surface-container-high: var(--indigo-color-surface-container-high);
+  --color-surface-container-highest: var(--indigo-color-surface-container-highest);
+  --color-surface-bright: var(--indigo-color-surface-bright);
+  --color-surface-dim: var(--indigo-color-surface-dim);
+
+  --color-inverse-surface: var(--indigo-color-inverse-surface);
+  --color-inverse-on-surface: var(--indigo-color-inverse-on-surface);
+  --color-inverse-primary: var(--indigo-color-inverse-primary);
+
+  --color-outline: var(--indigo-color-outline);
+  --color-outline-variant: var(--indigo-color-outline-variant);
+
+  --color-scrim: var(--indigo-color-scrim);
+  --color-shadow: var(--indigo-color-shadow);
+
+  --color-error: var(--indigo-color-error);
+  --color-on-error: var(--indigo-color-on-error);
+  --color-error-container: var(--indigo-color-error-container);
+  --color-on-error-container: var(--indigo-color-on-error-container);
+
+  --color-success: var(--indigo-color-success);
+  --color-on-success: var(--indigo-color-on-success);
+  --color-success-container: var(--indigo-color-success-container);
+  --color-on-success-container: var(--indigo-color-on-success-container);
+
+  --color-warning: var(--indigo-color-warning);
+  --color-on-warning: var(--indigo-color-on-warning);
+  --color-warning-container: var(--indigo-color-warning-container);
+  --color-on-warning-container: var(--indigo-color-on-warning-container);
+
+  --color-info: var(--indigo-color-info);
+  --color-on-info: var(--indigo-color-on-info);
+  --color-info-container: var(--indigo-color-info-container);
+  --color-on-info-container: var(--indigo-color-on-info-container);
+
+  --color-gradient-primary: var(--indigo-color-gradient-primary);
+  --color-gradient-secondary: var(--indigo-color-gradient-secondary);
+  --color-gradient-tertiary: var(--indigo-color-gradient-tertiary);
+  --color-gradient-error: var(--indigo-color-gradient-error);
+  --color-gradient-success: var(--indigo-color-gradient-success);
+  --color-gradient-warning: var(--indigo-color-gradient-warning);
+  --color-gradient-info: var(--indigo-color-gradient-info);
+
+  color-scheme: dark;
+}

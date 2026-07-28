@@ -2,23 +2,29 @@
    DESIGN SYSTEM TOKENS
    
    All CSS custom properties for the design system scale.
-   These are global (not theme-specific) — color roles live
-   in theme/aurora.css and theme/classic.css.
-   
+   These are global (not theme-specific) — color roles live in
+   theme/aqua.css, theme/burnt.css, and theme/indigo.css.
+
+   Shape (--radius-*) also lives here, globally, so cards, buttons,
+   and inputs render at identical sizes across every theme — themes
+   are only ever allowed to change color/glow/blur, never layout.
+
    Token groups:
    1. Typography (font sizes, line heights, weights, tracking)
-   2. Spacing (numeric scale + semantic aliases)
-   3. Motion (durations, easings)
-   4. Layout (z-index layers, icon sizes)
-   5. Shadows (M3 elevation system)
-   6. State layer opacity
+   2. Shape (corner radii — shared by every theme)
+   3. Spacing (numeric scale + semantic aliases)
+   4. Motion (durations, easings)
+   5. Layout (z-index layers, icon sizes)
+   6. Shadows (M3 elevation system)
+   7. State layer opacity
    ============================================================ */
 
 :root {
   /* ==================== TYPOGRAPHY ==================== */
-  /* Font Families are theme-specific — see theme/aurora.css and
-     theme/classic.css (brand/plain/mono vary per theme so each
-     theme can express its own typographic personality). */
+  /* Font Families are theme-specific — see theme/aqua.css,
+     theme/burnt.css, and theme/indigo.css (brand/plain/mono vary
+     per theme so each theme can express its own typographic
+     personality). */
 
   --font-size-base: 1rem;
 
@@ -95,6 +101,17 @@
   --typography-label-small-line-height: 1.5;
   --typography-label-small-font-weight: 500;
   --typography-label-small-letter-spacing: 0.015em;
+
+  /* ==================== SHAPE ====================
+     Large rounded corners, pill-shaped interactive controls.
+     Defined once, globally, so every theme (Aqua / Burnt / Indigo)
+     renders cards, buttons, and inputs at identical sizes — only
+     color/glow/blur values are allowed to vary per theme. */
+  --radius-card: 1.25rem;      /* 20px */
+  --radius-card-lg: 1.5rem;    /* 24px */
+  --radius-button: 9999px;     /* fully pill */
+  --radius-input: 0.75rem;     /* 12px */
+  --radius-badge: 9999px;
 
   /* ==================== SPACING ==================== */
   --spacing-base: 0.25rem;

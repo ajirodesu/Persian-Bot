@@ -36,11 +36,10 @@
     Global Custom Scrollbar Styles
 
     Scrollbars stay invisible at rest and fade in only during
-    active scroll interaction (Aurora theme sets
+    active scroll interaction. Every theme sets
     --scrollbar-idle-opacity to 0 and ThemeProvider toggles
-    html[data-scrolling="true"] while the user is scrolling;
-    Classic theme sets it to 1 to preserve its always-visible
-    behavior).
+    html[data-scrolling="true"] while the user is scrolling, so
+    this behavior is identical across Aqua, Burnt, and Indigo.
     ----------------------------------------------------------- */
   *:not(html) {
     scrollbar-width: thin;

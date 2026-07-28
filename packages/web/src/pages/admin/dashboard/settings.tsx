@@ -252,7 +252,7 @@ export default function AdminSettingsPage() {
           <div>
             <Card.Title as="h2">Appearance</Card.Title>
             <Card.Description>
-              Select the interface theme. Choose only one option: Winter or Summer.
+              Select the interface theme. Choose only one option: Aqua, Burnt, or Indigo.
             </Card.Description>
           </div>
         </Card.Header>

@@ -43,10 +43,9 @@ const base =
 /**
  * Variant classes with consistent border-2 sizing.
  *
- * `default` pulls its background/border from theme tokens so Aurora gets
- * a translucent surface fill with an 8% hairline border while Classic
- * keeps its original transparent background + solid outline-variant
- * border untouched.
+ * `default` pulls its background/border from theme tokens, so every
+ * theme (Aqua, Burnt, Indigo) gets a translucent surface fill with an
+ * 8% hairline border, each tinted to that theme's own palette.
  */
 const variantClasses: Record<InputVariant, string> = {
   default:
