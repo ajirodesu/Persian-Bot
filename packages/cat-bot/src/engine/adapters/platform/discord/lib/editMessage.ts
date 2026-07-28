@@ -49,8 +49,12 @@ export async function editMessage(
   const button = typeof options === 'object' ? options.button : undefined;
 
   // Process attachment arrays into AttachmentBuilder objects — mirrors replyMessage.ts processing.
-  // Discord API v10: when `files` are supplied, all retained attachments are kept by default
-  // (no explicit `attachments: []` needed unless the caller wants to remove existing files).
+  // Discord API v10: when `files` are supplied without an explicit `attachments` array,
+  // the previous attachment(s) are RETAINED alongside the new one instead of being replaced.
+  // Every caller in this codebase (refresh/next/more buttons on meme, cosplay, safebooru, etc.)
+  // sends a new attachment_url expecting it to fully replace the old photo — so once we build
+  // a new set of files below we must also clear the old attachments, or the original image
+  // stays attached and gets rendered a second time as a stuck duplicate alongside the new one.
   const attachment =
     typeof options === 'object' ? options.attachment : undefined;
   const attachmentUrl =
@@ -75,7 +79,14 @@ export async function editMessage(
       );
     }
   }
-  if (files.length > 0) payload.files = files;
+  if (files.length > 0) {
+    payload.files = files;
+    // Explicitly clear previously-attached files. Without this, Discord keeps the
+    // original attachment in addition to the new one, so switching photos via a
+    // refresh/next/more button leaves the old image stuck alongside the new image
+    // instead of replacing it.
+    payload.attachments = [];
+  }
 
   // Convert Unified ButtonItems into Discord ActionRowBuilders.
   // Explicit undefined check (not truthiness) so an empty array [] correctly clears
