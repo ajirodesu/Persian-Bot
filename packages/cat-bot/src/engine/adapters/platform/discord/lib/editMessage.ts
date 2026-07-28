@@ -8,12 +8,17 @@ import {
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
+  EmbedBuilder,
   escapeMarkdown,
   type MessageEditOptions,
   type TextChannel,
 } from 'discord.js';
 import type { EditMessageOptions } from '@/engine/adapters/models/api.model.js';
-import { streamToBuffer, urlToStream } from '../utils/helper.util.js';
+import { streamToBuffer, urlToBuffer } from '../utils/helper.util.js';
+
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
+const extOf = (nameOrUrl: string): string =>
+  nameOrUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
 
 export async function editMessage(
   channel: TextChannel,
@@ -48,18 +53,28 @@ export async function editMessage(
   const payload: MessageEditOptions = { content: finalContent };
   const button = typeof options === 'object' ? options.button : undefined;
 
-  // Process attachment arrays into AttachmentBuilder objects — mirrors replyMessage.ts processing.
-  // Discord API v10: when `files` are supplied without an explicit `attachments` array,
-  // the previous attachment(s) are RETAINED alongside the new one instead of being replaced.
-  // Every caller in this codebase (refresh/next/more buttons on meme, cosplay, safebooru, etc.)
-  // sends a new attachment_url expecting it to fully replace the old photo — so once we build
-  // a new set of files below we must also clear the old attachments, or the original image
-  // stays attached and gets rendered a second time as a stuck duplicate alongside the new one.
+  // Process attachment arrays exactly like replyMessage.ts does on the initial send:
+  // image URLs become embeds (Discord fetches the preview itself, no bot-side download),
+  // everything else (stream attachments, non-image URLs) becomes a real file attachment.
+  //
+  // THE ACTUAL BUG: the initial send from replyMessage.ts puts image URLs into an EMBED,
+  // not a file attachment. This edit path was building a real file attachment for every
+  // photo instead of matching that embed behavior, and — just as importantly — never told
+  // Discord to drop the OLD embed. Discord's message.edit() retains any field you don't
+  // explicitly set, so the old embed image stayed on the message while a brand-new file
+  // attachment got added next to it: two images on one message, i.e. the "stuck duplicate"
+  // photo. The fix has two parts: (1) mirror the embed behavior so we're replacing like
+  // with like, and (2) whenever new photo content comes in, always set BOTH `embeds` and
+  // `attachments` (even to `[]`) so whichever one held the previous photo gets cleared.
   const attachment =
     typeof options === 'object' ? options.attachment : undefined;
   const attachmentUrl =
     typeof options === 'object' ? options.attachment_url : undefined;
+  const hasNewPhotoContent = !!(attachment?.length || attachmentUrl?.length);
+
   const files: AttachmentBuilder[] = [];
+  const embeds: EmbedBuilder[] = [];
+
   if (attachment?.length) {
     for (const { name, stream } of attachment) {
       const buf = Buffer.isBuffer(stream)
@@ -69,23 +84,24 @@ export async function editMessage(
     }
   }
   if (attachmentUrl?.length) {
-    for (const { name, url } of attachmentUrl) {
-      const s = await urlToStream(url, name);
-      const buf = await streamToBuffer(s);
-      files.push(
-        new AttachmentBuilder(buf, {
-          name: name || (s as unknown as { path?: string }).path || 'file.bin',
-        }),
-      );
+    const imageUrls = attachmentUrl.filter((a) => IMAGE_EXTS.includes(extOf(a.name || a.url)));
+    const nonImageUrls = attachmentUrl.filter((a) => !IMAGE_EXTS.includes(extOf(a.name || a.url)));
+
+    for (const { url } of imageUrls) embeds.push(new EmbedBuilder().setImage(url));
+
+    for (const { name, url } of nonImageUrls) {
+      const { buffer, filename } = await urlToBuffer(url, name);
+      files.push(new AttachmentBuilder(buffer, { name: filename }));
     }
   }
-  if (files.length > 0) {
+
+  if (hasNewPhotoContent) {
+    // Set every time new photo content arrives — even as an empty array — so whichever
+    // field (embeds or attachments) carried the previous photo is explicitly cleared
+    // rather than silently retained by Discord's edit-preserves-unset-fields default.
     payload.files = files;
-    // Explicitly clear previously-attached files. Without this, Discord keeps the
-    // original attachment in addition to the new one, so switching photos via a
-    // refresh/next/more button leaves the old image stuck alongside the new image
-    // instead of replacing it.
     payload.attachments = [];
+    payload.embeds = embeds;
   }
 
   // Convert Unified ButtonItems into Discord ActionRowBuilders.
