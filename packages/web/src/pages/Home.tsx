@@ -91,18 +91,16 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             {/* ── Left: copy column ─────────────────────────────────────── */}
             <div className="flex flex-col gap-8">
-              {/* Status badge */}
+              {/* Eyebrow — mono uppercase kicker with glowing dot, matching
+                  the reference profile's signature label treatment */}
               <div
-                className="inline-flex items-center gap-2 w-fit rounded-full border border-outline-variant/80 bg-surface-container-low px-3.5 py-1.5"
+                className="eyebrow-mono w-fit"
                 style={{
                   animation:
                     'fade-in-down 400ms var(--easing-emphasized-decelerate) both',
                 }}
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-label-sm font-medium text-on-surface-variant">
-                  Multi-platform · Multi-bot · Open source
-                </span>
+                Multi-platform · Multi-bot · Open source
               </div>
 
               {/* Headline */}
@@ -116,7 +114,7 @@ export default function HomePage() {
                 >
                   Write once.
                   <br />
-                  <span className="text-primary">Deploy everywhere.</span>
+                  <span className="text-gradient-accent">Deploy everywhere.</span>
                 </h1>
                 <p
                   className="text-body-lg text-on-surface-variant max-w-lg leading-relaxed"
@@ -267,7 +265,7 @@ export default function HomePage() {
 
         <div className="relative max-w-6xl mx-auto flex flex-col gap-14">
           <div className="flex flex-col gap-3 text-center">
-            <p className="text-label-sm font-semibold text-primary uppercase tracking-widest">
+            <p className="eyebrow-mono justify-center">
               Capabilities
             </p>
             <h2 className="font-brand text-headline-md font-bold text-on-surface tracking-tight">
@@ -308,7 +306,7 @@ export default function HomePage() {
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[600px] rounded-full bg-primary/[0.05] blur-[80px]" />
 
         <div className="relative max-w-2xl mx-auto flex flex-col items-center gap-6 text-center">
-          <p className="text-label-sm font-semibold text-primary uppercase tracking-widest">
+          <p className="eyebrow-mono justify-center">
             Get Started
           </p>
           <h2 className="font-brand text-headline-md font-bold text-on-surface tracking-tight">

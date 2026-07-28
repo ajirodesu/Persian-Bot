@@ -101,6 +101,72 @@
   }
 
   /**
+   * Eyebrow label — uppercase monospace kicker with a glowing dot
+   * marker. Signature device for section labels ("BACKEND & FULL-
+   * STACK ENGINEER" style copy): a small pulse-capable dot in the
+   * primary color, wide letter-spacing, mono type for a distinctly
+   * "developer" register.
+   */
+  .eyebrow-mono {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-family-mono);
+    font-size: var(--typography-label-small-font-size, 0.75rem);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgb(var(--color-primary) / 1);
+  }
+
+  .eyebrow-mono::before {
+    content: '';
+    display: inline-block;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: rgb(var(--color-primary) / 1);
+    box-shadow: 0 0 8px rgb(var(--color-primary) / 0.9);
+    flex-shrink: 0;
+  }
+
+  /**
+   * Glow ring — theme-driven ring + bloom shadow, radius-agnostic so
+   * it can dress a square brand mark or a circular avatar alike.
+   */
+  .glow-ring {
+    box-shadow: var(--shadow-avatar-glow);
+  }
+
+  /**
+   * Avatar glow — the signature "glowing profile photo" ring from
+   * the reference design. A crisp surface-colored gap, then a
+   * saturated ring, then a soft outer bloom, all theme-driven via
+   * --shadow-avatar-glow so it re-hues automatically per theme.
+   */
+  .avatar-glow {
+    border-radius: 9999px;
+    box-shadow: var(--shadow-avatar-glow);
+  }
+
+  /**
+   * Gradient headline text — subtle two-stop fade from on-surface
+   * white into the primary accent, used sparingly on the second
+   * line of a hero headline for a soft "catching light" effect.
+   * Never used for body copy or anywhere legibility is critical.
+   */
+  .text-gradient-accent {
+    background: linear-gradient(
+      100deg,
+      rgb(var(--color-on-surface) / 1) 0%,
+      rgb(var(--color-primary) / 1) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /**
    * Explicit scrollbar class - for backward compatibility.
    * Global base styles already apply to all non-html elements,
    * so this class is only needed when a parent has reset to default.

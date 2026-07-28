@@ -90,7 +90,7 @@ export default function LoginPage() {
       >
         {/* Brand mark */}
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20 shadow-elevation-1">
+          <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
             <Logo className="h-6 w-6 text-on-primary-container" />
           </div>
           <div className="text-center flex flex-col gap-1.5">

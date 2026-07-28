@@ -145,6 +145,12 @@ html[data-theme='classic'] {
   /* Wide, soft accent glow ring for focused inputs */
   --shadow-focus-ring: 0 0 0 4px rgba(247, 141, 64, 0.22);
 
+  /* Avatar/portrait glow ring — warm counterpart to Aurora's mint glow */
+  --shadow-avatar-glow:
+    0 0 0 3px rgb(var(--classic-color-surface) / 1),
+    0 0 0 5px rgba(247, 141, 64, 0.5),
+    0 0 32px rgba(247, 141, 64, 0.3);
+
   /* ==================== MOTION ====================
      Same springy easing as Aurora — one unified motion feel */
   --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
