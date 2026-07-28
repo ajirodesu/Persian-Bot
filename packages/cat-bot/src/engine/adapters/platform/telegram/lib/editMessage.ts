@@ -144,18 +144,45 @@ export async function editMessage(
         ...(parseMode ? { parse_mode: parseMode } : {}),
       } as InputMedia;
     } else if (firstUrl) {
-      // URL media: Download locally first to match replyMessage.ts behavior.
-      // Telegram server-side URL fetching sometimes converts mp4s to animations (GIFs)
-      // or misidentifies media types. Multipart upload with explicit filename prevents this.
-      const stream = await urlToStream(firstUrl.url, firstUrl.name);
-      const buf = await streamToBuffer(stream as import('stream').Readable);
+      // Speed: forward the URL straight to Telegram for the common refresh/next/more
+      // case (memes, animal photos, etc.), exactly like the initial send in
+      // replyMessage.ts already does — Telegram's own servers fetch the bytes, so the
+      // bot skips a download-then-reupload round trip. But that direct fetch is only
+      // as reliable as the *source* URL at the moment Telegram requests it, and a
+      // meme-api.com/Reddit/imgur link can go stale between being handed to us and
+      // Telegram actually fetching it — especially right after rapid refresh-button
+      // use, where the source host is more likely to rate-limit Telegram's fetcher and
+      // serve an error/removed-post page instead of the image. Telegram then rejects
+      // that non-image content with a 400 ("wrong type of the web page content"),
+      // which used to bubble straight up as a user-facing failure. Now: try the fast
+      // direct-URL path first for every media type, and only pay for buffering the
+      // file ourselves if Telegram's API actually rejects the URL attempt.
       const urlExt = firstUrl.name.split('.').pop()?.toLowerCase() ?? '';
-      inputMedia = {
-        type: getMediaType(urlExt),
-        media: new InputFile(buf, firstUrl.name || 'file.bin'),
+      const urlMediaType = getMediaType(urlExt);
+      const urlInputMedia = {
+        type: urlMediaType,
+        media: firstUrl.url,
         ...(text ? { caption: text } : {}),
         ...(parseMode ? { parse_mode: parseMode } : {}),
       } as InputMedia;
+      try {
+        await ctx.api.editMessageMedia(
+          ctx.chat?.id as number,
+          mId,
+          urlInputMedia,
+          replyMarkup ? { reply_markup: replyMarkup } : undefined,
+        );
+        return;
+      } catch {
+        const stream = await urlToStream(firstUrl.url, firstUrl.name);
+        const buf = await streamToBuffer(stream as import('stream').Readable);
+        inputMedia = {
+          type: urlMediaType,
+          media: new InputFile(buf, firstUrl.name || 'file.bin'),
+          ...(text ? { caption: text } : {}),
+          ...(parseMode ? { parse_mode: parseMode } : {}),
+        } as InputMedia;
+      }
     }
     if (inputMedia) {
       await ctx.api.editMessageMedia(

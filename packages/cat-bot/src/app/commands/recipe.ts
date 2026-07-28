@@ -96,12 +96,12 @@ async function fetchAndSendRecipe(ctx: AppCtx): Promise<void> {
       await ctx.chat.replyMessage(payload);
       return;
     }
-    try {
-      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
-    } catch {
-      await ctx.chat.unsendMessage(loadingId).catch(() => {});
-      await ctx.chat.reply(payload);
-    }
+    // Always edit the original message in place — never delete it and send a
+    // new one. A delete+resend fallback here would mean a failed refresh
+    // silently replaces the message the user was looking at with a brand-new
+    // one (breaks reply threads, moves it to the bottom of the chat, etc.).
+    // If the edit itself fails, let the error propagate to the caller.
+    await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
   };
   const finish = deliver;
   const fail = (errorMessage: string): Promise<void> =>

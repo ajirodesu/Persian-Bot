@@ -105,41 +105,55 @@ async function runMeme(ctx: AppCtx, config: MemeConfig): Promise<void> {
       await ctx.chat.replyMessage(payload);
       return;
     }
-    try {
-      await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
-    } catch {
-      await ctx.chat.unsendMessage(loadingId).catch(() => {});
-      await ctx.chat.reply(payload);
-    }
+    // Always edit the original message in place — never delete it and send a
+    // new one. A delete+resend fallback here would mean a failed refresh
+    // silently replaces the message the user was looking at with a brand-new
+    // one (breaks reply threads, moves it to the bottom of the chat, etc.).
+    // If the edit itself fails, let the error propagate to the caller.
+    await ctx.chat.editMessage({ ...payload, message_id_to_edit: loadingId });
   };
-  const finish = deliver;
   const fail = (errorMessage: string): Promise<void> =>
     deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
-  try {
-    const meme = await fetchRandomMeme(config.endpoint);
+  // Reuse the active button instance ID on refresh so the button stays live;
+  // otherwise mint a fresh one for the initial send. Computed once — stays the
+  // same across every retry attempt below.
+  const buttonId = isButtonAction
+    ? session.id
+    : button.generateID({ id: BUTTON_ID.refresh, public: true });
 
-    // Reuse the active button instance ID on refresh so the button stays live;
-    // otherwise mint a fresh one for the initial send.
-    const buttonId = isButtonAction
-      ? session.id
-      : button.generateID({ id: BUTTON_ID.refresh, public: true });
+  // A meme-api.com link can go stale between being handed to us and the platform
+  // actually fetching it — especially right after rapid refresh-button use, where
+  // the underlying Reddit/imgur host is more likely to serve a removed-post or
+  // rate-limit page instead of the image, which the platform then rejects outright
+  // (e.g. Telegram's "wrong type of the web page content"). Rather than surface
+  // that as a user-facing error on the very next click, quietly re-roll a fresh
+  // meme (new URL, new odds) a few times first — this self-heals the vast majority
+  // of "overused the refresh button" failures without the user ever seeing them.
+  const MAX_ATTEMPTS = 3;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const meme = await fetchRandomMeme(config.endpoint);
+      const extMatch = meme.url.match(/\.(jpe?g|png|gif|webp)(\?|$)/i);
+      const ext = extMatch?.[1] ?? 'jpg';
 
-    const extMatch = meme.url.match(/\.(jpe?g|png|gif|webp)(\?|$)/i);
-    const ext = extMatch?.[1] ?? 'jpg';
-
-    await finish({
-      style: MessageStyle.MARKDOWN,
-      message: `${config.titlePrefix}**${meme.title}**`,
-      attachment_url: [
-        { name: `${config.attachmentPrefix}.${ext}`, url: meme.url },
-      ],
-      ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    await fail(`⚠️ Failed to fetch a meme: ${message}`);
+      await deliver({
+        style: MessageStyle.MARKDOWN,
+        message: `${config.titlePrefix}**${meme.title}**`,
+        attachment_url: [
+          { name: `${config.attachmentPrefix}.${ext}`, url: meme.url },
+        ],
+        ...(hasNativeButtons(native.platform) ? { button: [buttonId] } : {}),
+      });
+      return;
+    } catch (err) {
+      lastError = err;
+    }
   }
+
+  const message = lastError instanceof Error ? lastError.message : 'Unknown error';
+  await fail(`⚠️ Failed to fetch a meme: ${message}`);
 }
 
 // ── Command entry generation ──────────────────────────────────────────────────
