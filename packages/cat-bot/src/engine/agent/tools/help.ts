@@ -18,7 +18,7 @@ const HR = '─────────────────';
 const ROLE_LABEL: Record<number, string> = {
   [Role.ANYONE]: '0 (All users)',
   [Role.THREAD_ADMIN]: '1 (Group administrators)',
-  [Role.BOT_ADMIN]: '2 (Bot admin)',
+  [Role.BOT_ADMIN]: '3 (Bot admin)',
 };
 
 /**

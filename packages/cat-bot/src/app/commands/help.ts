@@ -90,8 +90,8 @@ const COMMANDS_PER_PAGE = 10;
 const ROLE_LABEL: Record<number, string> = {
   [Role.ANYONE]: '0 (All users)',
   [Role.THREAD_ADMIN]: '1 (Group administrators)',
-  [Role.BOT_ADMIN]: '2 (Bot admin)',
-  [Role.PREMIUM]: '3 (Premium)',
+  [Role.PREMIUM]: '2 (Premium)',
+  [Role.BOT_ADMIN]: '3 (Bot admin)',
   [Role.SYSTEM_ADMIN]: '4 (System admin)',
 };
 
