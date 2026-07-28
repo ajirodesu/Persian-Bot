@@ -57,6 +57,50 @@
   }
 
   /**
+   * Specular highlight utility.
+   *
+   * Lays a faint top-edge light catch across a raised surface —
+   * cards, sheets, pill buttons — via a pseudo-element so it never
+   * fights the element's own background/border-radius. Theme-driven
+   * (see --specular-highlight in aurora.css / classic.css), so it
+   * reads as "glass catching light" in both themes without extra
+   * markup or JS.
+   */
+  .surface-specular {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .surface-specular::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--specular-highlight, transparent);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /**
+   * Tactile press utility — a restrained iOS-style scale-down on
+   * :active, respecting reduced-motion preferences. Intended for
+   * buttons, cards, and other primary tap targets.
+   */
+  .tactile-press {
+    transition: transform var(--duration-short3) var(--easing-standard);
+  }
+
+  .tactile-press:active {
+    transform: scale(0.97);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tactile-press:active {
+      transform: none;
+    }
+  }
+
+  /**
    * Explicit scrollbar class - for backward compatibility.
    * Global base styles already apply to all non-html elements,
    * so this class is only needed when a parent has reset to default.

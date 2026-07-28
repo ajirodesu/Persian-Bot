@@ -366,8 +366,8 @@ const getSpinnerSize = (size: ButtonSize): number => {
  * Get border radius class based on variant and pill prop
  *
  * Non-link, non-unstyled buttons use the theme-driven --radius-button
- * token, so the Aurora theme can render every button fully pill-shaped
- * by default while Classic keeps its original rounded-lg corners. The
+ * token. Both Aurora and Classic render buttons fully pill-shaped by
+ * default, keeping the shape language unified across themes. The
  * explicit `pill` prop still forces full rounding regardless of theme.
  */
 function getBorderRadiusClass(variant: ButtonVariant, pill: boolean): string {

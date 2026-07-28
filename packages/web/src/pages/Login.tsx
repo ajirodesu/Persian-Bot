@@ -74,18 +74,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16">
+    <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16 overflow-hidden">
       <Helmet>
         <title>Log In · Cat-Bot</title>
       </Helmet>
 
+      {/* Ambient glow — same treatment as the marketing pages, so auth
+          never feels like a separate, less-considered surface */}
+      <div className="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/[0.06] blur-[110px]" />
+      <div className="pointer-events-none absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-tertiary/[0.05] blur-[100px]" />
+
       <div
-        className="w-full max-w-[400px] flex flex-col gap-7"
+        className="relative z-10 w-full max-w-[400px] flex flex-col gap-7"
         style={{ animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both' }}
       >
         {/* Brand mark */}
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20 shadow-elevation-1">
             <Logo className="h-6 w-6 text-on-primary-container" />
           </div>
           <div className="text-center flex flex-col gap-1.5">
@@ -98,8 +103,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Form card */}
-        <div className="rounded-2xl border border-outline-variant/70 bg-surface-container-low shadow-elevation-2 p-6 flex flex-col gap-5">
+        {/* Form card — frosted glass with a top-edge specular catch */}
+        <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-5">
           <form
             onSubmit={handleSubmit}
             noValidate

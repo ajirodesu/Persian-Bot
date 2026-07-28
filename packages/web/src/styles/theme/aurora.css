@@ -169,6 +169,16 @@ html[data-theme='aurora'] {
      Invisible at rest, fades in only while actively scrolling */
   --scrollbar-idle-opacity: 0;
 
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     A faint top-edge highlight on raised surfaces (cards, sheets,
+     pill buttons) — the "glass catching light" detail that reads
+     as iOS-grade polish. Applied via the .surface-specular utility. */
+  --specular-highlight: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0) 14%
+  );
+
   /* -------- Reference layer -------- */
   --color-primary: var(--aurora-color-primary);
   --color-on-primary: var(--aurora-color-on-primary);

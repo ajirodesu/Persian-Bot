@@ -1,139 +1,181 @@
 /* ============================================================
-   "CLASSIC" THEME — the original Replit-inspired dark theme
-
-   This is the pre-existing theme, preserved byte-for-byte in
-   spirit and kept selectable via the theme switcher. It is no
-   longer the default (Aurora is), but remains fully supported.
+   "CLASSIC" THEME — reforged as the warm counterpart to Aurora
+   (internally the "summer" register: sunlit amber-orange against
+   a warm charcoal, where Aurora is a cool cyan "winter" register)
 
    Palette strategy:
-   • Surfaces: deep navy-black (Replit IDE dark) — reads as
-     "professional developer tool"
-   • Primary: Replit orange (#F08730) — warm, vibrant, on-brand
+   • Surfaces: warm-tinted charcoal (not cold navy-black) — reads
+     as premium developer tool, not generic dark-mode gray
+   • Primary: refined Replit orange, pushed slightly warmer/richer
+     for a sunlit, confident accent
    • Secondary: muted amber for supporting actions
-   • Tertiary: electric blue for code/data accents
+   • Tertiary: sky blue for code/data accents, kept crisp against
+     the warm neutrals for contrast
    • Elevation via surface container steps, each a shade lighter
-     in the navy register
+     in the warm-charcoal register
+   • Same shape/glass/glow/motion vocabulary as Aurora — pill
+     buttons, frosted glass, soft layered shadows, springy easing —
+     so both themes read as one unified premium system, distinguished
+     only by hue and warmth, never by finish quality
    ============================================================ */
 
 html[data-theme='classic'] {
-  /* ==================== PRIMARY (Replit orange) ==================== */
-  --classic-color-primary: 240 135 60;
-  --classic-color-on-primary: 26 12 0;
-  --classic-color-primary-container: 138 61 0;
-  --classic-color-on-primary-container: 255 207 160;
+  /* ==================== PRIMARY (sunlit orange) ==================== */
+  --classic-color-primary: 247 141 64;
+  --classic-color-on-primary: 33 14 0;
+  --classic-color-primary-container: 92 42 4;
+  --classic-color-on-primary-container: 255 214 173;
 
   /* ==================== SECONDARY (muted amber) ==================== */
-  --classic-color-secondary: 201 168 124;
-  --classic-color-on-secondary: 58 32 16;
-  --classic-color-secondary-container: 106 60 20;
-  --classic-color-on-secondary-container: 248 222 184;
+  --classic-color-secondary: 214 178 128;
+  --classic-color-on-secondary: 46 30 10;
+  --classic-color-secondary-container: 74 50 22;
+  --classic-color-on-secondary-container: 248 224 188;
 
   /* ==================== TERTIARY (code blue) ==================== */
   --classic-color-tertiary: 121 192 255;
   --classic-color-on-tertiary: 0 27 62;
-  --classic-color-tertiary-container: 0 54 117;
+  --classic-color-tertiary-container: 12 46 87;
   --classic-color-on-tertiary-container: 202 232 255;
 
-  /* ==================== SURFACE SYSTEM ==================== */
-  --classic-color-surface: 13 17 23;
-  --classic-color-on-surface: 230 237 243;
-  --classic-color-surface-variant: 61 68 81;
-  --classic-color-on-surface-variant: 139 148 158;
-  --classic-color-surface-container-lowest: 9 12 16;
-  --classic-color-surface-container-low: 22 27 34;
-  --classic-color-surface-container: 28 33 40;
-  --classic-color-surface-container-high: 34 39 46;
-  --classic-color-surface-container-highest: 45 51 59;
-  --classic-color-surface-bright: 139 148 158;
-  --classic-color-surface-dim: 9 12 16;
+  /* ==================== SURFACE SYSTEM (warm charcoal) ==================== */
+  --classic-color-surface: 19 16 14;
+  --classic-color-on-surface: 244 237 231;
+  --classic-color-surface-variant: 74 64 56;
+  --classic-color-on-surface-variant: 176 163 152;
+  --classic-color-surface-container-lowest: 12 10 9;
+  --classic-color-surface-container-low: 26 22 19;
+  --classic-color-surface-container: 33 28 24;
+  --classic-color-surface-container-high: 41 34 30;
+  --classic-color-surface-container-highest: 51 43 37;
+  --classic-color-surface-bright: 176 163 152;
+  --classic-color-surface-dim: 12 10 9;
 
   /* ==================== INVERSE ==================== */
-  --classic-color-inverse-surface: 230 237 243;
-  --classic-color-inverse-on-surface: 13 17 23;
-  --classic-color-inverse-primary: 168 77 0;
+  --classic-color-inverse-surface: 244 237 231;
+  --classic-color-inverse-on-surface: 19 16 14;
+  --classic-color-inverse-primary: 154 66 8;
 
   /* ==================== OUTLINE ==================== */
-  --classic-color-outline: 110 118 129;
-  --classic-color-outline-variant: 48 54 61;
+  --classic-color-outline: 143 128 116;
+  --classic-color-outline-variant: 61 52 45;
 
   /* ==================== SCRIM & SHADOW ==================== */
   --classic-color-scrim: 0 0 0;
-  --classic-color-shadow: 0 0 0;
+  --classic-color-shadow: 10 6 2;
 
   /* ==================== ERROR ==================== */
-  --classic-color-error: 248 81 73;
-  --classic-color-on-error: 68 6 8;
-  --classic-color-error-container: 130 20 22;
-  --classic-color-on-error-container: 255 218 220;
+  --classic-color-error: 248 96 88;
+  --classic-color-on-error: 255 255 255;
+  --classic-color-error-container: 56 16 15;
+  --classic-color-on-error-container: 255 199 195;
 
   /* ==================== SUCCESS ==================== */
-  --classic-color-success: 56 211 121;
-  --classic-color-on-success: 2 48 22;
-  --classic-color-success-container: 8 88 44;
-  --classic-color-on-success-container: 214 252 230;
+  --classic-color-success: 74 214 138;
+  --classic-color-on-success: 4 32 16;
+  --classic-color-success-container: 15 46 26;
+  --classic-color-on-success-container: 173 245 199;
 
   /* ==================== WARNING ==================== */
-  --classic-color-warning: 255 192 0;
-  --classic-color-on-warning: 66 24 0;
-  --classic-color-warning-container: 140 56 0;
-  --classic-color-on-warning-container: 252 240 192;
+  --classic-color-warning: 255 196 51;
+  --classic-color-on-warning: 40 24 0;
+  --classic-color-warning-container: 51 34 6;
+  --classic-color-on-warning-container: 253 224 150;
 
   /* ==================== INFO ==================== */
-  --classic-color-info: 88 166 255;
-  --classic-color-on-info: 4 48 74;
-  --classic-color-info-container: 4 78 112;
-  --classic-color-on-info-container: 218 244 255;
+  --classic-color-info: 121 192 255;
+  --classic-color-on-info: 3 30 56;
+  --classic-color-info-container: 10 38 66;
+  --classic-color-on-info-container: 202 232 255;
 
   /* ==================== GRADIENTS ==================== */
-  --classic-color-gradient-primary: linear-gradient(135deg, rgb(240 135 60) 0%, rgb(200 90 20) 100%);
-  --classic-color-gradient-secondary: linear-gradient(135deg, rgb(160 120 72) 0%, rgb(240 135 60) 100%);
-  --classic-color-gradient-tertiary: linear-gradient(135deg, rgb(88 166 255) 0%, rgb(121 192 255) 100%);
-  --classic-color-gradient-error: linear-gradient(135deg, rgb(130 20 22) 0%, rgb(110 40 10) 100%);
-  --classic-color-gradient-success: linear-gradient(135deg, rgb(8 96 48) 0%, rgb(10 100 84) 100%);
-  --classic-color-gradient-warning: linear-gradient(135deg, rgb(130 56 0) 0%, rgb(112 80 10) 100%);
-  --classic-color-gradient-info: linear-gradient(135deg, rgb(16 96 152) 0%, rgb(8 100 120) 100%);
+  --classic-color-gradient-primary: linear-gradient(135deg, rgb(247 141 64) 0%, rgb(196 88 18) 100%);
+  --classic-color-gradient-secondary: linear-gradient(135deg, rgb(214 178 128) 0%, rgb(150 104 58) 100%);
+  --classic-color-gradient-tertiary: linear-gradient(135deg, rgb(121 192 255) 0%, rgb(56 122 199) 100%);
+  --classic-color-gradient-error: linear-gradient(135deg, rgb(248 96 88) 0%, rgb(120 28 26) 100%);
+  --classic-color-gradient-success: linear-gradient(135deg, rgb(74 214 138) 0%, rgb(20 96 60) 100%);
+  --classic-color-gradient-warning: linear-gradient(135deg, rgb(255 196 51) 0%, rgb(150 96 8) 100%);
+  --classic-color-gradient-info: linear-gradient(135deg, rgb(121 192 255) 0%, rgb(30 90 150) 100%);
 
-  /* ==================== SHAPE ==================== */
-  /* Classic keeps the original, more conservative Material-ish shape scale */
-  --radius-card: 0.75rem;
-  --radius-card-lg: 1rem;
-  --radius-button: 0.5rem;
-  --radius-input: 0.5rem;
-  --radius-badge: 0.375rem;
+  /* ==================== SHAPE ====================
+     Same pill/soft-round vocabulary as Aurora — Material You shape
+     language, unified across both themes rather than a "flatter"
+     fallback. */
+  --radius-card: 1.25rem;
+  --radius-card-lg: 1.5rem;
+  --radius-button: 9999px;
+  --radius-input: 0.75rem;
+  --radius-badge: 9999px;
 
-  /* ==================== SURFACES: GLASS / HAIRLINE ==================== */
-  --color-hairline-border: transparent;
-  --glass-bg: rgb(var(--classic-color-surface) / 0.9);
-  --glass-blur: 12px;
-  --glass-saturate: 100%;
-  --glass-border: rgb(var(--classic-color-outline-variant) / 0.7);
+  /* ==================== HAIRLINE BORDERS ====================
+     Warm white at 8% opacity — mirrors Aurora's hairline treatment */
+  --color-hairline-border: rgba(255, 241, 230, 0.08);
+
+  /* ==================== FROSTED GLASS ==================== */
+  --glass-bg: rgba(33, 28, 24, 0.55);
+  --glass-blur: 20px;
+  --glass-saturate: 160%;
+  --glass-border: rgba(255, 241, 230, 0.08);
 
   /* ==================== INPUT SURFACES ==================== */
-  --color-input-bg: transparent;
-  --color-input-border: rgb(var(--classic-color-outline-variant) / 1);
+  --color-input-bg: rgba(33, 28, 24, 0.55);
+  --color-input-border: rgba(255, 241, 230, 0.08);
 
-  /* ==================== SHADOWS / GLOW ==================== */
-  --shadow-cta-glow: none;
-  --shadow-focus-ring: none;
-  --shadow-card-rest: var(--shadow-elevation-1);
-  --shadow-card-hover: var(--shadow-elevation-2);
+  /* ==================== SOFT iOS-STYLE SHADOW SCALE ==================== */
+  --shadow-soft-sm:
+    0 1px 2px rgba(10, 6, 2, 0.28),
+    0 2px 8px rgba(10, 6, 2, 0.22);
+  --shadow-soft-md:
+    0 1px 2px rgba(10, 6, 2, 0.3),
+    0 8px 24px rgba(10, 6, 2, 0.34);
+  --shadow-soft-lg:
+    0 2px 4px rgba(10, 6, 2, 0.32),
+    0 16px 40px rgba(10, 6, 2, 0.38),
+    0 32px 64px rgba(10, 6, 2, 0.26);
 
-  /* ==================== MOTION ==================== */
-  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-card-rest: var(--shadow-soft-sm);
+  --shadow-card-hover: var(--shadow-soft-md);
 
-  /* ==================== TYPOGRAPHY ==================== */
+  /* Signature glow — sunlit amber, reserved for primary CTA buttons */
+  --shadow-cta-glow:
+    0 0 0 1px rgba(247, 141, 64, 0.35),
+    0 8px 24px rgba(247, 141, 64, 0.32),
+    0 2px 10px rgba(247, 141, 64, 0.28);
+
+  /* Wide, soft accent glow ring for focused inputs */
+  --shadow-focus-ring: 0 0 0 4px rgba(247, 141, 64, 0.22);
+
+  /* ==================== MOTION ====================
+     Same springy easing as Aurora — one unified motion feel */
+  --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ==================== TYPOGRAPHY ====================
+     Warm, humanist display pairing — Inter across the board keeps
+     Classic feeling like a distinct but equally considered sibling
+     of Aurora's geometric Sora brand face. */
   --font-family-brand:
     'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-plain:
     'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-mono:
-    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
-  /* ==================== AMBIENT BACKGROUND ==================== */
-  --ambient-glow-opacity: 0;
+  /* ==================== AMBIENT BACKGROUND GLOW ==================== */
+  --ambient-glow-opacity: 1;
+  --ambient-glow-primary: rgba(247, 141, 64, 0.16);
+  --ambient-glow-secondary: rgba(121, 192, 255, 0.12);
 
-  /* ==================== SCROLLBAR ==================== */
-  --scrollbar-idle-opacity: 1;
+  /* ==================== SCROLLBAR ====================
+     Invisible at rest, matching Aurora's refined behavior */
+  --scrollbar-idle-opacity: 0;
+
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     Matches Aurora's top-edge glass highlight on raised surfaces */
+  --specular-highlight: linear-gradient(
+    180deg,
+    rgba(255, 241, 230, 0.06) 0%,
+    rgba(255, 241, 230, 0) 14%
+  );
 
   /* -------- Reference layer -------- */
   --color-primary: var(--classic-color-primary);

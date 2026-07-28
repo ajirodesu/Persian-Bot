@@ -170,7 +170,7 @@ export default function SignupPage() {
         </div>
 
         {/* Form card */}
-        <div className="rounded-2xl border border-outline-variant/70 bg-surface-container-low shadow-elevation-2 p-6 flex flex-col gap-5">
+        <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-5">
           <form
             onSubmit={handleSubmit}
             noValidate
