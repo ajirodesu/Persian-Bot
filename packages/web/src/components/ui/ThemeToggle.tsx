@@ -42,14 +42,24 @@ export interface ThemeToggleProps {
   className?: string
 }
 
+// Diameter of the sliding indicator circle. Deliberately larger than the
+// icon chip itself (24px / h-6 w-6) so the active state reads as a glowing
+// halo *around* the icon rather than a hard-edged clone of its box — but
+// the halo's center is what's pinned to the icon's center, not its edges,
+// so the extra size never throws off the alignment.
+const INDICATOR_SIZE = 36
+
 /**
  * ThemeToggle — a three-option segmented pill switch for choosing between
  * the "aqua" (default), "burnt", and "indigo" UI themes.
  *
- * The sliding indicator is measured directly off each segment's rendered
- * width via refs (rather than assuming equal thirds), so the control stays
- * pixel-accurate regardless of label length or font metrics — the kind of
- * detail that separates a "real" switch from a CSS approximation.
+ * The sliding indicator is a fixed-diameter circle whose position is
+ * derived directly from the *icon chip's* own measured center (via a ref
+ * on the chip, not the button) — never from the button's outer box. That
+ * makes centering on the icon a structural guarantee rather than an
+ * incidental side effect of padding math: it holds true whether the label
+ * is hidden (mobile), visible (sm+), long, short, or absent — because the
+ * label is never part of what's being measured.
  *
  * Persists the choice via ThemeContext (localStorage-backed) and updates
  * `<html data-theme>` immediately. Colors are theme-agnostic (surface/
@@ -61,26 +71,33 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
   const activeIndex = OPTIONS.findIndex((o) => o.value === theme)
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const segmentRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const [indicator, setIndicator] = useState<{ left: number; width: number }>({
+  const iconRefs = useRef<Array<HTMLSpanElement | null>>([])
+  const [indicator, setIndicator] = useState<{ left: number; top: number }>({
     left: 0,
-    width: 0,
+    top: 0,
   })
 
-  // Measure the active segment's actual box (post-layout) so the indicator
-  // slides to a pixel-perfect position/width instead of a guessed fraction.
+  // Measure the active option's icon chip (post-layout) and position the
+  // indicator so its own center lands exactly on the chip's center —
+  // computed from the chip's real rendered box, so it's correct even if
+  // font metrics, icon size, or container padding ever change.
   useLayoutEffect(() => {
-    const el = segmentRefs.current[activeIndex]
+    const iconEl = iconRefs.current[activeIndex]
     const container = containerRef.current
-    if (!el || !container) return
+    if (!iconEl || !container) return
 
     const update = () => {
       const containerRect = container.getBoundingClientRect()
-      const elRect = el.getBoundingClientRect()
-      setIndicator({
-        left: elRect.left - containerRect.left,
-        width: elRect.width,
-      })
+      const iconRect = iconEl.getBoundingClientRect()
+      const iconCenterX = iconRect.left + iconRect.width / 2 - containerRect.left
+      const iconCenterY = iconRect.top + iconRect.height / 2 - containerRect.top
+      const next = {
+        left: iconCenterX - INDICATOR_SIZE / 2,
+        top: iconCenterY - INDICATOR_SIZE / 2,
+      }
+      setIndicator((prev) =>
+        prev.left === next.left && prev.top === next.top ? prev : next,
+      )
     }
 
     update()
@@ -96,7 +113,7 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
       role="radiogroup"
       aria-label="Interface theme"
       className={cn(
-        'relative inline-flex items-center rounded-full p-1.5 gap-1',
+        'relative inline-flex items-center rounded-full p-2 gap-1 max-w-full overflow-hidden',
         'bg-surface-container-high border border-[var(--color-hairline-border,transparent)]',
         // Inset groove for depth + a soft outer shadow so the whole shell
         // reads as a raised, considered object rather than a flat strip.
@@ -104,19 +121,23 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
         className,
       )}
     >
-      {/* Sliding indicator — pixel-measured, theme-colored gradient fill with
-          a soft signature glow and a thin top-edge sheen so the active state
-          reads as a glossy, pressed button rather than a flat color block. */}
+      {/* Sliding indicator — a fixed-diameter circle, translated so its own
+          center always coincides with the active icon's measured center.
+          Base position is top-left 0,0; `translate(x, y)` does all the
+          placement work, so there's a single source of truth (the icon's
+          rect) rather than separately-reasoned-about left/width/height
+          values that could drift out of sync with each other. */}
       <span
         aria-hidden="true"
         className={cn(
-          'absolute inset-y-1.5 rounded-full',
-          'transition-[transform,width] duration-medium-2 ease-standard',
+          'absolute top-0 left-0 rounded-full',
+          'transition-transform duration-medium-2 ease-standard',
           'will-change-transform',
         )}
         style={{
-          width: indicator.width,
-          transform: `translateX(${indicator.left}px)`,
+          width: INDICATOR_SIZE,
+          height: INDICATOR_SIZE,
+          transform: `translate(${indicator.left}px, ${indicator.top}px)`,
           background: 'var(--color-gradient-primary)',
           boxShadow: `var(--shadow-cta-glow), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 1px rgba(0,0,0,0.12)`,
         }}
@@ -127,33 +148,35 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
         return (
           <button
             key={option.value}
-            ref={(el) => {
-              segmentRefs.current[index] = el
-            }}
             type="button"
             role="radio"
             aria-checked={isActive}
             title={option.description}
             onClick={() => setTheme(option.value)}
             className={cn(
-              'relative z-10 flex items-center justify-center gap-2 rounded-full pl-1.5 pr-4 py-1.5',
+              'relative z-10 flex items-center justify-center gap-2 rounded-full',
+              'pl-2 pr-2 sm:pr-4 py-2',
               'text-label-md font-semibold transition-colors duration-medium-2 ease-standard',
               'tactile-press select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-high',
-              isActive
-                ? 'text-on-primary'
-                : 'text-on-surface-variant hover:text-on-surface',
             )}
           >
-            {/* Icon "cube" — a small squared color chip previewing the
-                theme's own accent, with a frosted glass treatment when
-                active so it reads as inset into the glossy indicator
-                rather than floating flatly on top of it. */}
+            {/* Icon chip — a fixed 24×24 (h-6 w-6) circle. This exact
+                element is what the sliding indicator's center is measured
+                against, so its own centering has to be exact too:
+                `flex items-center justify-center` centers the icon's box
+                on both axes, and `[&>svg]:block` strips the few pixels of
+                inline-baseline descender space every <svg> carries by
+                default — without it the icon (and therefore the whole
+                measured "center") reads a couple of pixels high. */}
             <span
+              ref={(el) => {
+                iconRefs.current[index] = el
+              }}
               className={cn(
-                'flex items-center justify-center h-6 w-6 rounded-[0.4rem] shrink-0',
-                'transition-all duration-medium-2 ease-standard',
-                isActive && 'scale-105',
+                'relative flex items-center justify-center h-6 w-6 rounded-full shrink-0 overflow-hidden',
+                'transition-[background,box-shadow,color] duration-medium-2 ease-standard',
+                '[&>svg]:block',
               )}
               style={{
                 background: isActive
@@ -162,12 +185,19 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
                 boxShadow: isActive
                   ? 'inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -1px 2px rgba(0,0,0,0.16)'
                   : 'inset 0 1px 1px rgba(255,255,255,0.05)',
-                color: isActive ? undefined : `rgb(${option.accent})`,
+                color: isActive ? '#fff' : `rgb(${option.accent})`,
               }}
             >
               {option.icon}
             </span>
-            <span className="hidden sm:inline">{option.label}</span>
+            <span
+              className={cn(
+                'hidden sm:inline whitespace-nowrap transition-colors duration-medium-2 ease-standard',
+                isActive ? 'text-on-surface' : 'text-on-surface-variant',
+              )}
+            >
+              {option.label}
+            </span>
           </button>
         )
       })}
