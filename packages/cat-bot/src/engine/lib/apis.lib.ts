@@ -53,30 +53,11 @@ export const APIs = {
   betadash: {
     baseURL: 'https://betadash-api-swordslush-production.up.railway.app',
   },
-  delirius: {
-    baseURL: 'https://api.delirius.store',
-  },
-  kuroneko: {
-    baseURL: 'https://api.danzy.web.id',
-  },
-  lexcode: {
-    baseURL: 'https://api.lexcode.biz.id',
-  },
-  neo: {
-    baseURL: 'https://www.neoapis.xyz',
-  },
-  neosoft: {
-    baseURL: 'https://api.neosoft.best',
-  },
   nexray: {
     baseURL: 'https://api.nexray.eu.cc',
   },
   popcat: {
     baseURL: 'https://api.popcat.xyz',
-  },
-  sanka: {
-    baseURL: 'https://www.sankavollerei.web.id',
-    APIKey: 'planaai',
   },
   siputzx: {
     baseURL: 'https://api.siputzx.my.id',
