@@ -6,7 +6,9 @@ const dbType = process.env['DATABASE_TYPE'];
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const m = (await (dbType === 'mongodb'
   ? import('./mongodb.js')
-  : import('./neondb.js'))) as any;
+  : dbType === 'turso'
+    ? import('./turso.js')
+    : import('./neondb.js'))) as any;
 
 // --- BOT SESSION COMMANDS ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -181,8 +183,15 @@ export const pool = m.pool;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const initDb = m.initDb;
 
-// dbReady resolves when the NeonDB schema DDL has completed; undefined for all other adapters.
-// dbReady resolves when the NeonDB schema DDL has completed; undefined for all other adapters.
+// --- TURSO CLIENT ---
+// tursoClient is undefined at runtime when DATABASE_TYPE!='turso' — only used by
+// better-auth.lib.ts which guards with its own isTurso check before accessing it.
+// Deliberately a distinct export from `pool` (incompatible type: @libsql/client Client vs pg.Pool).
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const tursoClient = m.tursoClient;
+
+// dbReady resolves when the active adapter's schema DDL has completed (neondb or turso);
+// undefined for mongodb, which has no DDL step.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const dbReady = m.dbReady as Promise<void> | undefined;
 

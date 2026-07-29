@@ -24,6 +24,7 @@
     "packages/database",
     "packages/database/adapters/neondb",
     "packages/database/adapters/mongodb",
+    "packages/database/adapters/turso",
     "packages/web"
   ]
 }

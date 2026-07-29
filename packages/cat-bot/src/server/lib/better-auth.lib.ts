@@ -3,10 +3,20 @@ import { env } from '@/engine/config/env.config.js';
 import { betterAuth } from 'better-auth';
 // MongoDB adapter — bundled via @better-auth/mongo-adapter; only evaluated when DATABASE_TYPE=mongodb.
 import { mongodbAdapter } from 'better-auth/adapters/mongodb';
+// Turso/libSQL has no first-class better-auth adapter (unlike mongodb/neondb above), so we
+// wrap the shared @libsql/client Client in a Kysely Dialect ourselves — better-auth accepts
+// any Kysely Dialect directly via `database: { dialect, type: 'sqlite' }`.
+import { LibsqlDialect } from '@libsql/kysely-libsql';
 // Import the shared singleton exported from the database workspace package — avoids TS6059
 // rootDir errors while keeping the DB client lifecycle owned in one place.
-// mongoClient and getMongoDb are undefined at runtime when DATABASE_TYPE !== 'mongodb'.
-import { mongoClient, getMongoDb, pool as neonPool } from 'database';
+// mongoClient/getMongoDb, neonPool, and tursoClient are each undefined at runtime unless
+// DATABASE_TYPE matches their respective adapter.
+import {
+  mongoClient,
+  getMongoDb,
+  pool as neonPool,
+  tursoClient,
+} from 'database';
 // Admin plugin — registers /api/auth/admin/* endpoints gated by user.role === 'admin'.
 import { admin } from 'better-auth/plugins';
 // createAuthMiddleware enables the adminAuth before-hook to inspect the sign-in body
@@ -20,23 +30,37 @@ import {
 } from '@/server/email-template/index.js';
 
 const isMongo = env.DATABASE_TYPE === 'mongodb';
+const isTurso = env.DATABASE_TYPE === 'turso';
 
 const isEmailServicesEnabled = env.VITE_EMAIL_SERVICES_ENABLE === 'true';
 
-export const auth = betterAuth({
-  database: isMongo
-    ? // MongoDB driver — mongodbAdapter() receives a Db instance; mongoClient is optional for
-      // transactions (disabled on Atlas M0 free tier which lacks replica-set support).
-      // getMongoDb/mongoClient are typed `any` in the database barrel so the cast is needed
-      // to satisfy strict-mode while keeping the dynamic adapter pattern.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mongodbAdapter((getMongoDb as unknown as () => any)(), {
-        client: mongoClient,
-      })
+// Computed once and reused by both betterAuth instances below (`auth` and `adminAuth`) —
+// they share the same underlying DB adapter/connection, just different basePath/cookies.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const databaseConfig: any = isMongo
+  ? // MongoDB driver — mongodbAdapter() receives a Db instance; mongoClient is optional for
+    // transactions (disabled on Atlas M0 free tier which lacks replica-set support).
+    // getMongoDb/mongoClient are typed `any` in the database barrel so the cast is needed
+    // to satisfy strict-mode while keeping the dynamic adapter pattern.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mongodbAdapter((getMongoDb as unknown as () => any)(), {
+      client: mongoClient,
+    })
+  : isTurso
+    ? // Turso/libSQL — no official better-auth adapter exists, so we pass a Kysely Dialect
+      // directly. better-auth's Kysely-based adapter auto-detects SQLite dialect features
+      // (INTEGER booleans, TEXT timestamps) from `type: 'sqlite'`.
+      {
+        dialect: new LibsqlDialect({ client: tursoClient }),
+        type: 'sqlite',
+      }
     : // NeonDB — neonPool is a pg.Pool; better-auth uses KyselyDialect(PostgresDialect) under the hood.
       // Neon is officially supported: https://better-auth.com/ (listed under Community databases).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (neonPool as unknown as any),
+      (neonPool as unknown as any);
+
+export const auth = betterAuth({
+  database: databaseConfig,
   user: {
     changeEmail: {
       enabled: isEmailServicesEnabled,
@@ -179,13 +203,7 @@ export const auth = betterAuth({
 // Signing out of one portal never touches the other's cookie or session row.
 export const adminAuth = betterAuth({
   basePath: '/api/admin-auth',
-  database: isMongo
-    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mongodbAdapter((getMongoDb as unknown as () => any)(), {
-        client: mongoClient,
-      })
-    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (neonPool as unknown as any),
+  database: databaseConfig,
   user: {
     changeEmail: {
       enabled: isEmailServicesEnabled,

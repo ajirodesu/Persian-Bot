@@ -18,7 +18,7 @@ import 'dotenv/config';
  */
 export type NodeEnv = 'development' | 'production' | 'test';
 
-export type DatabaseType = 'mongodb' | 'neondb';
+export type DatabaseType = 'mongodb' | 'neondb' | 'turso';
 
 /**
  * Environment configuration type definition.
@@ -111,6 +111,7 @@ const VALID_LOG_LEVELS = [
 const VALID_DATABASE_TYPES = [
   'mongodb',
   'neondb',
+  'turso',
 ] as const;
 
 // ============================================================================
