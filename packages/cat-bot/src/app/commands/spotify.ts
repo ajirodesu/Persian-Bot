@@ -2,7 +2,8 @@
  * spotify.ts — Spotify Track Search & Downloader
  *
  * Searches Spotify by free-text query (title, artist, or "artist - title") and
- * delivers the top match as a playable MP3, forwarded via a direct download URL.
+ * delivers the top match as a playable MP3, streamed straight through to the
+ * platform as soon as the download connection opens (no full-file buffering).
  *
  * API: GET https://api.nexray.eu.cc/downloader/spotifyplay?q=<query>
  *
@@ -30,6 +31,7 @@
  * Cooldown: 10s
  */
 
+import type { Readable } from 'stream';
 import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
@@ -148,43 +150,41 @@ async function searchSpotify(query: string): Promise<SpotifyPlayResult> {
   return result;
 }
 
-/** Generous timeout for downloading the actual audio binary. */
-const DOWNLOAD_TIMEOUT_MS = 60_000;
-
-/** Hard cap on the downloaded file — protects memory/bandwidth against runaway responses. */
-const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
+/** Timeout for establishing the download connection — not the whole transfer. */
+const DOWNLOAD_TIMEOUT_MS = 30_000;
 
 /**
- * Downloads the track's MP3 bytes into a Buffer.
+ * Opens a live stream to the track's MP3 bytes without buffering the file first.
  *
  * Telegram's Bot API can accept a bare URL for sendAudio and fetch it server-side, but
  * this CDN (spotidown.app) rejects or mis-serves Telegram's own fetcher — surfacing as
- * "failed to get HTTP URL content". Downloading the bytes ourselves with a normal browser
- * UA and forwarding them as a real attachment sidesteps that unreliable remote-fetch path.
+ * "failed to get HTTP URL content". Rather than downloading the whole file into memory
+ * before replying (which adds the full download time on top of the upload time), this
+ * opens the connection with a normal browser UA and hands the live Readable straight to
+ * the attachment — the platform wrapper streams it through as bytes arrive, so sending
+ * starts immediately instead of waiting for the download to finish first.
  *
  * @param url - Direct MP3 download URL.
- * @returns The downloaded audio buffer.
- * @throws When the download ultimately fails after retries.
+ * @returns A live Readable stream of the audio bytes.
+ * @throws When the connection itself cannot be established after retries.
  */
-async function downloadTrack(url: string): Promise<Buffer> {
+async function openTrackStream(url: string): Promise<Readable> {
   return withRetry(
     async () => {
-      const res = await axios.get<ArrayBuffer>(url, {
+      const res = await axios.get<Readable>(url, {
         timeout: DOWNLOAD_TIMEOUT_MS,
         headers: NEXRAY_HEADERS,
-        responseType: 'arraybuffer',
-        maxContentLength: MAX_DOWNLOAD_BYTES,
-        maxBodyLength: MAX_DOWNLOAD_BYTES,
+        responseType: 'stream',
         validateStatus: (status) => status >= 200 && status < 300,
       });
-      const buf = Buffer.from(res.data);
-      if (buf.length === 0) throw new Error('Downloaded audio file is empty.');
-      return buf;
+      return res.data;
     },
     {
       maxAttempts: 3,
       initialDelayMs: 1_000,
       maxDelayMs: 5_000,
+      // Only the connection/handshake is retried here — once bytes start streaming
+      // to the platform wrapper, a retry would just duplicate a partially-sent file.
       shouldRetry: (err) => isNetworkError(err),
     },
   );
@@ -217,7 +217,7 @@ export const onCommand = async ({ chat, args, usage }: AppCtx): Promise<void> =>
 
   try {
     const track = await searchSpotify(query);
-    const audioBuffer = await downloadTrack(track.download_url);
+    const audioStream = await openTrackStream(track.download_url);
 
     const caption = [
       `🎧  **${track.title}**`,
@@ -235,7 +235,7 @@ export const onCommand = async ({ chat, args, usage }: AppCtx): Promise<void> =>
       attachment: [
         {
           name: safeFilename(`${track.artist} - ${track.title}`),
-          stream: audioBuffer,
+          stream: audioStream,
         },
       ],
     });
