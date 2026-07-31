@@ -307,6 +307,20 @@ const iconOnlySizeClasses: Record<ButtonSize, string> = {
 }
 
 /**
+ * iOS HIG touch-target compliance for iconOnly buttons — xs/sm/md all
+ * render visually under 44×44px (by design, for dense toolbars), so an
+ * invisible ::before hit-slop layer extends the actual tap area without
+ * changing layout. Same pattern as IconButton.tsx. `lg` (p-3, effectively
+ * ≥44px once an icon is inside it) is left alone.
+ */
+const iconOnlyHitSlopClasses: Record<ButtonSize, string> = {
+  xs: 'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  sm: 'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  md: 'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  lg: '',
+}
+
+/**
  * Link variant size classes (no padding, just typography)
  */
 const linkSizeClasses: Record<ButtonSize, string> = {
@@ -499,6 +513,8 @@ const Button = forwardRefWithAs<'button', ButtonOwnProps>((props, ref) => {
     getVariantClasses(variant, resolvedColor),
     variant === 'filled' && resolvedColor === 'primary' && ctaGlowClass,
     !isUnstyled && getSizeClasses(),
+    iconOnly && !isUnstyled && 'relative',
+    iconOnly && !isUnstyled && iconOnlyHitSlopClasses[size],
     fullWidth && 'w-full',
     isLinkVariant && underline && 'underline underline-offset-2',
     className,

@@ -115,9 +115,10 @@ export interface TabsListProps {
 
 const variantClasses: Record<TabsVariant, string> = {
   line: 'border-b border-outline-variant',
-  enclosed: 'bg-surface-container p-1 rounded-lg border border-outline-variant',
+  enclosed:
+    'bg-surface-container p-1 rounded-[var(--radius-input)] border border-outline-variant',
   'enclosed-colored':
-    'bg-surface-container p-1 rounded-lg border border-outline-variant',
+    'bg-surface-container p-1 rounded-[var(--radius-input)] border border-outline-variant',
   'soft-rounded': 'bg-surface-container/50 p-1 rounded-full',
   'solid-rounded': 'bg-surface-container p-1 rounded-full',
   unstyled: '',
@@ -317,19 +318,19 @@ const Tab: React.FC<TabProps> = ({
       orientation === 'horizontal' && isActive && 'border-b-2 border-primary',
       orientation === 'vertical' &&
         isActive &&
-        'border-l-2 border-primary bg-primary/8 rounded-r-lg',
+        'border-l-2 border-primary bg-primary/8 rounded-r-[var(--radius-input)]',
       orientation === 'vertical' &&
         !isActive &&
-        'hover:bg-on-surface/[var(--state-hover-opacity)] rounded-lg',
+        'hover:bg-on-surface/[var(--state-hover-opacity)] rounded-[var(--radius-input)]',
     ),
     enclosed: cn(
-      'rounded-md',
+      'rounded-[var(--radius-input)]',
       isActive
         ? 'bg-surface text-on-surface shadow-elevation-1'
         : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
     ),
     'enclosed-colored': cn(
-      'rounded-md',
+      'rounded-[var(--radius-input)]',
       isActive
         ? 'bg-primary text-on-primary shadow-elevation-1'
         : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
@@ -416,8 +417,13 @@ const TabPanel: React.FC<TabPanelProps> = ({
       aria-labelledby={`tab-${panelValue}`}
       tabIndex={0}
       className={cn(
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-lg',
-        'animate-in fade-in duration-normal',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-[var(--radius-input)]',
+        // M3 shared-axis (X) transition: content enters with a small
+        // horizontal offset + fade rather than a flat cross-fade, so
+        // switching tabs reads as moving along an axis, not just
+        // appearing. Distance/duration/easing all come from the
+        // existing token scale — nothing invented outside it.
+        'animate-in fade-in slide-in-from-left-2 duration-normal ease-[var(--easing-emphasized-decelerate)]',
         className,
       )}
     >

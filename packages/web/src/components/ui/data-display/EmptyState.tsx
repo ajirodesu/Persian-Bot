@@ -122,7 +122,7 @@ const EmptyState = forwardRefWithAs<'div', EmptyStateOwnProps>((props, ref) => {
     <Component
       ref={ref}
       className={cn(
-        'bg-surface-container rounded-lg text-center',
+        'bg-surface-container rounded-[var(--radius-card)] text-center',
         config.wrapper,
         className,
       )}

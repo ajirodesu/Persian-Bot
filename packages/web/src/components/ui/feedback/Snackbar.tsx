@@ -115,7 +115,7 @@ const getActionButtonStyles = (
   color: SnackbarColor,
 ): string => {
   const base =
-    'px-3 py-1 rounded-md text-label-lg font-medium transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1'
+    'px-3 py-1 rounded-[var(--radius-input)] text-label-lg font-medium transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1'
 
   if (variant === 'standard') {
     // Inverse primary for standard snackbar (inverse surface background)
@@ -276,13 +276,18 @@ const Snackbar: React.FC<SnackbarProps> = ({
       className={cn(
         // Base styles
         // w-full on mobile spans the container, reverts to fixed min/max widths on tablet+
-        'flex items-center gap-3 px-4 py-3 rounded-lg shadow-elevation-3 w-full sm:w-auto sm:min-w-[288px] max-w-full sm:max-w-[568px]',
+        // Shared card-radius token; elevation-3 is correct here (this IS a
+        // floating overlay surface, per the M3 restraint rule) — left as-is
+        // rather than blurred, since toast text needs to stay fully legible
+        // over whatever's underneath, unlike a dialog scrim.
+        'flex items-center gap-3 px-4 py-3 rounded-[var(--radius-card)] shadow-elevation-3 w-full sm:w-auto sm:min-w-[288px] max-w-full sm:max-w-[568px]',
         // Typography
         'text-body-md',
         // Variant styles
         variantStyles,
-        // Animations
-        'transition-all duration-normal ease-standard',
+        // Animations — iOS-style deceleration on entrance/exit rather
+        // than the flatter default ease, matching Dialog/Tabs.
+        'transition-all duration-normal ease-[var(--easing-emphasized-decelerate)]',
         isVisible && !isExiting && 'translate-y-0 opacity-100',
         !isVisible && 'translate-y-4 opacity-0',
         isExiting && 'translate-y-4 opacity-0 scale-95',
@@ -315,8 +320,12 @@ const Snackbar: React.FC<SnackbarProps> = ({
         <button
           onClick={handleDismiss}
           className={cn(
-            'p-1 rounded-md hover:opacity-70 transition-opacity duration-fast',
+            // p-1 around a 16px icon is well under the 44px HIG minimum;
+            // hit-slop extends the tap area invisibly, same pattern as
+            // IconButton.tsx, without growing the compact toast layout.
+            'relative p-1 rounded-[var(--radius-input)] hover:opacity-70 transition-opacity duration-fast',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1',
+            'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
           )}
           aria-label="Dismiss"
         >

@@ -212,7 +212,10 @@ const DialogBackdrop: React.FC<DialogBackdropProps> = ({ className }) => {
   return (
     <div
       className={cn(
-        'absolute inset-0 bg-scrim/50 animate-in fade-in duration-normal',
+        // iOS-style vibrancy on the scrim (deliberate blur exception, see
+        // tokens.css --surface-blur-*) + M3 shared-axis fade, biased toward
+        // an emphasized-decelerate curve on entry per HIG sheet motion.
+        'absolute inset-0 bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)] animate-in fade-in duration-normal ease-[var(--easing-emphasized-decelerate)]',
         className,
       )}
       onClick={handleClick}
@@ -375,7 +378,13 @@ const DialogContent: React.FC<DialogContentProps> = ({
       ref={contentRef}
       tabIndex={-1}
       className={cn(
-        'relative w-full bg-surface rounded-xl shadow-elevation-3 border border-outline-variant overflow-hidden animate-in zoom-in-95 fade-in duration-normal',
+        // Shape comes from the shared card-radius token, never a hardcoded
+        // rounded-xl — keeps dialogs visually consistent with Card.tsx.
+        // Elevation-3 is reserved for true overlays (per the M3 restraint
+        // rule: resting surfaces stay flat, floating surfaces carry depth).
+        // Entrance uses the iOS spring/deceleration curve rather than the
+        // default linear-ish ease, so the sheet settles instead of snapping.
+        'relative w-full bg-surface rounded-[var(--radius-card-lg)] shadow-elevation-3 border border-outline-variant overflow-hidden animate-in zoom-in-95 fade-in duration-normal ease-[var(--easing-emphasized-decelerate)]',
         sizeClasses[size],
         className,
       )}
@@ -443,7 +452,11 @@ const DialogCloseTrigger: React.FC<DialogCloseTriggerProps> = ({
       onClick={handleClick}
       type="button"
       className={cn(
-        'ml-auto p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/8 transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+        // Visual size stays compact (p-1.5, matches the header's density);
+        // the ::before pseudo-element extends the actual hit area to the
+        // 44×44 HIG minimum without affecting layout — small target,
+        // generous tap zone, same pattern used in IconButton.tsx.
+        'relative ml-auto p-1.5 rounded-[var(--radius-input)] text-on-surface-variant hover:text-on-surface hover:bg-on-surface/8 transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
         className,
       )}
       aria-label="Close dialog"

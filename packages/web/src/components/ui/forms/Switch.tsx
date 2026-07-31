@@ -125,7 +125,12 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
         className={cn(
-          'relative inline-flex items-center rounded-full transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-surface',
+          // All three sizes (20/24/28px tall) are well under the 44px HIG
+          // minimum. Unlike Checkbox's unlabeled case, this IS a real
+          // <button onClick>, so the hit-slop ::before pattern actually
+          // extends the clickable area (clicks on the pseudo-element's
+          // painted region still target the button).
+          'relative inline-flex items-center rounded-full transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-surface before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
           config.container,
           checked ? 'bg-primary' : 'bg-outline',
           disabled
@@ -141,7 +146,7 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
         {/* Thumb - uses on-primary when checked for proper contrast in both themes */}
         <span
           className={cn(
-            'inline-block rounded-full transition-all duration-fast ease-standard transform',
+            'inline-block rounded-[var(--radius-button)] transition-all duration-fast ease-standard transform',
             config.thumb,
             checked ? 'bg-on-primary' : 'bg-surface',
             checked ? config.translate : 'translate-x-1',

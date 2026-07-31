@@ -212,8 +212,9 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         {/* Custom checkbox visual */}
         <span
           className={cn(
-            // Base styles
-            'inline-flex items-center justify-center rounded border-2 transition-all duration-fast ease-standard',
+            // Base styles — --radius-compact keeps the corner proportional
+            // to a 16–24px box (see tokens.css)
+            'inline-flex items-center justify-center rounded-[var(--radius-compact)] border-2 transition-all duration-fast ease-standard',
             config.container,
             // Unchecked state
             !checked && !indeterminate && 'border-outline bg-transparent',
@@ -248,7 +249,13 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
       </span>
     )
 
-    // If no label, return just the checkbox
+    // If no label, return just the checkbox. Note: its click target is the
+    // native <input> itself (sr-only, positioned via CSS, no wrapping
+    // <label>) — a hit-slop pseudo-element on this wrapper would be
+    // decorative only, since nothing here has a click handler to extend.
+    // Consumers needing a guaranteed 44px target for a standalone,
+    // unlabeled checkbox should pass a visually-hidden label instead of
+    // omitting it, so the browser's native label-click-forwarding applies.
     if (!label) {
       return (
         <span className={cn('inline-flex', className)}>{checkboxElement}</span>

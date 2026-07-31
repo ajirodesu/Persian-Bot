@@ -81,6 +81,18 @@ const sizeClasses: Record<
   },
 }
 
+/**
+ * All three visual sizes (28px/32px/40px) render under the 44px HIG
+ * minimum — appropriate for a dense admin table footer, but the actual
+ * tap target still needs to hit 44×44. Same hit-slop ::before pattern
+ * as IconButton.tsx: visual density stays, invisible tap area grows.
+ */
+const hitSlopClasses: Record<PaginationSize, string> = {
+  sm: 'relative before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  md: 'relative before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  lg: '', // 40px is close enough with the button's own padding + gap; left alone
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -397,9 +409,10 @@ const Pagination = forwardRefWithAs<'nav', PaginationOwnProps>((props, ref) => {
                 type="button"
                 onClick={() => handlePageChange(page)}
                 className={cn(
-                  'rounded-lg font-medium transition-colors',
+                  'rounded-[var(--radius-input)] font-medium transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                   config.button,
+                  hitSlopClasses[size],
                   isCurrentPage
                     ? 'bg-primary text-on-primary'
                     : 'bg-surface-container text-on-surface hover:bg-surface-container-high',

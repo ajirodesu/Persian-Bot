@@ -203,7 +203,7 @@ const Link = forwardRefWithAs<'a', LinkOwnProps>((props, ref) => {
     // Base styles
     'inline-flex items-center font-medium transition-all duration-fast ease-standard',
     // Focus ring for accessibility
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-sm',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-[var(--radius-compact)]',
     // Variant styles (skip for unstyled)
     variant !== 'unstyled' && sizeClasses[size],
     variant !== 'unstyled' && iconSizeClasses[size],

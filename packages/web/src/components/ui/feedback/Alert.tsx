@@ -185,7 +185,7 @@ const getActionButtonStyles = (
   actionVariant: 'primary' | 'secondary',
 ): string => {
   const base =
-    'px-3 py-1.5 rounded-md text-label-md font-medium transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1'
+    'px-3 py-1.5 rounded-[var(--radius-input)] text-label-md font-medium transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1'
 
   // For filled and gradient backgrounds, use inverse/light colors for buttons
   if (variant === 'filled' || variant === 'gradient') {
@@ -287,7 +287,7 @@ const Alert = forwardRefWithAs<'div', AlertOwnProps>((props, ref) => {
     <Component
       ref={ref}
       className={cn(
-        'rounded-lg border animate-in fade-in duration-fast flex items-start gap-3',
+        'rounded-[var(--radius-card)] border animate-in fade-in duration-fast flex items-start gap-3',
         sizeStyles[size],
         colorStyle,
         className,
@@ -342,7 +342,7 @@ const Alert = forwardRefWithAs<'div', AlertOwnProps>((props, ref) => {
         <button
           onClick={onClose}
           className={cn(
-            'flex-shrink-0 p-1 rounded-md hover:opacity-70 transition-opacity duration-fast',
+            'relative flex-shrink-0 p-1 rounded-[var(--radius-input)] hover:opacity-70 transition-opacity duration-fast before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1',
           )}
           aria-label="Dismiss alert"

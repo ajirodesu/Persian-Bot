@@ -44,6 +44,21 @@ const base =
   'relative inline-flex items-center justify-center rounded-full transition-all duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-state-disabled disabled:pointer-events-none active:scale-[0.95]'
 
 /**
+ * iOS HIG touch-target compliance: `sm` (32px) and `md` (40px) are both
+ * under the 44×44 minimum hit area, but shrinking every dense admin
+ * surface (tables, toolbars) to 44px squares would blow up layout
+ * density. Instead we keep the *visual* size and extend the *hit* area
+ * with an invisible ::before layer, centered on the button — the same
+ * "small target, big tap zone" pattern iOS uses for its own compact
+ * nav-bar icons. `lg` (48px) already clears 44px, so it's left alone.
+ */
+const hitSlopClasses: Record<Size, string> = {
+  sm: 'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  md: 'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+  lg: '',
+}
+
+/**
  * Filled variant state layer structure
  * Uses ::after pseudo-element for M3-compliant state layers
  * - z-[1] ensures state layer is above background but below content
@@ -197,6 +212,7 @@ const IconButton = forwardRefWithAs<'button', IconButtonOwnProps>(
       variantClasses[variant],
       sizeClasses[size],
       iconSizeClasses[size],
+      hitSlopClasses[size],
       className,
     )
 

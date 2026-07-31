@@ -112,6 +112,12 @@
   --radius-button: 9999px;     /* fully pill */
   --radius-input: 0.75rem;     /* 12px */
   --radius-badge: 9999px;
+  /* Compact controls (checkbox) sit well below the --radius-input scale —
+     --radius-input's 12px corner would read as nearly-circular on a
+     16–24px box. Formalized as its own token (value-identical to
+     Tailwind's `rounded` default) rather than a hardcoded class, per
+     the "every radius through the token system" rule. */
+  --radius-compact: 0.25rem;   /* 4px */
 
   /* ==================== SPACING ==================== */
   --spacing-base: 0.25rem;
@@ -256,6 +262,26 @@
   --shadow-glow-sm: 0 0 12px rgb(var(--color-primary) / 0.25);
   --shadow-glow-md: 0 0 24px rgb(var(--color-primary) / 0.35);
   --shadow-glow-lg: 0 0 40px rgb(var(--color-primary) / 0.45);
+
+  /* ==================== SURFACE MATERIALS (iOS vibrancy) ====================
+     The one deliberate exception to "no gradients": frosted-glass blur,
+     reserved for genuine overlay/floating surfaces (dialogs, sheets,
+     dropdowns, sticky headers, the drawer sidebar) — never resting
+     content surfaces like cards. Named here so every component reads
+     the same token instead of scattering inline `backdrop-blur-*`
+     values. Color/tint of the blurred surface still comes from each
+     theme's own --color-surface / --color-scrim. */
+  --surface-blur-sm: blur(8px) saturate(140%);
+  --surface-blur-md: blur(16px) saturate(150%);
+  --surface-blur-lg: blur(24px) saturate(160%);
+
+  /* ==================== TOUCH TARGETS (iOS HIG) ====================
+     Minimum interactive hit area, independent of a control's *visual*
+     size. Small/dense controls (table row actions, pagination digits,
+     icon-only buttons) keep their compact visual footprint but must
+     still expose a 44×44 hit area, via an invisible hit-slop layer —
+     see IconButton.tsx / Button.tsx (iconOnly) / Pagination.tsx. */
+  --touch-target-min: 2.75rem; /* 44px */
 
   /* ==================== STATE LAYER OPACITY ==================== */
   --state-hover-opacity: 0.08;

@@ -228,8 +228,10 @@ const Badge = forwardRefWithAs<'span', BadgeOwnProps>((props, ref) => {
       className={cn(
         // Base styles
         'inline-flex items-center justify-center font-medium border transition-colors duration-fast',
-        // Border radius
-        pill ? 'rounded-full' : 'rounded-md',
+        // Border radius — pill uses the shared badge token (9999px);
+        // non-pill uses --radius-compact (proportional to a small chip,
+        // same reasoning as Checkbox) rather than an arbitrary rounded-md.
+        pill ? 'rounded-[var(--radius-badge)]' : 'rounded-[var(--radius-compact)]',
         // Size
         sizeStyles[size],
         // Variant and color
@@ -276,7 +278,7 @@ const Badge = forwardRefWithAs<'span', BadgeOwnProps>((props, ref) => {
           type="button"
           onClick={handleDismiss}
           className={cn(
-            'flex-shrink-0 rounded-sm hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-current transition-opacity duration-fast ml-0.5 -mr-0.5',
+            'flex-shrink-0 rounded-[var(--radius-compact)] hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-current transition-opacity duration-fast ml-0.5 -mr-0.5',
           )}
           aria-label="Dismiss"
         >

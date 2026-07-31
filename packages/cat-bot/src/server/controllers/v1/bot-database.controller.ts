@@ -10,15 +10,18 @@
  * validates bot ownership via botService.getBot() before touching any data.
  * This prevents one user from accessing another user's session records.
  *
- * SQL: queries pool directly (same pg.Pool the adapter layer uses) to avoid
- * round-tripping through the LRU cache for admin reads and to support the
- * LIMIT / OFFSET / ILIKE search pattern not exposed by the engine repos.
+ * SQL: queries the active adapter directly (bypassing the engine repos' LRU
+ * cache) to support the LIMIT / OFFSET / ILIKE search pattern the dashboard
+ * needs. Written once in Postgres flavor and routed through dbQuery(), which
+ * runs it as-is against neondb's pg.Pool or translates it to libSQL syntax
+ * for turso — see database-query.lib.ts for why a single `pool` import can't
+ * do this (pool is only defined when DATABASE_TYPE=neondb).
  */
 
 import type { Request, Response } from 'express';
 import { requireSession } from '@/server/validators/auth-session.validator.js';
 import { botService } from '@/server/services/bot.service.js';
-import { pool } from 'database';
+import { dbQuery } from '@/server/lib/database-query.lib.js';
 import {
   banUser,
   unbanUser,
@@ -55,11 +58,6 @@ async function resolveSession(
     return null;
   }
 }
-
-// pool is exported as `any` from the database package (dynamic import barrel).
-// We call it untyped and cast the result rows instead of using generic type params.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db: { query: (sql: string, params: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }> } = pool as any;
 
 /** Status filter applied to the ban-state of a record. */
 type StatusFilter = 'all' | 'active' | 'banned';
@@ -123,7 +121,7 @@ export class BotDatabaseController {
 
     try {
       const [rowsResult, countResult] = await Promise.all([
-        db.query(
+        dbQuery(
           `SELECT
              bu.id,
              bu.name,
@@ -148,7 +146,7 @@ export class BotDatabaseController {
            LIMIT $5 OFFSET $6`,
           [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, limit, offset],
         ),
-        db.query(
+        dbQuery(
           `SELECT COUNT(*) AS count
            FROM bot_users_session bus
            JOIN bot_users bu ON bu.id = bus.bot_user_id
@@ -208,7 +206,7 @@ export class BotDatabaseController {
 
     try {
       const [rowsResult, countResult] = await Promise.all([
-        db.query(
+        dbQuery(
           `SELECT
              bt.id,
              bt.name,
@@ -233,7 +231,7 @@ export class BotDatabaseController {
            LIMIT $5 OFFSET $6`,
           [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, limit, offset],
         ),
-        db.query(
+        dbQuery(
           `SELECT COUNT(*) AS count
            FROM bot_threads_session bts
            JOIN bot_threads bt ON bt.id = bts.bot_thread_id
@@ -280,7 +278,7 @@ export class BotDatabaseController {
     }
 
     try {
-      await db.query(
+      await dbQuery(
         `DELETE FROM bot_users_session
          WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_user_id = $4`,
         [ctx.userId, ctx.platformId, ctx.sessionId, botUserId],
@@ -362,7 +360,7 @@ export class BotDatabaseController {
     }
 
     try {
-      await db.query(
+      await dbQuery(
         `DELETE FROM bot_threads_session
          WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
         [ctx.userId, ctx.platformId, ctx.sessionId, botThreadId],

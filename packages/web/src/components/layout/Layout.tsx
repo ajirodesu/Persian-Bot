@@ -60,9 +60,12 @@ export default function Layout() {
       <header
         className={cn(
           'sticky top-0 z-fixed transition-all duration-normal',
+          // Sticky header is one of the spec's named allowed vibrancy
+          // surfaces — migrated off hardcoded backdrop-blur-xl/md onto the
+          // shared --surface-blur-lg/md tokens (same material as Dialog/Select).
           scrolled
-            ? 'bg-surface/85 backdrop-blur-xl border-b border-outline-variant/70 shadow-elevation-1'
-            : 'bg-surface/60 backdrop-blur-md border-b border-outline-variant/40',
+            ? 'bg-surface/85 [backdrop-filter:var(--surface-blur-lg)] border-b border-outline-variant/70 shadow-elevation-1'
+            : 'bg-surface/60 [backdrop-filter:var(--surface-blur-md)] border-b border-outline-variant/40',
         )}
       >
         <nav
@@ -79,7 +82,7 @@ export default function Layout() {
             to="/"
             variant="unstyled"
             aria-label="Cat-Bot home"
-            className="flex items-center gap-2 text-title-lg font-semibold text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md"
+            className="flex items-center gap-2 text-title-lg font-semibold text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)]"
           >
             <Logo className={H_LOGO_ICON} />
           </UILink>
@@ -88,7 +91,7 @@ export default function Layout() {
           <Link
             to="/"
             className={cn(
-              'hidden md:inline-flex ml-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md font-semibold tracking-tight',
+              'hidden md:inline-flex ml-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
               H_BRAND_TEXT,
             )}
           >
@@ -100,7 +103,7 @@ export default function Layout() {
             <Link
               to="/"
               className={cn(
-                'pointer-events-auto text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md font-semibold tracking-tight',
+                'pointer-events-auto text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
                 H_BRAND_TEXT,
               )}
             >
@@ -168,7 +171,7 @@ export default function Layout() {
             role="navigation"
             aria-label="Mobile navigation"
             className={cn(
-              'md:hidden border-t border-outline-variant/60 bg-surface-container-low/95 backdrop-blur-xl',
+              'md:hidden border-t border-outline-variant/60 bg-surface-container-low/95 [backdrop-filter:var(--surface-blur-lg)]',
               '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
             )}
           >

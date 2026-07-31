@@ -489,7 +489,9 @@ const Bars: React.FC<ProgressBaseProps> = ({
           <div
             key={i}
             className={cn(
-              'rounded-sm animate-pulse',
+              // Tiny loading-bar segment — --radius-compact matches its
+              // scale (a card/input radius would look disproportionate).
+              'rounded-[var(--radius-compact)] animate-pulse',
               barSizeClasses[size].width,
               barSizeClasses[size].height,
               bgColorClasses[color],

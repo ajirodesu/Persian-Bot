@@ -113,7 +113,7 @@ export default function BotLayout() {
       </Tabs.Root>
 
       {/* Outlet renders the specific page chunk, wrapped in animation classes matching Tabs.Panel */}
-      <div className="focus-visible:outline-none animate-in fade-in duration-normal">
+      <div className="focus-visible:outline-none animate-in fade-in slide-in-from-left-2 duration-normal ease-[var(--easing-emphasized-decelerate)]">
         <Outlet
           context={
             { bot, setBot, isActive, startedAt, id } satisfies BotContextType

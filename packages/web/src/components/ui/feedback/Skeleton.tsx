@@ -126,7 +126,7 @@ const variantClasses: Record<SkeletonVariant, string> = {
   text: 'rounded-full',
   rectangular: 'rounded-none',
   circular: 'rounded-full aspect-square',
-  rounded: 'rounded-lg',
+  rounded: 'rounded-[var(--radius-card)]',
 }
 
 /**

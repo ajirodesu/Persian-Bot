@@ -154,11 +154,17 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
             title={option.description}
             onClick={() => setTheme(option.value)}
             className={cn(
+              // On mobile (label hidden below sm:) this button is icon +
+              // 8px padding ≈ 40px — under the 44px HIG minimum. Hit-slop
+              // extends the tap area without disturbing the hand-tuned
+              // sliding-indicator geometry (which measures the icon chip's
+              // own rect, not this button's).
               'relative z-10 flex items-center justify-center gap-2 rounded-full',
               'pl-2 pr-2 sm:pr-4 py-2',
               'text-label-md font-semibold transition-colors duration-medium-2 ease-standard',
               'tactile-press select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-high',
+              'before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""] before:-z-10',
             )}
           >
             {/* Icon chip — a fixed 24×24 (h-6 w-6) circle. This exact

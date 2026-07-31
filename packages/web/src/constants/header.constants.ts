@@ -87,8 +87,11 @@ export const H_AVATAR_TEXT =
  * `!important` this override would be at the mercy of Tailwind's internal
  * stylesheet ordering rather than reliably winning.
  */
+// 36px/40px visual size (intentionally compact for a dense mobile header),
+// but both are under the 44px HIG minimum — hit-slop extends the actual
+// tap area without growing the header's visual footprint.
 export const H_ICON_BTN_MOBILE =
-  '!w-9 !h-9 md:!w-10 md:!h-10 [&>svg]:!w-[18px] [&>svg]:!h-[18px] md:[&>svg]:!w-5 md:[&>svg]:!h-5' as const
+  'relative !w-9 !h-9 md:!w-10 md:!h-10 [&>svg]:!w-[18px] [&>svg]:!h-[18px] md:[&>svg]:!w-5 md:[&>svg]:!h-5 before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]' as const
 
 /** Chevron icon in menu triggers. */
 export const H_CHEVRON = 'h-4 w-4 3xl:h-5 3xl:w-5' as const
@@ -97,7 +100,7 @@ export const H_CHEVRON = 'h-4 w-4 3xl:h-5 3xl:w-5' as const
 
 /** Admin sidebar nav item classes. */
 export const H_SIDEBAR_NAV =
-  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-label-lg font-medium transition-colors duration-fast' as const
+  'flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-input)] text-label-lg font-medium transition-colors duration-fast' as const
 
 /** Icon size inside sidebar nav items. */
 export const H_SIDEBAR_ICON = 'h-4 w-4 shrink-0 3xl:h-5 3xl:w-5' as const

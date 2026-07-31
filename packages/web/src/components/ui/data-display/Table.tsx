@@ -84,7 +84,9 @@ const variantRootClasses: Record<TableVariant, string> = {
   ghost: 'bg-transparent',
   soft: 'bg-surface-container-low/50',
   filled: '',
-  glass: 'bg-surface/20 backdrop-blur-md border border-outline-variant/30',
+  // Frosted-glass token (--surface-blur-md), not a hardcoded backdrop-blur-md —
+  // keeps this in step with the same material used by Dialog's scrim.
+  glass: 'bg-surface/20 [backdrop-filter:var(--surface-blur-md)] border border-outline-variant/30',
 }
 
 // Soft variant header tint — low opacity keeps header text readable on the surface token
@@ -135,7 +137,7 @@ function getHeaderBgClass(
   if (variant === 'soft') return softHeaderClasses[colorScheme]
   if (variant === 'filled') return filledHeaderClasses[colorScheme]
   if (variant === 'ghost') return 'bg-transparent'
-  if (variant === 'glass') return 'bg-surface/30 backdrop-blur-sm'
+  if (variant === 'glass') return 'bg-surface/30 [backdrop-filter:var(--surface-blur-sm)]'
   return 'bg-surface-container-low'
 }
 
@@ -192,7 +194,7 @@ const TableScrollArea = React.forwardRef<HTMLDivElement, TableScrollAreaProps>(
       <div
         ref={ref}
         className={cn(
-          'w-full rounded-lg border border-outline-variant',
+          'w-full rounded-[var(--radius-card)] border border-outline-variant',
           className,
         )}
         style={scrollStyles}

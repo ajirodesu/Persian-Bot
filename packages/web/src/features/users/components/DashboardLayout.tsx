@@ -106,7 +106,7 @@ const SidebarNav = memo(function SidebarNav({
           to={ROUTES.DASHBOARD.ROOT}
           onClick={onNavClick}
           className={cn(
-            'flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-md font-semibold tracking-tight',
+            'flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
             H_BRAND_TEXT,
           )}
         >
@@ -134,7 +134,7 @@ const SidebarNav = memo(function SidebarNav({
               aria-current={isActive ? 'page' : undefined}
               className={cn(
                 H_SIDEBAR_NAV,
-                'rounded-xl font-medium transition-colors duration-fast',
+                'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
                 isActive
                   ? 'bg-primary/10 text-primary'
                   : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
@@ -163,7 +163,7 @@ const SidebarNav = memo(function SidebarNav({
                 aria-current={isBotRoute ? 'page' : undefined}
                 className={cn(
                   H_SIDEBAR_NAV,
-                  'rounded-xl font-medium transition-colors duration-fast',
+                  'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
                   isBotRoute
                     ? 'bg-primary/10 text-primary'
                     : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
@@ -237,7 +237,7 @@ const UserMenu = memo(function UserMenu() {
         aria-expanded={open}
         aria-label={`${displayName} — account menu`}
         className={cn(
-          'flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors duration-fast',
+          'flex items-center gap-1.5 rounded-[var(--radius-input)] px-2 py-1.5 transition-colors duration-fast',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
@@ -267,7 +267,7 @@ const UserMenu = memo(function UserMenu() {
           aria-label="User menu"
           className={cn(
             'absolute right-0 top-full mt-1.5 z-dropdown min-w-[210px]',
-            'rounded-xl border border-outline-variant/80 bg-surface-container-low',
+            'rounded-[var(--radius-input)] border border-outline-variant/80 bg-surface-container-low',
             'shadow-elevation-3 py-1 overflow-hidden',
             '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
           )}
@@ -471,7 +471,7 @@ export default function DashboardLayout() {
         {/* Mobile scrim */}
         {mobileOpen && (
           <div
-            className="fixed inset-0 z-drawer bg-scrim/50 md:hidden backdrop-blur-sm"
+            className="fixed inset-0 z-drawer bg-scrim/50 md:hidden [backdrop-filter:var(--surface-blur-sm)]"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />

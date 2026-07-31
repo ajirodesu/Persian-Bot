@@ -129,7 +129,10 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
         disabled={disabled}
         className={cn(
           // Added pointer-events-auto to override the wrapper's pointer-events-none in Input.tsx
-          'flex items-center justify-center rounded text-on-surface-variant transition-colors duration-fast pointer-events-auto',
+          // p-1/1.5/2 around a small icon is well under 44px; hit-slop
+          // extends the tap area without disturbing Input's icon-slot
+          // spacing (a visually larger button would misalign the field).
+          'relative flex items-center justify-center rounded-[var(--radius-compact)] text-on-surface-variant transition-colors duration-fast pointer-events-auto before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
           toggleButtonSizeClasses[inputSize],
           !disabled &&
             'hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',

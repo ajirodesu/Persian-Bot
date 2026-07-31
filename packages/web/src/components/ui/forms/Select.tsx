@@ -393,7 +393,10 @@ const Select: React.FC<SelectProps> = ({
         zIndex: 'var(--z-dropdown)',
       }}
       className={cn(
-        'max-h-60 overflow-auto rounded-lg border border-outline-variant bg-surface shadow-elevation-2',
+        // Dropdowns are one of the spec's named allowed vibrancy surfaces
+        // (alongside dialogs/sheets/sticky headers) — bg opacity dropped so
+        // the blur is visible, radius switched to the shared input token.
+        'max-h-60 overflow-auto rounded-[var(--radius-input)] border border-outline-variant bg-surface/90 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-2',
         menuSizeClasses[size],
       )}
     >
