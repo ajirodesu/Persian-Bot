@@ -12,11 +12,12 @@
     line-height: 1.6;
     letter-spacing: 0em;
     color-scheme: dark;
-    /* Inter optical sizing for crisp rendering */
+    /* Fraunces is a variable font with its own optical-size (opsz)
+       axis — auto lets the browser pick the right cut per rendered
+       size instead of stretching one static weight everywhere. */
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv11', 'cv01', 'cv02';
   }
 
   html {

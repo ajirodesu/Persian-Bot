@@ -2,7 +2,7 @@
  * Global Styles Entry Point
  *
  * Composition order:
- *   fonts    → Inter from Google Fonts (premium system typography)
+ *   fonts    → Fraunces from Google Fonts (unified serif across all text)
  *   theme/   → Per-theme CSS custom property values (color roles)
  *   tokens   → Design system tokens: typography, spacing, motion, layout, shadows
  *   base     → HTML element defaults and scrollbar normalization via @layer base
@@ -17,13 +17,18 @@
 
 /* -----------------------------------------------------------
   0. Web Fonts
-  Inter: humanist body typeface, used across every theme.
-  Sora: geometric extrabold display face used by the Aqua and
-  Indigo themes for headings/brand.
-  JetBrains Mono: distinct developer-grade monospace used by
-  every theme for code/data.
+  Fraunces: unified serif typeface used for --font-family-brand
+  AND --font-family-plain, on every theme — headings and body
+  copy both read Fraunces, site-wide. Loaded across its full
+  optical-size axis (9..144) so small body text and large
+  display headings each get their own optically-tuned cut
+  rather than one static weight stretched to every size.
+  JetBrains Mono: distinct developer-grade monospace, still used
+  by every theme for code/data — deliberately NOT switched to
+  Fraunces, since a display serif would break alignment/legibility
+  in code blocks and tabular data (see DESIGN_NOTES_M3_IOS.md).
   ----------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* -----------------------------------------------------------
   1. Theme Color Variables
@@ -38,9 +43,12 @@
               html[data-theme="indigo"].
 
   Every theme shares the exact same shape (--radius-*), spacing,
-  and typography tokens from tokens.css below — only color, glow,
-  and blur values are theme-specific, so switching themes never
-  changes the size or layout of cards, buttons, or text.
+  typography SIZE (--typography-*-font-size/-line-height/
+  -letter-spacing), and now font-family tokens from tokens.css
+  below and this file's Fraunces import — only color, glow, and
+  blur values are theme-specific. A theme file changing any size,
+  weight, line-height, or font-family value is a regression: open
+  its TYPOGRAPHY block and diff it against the other two themes.
   ----------------------------------------------------------- */
 @import './theme/aqua.css';
 @import './theme/burnt.css';
