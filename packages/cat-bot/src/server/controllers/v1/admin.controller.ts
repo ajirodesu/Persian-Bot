@@ -5,18 +5,52 @@ import { botRepo } from '@/server/repos/bot.repo.js';
 import { botService } from '@/server/services/bot.service.js';
 import {
   listSystemAdmins,
-  addSystemAdmin,
-  removeSystemAdmin,
   listAllUsers,
   deleteUser,
   resetAllDatabase,
 } from 'database';
+// System admin mutations/checks MUST go through the cached repo wrapper (not the
+// bare 'database' package functions above) — it writes through to the shared
+// in-memory Set so Add/Remove take effect immediately on the very next command
+// or API call, with no server restart and no waiting on the LRU's 5-min TTL.
+import {
+  addSystemAdmin,
+  removeSystemAdmin,
+  isSystemAdmin,
+} from '@/engine/repos/system-admin.repo.js';
 import type {
   AddSystemAdminRequestDto,
   ResetAllDatabaseRequestDto,
   ResetAllDatabaseResponseDto,
 } from '@/server/dtos/admin.dto.js';
 import { RESET_ALL_DATABASE_CONFIRMATION_PHRASE } from '@/server/dtos/admin.dto.js';
+
+/** Max length for a system admin ID — generous enough for any platform's native ID format (Discord/Telegram snowflakes, UUIDs, etc). */
+const SYSTEM_ADMIN_ID_MAX_LENGTH = 128;
+
+/**
+ * Validates a submitted system admin ID server-side — the client-side check in
+ * settings.tsx is a UX convenience only, never the source of truth. Returns the
+ * trimmed ID on success, or an error message string on failure.
+ */
+function validateSystemAdminId(raw: unknown): { id: string } | { error: string } {
+  if (typeof raw !== 'string') {
+    return { error: 'adminId must be a string' };
+  }
+  const id = raw.trim();
+  if (!id) {
+    return { error: 'adminId cannot be empty' };
+  }
+  if (id.length > SYSTEM_ADMIN_ID_MAX_LENGTH) {
+    return { error: `adminId must be ${SYSTEM_ADMIN_ID_MAX_LENGTH} characters or fewer` };
+  }
+  // Reject embedded whitespace/control characters — a valid platform user ID never contains these.
+  if (/[\s\u0000-\u001f]/.test(id)) {
+    return { error: 'adminId cannot contain whitespace or control characters' };
+  }
+  return { id };
+}
+
 export class AdminController {
   // In-process re-entrancy guard — see resetAllDatabase() safeguard #3.
   #resetInProgress = false;
@@ -82,13 +116,25 @@ export class AdminController {
   // POST /api/v1/admin/system-admins
   async addSystemAdmin(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
-    const { adminId } = req.body as AddSystemAdminRequestDto;
-    if (typeof adminId !== 'string' || !adminId.trim()) {
-      res.status(400).json({ error: 'Missing required field: adminId' });
+    const validated = validateSystemAdminId(
+      (req.body as AddSystemAdminRequestDto | undefined)?.adminId,
+    );
+    if ('error' in validated) {
+      res.status(400).json({ error: validated.error });
       return;
     }
+    const { id: adminId } = validated;
     try {
-      const admin = await addSystemAdmin(adminId.trim());
+      // Explicit pre-check so duplicates surface as a clear, specific error instead of a
+      // silently-idempotent 201 — addSystemAdmin() itself is still safe under a race (the
+      // DB's UNIQUE constraint + ON CONFLICT DO NOTHING makes it idempotent either way).
+      if (await isSystemAdmin(adminId)) {
+        res
+          .status(409)
+          .json({ error: `"${adminId}" is already a system admin` });
+        return;
+      }
+      const admin = await addSystemAdmin(adminId);
       res.status(201).json(admin);
     } catch (error) {
       console.error('[AdminController.addSystemAdmin]', error);
@@ -99,12 +145,19 @@ export class AdminController {
   // DELETE /api/v1/admin/system-admins/:adminId
   async removeSystemAdmin(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
-    const adminId = String(req.params['adminId'] ?? '');
-    if (!adminId) {
-      res.status(400).json({ error: 'Missing adminId param' });
+    const validated = validateSystemAdminId(req.params['adminId']);
+    if ('error' in validated) {
+      res.status(400).json({ error: validated.error });
       return;
     }
+    const { id: adminId } = validated;
     try {
+      if (!(await isSystemAdmin(adminId))) {
+        res
+          .status(404)
+          .json({ error: `"${adminId}" is not a registered system admin` });
+        return;
+      }
       await removeSystemAdmin(adminId);
       res.status(200).json({ status: 'removed' });
     } catch (error) {
