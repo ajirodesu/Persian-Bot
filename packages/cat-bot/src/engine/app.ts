@@ -368,10 +368,16 @@ async function main(): Promise<void> {
     await dbReady;
   }
 
-  // Load once — all platform listeners share the same Maps
-  const [commands, eventModules] = await Promise.all([
+  // Load once — all platform listeners share the same Maps.
+  // loadSessionConfigs() hits the DB while loadCommands()/loadEventModules() hit disk —
+  // independent I/O with no data dependency between them, so run all three concurrently
+  // instead of waiting for the file loads before even starting the DB round trip. This
+  // matters most right after idle, when the DB connection is cold and its latency would
+  // otherwise stack on top of the disk-import time instead of overlapping it.
+  const [commands, eventModules, sessionConfigs] = await Promise.all([
     loadCommands(),
     loadEventModules(),
+    loadSessionConfigs(),
   ]);
 
   logger.info('Cat-Bot - creating platform listeners...');
@@ -381,7 +387,6 @@ async function main(): Promise<void> {
   // inside platforms/index.js — app.ts sees a single uniform event surface.
   // All credentials are resolved from the DB before any transport is initialised —
   // credentials must be present before platform listeners start emitting events.
-  const sessionConfigs = await loadSessionConfigs();
   // Sync loaded module names into DB so the dashboard can list/toggle them per session
   await syncCommandsAndEvents(commands, eventModules, sessionConfigs);
 
