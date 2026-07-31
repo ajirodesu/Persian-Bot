@@ -329,3 +329,21 @@ if (!globalForTurso.tursoDbReadyPromise) {
 
 /** Resolves when the Turso/libSQL schema DDL has completed. Await this before issuing any query. */
 export const dbReady: Promise<void> = globalForTurso.tursoDbReadyPromise;
+
+// ── Connection heartbeat ─────────────────────────────────────────────────────
+// Remote Turso databases (libsql://...) can idle out at the platform or network
+// layer during quiet periods, same rationale as the neondb adapter's heartbeat —
+// without a periodic ping, the next real command after inactivity pays a full
+// reconnect (TCP/TLS + auth) on top of its own query, spiking first-command latency.
+//
+// A trivial `SELECT 1` every 45 s keeps the underlying HTTP/WebSocket session warm.
+// Harmless no-op for local `file:` URLs — negligible cost either way.
+// .unref() so the heartbeat never blocks graceful process shutdown.
+const HEARTBEAT_INTERVAL_MS = 45_000;
+
+setInterval(() => {
+  tursoClient.execute('SELECT 1').catch(() => {
+    // Ignore errors — the client reconnects automatically on the next real query.
+    // A heartbeat failure must never crash the process or surface to application code.
+  });
+}, HEARTBEAT_INTERVAL_MS).unref();

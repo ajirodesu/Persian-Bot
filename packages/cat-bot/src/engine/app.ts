@@ -71,7 +71,9 @@ import type { SessionConfigs } from '@/engine/modules/session/session-loader.uti
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
-// dbReady is the NeonDB schema-init promise; undefined for mongodb adapter.
+// dbReady resolves once the active adapter's connection (and, for neondb/turso, schema
+// init) is ready — defined for every adapter (neondb, turso, mongodb) so this boot gate
+// applies uniformly regardless of DATABASE_TYPE.
 import { dbReady } from 'database';
 
 // ============================================================================

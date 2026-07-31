@@ -54,7 +54,45 @@ if (process.env['NODE_ENV'] !== 'production')
 
 /**
  * Returns the Db instance for MONGO_DATABASE_NAME.
- * Called lazily — no connection is opened until the adapter makes its first query,
- * keeping the module safe to import in environments where DATABASE_TYPE !== 'mongodb'.
  */
 export const getMongoDb = (): Db => mongoClient.db(MONGO_DATABASE_NAME);
+
+// ── Connection readiness ─────────────────────────────────────────────────────
+// The MongoDB driver connects lazily by default — without this, the TCP + TLS +
+// auth handshake would land on whichever query happens to run first, which could
+// be a user's first command instead of boot. Connecting eagerly here and exposing
+// the promise as `dbReady` mirrors the neondb/turso adapters, so app.ts's existing
+// `await dbReady` boot gate applies uniformly across every adapter.
+const globalForMongoReady = globalThis as unknown as {
+  mongoDbReadyPromise: Promise<void> | undefined;
+};
+
+if (!globalForMongoReady.mongoDbReadyPromise) {
+  globalForMongoReady.mongoDbReadyPromise = mongoClient
+    .connect()
+    .then(() => undefined)
+    .catch((err: unknown) => {
+      // Non-fatal at the client level — log clearly so a bad URI/credentials surface
+      // immediately rather than silently retrying on every subsequent query.
+      console.error('[MongoDB] Failed to establish initial connection:', err);
+    });
+}
+
+/** Resolves once the initial MongoDB connection has been established. Await this before issuing any query. */
+export const dbReady: Promise<void> = globalForMongoReady.mongoDbReadyPromise;
+
+// ── Connection heartbeat ─────────────────────────────────────────────────────
+// Same rationale as the neondb/turso heartbeats: keep at least one pooled socket
+// warm through quiet periods so the next real command after inactivity doesn't
+// pay a full reconnect on top of its own query.
+const HEARTBEAT_INTERVAL_MS = 45_000;
+
+setInterval(() => {
+  mongoClient
+    .db(MONGO_DATABASE_NAME)
+    .command({ ping: 1 })
+    .catch(() => {
+      // Ignore errors — the driver reconnects automatically on the next real query.
+      // A heartbeat failure must never crash the process or surface to application code.
+    });
+}, HEARTBEAT_INTERVAL_MS).unref();
