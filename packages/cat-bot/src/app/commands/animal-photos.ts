@@ -84,7 +84,7 @@ const ANIMAL_CONFIGS: AnimalConfig[] = [
 async function fetchAnimalImage(config: AnimalConfig): Promise<string | null> {
   try {
     const { data } = await axios.get(config.apiUrl, {
-      params: config.apiParams,
+      ...(config.apiParams ? { params: config.apiParams } : {}),
       headers: { Accept: 'application/json' },
       timeout: 10000,
     });
