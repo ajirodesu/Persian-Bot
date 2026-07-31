@@ -28,13 +28,79 @@ if (!url) {
   );
 }
 
+// ── Transport selection: prefer a persistent connection, but never crash the boot ──
+// @libsql/client's Node entrypoint silently resolves a "libsql://" URL to its STATELESS
+// HTTP (Hrana-over-HTTP) transport, not the persistent WebSocket transport the scheme
+// visually implies (verified against @libsql/client@0.17.4 source: node.js's
+// createClient() calls expandConfig(config, /* preferHttp */ true), which only maps
+// "libsql:" -> "ws"/"wss" when preferHttp is false).
+//
+// Under the HTTP transport, every execute() opens a brand-new Hrana stream inside a
+// brand-new HTTP request — there is no persisted connection for the heartbeat below to
+// keep warm, and every command after any real idle gap pays a full new TCP+TLS handshake.
+// The WebSocket transport fixes that: it keeps ONE physical connection open across calls.
+//
+// BUT: not every hosting environment lets outbound WebSocket upgrades through. Some
+// platforms' reverse proxies reject the Upgrade request outright (observed: Replit
+// returns HTTP 400 on the WS handshake to Turso, which previously took the whole process
+// down with HRANA_WEBSOCKET_ERROR before this file ever got to run the schema DDL).
+// A hosting-specific requirement isn't something this file can hardcode a URL rewrite
+// around and trust blindly — so instead it PROBES: try the WS transport first, and if
+// opening it throws (rejected upgrade, blocked port, etc.), fall back to the HTTP
+// transport automatically and keep going. This is a top-level `await` — Node's ESM
+// loader will not evaluate any module that imports `tursoClient` (including
+// better-auth.lib.ts's `new LibsqlDialect({ client: tursoClient })`, itself evaluated at
+// that module's top level) until this promise settles, so every consumer always sees
+// the client that actually works, never the broken one.
+//
+// TURSO_FORCE_HTTP=1 skips the WS attempt entirely (e.g. to avoid the extra probe round
+// trip on a host already known not to support it).
+function toWebSocketUrl(rawUrl: string): string | null {
+  if (!rawUrl.startsWith('libsql://')) return null;
+  const authorityAndPath = rawUrl.slice('libsql://'.length);
+  const tlsExplicitlyDisabled = /[?&]tls=0(&|$)/.test(rawUrl);
+  return `${tlsExplicitlyDisabled ? 'ws' : 'wss'}://${authorityAndPath}`;
+}
+
+async function createTursoClient(): Promise<Client> {
+  const clientOpts = authToken ? { authToken } : {};
+  const wsUrl =
+    process.env['TURSO_FORCE_HTTP'] === '1' ? null : toWebSocketUrl(url!);
+
+  if (wsUrl) {
+    let wsClient: Client | undefined;
+    try {
+      wsClient = createClient({ url: wsUrl, ...clientOpts });
+      // Probe with a real round trip (with a timeout) — createClient() itself never
+      // throws on a bad URL, the failure only surfaces on the first actual request.
+      await Promise.race([
+        wsClient.execute('SELECT 1'),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('WS probe timed out')), 5_000),
+        ),
+      ]);
+      return wsClient;
+    } catch (err) {
+      console.warn(
+        '[turso] WebSocket transport unavailable, falling back to HTTP ' +
+          '(this host likely blocks/rejects outbound WebSocket upgrades — ' +
+          'set TURSO_FORCE_HTTP=1 to skip this probe on future boots):',
+        err instanceof Error ? err.message : err,
+      );
+      try {
+        wsClient?.close();
+      } catch {
+        // Best-effort cleanup — the connection never fully opened in most failure modes.
+      }
+    }
+  }
+
+  // HTTP fallback — the original, universally-compatible transport.
+  return createClient({ url: url!, ...clientOpts });
+}
+
 export const tursoClient: Client =
-  globalForTurso.tursoClient ??
-  createClient({
-    url,
-    // authToken is optional — local file: URLs and unauthenticated dev servers don't need one.
-    ...(authToken ? { authToken } : {}),
-  });
+  globalForTurso.tursoClient ?? (await createTursoClient());
 
 if (process.env['NODE_ENV'] !== 'production')
   globalForTurso.tursoClient = tursoClient;
@@ -331,15 +397,31 @@ if (!globalForTurso.tursoDbReadyPromise) {
 export const dbReady: Promise<void> = globalForTurso.tursoDbReadyPromise;
 
 // ── Connection heartbeat ─────────────────────────────────────────────────────
-// Remote Turso databases (libsql://...) can idle out at the platform or network
-// layer during quiet periods, same rationale as the neondb adapter's heartbeat —
-// without a periodic ping, the next real command after inactivity pays a full
-// reconnect (TCP/TLS + auth) on top of its own query, spiking first-command latency.
+// Now that the client above is forced onto the persistent WebSocket transport (see
+// toPersistentUrl), this heartbeat actually has a live connection to keep warm — on the
+// default HTTP transport it was a no-op, since each execute() opened and closed its own
+// one-shot HTTP request with nothing left behind to preserve between beats.
 //
-// A trivial `SELECT 1` every 45 s keeps the underlying HTTP/WebSocket session warm.
-// Harmless no-op for local `file:` URLs — negligible cost either way.
-// .unref() so the heartbeat never blocks graceful process shutdown.
+// Remote Turso databases can still idle out the WS connection at the platform or network
+// layer during quiet periods (and the WS client itself proactively recycles the
+// connection every 60 s — see maxConnAgeMillis in @libsql/client — but only from inside
+// an execute() call, so something has to keep calling it). Without a periodic ping, the
+// next real command after inactivity pays a full reconnect (TCP/TLS + Hrana handshake) on
+// top of its own query, spiking first-command latency.
+//
+// A trivial `SELECT 1` every 45 s (comfortably under the 60 s recycle window) keeps the
+// underlying WebSocket session warm. Harmless no-op for local `file:` URLs — negligible
+// cost either way. .unref() so the heartbeat never blocks graceful process shutdown.
 const HEARTBEAT_INTERVAL_MS = 45_000;
+
+// Fire one immediately (rather than waiting for the first 45 s tick) so the connection
+// is already warm by the time the first real command lands — matters most right after a
+// fresh boot or restart, which is exactly when dbReady's own DDL round trip already
+// warmed it once, but doing it explicitly here keeps this file correct even if initDb()
+// is ever changed to skip its own round trip (e.g. an empty/no-op schema in the future).
+tursoClient.execute('SELECT 1').catch(() => {
+  // Ignore errors — the client reconnects automatically on the next real query.
+});
 
 setInterval(() => {
   tursoClient.execute('SELECT 1').catch(() => {
