@@ -340,7 +340,7 @@ export default function NewBotPage() {
                               onClick={() => removeAdmin(i)}
                               aria-label={`Remove admin ${i + 1}`}
                               className={cn(
-                                'shrink-0 h-9 w-9 flex items-center justify-center rounded-lg',
+                                'shrink-0 h-9 w-9 flex items-center justify-center rounded-[var(--radius-input)]',
                                 'text-on-surface-variant hover:text-error hover:bg-error/10',
                                 'transition-all duration-150',
                                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30',
@@ -472,7 +472,7 @@ function WizardStepper({
                 aria-label={`Step ${step.index + 1}: ${step.label}`}
                 aria-current={isActive ? 'step' : undefined}
                 className={cn(
-                  'flex items-center gap-2.5 shrink-0 rounded-lg',
+                  'flex items-center gap-2.5 shrink-0 rounded-[var(--radius-input)]',
                   'transition-all duration-150',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
                   isLocked
@@ -675,7 +675,7 @@ function ReviewGroup({
       </p>
 
       <div
-        className="rounded-xl overflow-hidden flex flex-col"
+        className="rounded-[var(--radius-card)] overflow-hidden flex flex-col"
         style={{
           background: 'rgba(255,255,255,0.02)',
           border: '1px solid rgba(255,255,255,0.07)',
@@ -728,7 +728,7 @@ function ReviewRow({
 function AdminBadge({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono text-on-surface break-all leading-none"
+      className="inline-flex items-center px-2.5 py-1 rounded-[var(--radius-input)] text-xs font-mono text-on-surface break-all leading-none"
       style={{
         background: 'rgba(255,255,255,0.05)',
         border: '1px solid rgba(255,255,255,0.09)',

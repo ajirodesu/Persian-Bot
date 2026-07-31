@@ -20,9 +20,9 @@ function StatCard({
   colorClass: string
 }) {
   return (
-    <div className="rounded-2xl bg-surface border border-outline-variant p-5 flex flex-col gap-3 shadow-elevation-1">
+    <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 flex flex-col gap-3 shadow-elevation-1">
       <div
-        className={`h-10 w-10 rounded-xl flex items-center justify-center ${colorClass}`}
+        className={`h-10 w-10 rounded-[var(--radius-input)] flex items-center justify-center ${colorClass}`}
       >
         <Icon className="h-5 w-5" />
       </div>
@@ -105,7 +105,7 @@ export default function AdminDashboardPage() {
       {/* ── Detail cards ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Platform distribution — real data from useAdminBots */}
-        <div className="rounded-2xl bg-surface border border-outline-variant p-5 shadow-elevation-1">
+        <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 shadow-elevation-1">
           <h2 className="text-title-md font-semibold text-on-surface mb-4">
             Bot Platform Distribution
           </h2>
@@ -114,7 +114,7 @@ export default function AdminDashboardPage() {
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="h-10 rounded-xl bg-surface-container animate-pulse"
+                  className="h-10 rounded-[var(--radius-input)] bg-surface-container animate-pulse"
                 />
               ))}
             </div>
@@ -152,7 +152,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Recent registrations */}
-        <div className="rounded-2xl bg-surface border border-outline-variant p-5 shadow-elevation-1">
+        <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 shadow-elevation-1">
           <h2 className="text-title-md font-semibold text-on-surface mb-4">
             Recent Registrations
           </h2>
@@ -161,7 +161,7 @@ export default function AdminDashboardPage() {
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="h-10 rounded-xl bg-surface-container animate-pulse"
+                  className="h-10 rounded-[var(--radius-input)] bg-surface-container animate-pulse"
                 />
               ))}
             </div>

@@ -331,7 +331,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
       />
 
       {error !== null && (
-        <div className="rounded-xl bg-error-container text-on-error-container px-4 py-3 text-body-md">
+        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
           {error}
         </div>
       )}
@@ -787,7 +787,7 @@ function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: 
       />
 
       {error !== null && (
-        <div className="rounded-xl bg-error-container text-on-error-container px-4 py-3 text-body-md">
+        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
           {error}
         </div>
       )}

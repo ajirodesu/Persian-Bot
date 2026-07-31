@@ -105,7 +105,7 @@ export default function AdminBotsPage() {
       </div>
 
       {error !== null && (
-        <div className="rounded-xl bg-error-container text-on-error-container px-4 py-3 text-body-md">
+        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
           {error}
         </div>
       )}
@@ -124,7 +124,7 @@ export default function AdminBotsPage() {
           return (
             <div
               key={platform}
-              className="rounded-xl bg-surface border border-outline-variant p-4 shadow-elevation-1 flex flex-col gap-2"
+              className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-4 shadow-elevation-1 flex flex-col gap-2"
             >
               <span className="text-body-sm font-medium text-on-surface">
                 {PLATFORM_LABELS[platform] ?? platform}
@@ -313,8 +313,11 @@ export default function AdminBotsPage() {
                   Cancel
                 </Button>
               </Dialog.CloseTrigger>
+              {/* Was a hardcoded !bg-[#e7000b] override; use Button's own
+                  semantic error color (same --color-error token every other
+                  destructive control in the app already reads from). */}
               <Button
-                className="!bg-[#e7000b] !text-white"
+                color="error"
                 size="sm"
                 onClick={() => void handleDeleteBot()}
                 isLoading={isDeleting}

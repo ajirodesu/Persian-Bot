@@ -18,25 +18,6 @@ import type { SystemAdminDto } from '@/features/admin/services/admin.service'
 import { RESET_ALL_DATABASE_CONFIRMATION_PHRASE } from '@/features/admin/services/admin.service'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
-import { useSnackbar } from '@/contexts/SnackbarContext'
-
-/** Max length mirrored from the server-side validator in admin.controller.ts — client-side is a UX convenience, the server is the source of truth. */
-const SYSTEM_ADMIN_ID_MAX_LENGTH = 128
-
-/** Extracts the backend's `{ error }` message from a failed apiClient call, falling back to a status-aware default. */
-function extractApiError(err: unknown, fallback: string): string {
-  const e = err as {
-    response?: { status?: number; data?: { error?: string } }
-    message?: string
-  }
-  if (e.response?.status === 401) {
-    return 'Your session has expired. Please sign in again.'
-  }
-  if (e.response?.status === 403) {
-    return 'You do not have permission to perform this action.'
-  }
-  return e.response?.data?.error || (err instanceof Error ? err.message : fallback)
-}
 
 /**
  * AdminSettingsPage
@@ -49,7 +30,6 @@ export default function AdminSettingsPage() {
 
   const { data: session, isPending: sessionLoading } =
     authAdminClient.useSession()
-  const { snackbar } = useSnackbar()
 
   // ── Profile edit state ─────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState('')
@@ -129,23 +109,19 @@ export default function AdminSettingsPage() {
   const [adminSaving, setAdminSaving] = useState(false)
   const [adminSuccess, setAdminSuccess] = useState(false)
 
-  // Reloads the authoritative list from the database — always the last step of any
-  // mutation, win or lose, so the dashboard never drifts from what's actually stored.
-  const reloadSystemAdmins = async (): Promise<void> => {
-    const result = await adminService.getSystemAdmins()
-    setSystemAdmins(result.admins)
-    setAdminIds(
-      result.admins.length > 0 ? result.admins.map((a) => a.adminId) : [''],
-    )
-  }
-
   // Load persisted system admins on mount
   useEffect(() => {
     const load = async () => {
       try {
-        await reloadSystemAdmins()
+        const result = await adminService.getSystemAdmins()
+        setSystemAdmins(result.admins)
+        setAdminIds(
+          result.admins.length > 0 ? result.admins.map((a) => a.adminId) : [''],
+        )
       } catch (err) {
-        setAdminError(extractApiError(err, 'Failed to load system admins'))
+        setAdminError(
+          err instanceof Error ? err.message : 'Failed to load system admins',
+        )
       } finally {
         setAdminLoading(false)
       }
@@ -173,30 +149,9 @@ export default function AdminSettingsPage() {
     )
   }
 
-  // ── Client-side validation (UX convenience; admin.controller.ts re-validates
-  //    everything server-side and is the actual source of truth) ──────────────
-  const trimmedAdminIds = adminIds.map((id) => id.trim())
-  const tooLongIndexes = new Set(
-    trimmedAdminIds
-      .map((id, i) => (id.length > SYSTEM_ADMIN_ID_MAX_LENGTH ? i : -1))
-      .filter((i) => i !== -1),
-  )
-  // Rows whose (trimmed, non-empty) value repeats an earlier row — flagged so the
-  // admin can see and fix a typo'd duplicate before it ever reaches the server.
-  const duplicateIndexes = new Set<number>()
-  {
-    const seen = new Set<string>()
-    trimmedAdminIds.forEach((id, i) => {
-      if (!id) return
-      if (seen.has(id)) duplicateIndexes.add(i)
-      seen.add(id)
-    })
-  }
-  const hasClientValidationErrors = tooLongIndexes.size > 0
-
   // Compute diff to determine if a save is needed and what to dispatch
   const targetIds = Array.from(
-    new Set(trimmedAdminIds.filter((id) => id !== '')),
+    new Set(adminIds.map((id) => id.trim()).filter((id) => id !== '')),
   )
   const currentIds = systemAdmins.map((a) => a.adminId)
   const isAdminsModified =
@@ -205,87 +160,32 @@ export default function AdminSettingsPage() {
     currentIds.some((id) => !targetIds.includes(id))
 
   const handleSaveAdmins = async (): Promise<void> => {
-    if (hasClientValidationErrors) {
-      setAdminError(
-        `System admin IDs must be ${SYSTEM_ADMIN_ID_MAX_LENGTH} characters or fewer.`,
-      )
-      return
-    }
-
     setAdminSaving(true)
     setAdminError(null)
     setAdminSuccess(false)
-
-    const toAdd = targetIds.filter((id) => !currentIds.includes(id))
-    const toRemove = currentIds.filter((id) => !targetIds.includes(id))
-
-    // Run sequentially (not Promise.all) to avoid DB lock contention from concurrent
-    // writes to the same table, but track each operation's outcome independently so
-    // one failure doesn't hide or roll back the others — every operation gets its
-    // own clear success/error notification.
-    const failures: { id: string; action: 'add' | 'remove'; message: string }[] = []
-    let addedCount = 0
-    let removedCount = 0
-
-    for (const id of toRemove) {
-      try {
-        await adminService.removeSystemAdmin(id)
-        removedCount++
-      } catch (err) {
-        const message = extractApiError(err, 'Failed to remove system admin')
-        failures.push({ id, action: 'remove', message })
-        snackbar({
-          message: `Failed to remove "${id}": ${message}`,
-          color: 'error',
-          duration: 5000,
-        })
-      }
-    }
-
-    for (const id of toAdd) {
-      try {
-        await adminService.addSystemAdmin(id)
-        addedCount++
-      } catch (err) {
-        const message = extractApiError(err, 'Failed to add system admin')
-        failures.push({ id, action: 'add', message })
-        snackbar({
-          message: `Failed to add "${id}": ${message}`,
-          color: 'error',
-          duration: 5000,
-        })
-      }
-    }
-
-    // Always resync with the database afterward, whether every op succeeded or not —
-    // the DB is the source of truth and the form must reflect exactly what's stored.
     try {
-      await reloadSystemAdmins()
-    } catch (err) {
-      setAdminError(extractApiError(err, 'Failed to refresh system admins'))
-    }
+      const toAdd = targetIds.filter((id) => !currentIds.includes(id))
+      const toRemove = currentIds.filter((id) => !targetIds.includes(id))
 
-    if (failures.length === 0) {
-      const parts: string[] = []
-      if (addedCount > 0) parts.push(`${addedCount} added`)
-      if (removedCount > 0) parts.push(`${removedCount} removed`)
-      snackbar({
-        message:
-          parts.length > 0
-            ? `System administrators updated — ${parts.join(', ')}.`
-            : 'System administrators updated successfully.',
-        color: 'success',
-        duration: 4000,
-      })
+      // Execute operations iteratively to avoid DB lock issues with concurrent operations on the same table
+      for (const id of toRemove) await adminService.removeSystemAdmin(id)
+      for (const id of toAdd) await adminService.addSystemAdmin(id)
+
+      const result = await adminService.getSystemAdmins()
+      setSystemAdmins(result.admins)
+      setAdminIds(
+        result.admins.length > 0 ? result.admins.map((a) => a.adminId) : [''],
+      )
+
       setAdminSuccess(true)
       setTimeout(() => setAdminSuccess(false), 3000)
-    } else {
+    } catch (err) {
       setAdminError(
-        `${failures.length} operation${failures.length > 1 ? 's' : ''} failed. Successful changes were saved; failed rows remain editable above.`,
+        err instanceof Error ? err.message : 'Failed to update system admins',
       )
+    } finally {
+      setAdminSaving(false)
     }
-
-    setAdminSaving(false)
   }
 
   // ── Reset All Database — destructive, admin-only ─────────────────────────────
@@ -460,57 +360,36 @@ export default function AdminSettingsPage() {
               {[1, 2].map((i) => (
                 <div
                   key={i}
-                  className="h-10 rounded-xl bg-surface-container animate-pulse"
+                  className="h-10 rounded-[var(--radius-input)] bg-surface-container animate-pulse"
                 />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {adminIds.map((adminId, index) => {
-                const rowInvalid =
-                  tooLongIndexes.has(index) || duplicateIndexes.has(index)
-                return (
-                  <div key={index} className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <Field.Root invalid={rowInvalid}>
-                        <Input
-                          placeholder={`System admin user ID ${index + 1}`}
-                          value={adminId}
-                          onChange={(e) =>
-                            handleAdminChange(index, e.target.value)
-                          }
-                          disabled={adminSaving}
-                          aria-label={`System admin user ID ${index + 1}`}
-                        />
-                        {tooLongIndexes.has(index) && (
-                          <Field.ErrorText>
-                            Must be {SYSTEM_ADMIN_ID_MAX_LENGTH} characters or
-                            fewer.
-                          </Field.ErrorText>
-                        )}
-                        {!tooLongIndexes.has(index) &&
-                          duplicateIndexes.has(index) && (
-                            <Field.ErrorText>
-                              Duplicate — already entered above.
-                            </Field.ErrorText>
-                          )}
-                      </Field.Root>
-                    </div>
-                    {adminIds.length > 1 && (
-                      <Button
-                        variant="text"
-                        color="error"
-                        iconOnly
-                        onClick={() => handleRemoveAdminRow(index)}
-                        aria-label={`Remove system admin ${index + 1}`}
-                        leftIcon={<Trash2 className="h-4 w-4" />}
-                        disabled={adminSaving}
-                        className="mt-0.5"
-                      />
-                    )}
+              {adminIds.map((adminId, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input
+                      placeholder={`System admin user ID ${index + 1}`}
+                      value={adminId}
+                      onChange={(e) => handleAdminChange(index, e.target.value)}
+                      disabled={adminSaving}
+                      aria-label={`System admin user ID ${index + 1}`}
+                    />
                   </div>
-                )
-              })}
+                  {adminIds.length > 1 && (
+                    <Button
+                      variant="text"
+                      color="error"
+                      iconOnly
+                      onClick={() => handleRemoveAdminRow(index)}
+                      aria-label={`Remove system admin ${index + 1}`}
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      disabled={adminSaving}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
@@ -532,12 +411,7 @@ export default function AdminSettingsPage() {
               color="primary"
               size="sm"
               onClick={() => void handleSaveAdmins()}
-              disabled={
-                adminSaving ||
-                !isAdminsModified ||
-                adminLoading ||
-                hasClientValidationErrors
-              }
+              disabled={adminSaving || !isAdminsModified || adminLoading}
               isLoading={adminSaving}
             >
               Save changes
@@ -561,7 +435,7 @@ export default function AdminSettingsPage() {
           {isEmailEnabled && (
             <>
               {/* Admin password recovery directly from session state */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-xl border border-outline-variant/50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-[var(--radius-card)] border border-outline-variant/50">
                 <div>
                   <p className="text-label-lg font-medium text-on-surface">
                     Password Reset
@@ -699,7 +573,7 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         </Card.Header>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-xl border border-outline-variant/50">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-[var(--radius-card)] border border-outline-variant/50">
           <div>
             <p className="text-label-lg font-medium text-on-surface">
               Reset All Database
@@ -801,8 +675,11 @@ export default function AdminSettingsPage() {
                   Cancel
                 </Button>
               </Dialog.CloseTrigger>
+              {/* Was a hardcoded !bg-[#e7000b] override; use Button's own
+                  semantic error color (same --color-error token every other
+                  destructive control in the app already reads from). */}
               <Button
-                className="!bg-[#e7000b] !text-white"
+                color="error"
                 size="sm"
                 onClick={() => void handleResetAllDatabase()}
                 isLoading={isResetting}

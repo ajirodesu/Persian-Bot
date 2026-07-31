@@ -655,10 +655,10 @@ export default function BotSettingsPage() {
           <div className="flex justify-end">
             <Dialog.Root>
               <Dialog.Trigger asChild>
-                <Button
-                  size="sm"
-                  className="!bg-[#e7000b] !text-white w-full sm:w-auto"
-                >
+                {/* Was a hardcoded !bg-[#e7000b] override; Button already has a
+                    proper semantic error color that reads from --color-error
+                    the same way Alert's color="error" above does. */}
+                <Button size="sm" color="error" className="w-full sm:w-auto">
                   Delete Bot
                 </Button>
               </Dialog.Trigger>
@@ -688,7 +688,7 @@ export default function BotSettingsPage() {
                       </Button>
                     </Dialog.CloseTrigger>
                     <Button
-                      className="!bg-[#e7000b] !text-white"
+                      color="error"
                       isLoading={isDeleting}
                       disabled={isDeleting}
                       onClick={() => void handleDelete()}

@@ -803,7 +803,7 @@ function AudioPlayer({
         'cr-audio-player flex items-center gap-3',
         flush
           ? 'w-full px-3.5 py-3'
-          : 'pl-1.5 pr-3 py-2 rounded-2xl bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]',
+          : 'pl-1.5 pr-3 py-2 rounded-[var(--radius-card)] bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]',
       )}
     >
       <audio ref={audioRef} preload="metadata">
@@ -897,7 +897,7 @@ function LightboxImage({ url, fileName }: { url: string; fileName: string }) {
         onClick={() => setIsZoomed((z) => !z)}
         draggable={false}
         className={cn(
-          'rounded-lg select-none transition-transform duration-200 ease-out',
+          'rounded-[var(--radius-input)] select-none transition-transform duration-200 ease-out',
           isZoomed
             ? 'max-w-none max-h-none scale-[1.9] cursor-zoom-out'
             : 'max-w-[94vw] max-h-[86vh] object-contain cursor-zoom-in',
@@ -961,7 +961,7 @@ function ImageLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/92 backdrop-blur-md"
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/92 [backdrop-filter:var(--surface-blur-md)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       style={{ animation: 'cr-fadeInFast 140ms ease both' }}
     >
@@ -1038,7 +1038,7 @@ function ImageLightbox({
               onClick={() => onIndexChange(i)}
               aria-label={`View image ${i + 1}`}
               className={cn(
-                'h-10 w-10 rounded-lg overflow-hidden border-2 transition-all shrink-0',
+                'h-10 w-10 rounded-[var(--radius-input)] overflow-hidden border-2 transition-all shrink-0',
                 i === index ? 'border-primary opacity-100 scale-105' : 'border-transparent opacity-50 hover:opacity-80',
               )}
             >
@@ -1097,7 +1097,7 @@ function isGifAttachment(att: ChatAttachment): boolean {
  *  most chat clients use. */
 function GifBadge() {
   return (
-    <span className="absolute top-1.5 left-1.5 px-1.5 py-[1px] rounded-md bg-black/55 text-white text-[9px] font-bold tracking-wide backdrop-blur-sm pointer-events-none select-none">
+    <span className="absolute top-1.5 left-1.5 px-1.5 py-[1px] rounded-[var(--radius-compact)] bg-black/55 text-white text-[9px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
       GIF
     </span>
   )
@@ -1130,7 +1130,7 @@ function FlushMedia({
   if (!url) return null
 
   const MetaOverlay = showMeta ? (
-    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 backdrop-blur-sm text-white shadow-sm pointer-events-none">
+    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 [backdrop-filter:var(--surface-blur-sm)] text-white shadow-sm pointer-events-none">
       <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
         {formatTime(timestamp)}
       </span>
@@ -1289,7 +1289,7 @@ function ImageGrid({
               </div>
             )}
             {showMeta && isLastVisible && (
-              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 backdrop-blur-sm text-white shadow-sm pointer-events-none">
+              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 [backdrop-filter:var(--surface-blur-sm)] text-white shadow-sm pointer-events-none">
                 <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
                   {formatTime(timestamp)}
                 </span>
@@ -1338,7 +1338,7 @@ function AttachmentView({ att }: { att: ChatAttachment }) {
       target="_blank"
       rel="noopener noreferrer"
       download={att.name}
-      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/20 hover:bg-black/30 transition-colors text-xs border border-white/10"
+      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-black/20 hover:bg-black/30 transition-colors text-xs border border-white/10"
     >
       <FileText className="h-4 w-4 shrink-0 opacity-70" />
       <span className="truncate max-w-[160px]">{att.name ?? 'File'}</span>
@@ -1368,7 +1368,7 @@ const BotButtonRow = memo(function BotButtonRow({
               type="button"
               onClick={() => onButtonClick(btn.id, messageId)}
               className={cn(
-                'px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all',
+                'px-3.5 py-1.5 rounded-[var(--radius-input)] text-xs font-semibold transition-all',
                 'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                 btn.style === 'danger'
                   ? 'border-error/50 text-error hover:bg-error/10 active:scale-95'
@@ -1442,7 +1442,7 @@ const ReplyQuote = memo(function ReplyQuote({
         onClick={onClick}
         className={cn(
           'min-w-0 max-w-full overflow-hidden text-left cursor-pointer active:opacity-70 transition-opacity',
-          'rounded-2xl bg-on-surface/10 text-on-surface-variant px-3.5 py-2 text-[12.5px] leading-tight',
+          'rounded-[var(--radius-card)] bg-on-surface/10 text-on-surface-variant px-3.5 py-2 text-[12.5px] leading-tight',
         )}
       >
         {/* Up to three lines of the original message, ellipsis-truncated
@@ -1661,8 +1661,8 @@ const MessageBubble = memo(function MessageBubble({
             'flex flex-col overflow-hidden min-w-[52px]',
             hasMedia && 'w-full',
             isBot
-              ? 'bg-[var(--bubble-bot)] text-[var(--bubble-bot-text)] rounded-2xl'
-              : 'bg-[var(--bubble-user)] text-[var(--bubble-user-text)] rounded-2xl',
+              ? 'bg-[var(--bubble-bot)] text-[var(--bubble-bot-text)] rounded-[var(--radius-card)]'
+              : 'bg-[var(--bubble-user)] text-[var(--bubble-user-text)] rounded-[var(--radius-card)]',
             'shadow-md',
           )}
         >
@@ -1805,7 +1805,7 @@ function ChatSettingsMenu({
           // consistent component.
           'relative flex items-center gap-1.5 rounded-full transition-colors duration-fast',
           'h-9 w-9 justify-center',
-          'md:h-auto md:w-auto md:justify-start md:rounded-lg md:px-2 md:py-1.5',
+          'md:h-auto md:w-auto md:justify-start md:rounded-[var(--radius-input)] md:px-2 md:py-1.5',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
@@ -1834,7 +1834,7 @@ function ChatSettingsMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 z-[150] w-[248px] rounded-2xl border border-outline-variant/50 bg-surface-container shadow-elevation-3 overflow-hidden"
+          className="absolute right-0 top-full mt-2 z-[150] w-[248px] rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 overflow-hidden"
           style={{ animation: 'cr-fadeIn 140ms ease both' }}
         >
           <div className="px-4 pt-3.5 pb-2.5 border-b border-outline-variant/30">
@@ -1898,7 +1898,7 @@ function DotsMenuItem({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-xl text-sm font-medium transition-colors',
+        'w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-[var(--radius-input)] text-sm font-medium transition-colors',
         'w-[calc(100%-8px)]',
         danger
           ? 'text-error hover:bg-error/10'
@@ -1907,7 +1907,7 @@ function DotsMenuItem({
     >
       <span
         className={cn(
-          'flex items-center justify-center h-7 w-7 rounded-lg shrink-0',
+          'flex items-center justify-center h-7 w-7 rounded-[var(--radius-input)] shrink-0',
           danger ? 'bg-error/10' : 'bg-primary/10',
         )}
       >
@@ -1944,11 +1944,11 @@ function NicknameModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 [backdrop-filter:var(--surface-blur-sm)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-[360px] rounded-3xl bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
+        className="w-[360px] rounded-[var(--radius-card-lg)] bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
         style={{ animation: 'cr-fadeIn 160ms ease both' }}
       >
         <div className="flex items-center justify-between mb-1">
@@ -1963,7 +1963,7 @@ function NicknameModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-2xl border border-outline-variant/50 px-3 py-2.5 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
+        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-outline-variant/50 px-3 py-2.5 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
           <Tag className="h-4 w-4 text-primary shrink-0" />
           <input
             ref={inputRef}
@@ -1987,14 +1987,14 @@ function NicknameModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
+            className="px-4 py-2 rounded-[var(--radius-input)] text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 active:scale-95 transition-all"
+            className="px-5 py-2 rounded-[var(--radius-input)] text-sm font-bold bg-primary text-on-primary hover:opacity-90 active:scale-95 transition-all"
           >
             Save
           </button>
@@ -2030,11 +2030,11 @@ function PrefixModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 [backdrop-filter:var(--surface-blur-sm)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-[340px] rounded-3xl bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
+        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
         style={{ animation: 'cr-fadeIn 160ms ease both' }}
       >
         <div className="flex items-center justify-between mb-4">
@@ -2047,7 +2047,7 @@ function PrefixModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-2xl border border-outline-variant/50 px-3 py-2.5 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
+        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-outline-variant/50 px-3 py-2.5 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
           <Hash className="h-4 w-4 text-primary shrink-0" />
           <input
             ref={inputRef}
@@ -2071,14 +2071,14 @@ function PrefixModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
+            className="px-4 py-2 rounded-[var(--radius-input)] text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 active:scale-95 transition-all"
+            className="px-5 py-2 rounded-[var(--radius-input)] text-sm font-bold bg-primary text-on-primary hover:opacity-90 active:scale-95 transition-all"
           >
             Save
           </button>
@@ -2093,14 +2093,14 @@ function PrefixModal({
 function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 [backdrop-filter:var(--surface-blur-sm)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-[340px] rounded-3xl bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
+        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
         style={{ animation: 'cr-fadeIn 160ms ease both' }}
       >
-        <div className="h-11 w-11 rounded-2xl bg-error/12 flex items-center justify-center mb-4">
+        <div className="h-11 w-11 rounded-[var(--radius-card)] bg-error/12 flex items-center justify-center mb-4">
           <Trash2 className="h-5 w-5 text-error" />
         </div>
         <h2 className="text-base font-bold text-on-surface mb-1">Clear Chat?</h2>
@@ -2111,14 +2111,14 @@ function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: ()
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
+            className="px-4 py-2 rounded-[var(--radius-input)] text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => { onConfirm(); onClose() }}
-            className="px-5 py-2 rounded-xl text-sm font-bold bg-error text-on-error hover:opacity-90 active:scale-95 transition-all"
+            className="px-5 py-2 rounded-[var(--radius-input)] text-sm font-bold bg-error text-on-error hover:opacity-90 active:scale-95 transition-all"
           >
             Clear Chat
           </button>
@@ -2194,7 +2194,7 @@ function GetStartedScreen({
           <div
             key={i}
             className={cn(
-              'rounded-2xl border p-3.5 flex flex-col gap-2',
+              'rounded-[var(--radius-card)] border p-3.5 flex flex-col gap-2',
               f.bg,
             )}
           >
@@ -2212,13 +2212,13 @@ function GetStartedScreen({
         <button
           type="button"
           onClick={onStart}
-          className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 active:scale-95 transition-all shadow-elevation-2"
+          className="flex items-center gap-2 px-8 py-3 rounded-[var(--radius-card)] bg-primary text-on-primary font-bold text-sm hover:opacity-90 active:scale-95 transition-all shadow-elevation-2"
         >
           <Sparkles className="h-4 w-4" />
           Get Started
         </button>
         <p className="text-[11px] text-on-surface-variant/50 select-none">
-          Press <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded text-[10px]">Enter</kbd> to send &middot; <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded text-[10px]">Shift+Enter</kbd> for new line
+          Press <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded-[var(--radius-compact)] text-[10px]">Enter</kbd> to send &middot; <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded-[var(--radius-compact)] text-[10px]">Shift+Enter</kbd> for new line
         </p>
       </div>
     </div>
@@ -2303,12 +2303,12 @@ function AttachmentPicker({
       className="absolute bottom-full mb-2 left-0 z-[120]"
       style={{ animation: 'cr-fadeIn 110ms ease both' }}
     >
-      <div className="rounded-2xl border border-outline-variant/50 bg-surface-container shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
+      <div className="rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
         {options.map((opt) => (
           <label
             key={opt.id}
             htmlFor={opt.id}
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-on-surface hover:bg-on-surface/8 transition-colors cursor-pointer"
+            className="flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--radius-input)] text-sm text-on-surface hover:bg-on-surface/8 transition-colors cursor-pointer"
           >
             <span className="text-on-surface-variant">{opt.icon}</span>
             {opt.label}
@@ -2345,7 +2345,7 @@ function ReplyPreviewBar({
   displayName: string
 }) {
   return (
-    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-surface-container-high border border-outline-variant/20">
+    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-high border border-outline-variant/20">
       <div className="w-0.5 h-9 rounded-full bg-primary shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
@@ -2604,12 +2604,12 @@ const Composer = memo(function Composer({
     <>
       {/* ChatGPT-style rounded composer — the message bar itself. Filled
           with the same translucent surface + blur as the page header
-          (bg-surface/90 backdrop-blur-xl) so the two bars read as one
+          (bg-surface/90 [backdrop-filter:var(--surface-blur-lg)]) so the two bars read as one
           consistent tone, top and bottom. */}
       <div
         className={cn(
           'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
-          'bg-surface/90 backdrop-blur-xl ring-[1.5px] ring-inset ring-[var(--input-border)]',
+          'bg-surface/90 [backdrop-filter:var(--surface-blur-lg)] ring-[1.5px] ring-inset ring-[var(--input-border)]',
           'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
         )}
       >
@@ -2619,20 +2619,20 @@ const Composer = memo(function Composer({
             {pendingAttachments.map((att, i) => (
               <div key={i} className="relative group/att">
                 {att.type === 'image' && att.localUrl ? (
-                  <div className="relative h-16 w-16 rounded-xl overflow-hidden border border-white/10 shadow-sm">
+                  <div className="relative h-16 w-16 rounded-[var(--radius-input)] overflow-hidden border border-white/10 shadow-sm">
                     <img
                       src={att.localUrl}
                       alt={att.name}
                       className="h-full w-full object-cover"
                     />
                     {isGifAttachment(att) && (
-                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded bg-black/55 text-white text-[7px] font-bold tracking-wide backdrop-blur-sm pointer-events-none select-none">
+                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded-[var(--radius-compact)] bg-black/55 text-white text-[7px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
                         GIF
                       </span>
                     )}
                   </div>
                 ) : (
-                  <div className="h-16 w-16 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
+                  <div className="h-16 w-16 rounded-[var(--radius-input)] bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
                     {<FileText className="h-4 w-4 text-on-surface-variant" />}
                     <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
                   </div>
@@ -3476,8 +3476,8 @@ export default function ChatRoomPage() {
             // dashboard header uses. Desktop is unaffected and always shows
             // the full header, regardless of scroll position.
             isHeaderScrolled
-              ? 'bg-surface/90 backdrop-blur-xl border-b border-outline-variant/70'
-              : 'bg-transparent border-b border-transparent md:bg-surface/90 md:backdrop-blur-xl md:border-outline-variant/70',
+              ? 'bg-surface/90 [backdrop-filter:var(--surface-blur-lg)] border-b border-outline-variant/70'
+              : 'bg-transparent border-b border-transparent md:bg-surface/90 md:[backdrop-filter:var(--surface-blur-lg)] md:border-outline-variant/70',
             H_HEIGHT,
             H_PX,
           )}
@@ -3559,7 +3559,7 @@ export default function ChatRoomPage() {
                   const showSpacing = !prevMsg || prevMsg.type !== msg.type
 
                   return (
-                    <div key={msg.id} data-message-id={msg.id} className={cn(showSpacing && 'mt-3', 'rounded-2xl transition-colors duration-300')}>
+                    <div key={msg.id} data-message-id={msg.id} className={cn(showSpacing && 'mt-3', 'rounded-[var(--radius-card)] transition-colors duration-300')}>
                       {showDate && (
                         <div className="flex items-center gap-3 my-4 px-4">
                           <div className="flex-1 h-px bg-outline-variant/20" />

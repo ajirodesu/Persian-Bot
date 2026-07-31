@@ -83,7 +83,7 @@ function CommandDetailDialog({
               {/* ── Header ──────────────────────────────────────────────────── */}
               <Dialog.Header className="items-start gap-3 pb-3 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 shrink-0">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-[var(--radius-input)] bg-primary/10 shrink-0">
                     <Terminal className="w-4 h-4 text-primary" />
                   </span>
                   <div className="min-w-0">
@@ -191,7 +191,7 @@ function CommandDetailDialog({
                   </p>
 
                   {/* Switch row 1 — Commands (matches Events switch row style) */}
-                  <div className="flex items-start justify-between gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-4 mb-2.5">
+                  <div className="flex items-start justify-between gap-2 rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-4 mb-2.5">
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <p className="text-body-sm font-semibold text-on-surface leading-snug">
                         Commands
@@ -210,7 +210,7 @@ function CommandDetailDialog({
                   </div>
 
                   {/* Switch row 2 — Bot Admin Only (matches Events switch row style) */}
-                  <div className="flex items-start justify-between gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-4">
+                  <div className="flex items-start justify-between gap-2 rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-4">
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <p className="text-body-sm font-semibold text-on-surface leading-snug">
                         Bot Admin Only

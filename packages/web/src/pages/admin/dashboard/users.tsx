@@ -305,7 +305,7 @@ export default function AdminUsersPage() {
       </div>
 
       {error !== null && (
-        <div className="rounded-xl bg-error-container text-on-error-container px-4 py-3 text-body-md">
+        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
           {error}
         </div>
       )}
@@ -531,8 +531,11 @@ export default function AdminUsersPage() {
                   Cancel
                 </Button>
               </Dialog.CloseTrigger>
+              {/* Was a hardcoded !bg-[#e7000b] override; use Button's own
+                  semantic error color (same --color-error token every other
+                  destructive control in the app already reads from). */}
               <Button
-                className="!bg-[#e7000b] !text-white"
+                color="error"
                 size="sm"
                 onClick={() => {
                   void handleBanUser()
@@ -809,8 +812,11 @@ export default function AdminUsersPage() {
                   Cancel
                 </Button>
               </Dialog.CloseTrigger>
+              {/* Was a hardcoded !bg-[#e7000b] override; use Button's own
+                  semantic error color (same --color-error token every other
+                  destructive control in the app already reads from). */}
               <Button
-                className="!bg-[#e7000b] !text-white"
+                color="error"
                 size="sm"
                 onClick={() => void handleDeleteUser()}
                 isLoading={isDeleting}

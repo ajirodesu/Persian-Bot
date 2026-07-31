@@ -230,7 +230,7 @@ export default function SettingsPage() {
           {isEmailEnabled && (
             <>
               {/* Quick reset link shortcut */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-xl border border-outline-variant/50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
                 <div>
                   <p className="text-label-lg font-semibold text-on-surface">
                     Password Reset
