@@ -64,18 +64,6 @@ const DISCORD_MAX_ROWS = 5;
 const DISCORD_MAX_BUTTONS_PER_ROW = 5;
 const DISCORD_MAX_BUTTONS = DISCORD_MAX_ROWS * DISCORD_MAX_BUTTONS_PER_ROW; // 25
 
-// ── State keys (reply-nav platforms only) ─────────────────────────────────────
-
-const STATE = {
-  awaiting_category: 'awaiting_category',
-} as const;
-
-// ── Platform helpers ──────────────────────────────────────────────────────────
-
-function isReplyNavPlatform(_platform: string): boolean {
-  return false;
-}
-
 // ── Utility helpers ───────────────────────────────────────────────────────────
 
 function formatCategory(value: string): string {
@@ -286,7 +274,7 @@ function buildCategoryLines(
   return lines;
 }
 
-// ── Button Platforms: Category List ──────────────────────────────────────────
+// ── Category List ─────────────────────────────────────────────────────────────
 
 async function renderCategoryList(ctx: AppCtx): Promise<void> {
   const { chat, commands, native, event, button, prefix = '' } = ctx;
@@ -346,7 +334,7 @@ async function renderCategoryList(ctx: AppCtx): Promise<void> {
   }
 }
 
-// ── Button Platforms: Category Commands ───────────────────────────────────────
+// ── Category Commands ─────────────────────────────────────────────────────────
 
 async function renderCategoryCommands(
   ctx: AppCtx,
@@ -390,75 +378,6 @@ async function renderCategoryCommands(
   }
 }
 
-// ── Reply-Nav Platforms: Numbered Category List (sent ONCE) ──────────────────
-
-/**
- * Sends the numbered category menu once and registers state keyed to its
- * message ID. For unlimited-reply mode the state is re-created under the
- * same session ID after every reply — this function is only ever called
- * from onCommand (i.e., the initial /menu invocation).
- */
-async function sendNumberedCategoryList(ctx: AppCtx): Promise<void> {
-  const { chat, commands, native, event, state, prefix = '' } = ctx;
-
-  const disabledNames = await buildDisabledNames(commands, native, event);
-  const visibleMods = getVisibleMods(commands, disabledNames);
-  const categories = groupByCategory(visibleMods);
-  const categoryNames = categories.map(([cat]) => cat);
-
-  const lines: string[] = [
-    `▫️ **Command Menu**`,
-    ``,
-    `Reply with a number to choose a category:`,
-    ``,
-    ...categoryNames.map((cat, i) => `${i + 1}. ${cat}`),
-    ``,
-    `💡 ${prefix}help <command> for details`,
-  ];
-
-  const messageID = await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: lines.join('\n'),
-  });
-
-  if (!messageID) return;
-
-  state.create({
-    id: state.generateID({ id: String(messageID) }),
-    state: STATE.awaiting_category,
-    context: { categories: categoryNames },
-  });
-}
-
-// ── Reply-Nav Platforms: Category Commands ────────────────────────────────────
-
-async function sendCategoryCommandsForReplyNav(
-  ctx: AppCtx,
-  category: string,
-): Promise<void> {
-  const { chat, commands, native, event, prefix = '' } = ctx;
-
-  const disabledNames = await buildDisabledNames(commands, native, event);
-  const visibleMods = getVisibleMods(commands, disabledNames);
-  const grouped = groupByCategory(visibleMods);
-
-  const targetCategory = formatCategory(category);
-  const catEntry = grouped.find(([cat]) => cat === targetCategory);
-
-  if (!catEntry || catEntry[1].length === 0) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `**${targetCategory} COMMAND CENTER**\nNo visible commands in this category.`,
-    });
-  } else {
-    const [, catMods] = catEntry;
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: buildCategoryLines(catMods, targetCategory, prefix).join('\n'),
-    });
-  }
-}
-
 // ── Button definitions ────────────────────────────────────────────────────────
 
 const BUTTON_ID = { cat: 'cat', back: 'back' } as const;
@@ -483,75 +402,11 @@ export const button = {
   },
 };
 
-// ── onReply (reply-nav platforms only) ───────────────────────────────────────
-
-export const onReply = {
-  /**
-   * Fired whenever the user replies to the original numbered menu message.
-   *
-   * Unlimited-reply mechanism:
-   *   1. Show the requested category's commands.
-   *   2. Delete the current state entry.
-   *   3. Re-create state under the SAME session.id (= same message key).
-   *   4. The original menu message is never re-sent — the user replies to it
-   *      again and this handler fires again, indefinitely.
-   *
-   * Invalid input gets an error reply and the state is immediately re-created
-   * so the user can try again without needing a new /menu invocation.
-   */
-  [STATE.awaiting_category]: async (ctx: AppCtx): Promise<void> => {
-    const { chat, event, state, session } = ctx;
-
-    const input = String(event['message'] ?? '').trim();
-    const categoryNames =
-      (session.context['categories'] as string[] | undefined) ?? [];
-    const currentStateId = session.id;
-    const currentContext = session.context;
-
-    const num = parseInt(input, 10);
-
-    if (isNaN(num) || num < 1 || num > categoryNames.length) {
-      // Show error, but keep state alive so user can retry on the same message.
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `⚠️ Please reply with a number between **1** and **${categoryNames.length}**.`,
-      });
-      // Re-register state on the same message ID so the next reply is still caught.
-      state.delete(currentStateId);
-      state.create({
-        id: currentStateId,
-        state: STATE.awaiting_category,
-        context: currentContext,
-      });
-      return;
-    }
-
-    const selectedCategory = categoryNames[num - 1]!;
-
-    // Show the category — do this BEFORE re-registering state so the detail
-    // message appears before any potential state-related processing.
-    await sendCategoryCommandsForReplyNav(ctx, selectedCategory);
-
-    // Re-register state under the SAME session ID (same original menu message key)
-    // so the user can reply to the original message again without a new /menu.
-    state.delete(currentStateId);
-    state.create({
-      id: currentStateId,
-      state: STATE.awaiting_category,
-      context: currentContext,
-    });
-  },
-};
-
 // ── Command entry point ───────────────────────────────────────────────────────
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
   try {
-    if (isReplyNavPlatform(ctx.native.platform)) {
-      await sendNumberedCategoryList(ctx);
-    } else {
-      await renderCategoryList(ctx);
-    }
+    await renderCategoryList(ctx);
   } catch (err) {
     const error = err as { message?: string };
     await ctx.chat.replyMessage({

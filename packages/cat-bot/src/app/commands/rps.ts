@@ -33,9 +33,6 @@
  *       (RPS is a 1-player game — scoped to the user who started it)
  *     💰 Balance / ⬅ Back → public: false (always user-scoped)
  *
- *   hasNativeButtons (daily/work/fish/slot/quiz pattern)
- *     All button injection is gated with hasNativeButtons(native.platform).
- *
  * ── Win-Streak Bonus ─────────────────────────────────────────────────────────
  *   streak ≥  3 → +10% on top of the wager payout
  *   streak ≥  5 → +25%
@@ -46,17 +43,15 @@
  *   /rps          → free-play: win = +FREE_WIN_COINS (× streak bonus), loss/draw = 0
  *   /rps <amount> → wagered:   win = +bet (× streak bonus), loss = −bet, draw = refund
  *   Bet shorthands: all | max | half | 100k | 2m | 1b
- *   Max bet capped at 75 % of current balance (slot.ts rule).
  *
- * ── Platform split ────────────────────────────────────────────────────────────
- *   Discord & Telegram → native inline buttons (full flow below)
+ * ── Platform support ───────────────────────────────────────────────────────────
+ *   Discord & Telegram only — native inline buttons required.
  */
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
-import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 
@@ -160,6 +155,9 @@ interface RpsResultBtnCtx extends Record<string, unknown> {
 
 const pick = <T>(arr: readonly T[]): T =>
   arr[Math.floor(Math.random() * arr.length)]!;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Parses user bet input (slot.ts parseBetInput — verbatim).
@@ -280,24 +278,7 @@ function buildQuestionMessage(bet: number): string {
 // ── Core game runner (shared between onCommand and 🔄 Play Again) ─────────────
 
 async function startRpsGame(ctx: AppCtx, bet: number): Promise<void> {
-  const { chat, button: btn, event, native } = ctx;
-
-  if (!hasNativeButtons(native.platform)) {
-    // FB fallback — handled by onReply
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: [
-        `🤜 **Rock, Paper, Scissors!**`,
-        ``,
-        bet > 0
-          ? `💰 Wager: **${bet.toLocaleString()} coins**`
-          : `🆓 Free-play — win **${FREE_WIN_COINS} coins**`,
-        ``,
-        `Reply with: **rock**, **paper**, or **scissors**`,
-      ].join('\n'),
-    });
-    return;
-  }
+  const { chat, button: btn, event } = ctx;
 
   const rockId = btn.generateID({ id: BUTTON_ID.rock, public: false });
   const paperId = btn.generateID({ id: BUTTON_ID.paper, public: false });
@@ -328,17 +309,66 @@ async function startRpsGame(ctx: AppCtx, bet: number): Promise<void> {
   }
 }
 
+// ── Suspense animation (native-button flow) ────────────────────────────────────
+// Cycles Rock → Paper → Scissors on the SAME message via sequential editMessage
+// calls before the bot's choice is generated or the winner is determined — the
+// outcome literally does not exist yet while this is playing, so there is no way
+// for the result to appear before the animation finishes.
+
+/** Order the animation cycles through — always Rock → Paper → Scissors. */
+const ANIMATION_SEQUENCE: readonly Choice[] = ['rock', 'paper', 'scissors'];
+
+/** Delay between each animation frame. Short enough to feel snappy, long enough to read. */
+const ANIMATION_FRAME_DELAY_MS = 550;
+
+function buildAnimationFrame(playerChoice: Choice, frame: Choice): string {
+  return [
+    `🤜 **Rock, Paper, Scissors!**`,
+    ``,
+    `👤 You chose: **${playerChoice.toUpperCase()}** ${EMOJIS[playerChoice]}`,
+    ``,
+    `🤖 ${EMOJIS[frame]} ${frame.toUpperCase()}...`,
+  ].join('\n');
+}
+
+/**
+ * Plays the Rock → Paper → Scissors suspense animation in place on `msgId`,
+ * with no buttons attached (prevents taps mid-animation). Always awaits every
+ * frame in order — the caller cannot proceed to compute a result until this
+ * promise resolves, which only happens after the full sequence has rendered.
+ */
+async function playChoiceAnimation(
+  ctx: AppCtx,
+  msgId: string,
+  playerChoice: Choice,
+): Promise<void> {
+  const { chat } = ctx;
+  for (const frame of ANIMATION_SEQUENCE) {
+    await chat.editMessage({
+      style: MessageStyle.MARKDOWN,
+      message_id_to_edit: msgId,
+      message: buildAnimationFrame(playerChoice, frame),
+    });
+    await sleep(ANIMATION_FRAME_DELAY_MS);
+  }
+}
+
 // ── Result handler (shared by all three choice buttons) ───────────────────────
 
 async function resolveChoice(ctx: AppCtx, playerChoice: Choice): Promise<void> {
-  const { chat, event, session, button: btn, currencies, native } = ctx;
+  const { chat, event, session, button: btn, currencies } = ctx;
 
   const choiceCtx = session.context as Partial<RpsChoiceCtx>;
   const bet = choiceCtx.bet ?? 0;
   const senderID = event['senderID'] as string | undefined;
+  const msgId = event['messageID'] as string;
 
   // Clean up choice button contexts — round is resolved
   btn.deleteContext(session.id);
+
+  // ── Play the suspense animation FIRST — nothing below this line (bot's choice,
+  // outcome, stats, payout) is computed until every frame has been shown and read.
+  await playChoiceAnimation(ctx, msgId, playerChoice);
 
   const botChoice = pick(CHOICES);
   const outcome = getOutcome(playerChoice, botChoice);
@@ -406,7 +436,7 @@ async function resolveChoice(ctx: AppCtx, playerChoice: Choice): Promise<void> {
   const outcomeText =
     outcome === 'win' ? 'You won!' : outcome === 'draw' ? "It's a tie!" : 'You lost!';
 
-  const choiceLine = `👤 You: **${playerChoice.toUpperCase()}** ${EMOJIS[playerChoice]}   🤖 Bot: **${botChoice.toUpperCase()}** ${EMOJIS[botChoice]}`;
+  const choiceLine = `👤 You: **${playerChoice.toUpperCase()}** ${EMOJIS[playerChoice]}\n🤖 Bot: **${botChoice.toUpperCase()}** ${EMOJIS[botChoice]}`;
 
   // Coin block (work/fish/quiz message pattern)
   let coinBlock = '';
@@ -471,9 +501,9 @@ async function resolveChoice(ctx: AppCtx, playerChoice: Choice): Promise<void> {
 
   await chat.editMessage({
     style: MessageStyle.MARKDOWN,
-    message_id_to_edit: event['messageID'] as string,
+    message_id_to_edit: msgId,
     message: resultMessage,
-    ...(hasNativeButtons(native.platform) ? { button: buttons } : {}),
+    button: buttons,
   });
 }
 
@@ -520,7 +550,7 @@ export const button = {
   [BUTTON_ID.balance]: {
     label: '💰 Balance',
     style: ButtonStyle.SECONDARY,
-    onClick: async ({ chat, event, native, session, currencies }: AppCtx) => {
+    onClick: async ({ chat, event, session, currencies }: AppCtx) => {
       const senderID = event['senderID'] as string | undefined;
       const msgId = event['messageID'] as string | undefined;
       const btnCtx = readRpsResultBtnCtx(session.context);
@@ -538,7 +568,7 @@ export const button = {
           `📊 Current balance: **${coins.toLocaleString()} coins**`,
         ].join('\n'),
         // Back button ID is stable — taken from stored context (slot/quiz pattern)
-        ...(hasNativeButtons(native.platform) ? { button: [btnCtx.backId] } : {}),
+        button: [btnCtx.backId],
       });
     },
   },
@@ -549,7 +579,7 @@ export const button = {
   [BUTTON_ID.back]: {
     label: '⬅ Back',
     style: ButtonStyle.SECONDARY,
-    onClick: async ({ chat, event, native, session }: AppCtx) => {
+    onClick: async ({ chat, event, session }: AppCtx) => {
       const msgId = event['messageID'] as string | undefined;
       const btnCtx = readRpsResultBtnCtx(session.context);
 
@@ -570,9 +600,7 @@ export const button = {
         // Restore the full result card text exactly as stored (slot back pattern)
         message: btnCtx.resultMessage,
         // Re-attach both stable button IDs from context (quiz/slot pattern)
-        ...(hasNativeButtons(native.platform)
-          ? { button: [btnCtx.playAgainId, btnCtx.balanceId] }
-          : {}),
+        button: [btnCtx.playAgainId, btnCtx.balanceId],
       });
     },
   },
@@ -585,7 +613,6 @@ export const onCommand = async ({
   args,
   event,
   currencies,
-  native,
   button: btn,
   state,
 }: AppCtx): Promise<void> => {
@@ -645,159 +672,9 @@ export const onCommand = async ({
     bet = parsed;
   }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // BRANCH A — Discord & Telegram: native inline buttons
-  // ════════════════════════════════════════════════════════════════════════════
-  if (hasNativeButtons(native.platform)) {
-    await startRpsGame(
-      { chat, event, currencies, native, button: btn, state } as AppCtx,
-      bet,
-    );
-    return;
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // BRANCH B — text reply flow (platforms without native button support)
-  // ════════════════════════════════════════════════════════════════════════════
-  const messageID = await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: [
-      `🤜 **Rock, Paper, Scissors!**`,
-      ``,
-      bet > 0
-        ? `💰 Wager: **${bet.toLocaleString()} coins**`
-        : `🆓 Free-play — win **${FREE_WIN_COINS} coins** (+ streak bonus)`,
-      ``,
-      `Reply with: **rock**, **paper**, or **scissors**`,
-    ].join('\n'),
-  });
-
-  if (!messageID) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: '❌ onReply unavailable: this platform did not return a message ID.',
-    });
-    return;
-  }
-
-  state.create({
-    id: state.generateID({ id: String(messageID) }),
-    state: ['rock', 'paper', 'scissors'],
-    context: { bet } satisfies Record<string, unknown>,
-  });
+  // Discord & Telegram only — native inline buttons required.
+  await startRpsGame(
+    { chat, event, currencies, button: btn, state } as AppCtx,
+    bet,
+  );
 };
-
-// ── onReply handler ───────────────────────────────────────────────────────────
-
-export const onReply = {
-  rock: async (ctx: AppCtx) => resolveFbReply(ctx, 'rock'),
-  paper: async (ctx: AppCtx) => resolveFbReply(ctx, 'paper'),
-  scissors: async (ctx: AppCtx) => resolveFbReply(ctx, 'scissors'),
-};
-
-async function resolveFbReply(ctx: AppCtx, playerChoice: Choice): Promise<void> {
-  const { chat, event, session, state, currencies } = ctx;
-
-  const bet = (session.context['bet'] as number | undefined) ?? 0;
-  state.delete(session.id);
-
-  const senderID = event['senderID'] as string | undefined;
-  const botChoice = pick(CHOICES);
-  const outcome = getOutcome(playerChoice, botChoice);
-
-  let stats: RpsStats = {
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    streak: 0,
-    bestStreak: 0,
-    totalEarned: 0,
-    totalLost: 0,
-  };
-  let netChange = 0;
-  let newBalance = 0;
-  let streakBonusCoins = 0;
-  let streakBonusLabel = '';
-
-  if (senderID) {
-    stats = await readRpsStats(ctx, senderID);
-
-    if (outcome === 'win') {
-      stats.wins += 1;
-      stats.streak += 1;
-      if (stats.streak > stats.bestStreak) stats.bestStreak = stats.streak;
-
-      const base = bet > 0 ? bet : FREE_WIN_COINS;
-      streakBonusCoins = applyStreakBonus(base, stats.streak);
-      const tier = getStreakTier(stats.streak);
-      if (tier) streakBonusLabel = tier.label;
-
-      netChange = base + streakBonusCoins;
-      stats.totalEarned += netChange;
-
-      await saveRpsStats(ctx, senderID, stats);
-      await currencies.increaseMoney({ user_id: senderID, money: netChange });
-    } else if (outcome === 'loss') {
-      stats.losses += 1;
-      stats.streak = 0;
-      if (bet > 0) {
-        netChange = -bet;
-        stats.totalLost += bet;
-        await saveRpsStats(ctx, senderID, stats);
-        await currencies.decreaseMoney({ user_id: senderID, money: bet });
-      } else {
-        await saveRpsStats(ctx, senderID, stats);
-      }
-    } else {
-      stats.draws += 1;
-      stats.streak = 0;
-      await saveRpsStats(ctx, senderID, stats);
-    }
-
-    newBalance = await currencies.getMoney(senderID);
-  }
-
-  const outcomeEmoji =
-    outcome === 'win' ? '🎉' : outcome === 'draw' ? '🤝' : '💀';
-  const outcomeText =
-    outcome === 'win' ? 'You won!' : outcome === 'draw' ? "It's a tie!" : 'You lost!';
-
-  const lines = [
-    `${outcomeEmoji} **${outcomeText}**`,
-    ``,
-    `👤 You: **${playerChoice.toUpperCase()}** ${EMOJIS[playerChoice]}   🤖 Bot: **${botChoice.toUpperCase()}** ${EMOJIS[botChoice]}`,
-  ];
-
-  if (senderID) {
-    if (outcome === 'win') {
-      const baseLine =
-        bet > 0
-          ? `💰 **+${bet.toLocaleString()} coins** won!`
-          : `💰 **+${FREE_WIN_COINS} coins** (free-play reward)`;
-      lines.push(``, baseLine);
-      if (streakBonusCoins > 0) {
-        lines.push(`${streakBonusLabel} **+${streakBonusCoins.toLocaleString()} coins**`);
-        lines.push(`💎 Total earned: **+${netChange.toLocaleString()} coins**`);
-      }
-      lines.push(`📊 Balance: **${newBalance.toLocaleString()} coins**`);
-    } else if (outcome === 'loss' && bet > 0) {
-      lines.push(``, `💸 **−${bet.toLocaleString()} coins** lost!`);
-      lines.push(`📊 Balance: **${newBalance.toLocaleString()} coins**`);
-    } else if (outcome === 'draw' && bet > 0) {
-      lines.push(``, `↩️ Wager **refunded** — no coins exchanged.`);
-      lines.push(`📊 Balance: **${newBalance.toLocaleString()} coins**`);
-    }
-
-    lines.push(
-      ``,
-      `🔥 Streak: **${stats.streak}** | Best: **${stats.bestStreak}**`,
-      `🏆 W: **${stats.wins}** / L: **${stats.losses}** / D: **${stats.draws}**`,
-      `💎 Lifetime earned: **${stats.totalEarned.toLocaleString()} coins** | Lost: **${stats.totalLost.toLocaleString()} coins**`,
-    );
-  }
-
-  await chat.reply({
-    style: MessageStyle.MARKDOWN,
-    message: lines.join('\n'),
-  });
-}
