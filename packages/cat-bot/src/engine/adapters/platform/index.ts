@@ -35,8 +35,6 @@
  */
 
 import { EventEmitter } from 'events';
-import { createDiscordListener } from './discord/index.js';
-import { createTelegramListener } from './telegram/index.js';
 import { createLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 import type { SessionLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
@@ -52,6 +50,36 @@ import {
   commandRegistry,
   eventRegistry,
 } from '@/engine/lib/module-registry.lib.js';
+
+// ── Lazy transport SDK loading ─────────────────────────────────────────────────
+// `discord.js` and `grammy` are both sizeable SDKs — importing either one eagerly
+// costs real wall-clock time at process boot (discord.js alone is ~500ms of pure
+// module-graph loading before it does anything). A deployment running only one
+// platform was previously paying that cost for BOTH transports on every cold
+// start, restart, and redeploy, since createDiscordListener/createTelegramListener
+// were static imports evaluated unconditionally at module load time.
+//
+// These loaders defer the import until a session for that specific platform is
+// actually about to start — either at boot (via createUnifiedPlatformListener,
+// gated on config.discord/telegram being non-empty) or later at runtime (via
+// spawnDynamicSession, when the dashboard adds a first session for a platform
+// that wasn't previously active). Each loader caches its promise so the dynamic
+// import only ever executes once per process, regardless of how many sessions
+// or spawn calls request it afterwards.
+type DiscordModule = typeof import('./discord/index.js');
+type TelegramModule = typeof import('./telegram/index.js');
+
+let discordModulePromise: Promise<DiscordModule> | null = null;
+function loadDiscordModule(): Promise<DiscordModule> {
+  discordModulePromise ??= import('./discord/index.js');
+  return discordModulePromise;
+}
+
+let telegramModulePromise: Promise<TelegramModule> | null = null;
+function loadTelegramModule(): Promise<TelegramModule> {
+  telegramModulePromise ??= import('./telegram/index.js');
+  return telegramModulePromise;
+}
 
 /**
  * Every registered platform ID in one place — derived from each platform's own index.ts constant.
@@ -125,18 +153,11 @@ export function createUnifiedPlatformListener(
   const emitter = new EventEmitter() as UnifiedPlatformEmitter;
   globalEmitter = emitter;
 
-  // Create one listener per session for each platform — empty arrays produce no listeners.
-  const discordListeners = config.discord.map((c) => createDiscordListener(c));
-  const telegramListeners = config.telegram.map((c) =>
-    createTelegramListener(c),
-  );
-
-  // Forward events from every session of every platform to the single unified emitter.
-  // The payload shape is identical across all sessions — app.ts needs no per-session branching.
-  for (const transport of [
-    ...discordListeners,
-    ...telegramListeners,
-  ]) {
+  /**
+   * Wires every forwarded event type from one transport instance to the shared
+   * unified emitter. Shared between the boot-time path below and spawnDynamicSession.
+   */
+  function forwardEvents(transport: EventEmitter): void {
     for (const eventType of FORWARDED_EVENTS) {
       transport.on(eventType, (payload: unknown) =>
         emitter.emit(eventType, payload),
@@ -148,67 +169,90 @@ export function createUnifiedPlatformListener(
    * Boots all session listeners in parallel.
    * Each platform listener owns its own retry loop — a failing session is self-contained.
    * Errors are caught per-session so one failing account never prevents others from starting.
+   *
+   * Listener construction (and therefore each transport SDK's dynamic import) happens
+   * HERE rather than at createUnifiedPlatformListener() call time — app.ts always wires
+   * its `platform.on(...)` handlers before calling `platform.start(...)`, so deferring
+   * construction this far is safe: no event can fire before its forwarding listener
+   * is attached below. This is what lets a Telegram-only deployment skip loading
+   * discord.js entirely, and vice versa.
    */
   emitter.start = async (
     commands: Map<string, Record<string, unknown>>,
   ): Promise<void> => {
     activeCommands = commands;
 
-    // Retry and markActive are now owned by each Discord listener internally.
-    config.discord.forEach((c, i) => {
-      const l = discordListeners[i]!;
-      const smKey = `${c.userId}:${Platforms.Discord}:${c.sessionId}`;
-      const sessionLogger = createLogger({
-        userId: c.userId,
-        platformId: PLATFORM_TO_ID[Platforms.Discord],
-        sessionId: c.sessionId,
-      });
-      const stopFn = async (signal?: string, persist = true) => {
-        if (persist) {
-          await sessionManager.markInactive(smKey);
-        } else {
-          sessionManager.markInactiveTransient(smKey);
-        }
-        await l.stop(signal);
-      };
-      sessionManager.register(smKey, {
-        start: () => l.start(commands),
-        stop: stopFn,
-      });
-      void sessionManager
-        .start(smKey)
-        .catch((err) =>
-          sessionLogger.error(`[discord] Fatal startup error:`, { error: err }),
-        );
-    });
-
-    // Retry and markActive are now owned by each Telegram listener internally.
-    config.telegram.forEach((c, i) => {
-      const l = telegramListeners[i]!;
-      const smKey = `${c.userId}:${Platforms.Telegram}:${c.sessionId}`;
-      const sessionLogger = createLogger({
-        userId: c.userId,
-        platformId: PLATFORM_TO_ID[Platforms.Telegram],
-        sessionId: c.sessionId,
-      });
-      const stopFn = async (signal?: string, persist = true) => {
-        if (persist) {
-          await sessionManager.markInactive(smKey);
-        } else {
-          sessionManager.markInactiveTransient(smKey);
-        }
-        await l.stop(signal);
-      };
-      sessionManager.register(smKey, {
-        start: () => l.start(commands),
-        stop: stopFn,
-      });
-      void sessionManager.start(smKey).catch((err) =>
-        sessionLogger.error(`[telegram] Fatal startup error:`, {
-          error: err,
-        }),
+    // Only pay for discord.js's module graph when at least one Discord session exists.
+    if (config.discord.length > 0) {
+      const { createDiscordListener } = await loadDiscordModule();
+      const discordListeners = config.discord.map((c) =>
+        createDiscordListener(c),
       );
-    });
+      discordListeners.forEach((l, i) => {
+        forwardEvents(l);
+        const c = config.discord[i]!;
+        const smKey = `${c.userId}:${Platforms.Discord}:${c.sessionId}`;
+        const sessionLogger = createLogger({
+          userId: c.userId,
+          platformId: PLATFORM_TO_ID[Platforms.Discord],
+          sessionId: c.sessionId,
+        });
+        const stopFn = async (signal?: string, persist = true) => {
+          if (persist) {
+            await sessionManager.markInactive(smKey);
+          } else {
+            sessionManager.markInactiveTransient(smKey);
+          }
+          await l.stop(signal);
+        };
+        sessionManager.register(smKey, {
+          start: () => l.start(commands),
+          stop: stopFn,
+        });
+        void sessionManager
+          .start(smKey)
+          .catch((err) =>
+            sessionLogger.error(`[discord] Fatal startup error:`, {
+              error: err,
+            }),
+          );
+      });
+    }
+
+    // Only pay for grammy's module graph when at least one Telegram session exists.
+    if (config.telegram.length > 0) {
+      const { createTelegramListener } = await loadTelegramModule();
+      const telegramListeners = config.telegram.map((c) =>
+        createTelegramListener(c),
+      );
+      telegramListeners.forEach((l, i) => {
+        forwardEvents(l);
+        const c = config.telegram[i]!;
+        const smKey = `${c.userId}:${Platforms.Telegram}:${c.sessionId}`;
+        const sessionLogger = createLogger({
+          userId: c.userId,
+          platformId: PLATFORM_TO_ID[Platforms.Telegram],
+          sessionId: c.sessionId,
+        });
+        const stopFn = async (signal?: string, persist = true) => {
+          if (persist) {
+            await sessionManager.markInactive(smKey);
+          } else {
+            sessionManager.markInactiveTransient(smKey);
+          }
+          await l.stop(signal);
+        };
+        sessionManager.register(smKey, {
+          start: () => l.start(commands),
+          stop: stopFn,
+        });
+        void sessionManager.start(smKey).catch((err) =>
+          sessionLogger.error(`[telegram] Fatal startup error:`, {
+            error: err,
+          }),
+        );
+      });
+    }
   };
 
   return emitter;
@@ -256,6 +300,7 @@ export async function spawnDynamicSession(
   let sessionLogger: SessionLogger;
 
   if (platform === Platforms.Discord) {
+    const { createDiscordListener } = await loadDiscordModule();
     const l = createDiscordListener(sessionConfig as DiscordConfig);
     listener = l;
     smKey = `${sessionConfig.userId}:${Platforms.Discord}:${sessionConfig.sessionId}`;
@@ -275,6 +320,7 @@ export async function spawnDynamicSession(
       await l.stop(signal);
     };
   } else if (platform === Platforms.Telegram) {
+    const { createTelegramListener } = await loadTelegramModule();
     const l = createTelegramListener(sessionConfig as TelegramConfig);
     listener = l;
     smKey = `${sessionConfig.userId}:${Platforms.Telegram}:${sessionConfig.sessionId}`;
