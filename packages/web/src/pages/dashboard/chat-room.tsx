@@ -2604,12 +2604,13 @@ const Composer = memo(function Composer({
     <>
       {/* ChatGPT-style rounded composer — the message bar itself. Filled
           with the same frosted glass as the page header (glass-surface) so
-          the two bars read as one consistent tone, top and bottom. */}
+          the two bars read as one consistent tone, top and bottom. The bar
+          is the capsule only — no shadow/glow hanging outside the ring. */}
       <div
         className={cn(
-          'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
+          'relative rounded-[28px] transition-all',
           'glass-surface ring-[1.5px] ring-inset ring-[var(--input-border)]',
-          'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
+          'focus-within:ring-[var(--input-border-focus)]',
         )}
       >
         {/* Pending attachments row — images shown in the message bar */}
@@ -2773,15 +2774,6 @@ const Composer = memo(function Composer({
           </button>
         </div>
       </div>
-
-      {/* Desktop-only composer hint — replaces the old keyboard-
-          shortcut reminder (Enter/Shift+Enter behaviour is standard
-          desktop chat convention and no longer needs a caption)
-          with a pointer toward the AI feature instead: mentioning
-          the bot's name in a message triggers an AI response. */}
-      <p className="hidden sm:block text-center text-[10px] text-on-surface-variant/30 mt-1.5 select-none">
-        Type {botNickname} to trigger an AI response
-      </p>
     </>
   )
 })
@@ -2803,7 +2795,6 @@ const CR_STYLES = `
           --bubble-user-text: rgb(var(--color-on-primary));
           --input-border: var(--color-input-border);
           --input-border-focus: rgb(var(--color-primary) / 0.45);
-          --input-ring: rgb(var(--color-primary) / 0.12);
         }
 
 

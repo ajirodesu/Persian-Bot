@@ -29,7 +29,11 @@ import {
 import { upsertSessionEvents } from '@/engine/modules/session/bot-session-events.repo.js';
 import type { SessionConfigs } from '@/engine/modules/session/session-loader.util.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
-import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
+import {
+  createCollectionManager,
+  createThreadCollectionManager,
+  createBotCollectionManager,
+} from '@/engine/lib/db-collection.lib.js';
 import { dbReady } from 'database';
 import { listBotAdmins, listBotPremiums } from '@/engine/repos/credentials.repo.js';
 import {
@@ -38,6 +42,7 @@ import {
 } from '@/engine/repos/session.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
+import { setCachedSessionAdminOnly } from '@/engine/lib/admin-only-state.lib.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -253,11 +258,42 @@ async function syncCommandsAndEvents(
 // ── LRU pre-warm ──────────────────────────────────────────────────────────────
 
 /**
+ * Warms the session-wide admin-only fast-path cache for a session. Mirrors the
+ * read logic in enforceAdminOnly (on-command.middleware.ts) exactly so the
+ * cached value is identical to what a real command dispatch would compute:
+ * caches `false` only when no session_settings collection exists, and caches
+ * the enabled flag only when the stored value is actually set. Once warmed,
+ * the first command skips the session_settings DB read entirely.
+ */
+async function warmSessionAdminOnly(
+  userId: string,
+  platform: string,
+  sessionId: string,
+): Promise<void> {
+  try {
+    const botColl = createBotCollectionManager(userId, platform, sessionId);
+    if (await botColl.isCollectionExist('session_settings')) {
+      const h = await botColl.getCollection('session_settings');
+      const settings = await h.getAll();
+      const enabled = settings['adminOnlyEnabled'] as boolean | null | undefined;
+      if (enabled !== null && enabled !== undefined) {
+        setCachedSessionAdminOnly(userId, platform, sessionId, enabled === true);
+      }
+    } else {
+      setCachedSessionAdminOnly(userId, platform, sessionId, false);
+    }
+  } catch {
+    // fail-open — a cold cache on the first message is always safe
+  }
+}
+
+/**
  * Pre-populates the LRU cache for every active session immediately after
  * session configs are loaded. Loads admin lists, premium lists, bot session data,
- * the command enable-list, the bot nickname, and the system-admin set so the
- * very first command from any user finds everything already in memory and makes
- * zero DB round-trips through the middleware chain.
+ * the command enable-list, the bot nickname, the system-admin set, and the
+ * session-wide admin-only flag so the very first command from any user finds
+ * everything already in memory and makes zero DB round-trips through the
+ * middleware chain.
  *
  * Runs in the background (fire-and-forget from main) — failures are logged and
  * swallowed; a cold cache miss on the first message is always safe.
@@ -293,6 +329,11 @@ async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
         findSessionCommands(s.userId, s.platform, s.sessionId),
         getBotNickname(s.userId, s.platform, s.sessionId),
       ]),
+      // Session-wide admin-only flag — warms enforceAdminOnly's fast-path so
+      // the first command skips the session_settings DB read.
+      ...allSessions.map((s) =>
+        warmSessionAdminOnly(s.userId, s.platform, s.sessionId),
+      ),
     ]);
 
     logger.info(
@@ -322,10 +363,12 @@ async function main(): Promise<void> {
 
   logger.info('Cat-Bot - creating platform listeners...');
 
-  // Pre-warm the LRU cache in the background while the rest of boot continues.
-  // Failures are non-fatal — the bot will still start and serve commands, just
-  // with a cold cache on the very first request.
-  void prewarmCache(sessionConfigs);
+  // Pre-warm the LRU cache BEFORE the platform listeners go live so the very
+  // first command after boot finds every hot-path key already in memory. The
+  // web/API server below still starts in parallel — only the platform gateway
+  // connect waits on the warm-up. Bounded: if the DB is slow to answer, give
+  // up after 8s and start with a cold cache (fail-open — a cold miss is safe).
+  const prewarmPromise = prewarmCache(sessionConfigs);
 
   // Warn about Telegram-incompatible command meta once at startup.
   const hasTelegramSlashSession = sessionConfigs.telegram.some((c) => c.prefix === '/');
@@ -453,15 +496,34 @@ async function main(): Promise<void> {
   });
 
   platform.on('button_action', async (payload: Record<string, unknown>) => {
+    const native = payload.native as import('@/engine/types/controller.types.js').NativeContext;
+    const threadID = (payload.event as Record<string, unknown>)['threadID'] as string | undefined;
+    const sessionPrefix = prefixManager.getPrefix(
+      native.userId ?? '',
+      native.platform,
+      native.sessionId ?? '',
+    );
+    const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
     await handleButtonAction(
       payload.api as UnifiedApi,
       payload.event as Record<string, unknown>,
       commands,
-      payload.native as import('@/engine/types/controller.types.js').NativeContext,
+      native,
+      // A button click re-runs the owning command (e.g. help's Prev/Next page),
+      // so the re-render must keep the same prefix the message used — otherwise
+      // every displayed command loses its prefix on the button-action re-render.
+      threadPrefix ?? sessionPrefix,
     );
   });
 
   logger.info('Cat-Bot - starting all platforms...');
+
+  // Bounded wait for the cache warm-up (8s cap) — the platform gateways won't
+  // accept the first message until the hot-path keys are in memory.
+  await Promise.race([
+    prewarmPromise,
+    new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
+  ]);
   platform.start(commands);
   logger.info('Cat-Bot — all platform listeners wired');
 

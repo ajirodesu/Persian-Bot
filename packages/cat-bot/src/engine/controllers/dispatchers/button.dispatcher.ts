@@ -198,6 +198,7 @@ export async function handleButtonAction(
   event: Record<string, unknown>,
   commands: CommandMap,
   native: NativeContext = { platform: 'unknown' },
+  prefix?: string,
 ): Promise<void> {
   const buttonIdStr = String(event['buttonId'] ?? '');
   const colonIdx = buttonIdStr.indexOf(':');
@@ -216,7 +217,7 @@ export async function handleButtonAction(
   // ack() extraction, and per-user ownership enforcement, then populates ctx.baseButtonId,
   // ctx.scopeUserId, and ctx.ack before the final handler executes.
   const buttonClickCtx: OnButtonClickCtx = {
-    ...buildBaseCtx(api, event, commands, native),
+    ...buildBaseCtx(api, event, commands, native, prefix),
     commandName,
     // Placeholder values — enforceButtonScope overwrites these before calling next().
     // Same pattern as OnCommandCtx.options seeded as OptionsMap.empty() before validateCommandOptions.

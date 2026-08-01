@@ -957,6 +957,7 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
           buttonEvent,
           commands,
           native,
+          session.prefix,
         ).catch((err: unknown) => {
           logger.error('[chat-room] handleButtonAction error', { error: err });
         });
