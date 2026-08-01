@@ -32,6 +32,9 @@ import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.uti
 import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
 import { dbReady } from 'database';
+import { listBotAdmins, listBotPremiums } from '@/engine/repos/credentials.repo.js';
+import { getBotSessionData } from '@/engine/repos/session.repo.js';
+import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -244,6 +247,53 @@ async function syncCommandsAndEvents(
   logger.info(`[app] Synced commands and events for ${allSessions.length} session(s)`);
 }
 
+// ── LRU pre-warm ──────────────────────────────────────────────────────────────
+
+/**
+ * Pre-populates the LRU cache for every active session immediately after
+ * session configs are loaded. Loads admin lists, premium lists, bot session data,
+ * and the system-admin set so the very first command from any user finds everything
+ * already in memory and makes zero DB round-trips through the middleware chain.
+ *
+ * Runs in the background (fire-and-forget from main) — failures are logged and
+ * swallowed; a cold cache miss on the first message is always safe.
+ */
+async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
+  try {
+    const allSessions = [
+      ...sessionConfigs.discord.map((s) => ({
+        userId: s.userId,
+        sessionId: s.sessionId,
+        platform: Platforms.Discord,
+      })),
+      ...sessionConfigs.telegram.map((s) => ({
+        userId: s.userId,
+        sessionId: s.sessionId,
+        platform: Platforms.Telegram,
+      })),
+    ];
+
+    await Promise.allSettled([
+      // Prime the system-admin Set — called on every command dispatch.
+      isSystemAdmin('__prewarm__'),
+      // Per-session hot-path data: admin list, premium list, bot session blob.
+      ...allSessions.flatMap((s) => [
+        listBotAdmins(s.userId, s.platform, s.sessionId),
+        listBotPremiums(s.userId, s.platform, s.sessionId),
+        getBotSessionData(s.userId, s.platform, s.sessionId),
+      ]),
+    ]);
+
+    logger.info(
+      `[app] LRU cache pre-warmed for ${allSessions.length} session(s)`,
+    );
+  } catch (err) {
+    logger.warn('[app] LRU pre-warm encountered an error (non-fatal)', {
+      error: err,
+    });
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -261,7 +311,10 @@ async function main(): Promise<void> {
 
   logger.info('Cat-Bot - creating platform listeners...');
 
-  await syncCommandsAndEvents(commands, eventModules, sessionConfigs);
+  // Pre-warm the LRU cache in the background while the rest of boot continues.
+  // Failures are non-fatal — the bot will still start and serve commands, just
+  // with a cold cache on the very first request.
+  void prewarmCache(sessionConfigs);
 
   // Warn about Telegram-incompatible command meta once at startup.
   const hasTelegramSlashSession = sessionConfigs.telegram.some((c) => c.prefix === '/');
@@ -400,6 +453,12 @@ async function main(): Promise<void> {
   logger.info('Cat-Bot - starting all platforms...');
   platform.start(commands);
   logger.info('Cat-Bot — all platform listeners wired');
+
+  // Sync command/event names to the DB for dashboard display — runs in the
+  // background so the bot starts accepting messages without waiting for DB writes.
+  void syncCommandsAndEvents(commands, eventModules, sessionConfigs).catch(
+    (err) => logger.warn('[app] Background syncCommandsAndEvents failed', { error: err }),
+  );
 
   startServer();
 }

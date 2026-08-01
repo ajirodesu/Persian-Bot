@@ -1,0 +1,1 @@
+- [Turso cold-start optimization](turso-cold-start.md) — schema DDL skipped on warm boots; WS probe 500ms; LRU pre-warmed at startup to eliminate first-command DB round-trips.

@@ -28,22 +28,30 @@ function toWebSocketUrl(rawUrl: string): string | null {
 
 // Try the persistent WebSocket transport first; fall back to HTTP if the host
 // blocks outbound WebSocket upgrades. Set TURSO_FORCE_HTTP=1 to skip the probe.
+// Once resolved, the result is written to TURSO_TRANSPORT so subsequent process
+// restarts (same machine) skip the probe entirely and connect immediately.
 async function createTursoClient(): Promise<Client> {
   const clientOpts = authToken ? { authToken } : {};
-  const wsUrl = process.env['TURSO_FORCE_HTTP'] === '1' ? null : toWebSocketUrl(url!);
+
+  // Honour an explicit override from a previous successful probe (or manual config).
+  const resolved = process.env['TURSO_TRANSPORT'];
+  const forceHttp = process.env['TURSO_FORCE_HTTP'] === '1' || resolved === 'http';
+  const wsUrl = forceHttp ? null : toWebSocketUrl(url!);
 
   if (wsUrl) {
     let wsClient: Client | undefined;
     try {
       wsClient = createClient({ url: wsUrl, ...clientOpts });
-      // 2 s timeout — hosts that reject the Upgrade reply immediately; this just
-      // caps worst-case boot delay from a silently-stalled handshake.
+      // 500 ms timeout — if WS isn't ready quickly it likely won't be reliable;
+      // falling back to HTTP is faster than waiting out a stalled handshake.
       await Promise.race([
         wsClient.execute('SELECT 1'),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('WS probe timed out')), 2_000),
+          setTimeout(() => reject(new Error('WS probe timed out')), 500),
         ),
       ]);
+      // Cache the successful transport so future restarts skip the probe.
+      process.env['TURSO_TRANSPORT'] = 'ws';
       return wsClient;
     } catch (err) {
       console.warn(
@@ -52,6 +60,7 @@ async function createTursoClient(): Promise<Client> {
         err instanceof Error ? err.message : err,
       );
       try { wsClient?.close(); } catch { /* best-effort */ }
+      process.env['TURSO_TRANSPORT'] = 'http';
     }
   }
 
@@ -75,6 +84,14 @@ export const intToBool = (
 /** Idempotent schema bootstrap. Safe to call on every boot. */
 export async function initDb(): Promise<void> {
   await tursoClient.execute('PRAGMA foreign_keys = ON;');
+
+  // Fast-path: if the last table in the DDL already exists the schema is fully
+  // applied. Skip the entire DDL block — saves one extra Turso round-trip on
+  // every restart when the database is already initialised.
+  const schemaCheck = await tursoClient.execute(
+    `SELECT 1 FROM sqlite_master WHERE type='table' AND name='system_admin' LIMIT 1`,
+  );
+  if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`
     CREATE TABLE IF NOT EXISTS "user" (
@@ -323,10 +340,13 @@ if (!globalForTurso.tursoDbReadyPromise) {
 /** Resolves when schema DDL has completed. Await before issuing the first query. */
 export const dbReady: Promise<void> = globalForTurso.tursoDbReadyPromise;
 
-// Keep the connection pool warm. On the HTTP transport undici's idle-socket window
-// can be as short as 4–10 s; 8 s stays safely below it so every real query lands
-// on an open socket. .unref() so the interval never blocks graceful shutdown.
-const HEARTBEAT_INTERVAL_MS = 8_000;
+// Keep the connection pool warm.
+// - HTTP transport: undici idle-socket window is 4–10 s; 8 s ensures every real
+//   query lands on an open socket.
+// - WS transport: the libsql client sends its own ping/pong frames; 25 s is ample.
+// .unref() so the interval never blocks graceful shutdown.
+const HEARTBEAT_INTERVAL_MS =
+  process.env['TURSO_TRANSPORT'] === 'ws' ? 25_000 : 8_000;
 
 tursoClient.execute('SELECT 1').catch(() => { /* reconnects automatically */ });
 
