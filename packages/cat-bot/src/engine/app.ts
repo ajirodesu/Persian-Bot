@@ -29,12 +29,15 @@ import {
 import { upsertSessionEvents } from '@/engine/modules/session/bot-session-events.repo.js';
 import type { SessionConfigs } from '@/engine/modules/session/session-loader.util.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
-import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
 import { dbReady } from 'database';
 import { listBotAdmins, listBotPremiums } from '@/engine/repos/credentials.repo.js';
-import { getBotSessionData } from '@/engine/repos/session.repo.js';
+import {
+  getBotSessionData,
+  getBotNickname,
+} from '@/engine/repos/session.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -252,11 +255,15 @@ async function syncCommandsAndEvents(
 /**
  * Pre-populates the LRU cache for every active session immediately after
  * session configs are loaded. Loads admin lists, premium lists, bot session data,
- * and the system-admin set so the very first command from any user finds everything
- * already in memory and makes zero DB round-trips through the middleware chain.
+ * the command enable-list, the bot nickname, and the system-admin set so the
+ * very first command from any user finds everything already in memory and makes
+ * zero DB round-trips through the middleware chain.
  *
  * Runs in the background (fire-and-forget from main) — failures are logged and
  * swallowed; a cold cache miss on the first message is always safe.
+ *
+ * Also re-invoked on a fixed interval (see main) to keep the cache warm across
+ * idle periods that would otherwise exceed the LRU TTL.
  */
 async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
   try {
@@ -276,11 +283,15 @@ async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
     await Promise.allSettled([
       // Prime the system-admin Set — called on every command dispatch.
       isSystemAdmin('__prewarm__'),
-      // Per-session hot-path data: admin list, premium list, bot session blob.
+      // Per-session hot-path data: admin list, premium list, bot session blob,
+      // the command enable-list (isCommandEnabled) and the bot nickname
+      // (read on every AI/passive message).
       ...allSessions.flatMap((s) => [
         listBotAdmins(s.userId, s.platform, s.sessionId),
         listBotPremiums(s.userId, s.platform, s.sessionId),
         getBotSessionData(s.userId, s.platform, s.sessionId),
+        findSessionCommands(s.userId, s.platform, s.sessionId),
+        getBotNickname(s.userId, s.platform, s.sessionId),
       ]),
     ]);
 
@@ -396,7 +407,7 @@ async function main(): Promise<void> {
     if (threadID) await restoreThreadPrefix(threadID, native);
     const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
     const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
-    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, eventModules, livePrefix, native);
+    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, livePrefix, native);
   });
 
   platform.on('message_reply', async (payload: Record<string, unknown>) => {
@@ -410,7 +421,7 @@ async function main(): Promise<void> {
     if (threadID) await restoreThreadPrefix(threadID, native);
     const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
     const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
-    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, eventModules, livePrefix, native);
+    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, livePrefix, native);
   });
 
   platform.on('event', async (payload: Record<string, unknown>) => {
@@ -460,7 +471,24 @@ async function main(): Promise<void> {
     (err) => logger.warn('[app] Background syncCommandsAndEvents failed', { error: err }),
   );
 
-  startServer();
+  // Start the webhook/API server lazily in the background. Loading the server
+  // stack (express, better-auth, socket.io) at boot defers the bot's platform
+  // listeners behind their module evaluation; starting it asynchronously lets
+  // the first message be handled as soon as the platform session is live.
+  void import('@/server/server.js')
+    .then(({ startServer }) => startServer())
+    .catch((err) =>
+      logger.error('[app] Failed to start web/API server', { error: err }),
+    );
+
+  // Keep the LRU cache warm across idle periods. Entries expire after 15 min,
+  // so the first interaction after a long gap would otherwise pay cold DB
+  // round-trips. Refreshing on a 10-min cadence — below the TTL — guarantees a
+  // warm cache for the first command after any downtime. unref() so the timer
+  // never keeps the process alive on its own.
+  setInterval(() => {
+    void prewarmCache(sessionConfigs);
+  }, 10 * 60 * 1000).unref();
 }
 
 // ── Signal handlers ───────────────────────────────────────────────────────────

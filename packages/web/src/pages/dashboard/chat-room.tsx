@@ -803,7 +803,7 @@ function AudioPlayer({
         'cr-audio-player flex items-center gap-3',
         flush
           ? 'w-full px-3.5 py-3'
-          : 'pl-1.5 pr-3 py-2 rounded-[var(--radius-card)] bg-black/25 border border-white/10 min-w-[248px] max-w-[300px]',
+          : 'pl-1.5 pr-3 py-2 rounded-[var(--radius-card)] bg-on-surface/5 border border-outline-variant/50 min-w-[248px] max-w-[300px]',
       )}
     >
       <audio ref={audioRef} preload="metadata">
@@ -833,7 +833,7 @@ function AudioPlayer({
         </div>
 
         <div className="relative flex items-center h-3 group/seek">
-          <div className="absolute inset-x-0 h-[3px] rounded-full bg-white/15 overflow-hidden pointer-events-none">
+          <div className="absolute inset-x-0 h-[3px] rounded-full bg-on-surface/15 overflow-hidden pointer-events-none">
             <div
               className="h-full bg-primary rounded-full"
               style={{ width: `${progressPct}%`, transition: isScrubbing ? 'none' : 'width 0.1s linear' }}
@@ -869,7 +869,7 @@ function AudioPlayer({
           href={url}
           download={fileName}
           aria-label={`Download ${fileName}`}
-          className="p-1.5 rounded-full text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors"
+          className="p-1.5 rounded-full text-on-surface-variant/60 hover:text-primary hover:bg-on-surface/10 transition-colors"
         >
           <Download className="h-3.5 w-3.5" />
         </a>
@@ -888,7 +888,7 @@ function LightboxImage({ url, fileName }: { url: string; fileName: string }) {
   return (
     <>
       {isLoading && (
-        <span className="absolute h-8 w-8 rounded-full border-[3px] border-white/25 border-t-white animate-spin" />
+        <span className="absolute h-8 w-8 rounded-full border-[3px] border-on-surface/25 border-t-on-surface animate-spin" />
       )}
       <img
         src={url}
@@ -961,17 +961,17 @@ function ImageLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/92 [backdrop-filter:var(--surface-blur-md)]"
+      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/95 [backdrop-filter:var(--surface-blur-md)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       style={{ animation: 'cr-fadeInFast 140ms ease both' }}
     >
       {/* Top bar */}
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-black/70 to-transparent z-10">
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-scrim/70 to-transparent z-10">
         <div className="flex items-center gap-2 min-w-0">
-          <ImageIcon className="h-4 w-4 text-white/70 shrink-0" />
-          <span className="text-sm text-white/90 font-medium truncate max-w-[46vw]">{fileName}</span>
+          <ImageIcon className="h-4 w-4 text-on-surface/70 shrink-0" />
+          <span className="text-sm text-on-surface/90 font-medium truncate max-w-[46vw]">{fileName}</span>
           {hasMultiple && (
-            <span className="text-xs text-white/50 tabular-nums shrink-0">{index + 1} / {images.length}</span>
+            <span className="text-xs text-on-surface/50 tabular-nums shrink-0">{index + 1} / {images.length}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -979,7 +979,7 @@ function ImageLightbox({
             href={url}
             download={fileName}
             aria-label="Download image"
-            className="p-2 rounded-full text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+            className="p-2 rounded-full text-on-surface/80 hover:bg-on-surface/10 hover:text-on-surface transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="h-[18px] w-[18px]" />
@@ -988,7 +988,7 @@ function ImageLightbox({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-2 rounded-full text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+            className="p-2 rounded-full text-on-surface/80 hover:bg-on-surface/10 hover:text-on-surface transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1002,7 +1002,7 @@ function ImageLightbox({
             type="button"
             onClick={(e) => { e.stopPropagation(); goPrev() }}
             aria-label="Previous image"
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white border border-white/10 transition-colors z-10"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-outline-variant/60 transition-colors z-10"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -1010,7 +1010,7 @@ function ImageLightbox({
             type="button"
             onClick={(e) => { e.stopPropagation(); goNext() }}
             aria-label="Next image"
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white border border-white/10 transition-colors z-10"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-outline-variant/60 transition-colors z-10"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -1028,7 +1028,7 @@ function ImageLightbox({
       {/* Filmstrip for multi-image messages */}
       {hasMultiple && (
         <div
-          className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-1.5 px-4 py-3 bg-gradient-to-t from-black/70 to-transparent overflow-x-auto"
+          className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-1.5 px-4 py-3 bg-gradient-to-t from-scrim/70 to-transparent overflow-x-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {images.map((img, i) => (
@@ -1097,7 +1097,7 @@ function isGifAttachment(att: ChatAttachment): boolean {
  *  most chat clients use. */
 function GifBadge() {
   return (
-    <span className="absolute top-1.5 left-1.5 px-1.5 py-[1px] rounded-[var(--radius-compact)] bg-black/55 text-white text-[9px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
+    <span className="absolute top-1.5 left-1.5 px-1.5 py-[1px] rounded-[var(--radius-compact)] bg-scrim/55 text-on-surface text-[9px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
       GIF
     </span>
   )
@@ -1130,7 +1130,7 @@ function FlushMedia({
   if (!url) return null
 
   const MetaOverlay = showMeta ? (
-    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 [backdrop-filter:var(--surface-blur-sm)] text-white shadow-sm pointer-events-none">
+    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-scrim/55 [backdrop-filter:var(--surface-blur-sm)] text-on-surface shadow-sm pointer-events-none">
       <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
         {formatTime(timestamp)}
       </span>
@@ -1143,7 +1143,7 @@ function FlushMedia({
 
     if (disableFullscreen) {
       return (
-        <div className="relative block w-full bg-black/10">
+        <div className="relative block w-full bg-surface-container">
           <img
             src={url}
             alt={att.name ?? 'image'}
@@ -1164,7 +1164,7 @@ function FlushMedia({
         type="button"
         onClick={onOpen}
         aria-label={`View ${att.name ?? 'image'} fullscreen`}
-        className="group/photo relative block w-full cursor-zoom-in bg-black/10"
+        className="group/photo relative block w-full cursor-zoom-in bg-surface-container"
       >
         {/* Animated GIFs play natively in a plain <img> — no special decoding
             is needed, so the same element that renders a static photo also
@@ -1180,8 +1180,8 @@ function FlushMedia({
           className="block w-full h-auto max-h-[340px] object-cover select-none"
         />
         {isGif && <GifBadge />}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/photo:bg-black/20 transition-colors duration-200">
-          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-black/50 text-white opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
+        <div className="absolute inset-0 flex items-center justify-center bg-scrim/0 group-hover/photo:bg-scrim/20 transition-colors duration-200">
+          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-scrim/50 text-on-surface opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
             <Maximize2 className="h-4 w-4" />
           </span>
         </div>
@@ -1192,7 +1192,7 @@ function FlushMedia({
 
   if (att.type === 'video') {
     return (
-      <div className="group relative block w-full bg-black">
+      <div className="group relative block w-full bg-scrim">
         <video
           src={url}
           controls
@@ -1200,7 +1200,7 @@ function FlushMedia({
           preload="metadata"
           controlsList="nodownload noremoteplayback"
           onLoadedData={onMediaLoad}
-          className="block w-full h-auto max-h-[340px] bg-black"
+          className="block w-full h-auto max-h-[340px] bg-scrim"
         />
         {MetaOverlay}
       </div>
@@ -1265,7 +1265,7 @@ function ImageGrid({
             type="button"
             onClick={() => onOpen(globalIndex >= 0 ? globalIndex : i)}
             aria-label={`View image ${i + 1} of ${images.length} fullscreen`}
-            className="group/photo relative block w-full aspect-square cursor-zoom-in bg-black/10 overflow-hidden"
+            className="group/photo relative block w-full aspect-square cursor-zoom-in bg-surface-container overflow-hidden"
           >
             <img
               src={url}
@@ -1278,18 +1278,18 @@ function ImageGrid({
             />
             {isGif && !showOverlayCount && <GifBadge />}
             {showOverlayCount ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-white text-lg font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center bg-scrim/55 text-on-surface text-lg font-semibold">
                 +{extra}
               </div>
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover/photo:bg-black/20 transition-colors duration-200">
-                <span className="flex items-center justify-center h-7 w-7 rounded-full bg-black/50 text-white opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
+              <div className="absolute inset-0 flex items-center justify-center bg-scrim/0 group-hover/photo:bg-scrim/20 transition-colors duration-200">
+                <span className="flex items-center justify-center h-7 w-7 rounded-full bg-scrim/50 text-on-surface opacity-0 group-hover/photo:opacity-100 scale-90 group-hover/photo:scale-100 transition-all duration-200">
                   <Maximize2 className="h-3.5 w-3.5" />
                 </span>
               </div>
             )}
             {showMeta && isLastVisible && (
-              <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-black/55 [backdrop-filter:var(--surface-blur-sm)] text-white shadow-sm pointer-events-none">
+    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-scrim/55 [backdrop-filter:var(--surface-blur-sm)] text-on-surface shadow-sm pointer-events-none">
                 <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
                   {formatTime(timestamp)}
                 </span>
@@ -1338,7 +1338,7 @@ function AttachmentView({ att }: { att: ChatAttachment }) {
       target="_blank"
       rel="noopener noreferrer"
       download={att.name}
-      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-black/20 hover:bg-black/30 transition-colors text-xs border border-white/10"
+      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-low hover:bg-surface-container transition-colors text-xs border border-outline-variant/50"
     >
       <FileText className="h-4 w-4 shrink-0 opacity-70" />
       <span className="truncate max-w-[160px]">{att.name ?? 'File'}</span>
@@ -1373,7 +1373,7 @@ const BotButtonRow = memo(function BotButtonRow({
                 btn.style === 'danger'
                   ? 'border-error/50 text-error hover:bg-error/10 active:scale-95'
                   : btn.style === 'success'
-                    ? 'border-emerald-400/50 text-emerald-400 hover:bg-emerald-400/10 active:scale-95'
+                    ? 'border-success/50 text-success hover:bg-success/10 active:scale-95'
                     : 'border-primary/40 text-primary hover:bg-primary/10 active:scale-95',
               )}
             >
@@ -1816,7 +1816,7 @@ function ChatSettingsMenu({
           <span
             className={cn(
               'absolute bottom-0 right-0 h-2.5 w-2.5 md:h-3 md:w-3 rounded-full border-2 border-surface transition-colors duration-500',
-              isConnected ? 'bg-emerald-400' : 'bg-on-surface-variant/30',
+              isConnected ? 'bg-success' : 'bg-on-surface-variant/30',
             )}
           />
         </span>
@@ -1843,7 +1843,7 @@ function ChatSettingsMenu({
             </p>
             <p className="text-[11px] mt-0.5">
               {isConnected ? (
-                <span className="text-emerald-400/80 font-medium">Online</span>
+                <span className="text-success/80 font-medium">Online</span>
               ) : (
                 <span className="text-on-surface-variant/60">Connecting…</span>
               )}
@@ -1944,7 +1944,7 @@ function NicknameModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 [backdrop-filter:var(--surface-blur-sm)]"
+      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
@@ -2030,7 +2030,7 @@ function PrefixModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 [backdrop-filter:var(--surface-blur-sm)]"
+      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
@@ -2093,7 +2093,7 @@ function PrefixModal({
 function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 [backdrop-filter:var(--surface-blur-sm)]"
+      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
@@ -2141,26 +2141,26 @@ function GetStartedScreen({
 }) {
   const features = [
     {
-      icon: <Zap className="h-4 w-4 text-amber-400" />,
-      bg: 'bg-amber-400/10 border-amber-400/20',
+      icon: <Zap className="h-4 w-4 text-primary" />,
+      bg: 'bg-primary/10 border-primary/20',
       title: 'Instant Commands',
       desc: `Type ${prefix}help to explore everything the bot can do.`,
     },
     {
-      icon: <DollarSign className="h-4 w-4 text-sky-400" />,
-      bg: 'bg-sky-400/10 border-sky-400/20',
+      icon: <DollarSign className="h-4 w-4 text-info" />,
+      bg: 'bg-info/10 border-info/20',
       title: 'Economy & Games',
       desc: 'Earn coins, check balance, play slots — economy commands tied to your account.',
     },
     {
-      icon: <MessageCircle className="h-4 w-4 text-emerald-400" />,
-      bg: 'bg-emerald-400/10 border-emerald-400/20',
+      icon: <MessageCircle className="h-4 w-4 text-success" />,
+      bg: 'bg-success/10 border-success/20',
       title: 'Rich Responses',
       desc: 'Markdown, buttons, images, and files — all supported.',
     },
     {
-      icon: <Shield className="h-4 w-4 text-violet-400" />,
-      bg: 'bg-violet-400/10 border-violet-400/20',
+      icon: <Shield className="h-4 w-4 text-tertiary" />,
+      bg: 'bg-tertiary/10 border-tertiary/20',
       title: 'Persistent History',
       desc: 'Your messages are saved — pick up right where you left off.',
     },
@@ -2173,8 +2173,8 @@ function GetStartedScreen({
         <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center shadow-elevation-3 ring-1 ring-primary/20">
           <Logo className="h-12 w-12 text-primary" />
         </div>
-        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-emerald-400 border-[3px] border-[var(--chatroom-bg)] flex items-center justify-center">
-          <Sparkles className="h-3 w-3 text-emerald-900" />
+        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-success border-[3px] border-[var(--chatroom-bg)] flex items-center justify-center">
+          <Sparkles className="h-3 w-3 text-on-success" />
         </div>
       </div>
 
@@ -2603,13 +2603,12 @@ const Composer = memo(function Composer({
   return (
     <>
       {/* ChatGPT-style rounded composer — the message bar itself. Filled
-          with the same translucent surface + blur as the page header
-          (bg-surface/90 [backdrop-filter:var(--surface-blur-lg)]) so the two bars read as one
-          consistent tone, top and bottom. */}
+          with the same frosted glass as the page header (glass-surface) so
+          the two bars read as one consistent tone, top and bottom. */}
       <div
         className={cn(
           'relative rounded-[28px] transition-all shadow-[0_1px_6px_rgba(0,0,0,0.16)]',
-          'bg-surface/90 [backdrop-filter:var(--surface-blur-lg)] ring-[1.5px] ring-inset ring-[var(--input-border)]',
+          'glass-surface ring-[1.5px] ring-inset ring-[var(--input-border)]',
           'focus-within:ring-[var(--input-border-focus)] focus-within:shadow-[0_0_0_3px_var(--input-ring),0_1px_6px_rgba(0,0,0,0.16)]',
         )}
       >
@@ -2619,20 +2618,20 @@ const Composer = memo(function Composer({
             {pendingAttachments.map((att, i) => (
               <div key={i} className="relative group/att">
                 {att.type === 'image' && att.localUrl ? (
-                  <div className="relative h-16 w-16 rounded-[var(--radius-input)] overflow-hidden border border-white/10 shadow-sm">
+                  <div className="relative h-16 w-16 rounded-[var(--radius-input)] overflow-hidden border border-outline-variant/60 shadow-sm">
                     <img
                       src={att.localUrl}
                       alt={att.name}
                       className="h-full w-full object-cover"
                     />
                     {isGifAttachment(att) && (
-                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded-[var(--radius-compact)] bg-black/55 text-white text-[7px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
+                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded-[var(--radius-compact)] bg-scrim/55 text-on-surface text-[7px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
                         GIF
                       </span>
                     )}
                   </div>
                 ) : (
-                  <div className="h-16 w-16 rounded-[var(--radius-input)] bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-1 p-1">
+                  <div className="h-16 w-16 rounded-[var(--radius-input)] bg-on-surface/5 border border-outline-variant/60 flex flex-col items-center justify-center gap-1 p-1">
                     {<FileText className="h-4 w-4 text-on-surface-variant" />}
                     <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
                   </div>
@@ -2794,12 +2793,15 @@ const Composer = memo(function Composer({
 // (e.g. on every keystroke in the composer).
 const CR_STYLES = `
         :root {
-          --chatroom-bg: #0d0f12;
-          --bubble-bot: rgb(var(--color-surface-container-high));
+          /* Matches the dashboard shell's content background
+             (DashboardLayout uses bg-surface-container-high) so the
+             chat page blends seamlessly into the rest of the app. */
+          --chatroom-bg: rgb(var(--color-surface-container-high));
+          --bubble-bot: rgb(var(--color-surface-container-highest));
           --bubble-bot-text: rgb(var(--color-on-surface));
           --bubble-user: rgb(var(--color-primary));
           --bubble-user-text: rgb(var(--color-on-primary));
-          --input-border: rgba(255,255,255,0.1);
+          --input-border: var(--color-input-border);
           --input-border-focus: rgb(var(--color-primary) / 0.45);
           --input-ring: rgb(var(--color-primary) / 0.12);
         }
@@ -2816,7 +2818,7 @@ const CR_STYLES = `
         }
 
         /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
-        .cr-highlight-flash { background-color: rgba(255,130,40,0.16); }
+        .cr-highlight-flash { background-color: rgb(var(--color-primary) / 0.16); }
 
         /* ── Auto-hiding scroll bar — thumb only appears while actively
                scrolling, then fades out, instead of sitting on screen
@@ -2826,7 +2828,7 @@ const CR_STYLES = `
           scrollbar-color: transparent transparent;
         }
         .cr-scroll.is-scrolling {
-          scrollbar-color: rgba(255,255,255,0.22) transparent;
+          scrollbar-color: rgb(var(--color-outline-variant) / 0.6) transparent;
         }
         .cr-scroll::-webkit-scrollbar { width: 6px; }
         .cr-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -2836,7 +2838,7 @@ const CR_STYLES = `
           transition: background-color 200ms ease;
         }
         .cr-scroll.is-scrolling::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.22);
+          background: rgb(var(--color-outline-variant) / 0.6);
         }
 
         /* ── Composer wrapper — safe-area-aware bottom padding ─────────────
@@ -2900,18 +2902,19 @@ const CR_STYLES = `
         .chatmd u { text-decoration: underline; }
 
         .chatmd-code {
-          font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
+          font-family: var(--font-family-mono);
           font-size: 0.8em;
           padding: 0.1em 0.38em;
           border-radius: 5px;
-          background: rgba(255 255 255 / 0.1);
-          border: 1px solid rgba(255 255 255 / 0.08);
+          background: rgb(var(--color-surface-container-highest) / 0.9);
+          border: 1px solid rgb(var(--color-outline-variant) / 0.6);
+          color: rgb(var(--color-primary) / 0.9);
         }
         .chatmd-pre {
           margin: 6px 0;
           border-radius: 10px;
-          background: rgba(0 0 0 / 0.35);
-          border: 1px solid rgba(255 255 255 / 0.07);
+          background: rgb(var(--color-surface-container-highest) / 0.7);
+          border: 1px solid rgb(var(--color-outline-variant) / 0.5);
           padding: 10px 14px;
           overflow-x: auto;
         }
@@ -2925,22 +2928,22 @@ const CR_STYLES = `
           font-weight: 700;
           letter-spacing: 0.06em;
           text-transform: uppercase;
-          color: rgba(255,255,255,0.32);
+          color: rgb(var(--color-on-surface-variant) / 0.7);
           user-select: none;
           pointer-events: none;
         }
         .chatmd-pre-wrap:has(.chatmd-pre-lang) .chatmd-pre { padding-top: 22px; }
-        /* Syntax token colors — VS Code "Dark+" palette */
-        .tok-keyword  { color: #569cd6; }
-        .tok-string   { color: #ce9178; }
-        .tok-comment  { color: #6a9955; font-style: italic; }
-        .tok-number   { color: #b5cea8; }
-        .tok-function { color: #dcdcaa; }
-        .tok-type     { color: #4ec9b0; }
-        .tok-property { color: #9cdcfe; }
-        .tok-tag      { color: #569cd6; }
-        .tok-attr     { color: #9cdcfe; }
-        .tok-punct    { color: rgba(255,255,255,0.75); }
+        /* Syntax token colors — theme-driven semantic roles (re-hue per theme) */
+        .tok-keyword  { color: rgb(var(--color-primary)); }
+        .tok-string   { color: rgb(var(--color-warning)); }
+        .tok-comment  { color: rgb(var(--color-on-surface-variant)); font-style: italic; }
+        .tok-number   { color: rgb(var(--color-success)); }
+        .tok-function { color: rgb(var(--color-on-surface)); }
+        .tok-type     { color: rgb(var(--color-tertiary)); }
+        .tok-property { color: rgb(var(--color-info)); }
+        .tok-tag      { color: rgb(var(--color-primary)); }
+        .tok-attr     { color: rgb(var(--color-info)); }
+        .tok-punct    { color: rgb(var(--color-outline)); }
         .chatmd-copy-btn {
           position: absolute;
           top: 12px;
@@ -2950,9 +2953,9 @@ const CR_STYLES = `
           line-height: 1;
           padding: 4px 8px;
           border-radius: 6px;
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.14);
-          color: rgba(255,255,255,0.55);
+          background: rgb(var(--color-on-surface) / 0.08);
+          border: 1px solid rgb(var(--color-outline) / 0.4);
+          color: rgb(var(--color-on-surface-variant));
           opacity: 0.7;
           transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
           cursor: pointer;
@@ -2962,35 +2965,35 @@ const CR_STYLES = `
           opacity: 1;
         }
         .chatmd-copy-btn:hover {
-          background: rgba(255,255,255,0.18);
-          color: rgba(255,255,255,0.95);
+          background: rgb(var(--color-on-surface) / 0.16);
+          color: rgb(var(--color-on-surface));
         }
-        .chatmd-copy-btn:disabled { cursor: default; color: #4ade80; }
+        .chatmd-copy-btn:disabled { cursor: default; color: rgb(var(--color-success)); }
         .chatmd-code-block {
-          font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace;
+          font-family: var(--font-family-mono);
           font-size: 0.78em;
           white-space: pre-wrap;
           word-break: break-all;
           display: block;
         }
         .chatmd-link {
-          color: #79c0ff;
+          color: rgb(var(--color-primary));
           text-decoration: underline;
           text-underline-offset: 2px;
           word-break: break-all;
           overflow-wrap: anywhere;
         }
-        .chatmd-link:hover { color: #a5d6ff; }
-        .chatmd-link:visited { color: #b39ddb; }
+        .chatmd-link:hover { color: rgb(var(--color-primary) / 0.85); }
+        .chatmd-link:visited { color: rgb(var(--color-tertiary)); }
         .chatmd-h1 { display: block; font-size: 1.12em; font-weight: 800; margin: 5px 0 2px; }
         .chatmd-h2 { display: block; font-size: 1.06em; font-weight: 700; margin: 4px 0 1px; }
         .chatmd-h3 { display: block; font-size: 1em; font-weight: 600; margin: 3px 0 1px; }
-        .chatmd-hr { border: none; border-top: 1px solid rgba(255 255 255 / 0.12); margin: 7px 0; }
+        .chatmd-hr { border: none; border-top: 1px solid rgb(var(--color-outline-variant) / 0.7); margin: 7px 0; }
         .chatmd-li { display: block; padding-left: 4px; margin: 1px 0; }
         .chatmd-oli { display: block; padding-left: 4px; margin: 1px 0; }
         .chatmd-quote {
           display: block;
-          border-left: 2px solid rgba(255 255 255 / 0.25);
+          border-left: 2px solid rgb(var(--color-primary) / 0.4);
           padding-left: 8px;
           margin: 2px 0;
           opacity: 0.78;
@@ -3476,8 +3479,8 @@ export default function ChatRoomPage() {
             // dashboard header uses. Desktop is unaffected and always shows
             // the full header, regardless of scroll position.
             isHeaderScrolled
-              ? 'bg-surface/90 [backdrop-filter:var(--surface-blur-lg)] border-b border-outline-variant/70'
-              : 'bg-transparent border-b border-transparent md:bg-surface/90 md:[backdrop-filter:var(--surface-blur-lg)] md:border-outline-variant/70',
+              ? 'glass-surface border-b border-outline-variant/70'
+              : 'bg-transparent border-b border-transparent md:glass-surface md:border-outline-variant/70',
             H_HEIGHT,
             H_PX,
           )}

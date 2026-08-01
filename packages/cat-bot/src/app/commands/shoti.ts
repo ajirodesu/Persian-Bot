@@ -190,7 +190,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       throw new Error('No video was returned. Try again in a moment.');
     }
 
-    const { author, title, shotiurl, username, nickname, duration, region, total_vids } =
+    const { title, shotiurl, username, nickname, duration, region, total_vids } =
       data.result;
 
     // ── Step 2: Download video binary ────────────────────────────────────

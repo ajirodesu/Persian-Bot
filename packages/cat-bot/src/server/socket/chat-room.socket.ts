@@ -24,7 +24,7 @@ import type {
 } from '@/engine/adapters/models/api.model.js';
 import { handleMessage } from '@/engine/controllers/handlers/message.handler.js';
 import { handleButtonAction } from '@/engine/controllers/dispatchers/button.dispatcher.js';
-import type { CommandMap, EventModuleMap, NativeContext } from '@/engine/types/controller.types.js';
+import type { CommandMap, NativeContext } from '@/engine/types/controller.types.js';
 import { commandRegistry } from '@/engine/lib/module-registry.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
@@ -654,10 +654,6 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
       return commandRegistry as unknown as CommandMap;
     }
 
-    function getEventModules(): EventModuleMap {
-      return new Map();
-    }
-
     function getNative(): NativeContext {
       // Previously this intentionally omitted userId/sessionId because passing
       // empty/fake values would make every DB-backed feature fail (the on-chat
@@ -838,13 +834,11 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
         const webChatApi = new WebChatApi(socket, sid);
         const native = getNative();
         const commands = getCommands();
-        const eventModules = getEventModules();
 
         void handleMessage(
           webChatApi,
           event,
           commands,
-          eventModules,
           prefix,
           native,
         ).catch((err: unknown) => {
@@ -910,13 +904,11 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
         const webChatApi = new WebChatApi(socket, sid);
         const native = getNative();
         const commands = getCommands();
-        const eventModules = getEventModules();
 
         void handleMessage(
           webChatApi,
           replyEvent,
           commands,
-          eventModules,
           prefix,
           native,
         ).catch((err: unknown) => {

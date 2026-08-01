@@ -187,7 +187,6 @@ export const onCommand = async ({
   db,
   usage,
   currencies,
-  user,
   native,
   button: btn,
 }: AppCtx): Promise<void> => {

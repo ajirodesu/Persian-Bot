@@ -124,7 +124,7 @@ export const button = {
 // ── Command Entry Point ───────────────────────────────────────────────────────
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, native, event, button, session, args } = ctx;
+  const { native, button, session, args } = ctx;
 
   const isButtonAction = ctx.event['type'] === 'button_action';
   const loadingId = isButtonAction

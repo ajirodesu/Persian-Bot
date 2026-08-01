@@ -89,7 +89,6 @@ export const onCommand = async ({
   chat,
   event,
   usage,
-  prefix = '/',
 }: AppCtx): Promise<void> => {
   if (args.length < 2) {
     await usage();

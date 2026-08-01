@@ -137,7 +137,7 @@ export const button = {
 };
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, event, currencies, button: btn, native, usage } = ctx; // usage kept for consistency with slot command
+  const { chat, event, currencies, button: btn, native } = ctx;
 
   const senderID = event['senderID'] as string | undefined;
 

@@ -211,8 +211,6 @@ export const onReply = {
     }
   };
   const finish = deliver;
-  const fail = (errorMessage: string): Promise<void> =>
-    deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
       await finish({
         style: MessageStyle.MARKDOWN,
         message: `🎬 **${anime.title}**`,

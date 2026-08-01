@@ -12,7 +12,6 @@
  */
 
 import type {
-  CommandMap,
   ParsedCommand,
 } from '@/engine/types/controller.types.js';
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
@@ -48,7 +47,6 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
  * If command module is missing or lacks onCommand handler, returns silently.
  */
 export async function dispatchCommand(
-  commands: CommandMap,
   parsed: ParsedCommand,
   ctx: OnCommandCtx,
   api: UnifiedApi,

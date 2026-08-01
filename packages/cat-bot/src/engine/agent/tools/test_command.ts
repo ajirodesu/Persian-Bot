@@ -418,7 +418,6 @@ export const run = async (
         };
 
         await dispatchCommand(
-          ctx.commands,
           commandCtx.parsed!,
           commandCtx,
           mockApi,

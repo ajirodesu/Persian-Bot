@@ -105,7 +105,7 @@ export function createApp(): Application {
   const webDistPath = path.resolve(__dirname, '../../../web/dist');
   if (fs.existsSync(webDistPath)) {
     app.use(express.static(webDistPath));
-    app.get('/{*splat}', (req, res) => {
+    app.get('/{*splat}', (_req, res) => {
       res.sendFile(path.join(webDistPath, 'index.html'));
     });
   }

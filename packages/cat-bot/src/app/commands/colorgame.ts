@@ -69,20 +69,6 @@ export const meta: CommandMeta = {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function parseBet(raw: string, balance: number): number {
-  const v = raw.trim().toLowerCase().replace(/,/g, '');
-  if (v === 'all' || v === 'max') return Math.floor(balance);
-  if (v === 'half') return Math.floor(balance / 2);
-
-  const m = v.match(/^(\d+(?:\.\d+)?)([kmb])?$/i);
-  if (!m) return NaN;
-  const amount = Number(m[1]);
-  const suffix = m[2]?.toLowerCase();
-  const mult =
-    suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : suffix === 'b' ? 1_000_000_000 : 1;
-  return Math.floor(amount * mult);
-}
-
 /** Parse "100 red, 50 violet" → [{ bet:100, color:'red' }, { bet:50, color:'violet' }] */
 function parseBets(rawArgs: string[]): Array<{ bet: number; color: string }> | null {
   // Re-join all args and split on commas to allow spaces around commas

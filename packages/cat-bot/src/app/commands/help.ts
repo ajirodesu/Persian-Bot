@@ -46,7 +46,6 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';

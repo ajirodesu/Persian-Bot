@@ -4,4 +4,5 @@ package-lock.json
 packages/cat-bot/dist
 packages/database/dist
 packages/web/dist
+packages/cat-bot/.env
 .compile-cache

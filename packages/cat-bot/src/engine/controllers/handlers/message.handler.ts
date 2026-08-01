@@ -12,7 +12,6 @@
 
 import type {
   CommandMap,
-  EventModuleMap,
   NativeContext,
 } from '@/engine/types/controller.types.js';
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
@@ -104,7 +103,6 @@ export async function handleMessage(
   api: UnifiedApi,
   event: Record<string, unknown>,
   commands: CommandMap,
-  eventModules: EventModuleMap,
   prefix: string,
   native: NativeContext = { platform: 'unknown' },
 ): Promise<void> {
@@ -267,7 +265,6 @@ export async function handleMessage(
         }
 
         await dispatchCommand(
-          commands,
           p,
           commandCtx,
           api,
