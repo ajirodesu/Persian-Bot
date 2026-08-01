@@ -11,7 +11,6 @@ import { env } from '@/engine/config/env.config.js';
 import { toNodeHandler } from 'better-auth/node';
 import { auth, adminAuth } from '@/server/lib/better-auth.lib.js';
 import cors from 'cors';
-import compression from 'compression';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -56,16 +55,6 @@ export function createApp(): Application {
       allowedHeaders: ['Content-Type', 'Authorization'],
     }),
   );
-
-  // gzip/brotli-capable compression for every response this process sends — dashboard
-  // API JSON payloads and the static SPA bundle both shrink significantly over the wire,
-  // which is a bigger win for perceived latency than anything server-side CPU work can
-  // buy back. Registered early so it wraps every downstream response, but it only patches
-  // res.write/res.end — it never touches the *request* body stream, so it is safe to sit
-  // before the raw-stream consumers below (better-auth, the Telegram webhook handler).
-  // threshold skips compressing tiny responses (health checks, small JSON) where the
-  // gzip framing overhead would exceed any savings.
-  app.use(compression({ threshold: 1024 }));
 
   // Better Auth must mount BEFORE express.json() — toNodeHandler reads the raw Node.js
   // IncomingMessage stream; json() would consume the body before better-auth can parse it.
@@ -115,23 +104,8 @@ export function createApp(): Application {
   // Serve SPA if the built dist folder exists — fallback for React Router
   const webDistPath = path.resolve(__dirname, '../../../web/dist');
   if (fs.existsSync(webDistPath)) {
-    app.use(
-      express.static(webDistPath, {
-        // Vite fingerprints every file under /assets (e.g. index-a1b2c3d4.js), so once a
-        // browser has one it can cache it forever — a new deploy ships a new filename,
-        // never a mutated one. `immutable` stops the browser from even issuing a
-        // conditional revalidation request on repeat visits.
-        setHeaders: (res, filePath) => {
-          if (filePath.includes(`${path.sep}assets${path.sep}`)) {
-            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-          }
-        },
-      }),
-    );
+    app.use(express.static(webDistPath));
     app.get('/{*splat}', (req, res) => {
-      // index.html references the current hashed asset filenames, so it must always be
-      // revalidated — caching it would pin users to a stale bundle after every deploy.
-      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(webDistPath, 'index.html'));
     });
   }
