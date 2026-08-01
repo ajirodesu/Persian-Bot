@@ -9,7 +9,7 @@
     "build": "npm run build --prefix ../database && tsc && tsc-alias",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "start": "cross-env NODE_COMPILE_CACHE=.compile-cache node dist/engine/app.js",
+    "start": "node dist/engine/app.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:admin": "tsx scripts/seed-admin.ts",
