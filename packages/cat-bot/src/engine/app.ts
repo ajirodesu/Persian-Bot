@@ -1,65 +1,25 @@
-/**
- * Cat-Bot — Central Entry Point & Orchestration Layer
- *
- * This file owns everything above the platform transport layer:
- *   1. Module loading  — reads src/app/commands/ and src/app/events/
- *   2. Platform setup  — creates EventEmitter-based platform listeners
- *   3. Event wiring    — subscribes to typed platform events and delegates
- *                        to the unified handler (src/controllers/index.ts)
- *
- * ── Platform Listener Pattern ────────────────────────────────────────────────
- * Each platform (discord/, telegram/)
- * exposes a createXxxListener() factory that returns a Node.js EventEmitter.
- * The listener emits events keyed by EventType (e.g. 'message', 'message_reply',
- * 'message_reaction', 'message_unsend', 'event') carrying the payload:
- *
- *   { api: UnifiedApi, event: UnifiedEvent, native: PlatformNative }
- *
- * app.ts registers .on() handlers for each event type BEFORE calling
- * listener.start() to boot the transport. This separation means:
- *
- *   - Platforms know HOW to receive and normalise events (transport concern)
- *   - app.ts knows WHERE to route events (orchestration concern)
- *   - Adding a new platform = import listener + register .on() handlers
- *   - Platform event types follow models/event.model.ts EventType values
- *
- * ── Event routing ─────────────────────────────────────────────────────────────
- *   'message'          → handleMessage (all platforms)
- *   'message_reply'    → handleMessage (Discord, Telegram)
- *   'event'            → handleEvent   (all platforms)
- *   'message_reaction' → handleEvent   (platform reaction events)
- *   'message_unsend'   → handleEvent   (platform unsend events)
- */
-
-// Side-effect import — must run before any command module (which calls axios.get/post)
-// is dynamically loaded, so every outbound HTTP request reuses pooled keep-alive sockets.
+// Side-effect import — must run before any command module loads so all axios
+// calls share pooled keep-alive sockets from the start.
 import '@/engine/lib/http-agent.lib.js';
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
-// ── Core config and logging ───────────────────────────────────────────────────
 import { env } from '@/engine/config/env.config.js';
-import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { loadSessionConfigs } from '@/engine/modules/session/session-loader.util.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
-
-// ── Handler — imported via @/ alias for consistency with the rest of the codebase ──
 import {
   handleMessage,
   handleEvent,
   handleButtonAction,
 } from '@/engine/controllers/index.js';
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
-
-// ── Platform listeners ────────────────────────────────────────────────────────
 import { createUnifiedPlatformListener } from '@/engine/adapters/platform/index.js';
-// Side-effect import — registers the default middleware pipeline (validateCommandOptions,
-// chatPassthrough, etc.) so the registry is fully populated before platform.start() fires.
+// Side-effect: registers the default middleware pipeline before platform.start() fires.
 import '@/engine/middleware/index.js';
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
-// Command/event registry sync — needed to populate bot_session_commands/events at boot
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { upsertSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
 import {
@@ -71,26 +31,14 @@ import type { SessionConfigs } from '@/engine/modules/session/session-loader.uti
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import { startServer } from '@/server/server.js';
 import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
-// dbReady resolves once the active adapter's connection (and, for neondb/turso, schema
-// init) is ready — defined for every adapter (neondb, turso, mongodb) so this boot gate
-// applies uniformly regardless of DATABASE_TYPE.
 import { dbReady } from 'database';
 
-// ============================================================================
-// __dirname equivalent — needed for dynamic module path resolution in ESM
-// ============================================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ============================================================================
-// MODULE LOADER — single source of truth for commands and events
-// ============================================================================
+// ── Module loaders ────────────────────────────────────────────────────────────
 
-/**
- * Dynamically imports every .js file in src/app/commands/ and returns a
- * Map keyed by lowercased command name. Invalid modules are skipped with a
- * warning so a single broken file never prevents the bot from starting.
- */
+/** Imports every command file concurrently; broken files are skipped with a warning. */
 async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
   const commands = new Map<string, Record<string, unknown>>();
   const dir = path.join(__dirname, '..', 'app', 'commands');
@@ -100,14 +48,10 @@ async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
     return commands;
   }
 
-  // Allow loading .ts files during local dev via tsx, whilst ignoring compiled type definitions
   const files = (await fs.promises.readdir(dir)).filter(
     (f) => (f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
   );
 
-  // Saturate the Node.js I/O thread pool by importing all command files
-  // concurrently — sequential import() serialises disk reads unnecessarily
-  // on startup, compounding linearly with command count.
   await Promise.allSettled(
     files.map(async (file) => {
       try {
@@ -115,20 +59,9 @@ async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
           pathToFileURL(path.join(dir, file)).href
         )) as Record<string, unknown>;
 
-        // ── Multi-command file support ─────────────────────────────────────
-        // A file may export `commands: Array<{ meta, onCommand, onChat?, button? }>`
-        // instead of a single top-level `meta`/`onCommand` pair. Each array entry
-        // is registered exactly like a standalone command module — this lets a
-        // family of closely-related commands (e.g. a shared API-config table)
-        // live in one source file without polluting the commands/ directory with
-        // near-duplicate files, while every downstream consumer (dispatcher,
-        // help.ts, registry sync, isPlatformAllowed) keeps working unmodified
-        // since each registered entry is itself a fully-shaped
-        // `{ meta, onCommand, ... }` object.
+        // Multi-command files export `commands: Array<{ meta, onCommand, ... }>`.
         if (Array.isArray(mod['commands'])) {
-          for (const rawEntry of mod['commands'] as Array<
-            Record<string, unknown>
-          >) {
+          for (const rawEntry of mod['commands'] as Array<Record<string, unknown>>) {
             const entryCfg = rawEntry['meta'] as
               | { name?: string; aliases?: string[]; options?: Array<{ name?: string }> }
               | undefined;
@@ -141,18 +74,14 @@ async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
               typeof rawEntry['onCommand'] !== 'function' &&
               typeof rawEntry['onChat'] !== 'function'
             ) {
-              logger.warn(
-                `⚠️  Skipping "${entryCfg.name}" in ${file}: missing onCommand/onChat`,
-              );
+              logger.warn(`⚠️  Skipping "${entryCfg.name}" in ${file}: missing onCommand/onChat`);
               continue;
             }
 
             entryCfg.name = entryCfg.name.toLowerCase();
             if (Array.isArray(entryCfg.options)) {
               for (const opt of entryCfg.options) {
-                if (opt && typeof opt.name === 'string') {
-                  opt.name = opt.name.toLowerCase();
-                }
+                if (opt && typeof opt.name === 'string') opt.name = opt.name.toLowerCase();
               }
             }
 
@@ -170,40 +99,27 @@ async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
           return;
         }
 
-        const cfg = mod['meta'] as
-          | { name?: string; aliases?: string[] }
-          | undefined;
+        const cfg = mod['meta'] as { name?: string; aliases?: string[] } | undefined;
 
-        if (!cfg?.name) {
-          logger.warn(`⚠️  Skipping ${file}: missing meta.name`);
-          return;
-        }
-        if (
-          typeof mod['onCommand'] !== 'function' &&
-          typeof mod['onChat'] !== 'function'
-        ) {
+        if (!cfg?.name) { logger.warn(`⚠️  Skipping ${file}: missing meta.name`); return; }
+        if (typeof mod['onCommand'] !== 'function' && typeof mod['onChat'] !== 'function') {
           logger.warn(`⚠️  Skipping ${file}: missing onStart/onChat`);
           return;
         }
 
-        // Discord strict requirement: command names and option names must be lowercase.
-        // Normalise them at load time so developers don't encounter API errors
-        // if they accidentally use camelCase or TitleCase in their command meta.
+        // Discord requires lowercase command/option names — normalise at load time.
         if (cfg.name) cfg.name = cfg.name.toLowerCase();
         const rawCfg = mod['meta'] as { options?: Array<{ name?: string }> };
         if (Array.isArray(rawCfg.options)) {
           for (const opt of rawCfg.options) {
-            if (opt && typeof opt.name === 'string') {
-              opt.name = opt.name.toLowerCase();
-            }
+            if (opt && typeof opt.name === 'string') opt.name = opt.name.toLowerCase();
           }
         }
 
         commands.set(cfg.name.toLowerCase(), mod);
         commandRegistry.set(cfg.name.toLowerCase(), mod);
         logger.info(`Loaded command: ${cfg.name}`);
-        // Register each alias so e.g. '/bal' dispatches the same onCommand as '/balance'.
-        // Aliases point to the same module reference — no duplication of handler logic.
+
         if (Array.isArray(cfg.aliases)) {
           for (const alias of cfg.aliases) {
             commands.set(String(alias).toLowerCase(), mod);
@@ -220,14 +136,8 @@ async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
   return commands;
 }
 
-/**
- * Dynamically imports every .js file in src/app/events/ and returns a
- * Map keyed by unified event type (e.g. 'member_join', 'member_leave').
- * One event file can register for multiple types via meta.eventType[].
- */
-async function loadEventModules(): Promise<
-  Map<string, Array<Record<string, unknown>>>
-> {
+/** Imports every event file concurrently; one file may register multiple event types. */
+async function loadEventModules(): Promise<Map<string, Array<Record<string, unknown>>>> {
   const events = new Map<string, Array<Record<string, unknown>>>();
   const dir = path.join(__dirname, '..', 'app', 'events');
 
@@ -236,7 +146,6 @@ async function loadEventModules(): Promise<
     return events;
   }
 
-  // Allow loading .ts files during local dev via tsx, whilst ignoring compiled type definitions
   const files = (await fs.promises.readdir(dir)).filter(
     (f) => (f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
   );
@@ -248,16 +157,11 @@ async function loadEventModules(): Promise<
           pathToFileURL(path.join(dir, file)).href
         )) as Record<string, unknown>;
         const cfg = mod['meta'] as
-          | {
-              name?: string;
-              eventType?: string[];
-              onEvent?: (...args: unknown[]) => unknown;
-            }
+          | { name?: string; eventType?: string[]; onEvent?: (...args: unknown[]) => unknown }
           | undefined;
 
         if (!cfg?.name || !Array.isArray(cfg.eventType)) return;
 
-        // Validate that event module exports onEvent handler
         if (typeof mod['onEvent'] !== 'function') {
           logger.warn(`⚠️  Skipping ${file}: missing onEvent handler`);
           return;
@@ -268,7 +172,6 @@ async function loadEventModules(): Promise<
           events.get(type)!.push(mod);
         }
         eventRegistry.set(cfg.name.toLowerCase(), mod);
-
         logger.info(`Loaded event handler: ${cfg.name}`);
       } catch (err) {
         logger.error(`Failed to load event ${file}`, { error: err });
@@ -279,18 +182,12 @@ async function loadEventModules(): Promise<
   return events;
 }
 
-// ============================================================================
-// COMMAND & EVENT REGISTRY SYNC
-// ============================================================================
+// ── Registry sync ─────────────────────────────────────────────────────────────
 
 /**
- * Upserts all loaded command and event module names into the DB for every active
- * session so the web dashboard can list and toggle them without knowing which
- * modules are installed. Existing isEnable = false rows set by the bot admin
- * survive bot restarts unchanged since only missing rows are created.
- *
- * Called once per boot after sessions are resolved — the commands/events Maps are
- * finalised at this point and will not change until the next restart.
+ * Upserts command/event names into the DB for every active session so the
+ * dashboard can list and toggle them. Existing isEnable = false rows survive
+ * restarts — only missing rows are created.
  */
 async function syncCommandsAndEvents(
   commands: Map<string, Record<string, unknown>>,
@@ -310,13 +207,8 @@ async function syncCommandsAndEvents(
     })),
   ];
 
-  // All sessions are independent — sync them concurrently instead of sequentially.
-  // Within each session, the command and event upserts are also independent, so both
-  // fire together. For N sessions this cuts the total await chain from N×2 serial DB
-  // calls to a single Promise.all round-trip regardless of session count.
   await Promise.all(
     allSessions.map(async (sess) => {
-      // Only sync commands that are structurally allowed to run on this specific platform session
       const cmdList = new Set<string>();
       for (const mod of commands.values()) {
         if (isPlatformAllowed(mod, sess.platform)) {
@@ -325,7 +217,6 @@ async function syncCommandsAndEvents(
         }
       }
 
-      // Only sync events that are structurally allowed to run on this specific platform session
       const evtList = new Set<string>();
       for (const handlers of eventModules.values()) {
         for (const mod of handlers) {
@@ -350,32 +241,18 @@ async function syncCommandsAndEvents(
     }),
   );
 
-  logger.info(
-    `[app] Synced commands and events for ${allSessions.length} session(s)`,
-  );
+  logger.info(`[app] Synced commands and events for ${allSessions.length} session(s)`);
 }
 
-// ============================================================================
-// BOOT
-// ============================================================================
+// ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   logger.info('Cat-Bot - loading modules...');
   logger.info(`Environment: ${env.NODE_ENV}`);
 
-  // Ensure NeonDB schema DDL has completed before any session/credential queries land.
-  // For the mongodb adapter, dbReady is undefined — await on undefined
-  // resolves immediately, so this guard is a zero-cost no-op for non-neondb adapters.
-  if (dbReady !== undefined) {
-    await dbReady;
-  }
+  if (dbReady !== undefined) await dbReady;
 
-  // Load once — all platform listeners share the same Maps.
-  // loadSessionConfigs() hits the DB while loadCommands()/loadEventModules() hit disk —
-  // independent I/O with no data dependency between them, so run all three concurrently
-  // instead of waiting for the file loads before even starting the DB round trip. This
-  // matters most right after idle, when the DB connection is cold and its latency would
-  // otherwise stack on top of the disk-import time instead of overlapping it.
+  // DB query and disk imports are independent — run all three concurrently.
   const [commands, eventModules, sessionConfigs] = await Promise.all([
     loadCommands(),
     loadEventModules(),
@@ -384,37 +261,20 @@ async function main(): Promise<void> {
 
   logger.info('Cat-Bot - creating platform listeners...');
 
-  // ── Create unified platform listener ──────────────────────────────────────
-  // Platform-specific quirks (which events each transport supports) are handled
-  // inside platforms/index.js — app.ts sees a single uniform event surface.
-  // All credentials are resolved from the DB before any transport is initialised —
-  // credentials must be present before platform listeners start emitting events.
-  // Sync loaded module names into DB so the dashboard can list/toggle them per session
   await syncCommandsAndEvents(commands, eventModules, sessionConfigs);
 
-  // Warn at startup about command meta that is incompatible with Telegram's slash menu.
-  // Telegram's /setcommands API rejects names containing hyphens and descriptions containing
-  // emoji — slash-commands.ts sanitizes both automatically, but logging here surfaces the
-  // issue once, globally, before any transport boots so developers can fix the source modules.
-  // Skipped entirely when no Telegram session uses the '/' prefix.
-  const hasTelegramSlashSession = sessionConfigs.telegram.some(
-    (c) => c.prefix === '/',
-  );
+  // Warn about Telegram-incompatible command meta once at startup.
+  const hasTelegramSlashSession = sessionConfigs.telegram.some((c) => c.prefix === '/');
   if (hasTelegramSlashSession) {
     for (const [, mod] of commands) {
-      const cfg = mod['meta'] as
-        | { name?: string; description?: string }
-        | undefined;
+      const cfg = mod['meta'] as { name?: string; description?: string } | undefined;
       if (!cfg?.name) continue;
       if (cfg.name.includes('-')) {
         logger.warn(
           `[app] Telegram command name "${cfg.name}" contains hyphens — not supported, will be registered as "${cfg.name.replace(/-/g, '_')}"`,
         );
       }
-      if (
-        cfg.description &&
-        /\p{Extended_Pictographic}/u.test(cfg.description)
-      ) {
+      if (cfg.description && /\p{Extended_Pictographic}/u.test(cfg.description)) {
         logger.warn(
           `[app] Telegram command "${cfg.name}" description contains emoji — not supported, emoji will be stripped`,
         );
@@ -422,23 +282,17 @@ async function main(): Promise<void> {
     }
   }
 
-  const botConfig = {
+  const platform = createUnifiedPlatformListener({
     discord: sessionConfigs.discord,
     telegram: sessionConfigs.telegram,
-  };
-  const platform = createUnifiedPlatformListener(botConfig);
+  });
 
-  // ── Shared helper — thread prefix restoration ──────────────────────────────
-  // Restores a thread's custom prefix from DB into prefixManager on the first
-  // message seen for that thread after a process restart.  Extracted here so the
-  // identical 20-line block that previously appeared in BOTH 'message' and
-  // 'message_reply' handlers lives in exactly one place.
+  // Restores a thread's custom prefix from DB on the first message seen after restart.
   async function restoreThreadPrefix(
     threadID: string,
     native: import('@/engine/types/controller.types.js').NativeContext,
   ): Promise<void> {
     if (!native.userId || !native.sessionId) return;
-    // Already restored this session — nothing to do.
     if (prefixManager.getThreadPrefix(threadID) !== undefined) return;
     try {
       const threadColl = createThreadCollectionManager(
@@ -452,15 +306,12 @@ async function main(): Promise<void> {
         if (stored) prefixManager.setThreadPrefix(threadID, stored);
       }
     } catch {
-      /* fail-open — livePrefix falls back to session prefix on DB error */
+      /* fail-open — falls back to session prefix */
     }
   }
 
-  // ── Shared helper — compute effective prefix for a message payload ─────────
-  // On Discord and Telegram, slash commands are registered globally per-session
-  // and cannot be scoped to individual threads.  When the session prefix is '/'
-  // and a group admin has set a custom thread prefix (e.g. '!'), both must work
-  // simultaneously: '!ping' uses the thread prefix, '/help' uses the slash menu.
+  // When session prefix is '/' and a thread has a custom prefix, honour both:
+  // slash-menu commands use '/', text commands use the thread prefix.
   function resolveLivePrefix(
     payload: Record<string, unknown>,
     native: import('@/engine/types/controller.types.js').NativeContext,
@@ -471,75 +322,42 @@ async function main(): Promise<void> {
       sessionPrefix === '/' &&
       threadPrefix !== undefined &&
       threadPrefix !== '/' &&
-      (native.platform === Platforms.Discord ||
-        native.platform === Platforms.Telegram)
+      (native.platform === Platforms.Discord || native.platform === Platforms.Telegram)
     ) {
-      const body = ((payload.event as Record<string, unknown>)['message'] ??
-        '') as string;
+      const body = ((payload.event as Record<string, unknown>)['message'] ?? '') as string;
       if (body.startsWith('/')) return '/';
     }
     return threadPrefix ?? sessionPrefix;
   }
 
-  // ── Wire event handlers once for all platforms ─────────────────────────────
-  // Transports that do not support a given event type simply never emit it;
-  // no platform branching or special-casing needed here.
+  // ── Event routing ─────────────────────────────────────────────────────────
+
   platform.on('message', async (payload: Record<string, unknown>) => {
-    const native =
-      payload.native as import('@/engine/types/controller.types.js').NativeContext;
-    const threadID = (payload.event as Record<string, unknown>)['threadID'] as
-      | string
-      | undefined;
+    const native = payload.native as import('@/engine/types/controller.types.js').NativeContext;
+    const threadID = (payload.event as Record<string, unknown>)['threadID'] as string | undefined;
     const sessionPrefix = prefixManager.getPrefix(
       native.userId ?? '',
       native.platform,
       native.sessionId ?? '',
     );
-    // Restore thread prefix from DB before computing livePrefix — guarantees the correct
-    // stored prefix is used on the FIRST message after a process restart.
     if (threadID) await restoreThreadPrefix(threadID, native);
-    const threadPrefix = threadID
-      ? prefixManager.getThreadPrefix(threadID)
-      : undefined;
+    const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
     const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
-    await handleMessage(
-      payload.api as UnifiedApi,
-      payload.event as Record<string, unknown>,
-      commands,
-      eventModules,
-      livePrefix,
-      native,
-    );
+    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, eventModules, livePrefix, native);
   });
 
   platform.on('message_reply', async (payload: Record<string, unknown>) => {
-    const native =
-      payload.native as import('@/engine/types/controller.types.js').NativeContext;
-    const threadID = (payload.event as Record<string, unknown>)['threadID'] as
-      | string
-      | undefined;
+    const native = payload.native as import('@/engine/types/controller.types.js').NativeContext;
+    const threadID = (payload.event as Record<string, unknown>)['threadID'] as string | undefined;
     const sessionPrefix = prefixManager.getPrefix(
       native.userId ?? '',
       native.platform,
       native.sessionId ?? '',
     );
-    // Same thread prefix restoration as the 'message' handler — message_reply events
-    // carry the same threadID and must resolve the stored prefix before livePrefix
-    // is computed so quoted-message reply flows also honour thread-level overrides.
     if (threadID) await restoreThreadPrefix(threadID, native);
-    const threadPrefix = threadID
-      ? prefixManager.getThreadPrefix(threadID)
-      : undefined;
+    const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
     const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
-    // message_reply shares handleMessage — command modules read event.messageReply for the quoted message.
-    await handleMessage(
-      payload.api as UnifiedApi,
-      payload.event as Record<string, unknown>,
-      commands,
-      eventModules,
-      livePrefix,
-      native,
-    );
+    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, eventModules, livePrefix, native);
   });
 
   platform.on('event', async (payload: Record<string, unknown>) => {
@@ -552,7 +370,6 @@ async function main(): Promise<void> {
   });
 
   platform.on('message_reaction', async (payload: Record<string, unknown>) => {
-    // commands passed so dispatchOnReact can match pending onReact state before generic event dispatch.
     await handleEvent(
       payload.api as UnifiedApi,
       payload.event as Record<string, unknown>,
@@ -581,39 +398,23 @@ async function main(): Promise<void> {
   });
 
   logger.info('Cat-Bot - starting all platforms...');
-
-  // ── Start all platforms via unified listener ───────────────────────────────
-  // Each transport boots independently inside platform.start(); one failure does not block the others.
   platform.start(commands);
-
   logger.info('Cat-Bot — all platform listeners wired');
 
-  // ── Start API & Webhook Server ──────────────────────────────────────────────
-  // Hosts the bot management dashboard API.
   startServer();
 }
 
-// ============================================================================
-// CENTRALIZED SIGNAL HANDLERS
-// Registered once here so spawning N platform sessions never stacks duplicate
-// process.once listeners. Each platform calls shutdownRegistry.register(stopFn)
-// inside start() instead — app.ts iterates the full registry on every signal.
-// ============================================================================
+// ── Signal handlers ───────────────────────────────────────────────────────────
+// Registered once here so N platform sessions never stack duplicate listeners.
 
 async function handleShutdown(signal: string, exitCode: number): Promise<void> {
-  logger.info(
-    `🛑 [app] Received ${signal} — stopping all platform sessions...`,
-  );
+  logger.info(`🛑 [app] Received ${signal} — stopping all platform sessions...`);
   await sessionManager.stopAll(signal);
   process.exit(exitCode);
 }
 
-process.once('SIGINT', () => {
-  void handleShutdown('SIGINT', 0);
-});
-process.once('SIGTERM', () => {
-  void handleShutdown('SIGTERM', 0);
-});
+process.once('SIGINT', () => { void handleShutdown('SIGINT', 0); });
+process.once('SIGTERM', () => { void handleShutdown('SIGTERM', 0); });
 process.once('uncaughtException', (err: Error) => {
   logger.error('💀 [app] Uncaught exception', { error: err });
 });

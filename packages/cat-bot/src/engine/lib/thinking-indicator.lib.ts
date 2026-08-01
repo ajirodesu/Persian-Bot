@@ -1,48 +1,28 @@
 /**
- * Thinking Indicator Lib — Telegram-only "AI is thinking…" signal, layered on
- * top of the cross-platform typing indicator.
+ * Thinking Indicator Lib — Telegram-only "AI is thinking…" signal.
  *
- * WHY THIS EXISTS SEPARATELY FROM typing-indicator.lib.ts:
- * Bot API 10.1 (June 11, 2026) added Rich Messages with an InputRichBlockThinking
- * block — a live, animated "Thinking…" placeholder rendered via
- * sendRichMessageDraft, distinct from the generic chat-action typing bubble.
- * It is Telegram-specific (no Discord/WebChat equivalent) and, per the Bot API,
- * only valid in PRIVATE chats (sendRichMessageDraft rejects groups/channels).
+ * Bot API 10.1 added Rich Messages with InputRichBlockThinking: a live animated
+ * "Thinking…" placeholder via sendRichMessageDraft, distinct from the generic typing bubble.
+ * Valid only in private chats (sendRichMessageDraft rejects groups/channels).
  *
- * This wrapper keeps the existing withTypingIndicator running everywhere
- * unconditionally (so Discord/WebChat/Telegram-groups keep their familiar
- * typing bubble), and additionally drives a RichBlockThinking draft on Telegram
- * private chats for a richer "the AI agent is thinking" preview. The two run
- * concurrently — thinking drafts never replace the typing indicator.
+ * withThinkingIndicator wraps withTypingIndicator (running unconditionally everywhere) and
+ * additionally streams a RichBlockThinking draft on Telegram private chats. The two run
+ * concurrently — the thinking draft never replaces the typing indicator.
  *
- * The draft is purely a live preview: it auto-expires after ~30s if not
- * refreshed, is never persisted, and the caller's `fn` is still expected to
- * send the real, final reply via ctx.chat.replyMessage as usual once it
- * resolves — this wrapper does not send or edit the final message itself.
+ * Safe to call from cross-platform code: on Discord/WebChat and Telegram groups it is
+ * identical to withTypingIndicator.
  */
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
-import {
-  withTypingIndicator,
-  registerTypingStopper,
-} from './typing-indicator.lib.js';
+import { withTypingIndicator, registerTypingStopper } from './typing-indicator.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { getAgentStatus } from '@/engine/agent/lib/agent-status.lib.js';
 
-// Below sendRichMessageDraft's ~30s expiry so the placeholder never visibly
-// drops out while `fn` is still running. Shorter than the old 8s value so the
-// draft catches up quickly with agent.ts's live status updates (tool calls
-// often resolve well under 8s, which previously left a stale phrase on screen).
+// Below sendRichMessageDraft's ~30s expiry; short enough to catch agent.ts live status updates.
 const THINKING_REFRESH_INTERVAL_MS = 3000;
 
-/**
- * Fallback phrases used only before the agent has reported any specific
- * action (e.g. the very first tick, fired before `fn` starts running) or for
- * callers that never populate the live agent status. Once agent.ts is
- * running it drives real, action-specific text via setAgentStatus — see
- * engine/agent/lib/agent-status.lib.ts — and this rotation is bypassed.
- */
+/** Fallback phrases used before the agent reports any specific action. */
 const FALLBACK_THINKING_PHRASES = [
   '🧠 Thinking…',
   '💭 Working it out…',
@@ -50,18 +30,13 @@ const FALLBACK_THINKING_PHRASES = [
 ];
 
 export interface ThinkingIndicatorOptions {
-  /** Set true for group/supergroup chats to explicitly skip the rich draft (sendRichMessageDraft is private-chat-only). Auto-detected when omitted. */
+  /** Explicitly skip the rich draft for groups. Auto-detected from ctx.event when omitted. */
   isGroup?: boolean;
 }
 
 /**
- * Runs `fn` while keeping a typing indicator alive on `threadID`, and — on
- * Telegram private chats only — additionally streaming an animated
- * RichBlockThinking draft for the duration.
- *
- * Safe to call unconditionally from cross-platform code (agent.ts):
- * on Discord/WebChat, and on Telegram groups, this behaves identically to
- * withTypingIndicator — the thinking-draft branch is simply skipped.
+ * Runs `fn` while keeping a typing indicator alive and — on Telegram private chats only —
+ * additionally streaming an animated RichBlockThinking draft.
  */
 export async function withThinkingIndicator<T>(
   ctx: AppCtx,
@@ -73,7 +48,6 @@ export async function withThinkingIndicator<T>(
   const isTelegram = ctx.native.platform === Platforms.Telegram;
   const isGroup = options.isGroup ?? Boolean(ctx.event['isGroup']);
 
-  // Non-Telegram, no thread, or a group chat → plain typing indicator only.
   if (!isTelegram || !threadID || isGroup) {
     return withTypingIndicator(api, threadID, fn);
   }
@@ -85,10 +59,7 @@ export async function withThinkingIndicator<T>(
   const trigger = (): void => {
     if (inFlight) return;
     inFlight = true;
-    // Prefer the agent's live, action-specific status (set by agent.ts as it
-    // reasons and calls tools); only fall back to the generic rotation when
-    // no live status has been reported yet (e.g. the very first tick, which
-    // fires before `fn`/runAgent has started).
+    // Prefer agent's live status; fall back to generic rotation on the first tick.
     const liveText = getAgentStatus(ctx);
     let text: string;
     if (liveText) {
@@ -97,18 +68,11 @@ export async function withThinkingIndicator<T>(
       text = FALLBACK_THINKING_PHRASES[phraseIndex % FALLBACK_THINKING_PHRASES.length]!;
       phraseIndex += 1;
     }
-    void api
-      .sendThinkingDraft(threadID, text, draftId)
-      .then(() => {
-        inFlight = false;
-      })
+    void api.sendThinkingDraft(threadID, text, draftId)
+      .then(() => { inFlight = false; })
       .catch((err: unknown) => {
         inFlight = false;
-        logger.debug('[thinking-indicator] sendThinkingDraft failed', {
-          platform: api.platform,
-          threadID,
-          error: err,
-        });
+        logger.debug('[thinking-indicator] sendThinkingDraft failed', { platform: api.platform, threadID, error: err });
       });
   };
 
@@ -118,18 +82,13 @@ export async function withThinkingIndicator<T>(
     draftStopped = true;
     clearInterval(interval);
   };
-  // Registered independently of withTypingIndicator's own registration below —
-  // stopTypingIndicator(threadID) invokes every stopper registered for that
-  // thread, so both the draft refresh and the plain typing bubble get torn
-  // down together the instant the real reply is sent.
+  // stopTypingIndicator(threadID) tears down both the draft refresh and the typing bubble together.
   const unregisterDraft = registerTypingStopper(threadID, stopDraft);
 
   trigger();
   const interval = setInterval(trigger, THINKING_REFRESH_INTERVAL_MS);
 
   try {
-    // Run the typing indicator concurrently for the same duration — see
-    // module docstring for why both stay active together.
     return await withTypingIndicator(api, threadID, fn);
   } finally {
     stopDraft();

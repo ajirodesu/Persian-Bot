@@ -1,25 +1,10 @@
 /**
  * Discord Platform Listener — Orchestrator
  *
- * Thin composition layer that wires the modular Discord platform components:
- *   - client.ts          → Discord.js Client creation and lifecycle
- *   - slash-commands.ts  → Application command registration via REST
- *   - event-handlers.ts  → Discord.js event listener attachment
+ * Wires client.ts, slash-commands.ts, and event-handlers.ts into a single
+ * EventEmitter with .start(commands) / .stop() hooks consumed by platform-runner.lib.ts.
  *
- * WHY: Previously a 360-line monolith mixing client bootstrapping, slash command
- * registration, event handler wiring, and a copy-pasted 40-line retry boilerplate.
- * The retry orchestration now lives in platform-runner.lib.ts — a single declaration
- * shared by all four platform listeners. This file provides only boot() and cleanup()
- * hooks to the runner.
- *
- * Retry architecture:
- *   emitter.start() delegates to runManagedSession() which owns exponential-backoff
- *   (10 attempts, 3 s → 120 s), isLocked / isRetrying zombie guards, AbortController
- *   cancellation, and markActive / markInactive dashboard sync.
- *
- * EXTERNAL CONTRACT (unchanged):
- *   - createDiscordListener(config) returns EventEmitter with .start(commands) and .stop()
- *   - Emitted events: message, message_reply, event, message_reaction, message_unsend, button_action
+ * Emitted events: message, message_reply, event, message_reaction, message_unsend, button_action
  */
 
 import { EventEmitter } from 'events';
@@ -41,8 +26,6 @@ import {
 import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 import { botRepo } from '@/server/repos/bot.repo.js';
-// Centralized retry runner — replaces the inline withRetry + AbortController boilerplate
-// that was previously copy-pasted across all four platform listeners.
 import { runManagedSession } from '@/engine/lib/platform-runner.lib.js';
 import { startHeartbeat, stopHeartbeat } from '@/engine/lib/rest-heartbeat.lib.js';
 
@@ -69,26 +52,15 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
     sessionId: config.sessionId,
   });
 
-  // Hoisted to factory scope — eliminates duplicate string construction in start() and stop().
   const smKey = `${config.userId}:${Platforms.Discord}:${config.sessionId}`;
 
   let activeClient: import('discord.js').Client | null = null;
-  // Keeps client.rest's underlying connection pool to discord.com warm — without this,
-  // any gap of inactivity (including the gap between boot and a person's first typed
-  // command) lets the pooled connection close, so that command pays a fresh TCP/TLS
-  // handshake that shows up directly in ping/uptime's real round-trip measurement.
   let heartbeatHandle: NodeJS.Timeout | null = null;
-
-  // Retained across start() calls so the slash-sync callback always references the current Map.
   let activeCommands: Map<string, Record<string, unknown>> | null = null;
 
   emitter.start = async (
     commands: Map<string, Record<string, unknown>>,
   ): Promise<void> => {
-    /**
-     * Tears down partial state between retry attempts.
-     * Called by runManagedSession before each non-first attempt — never directly.
-     */
     const cleanup = async (): Promise<void> => {
       unregisterSlashSync(smKey);
       activeCommands = null;
@@ -100,18 +72,11 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
       }
     };
 
-    /**
-     * Platform-specific boot routine. Called once per retry attempt under markLocked.
-     * markActive is NOT called here — runManagedSession calls it after boot() resolves.
-     */
     const boot = async (): Promise<void> => {
-      // Restore from the start() parameter on every attempt — cleanup() sets it to null
-      // between retries, so re-assignment here guarantees boot always sees the current Map.
       activeCommands = commands;
 
-      // WHY: Fetching inside boot guarantees every attempt (including credential-update
-      // auto-restarts triggered via the dashboard) uses the latest DB values without
-      // requiring a process restart.
+      // Fetch latest credentials from DB so every retry attempt (including
+      // credential-update restarts from the dashboard) uses fresh values.
       const botDetail = await botRepo.getById(config.userId, config.sessionId);
       const token = botDetail
         ? (botDetail.credentials.platform === 'discord'
@@ -130,22 +95,13 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
 
       sessionLogger.info('[discord] Starting Listener...');
 
-      // Phase 1: Create and boot the Discord.js client (intents, login, ready event)
+      // Phase 1: login + gateway ready
       activeClient = await createDiscordClient(token, sessionLogger, (_err) => {
-        // Marks the session offline in the dashboard when Discord gateway rejects
-        // the token post-boot (e.g. token rotated while the session was running).
         void sessionManager.markInactive(smKey);
       });
 
-      // Phase 2: Attach all Discord.js event listeners FIRST — the client is already
-      // connected to the gateway after Phase 1 (login/ready), so it can start receiving
-      // interactionCreate/messageCreate dispatches immediately. Registering slash commands
-      // (next phase) is a REST round-trip whose duration scales with command count — if
-      // that ran first, the client would sit connected-but-deaf for however long it takes,
-      // and any interaction landing in that window would either get silently dropped or
-      // (worse) get picked up right at the tail end, too close to Discord's 3s ack deadline,
-      // producing "Unknown interaction" (10062) failures on deferReply(). Attaching the
-      // listener before the REST call closes that window entirely.
+      // Phase 2: attach event handlers BEFORE slash registration so no interaction
+      // lands while the client is connected-but-deaf during the REST round-trip.
       await attachEventHandlers({
         client: activeClient,
         emitter,
@@ -158,7 +114,7 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
         sessionLogger,
       });
 
-      // Phase 3: Register or clear slash commands based on the active prefix
+      // Phase 3: register/clear slash commands
       await registerSlashCommands({
         client: activeClient,
         commands,
@@ -170,12 +126,8 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
         sessionLogger,
       });
 
-      // Keep client.rest's connection to discord.com warm on a short interval — this is
-      // the exact REST manager instance channel.send()/message edits use, so warming it
-      // here directly keeps real user-facing ping/uptime readings low and consistent,
-      // instead of only being warm right after boot and going cold the moment nobody
-      // has typed a command in a while. Routes.gateway() is unauthenticated and trivial
-      // for Discord to serve, but still exercises the same pooled connection.
+      // Keep client.rest's connection to discord.com warm so real-command latency
+      // stays low even after a period of inactivity.
       const heartbeatClient = activeClient;
       heartbeatHandle = startHeartbeat(
         () => heartbeatClient.rest.get(Routes.gateway()),
@@ -183,27 +135,13 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
         '[discord]',
       );
 
-      // Register the slash-sync callback AFTER all three phases succeed.
-      // The closure captures activeClient and activeCommands by variable reference so
-      // subsequent dashboard restarts bind to the new Client instance without re-registering.
       registerSlashSync(smKey, async () => {
         if (!activeClient || !activeCommands) return;
-        const livePrefix = prefixManager.getPrefix(
-          userId,
-          Platforms.Discord,
-          sessionId,
-        );
-        const rows = await findSessionCommands(
-          userId,
-          Platforms.Discord,
-          sessionId,
-        );
-        // Explicitly typed — database exports can fall back to `any`
+        const livePrefix = prefixManager.getPrefix(userId, Platforms.Discord, sessionId);
+        const rows = await findSessionCommands(userId, Platforms.Discord, sessionId);
         const disabledNames = new Set<string>(
           rows
-            .filter(
-              (r: { isEnable: boolean; commandName: string }) => !r.isEnable,
-            )
+            .filter((r: { isEnable: boolean; commandName: string }) => !r.isEnable)
             .map((r: { commandName: string }) => r.commandName),
         );
         await registerSlashCommands({
@@ -223,13 +161,7 @@ export function createDiscordListener(config: DiscordConfig): EventEmitter & {
       sessionLogger.info('[discord] Listener active');
     };
 
-    await runManagedSession({
-      smKey,
-      sessionLogger,
-      label: '[discord]',
-      boot,
-      cleanup,
-    });
+    await runManagedSession({ smKey, sessionLogger, label: '[discord]', boot, cleanup });
   };
 
   emitter.stop = async (_signal?: string): Promise<void> => {

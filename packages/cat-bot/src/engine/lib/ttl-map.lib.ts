@@ -1,21 +1,13 @@
 /**
- * TTLMap — Generic In-Memory Map with Sliding or Fixed Expiration and Lazy Eviction
+ * TTLMap — Generic in-memory Map with sliding or fixed expiration and lazy eviction.
  *
- * Drop-in replacement for raw Map<string, V> where entries must auto-expire to prevent
- * unbounded memory growth. Two eviction strategies are combined:
+ *   sliding: true  (default) — each get() resets the TTL window (active entries stay alive)
+ *   sliding: false           — TTL fixed at write time; use for single-consumption payloads
  *
- *   1. Lazy eviction on read     — get() checks expiry and deletes before returning
- *   2. Threshold-triggered sweep — set() runs a full prune when size hits pruneThreshold
- *   3. Background timer (opt-in) — unref'd setInterval for long-idle stores
- *
- * Sliding vs. fixed TTL:
- *   sliding: true  (default) — each successful get() resets the TTL window, keeping
- *                              actively-used entries alive (conversation flows, button contexts).
- *   sliding: false           — TTL is fixed at write time and never extended; use for
- *                              single-consumption payloads (agent result keys) where a read
- *                              does not indicate renewed interest.
- *
- * Zero external dependencies — safe to import from any layer without risk of circular deps.
+ * Eviction:
+ *   1. Lazy on read — get() checks expiry and deletes before returning
+ *   2. Threshold-triggered sweep — set() runs prune() when size hits pruneThreshold
+ *   3. Background timer (opt-in via cleanupIntervalMs) — unref'd setInterval
  */
 
 export class TTLMap<V> {
@@ -25,24 +17,12 @@ export class TTLMap<V> {
   readonly #pruneThreshold: number;
 
   constructor(opts: {
-    /** Milliseconds each entry lives from its last write (or last read in sliding mode). */
     ttlMs: number;
-    /**
-     * When true (default), a successful get() resets the expiry clock.
-     * Set to false for one-shot payloads that should expire regardless of reads.
-     */
+    /** When true (default), a successful get() resets the expiry clock. */
     sliding?: boolean;
-    /**
-     * Store size above which the next set() triggers a full expired-entry sweep.
-     * Bounds peak memory between background timer intervals without adding I/O.
-     * Defaults to 500 — sufficient for all current in-memory bot stores.
-     */
+    /** Store size above which set() triggers a full sweep. Default 500. */
     pruneThreshold?: number;
-    /**
-     * Milliseconds between background cleanup sweeps via setInterval.
-     * The timer is unref'd — it never delays process exit after all other work finishes.
-     * Omit for low-write stores where threshold-triggered pruning alone is adequate.
-     */
+    /** Milliseconds between background cleanup sweeps (unref'd). Omit for low-write stores. */
     cleanupIntervalMs?: number;
   }) {
     this.#ttlMs = opts.ttlMs;
@@ -50,42 +30,22 @@ export class TTLMap<V> {
     this.#pruneThreshold = opts.pruneThreshold ?? 500;
 
     if (opts.cleanupIntervalMs !== undefined) {
-      // Unref keeps the timer from preventing process exit — housekeeping should never
-      // outlive the application's meaningful work.
-      const timer = setInterval(() => {
-        this.prune();
-      }, opts.cleanupIntervalMs);
+      const timer = setInterval(() => { this.prune(); }, opts.cleanupIntervalMs);
       (timer as NodeJS.Timeout).unref();
     }
   }
 
-  /**
-   * Returns the value for `key`, or undefined when absent or expired.
-   * Expired entries are lazily deleted on the first failed read.
-   * In sliding mode, a successful hit resets the TTL clock.
-   */
+  /** Returns the value, or undefined when absent or expired. Lazily deletes expired entries. */
   get(key: string): V | undefined {
     const entry = this.#store.get(key);
     if (entry === undefined) return undefined;
     const now = Date.now();
-    if (now >= entry.expiry) {
-      // Lazy eviction: remove the stale entry immediately rather than waiting for
-      // a sweep — guarantees callers never observe post-expiry values.
-      this.#store.delete(key);
-      return undefined;
-    }
-    if (this.#sliding) {
-      // Extend the deadline on every successful access — entries that are actively
-      // used remain alive without requiring the caller to explicitly re-set them.
-      entry.expiry = now + this.#ttlMs;
-    }
+    if (now >= entry.expiry) { this.#store.delete(key); return undefined; }
+    if (this.#sliding) entry.expiry = now + this.#ttlMs;
     return entry.value;
   }
 
-  /**
-   * Stores a value with a fresh TTL window starting from now.
-   * Triggers a sweep when the store exceeds pruneThreshold to bound peak memory.
-   */
+  /** Stores a value with a fresh TTL window. Triggers a sweep if over pruneThreshold. */
   set(key: string, value: V): void {
     if (this.#store.size >= this.#pruneThreshold) this.prune();
     this.#store.set(key, { value, expiry: Date.now() + this.#ttlMs });
@@ -96,12 +56,12 @@ export class TTLMap<V> {
     return this.get(key) !== undefined;
   }
 
-  /** Immediately removes an entry regardless of its remaining TTL. */
+  /** Immediately removes an entry regardless of remaining TTL. */
   delete(key: string): void {
     this.#store.delete(key);
   }
 
-  /** Sweeps the entire store, removing all entries whose TTL has elapsed. */
+  /** Sweeps the entire store, removing all expired entries. */
   prune(): void {
     const now = Date.now();
     for (const [k, v] of this.#store) {
@@ -109,10 +69,7 @@ export class TTLMap<V> {
     }
   }
 
-  /**
-   * Raw entry count including entries that may have expired but not yet been lazily evicted.
-   * Use has() or get() for authoritative existence checks.
-   */
+  /** Raw entry count (may include not-yet-lazily-evicted expired entries). */
   get size(): number {
     return this.#store.size;
   }

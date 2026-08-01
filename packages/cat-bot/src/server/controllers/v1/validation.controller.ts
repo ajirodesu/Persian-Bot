@@ -1,217 +1,112 @@
 /**
- * Credential Validation Controller — REST Endpoints
+ * Credential Validation Controller
  *
- * POST /api/v1/validate/discord          — verify Discord bot token via REST API
+ * POST /api/v1/validate/discord          — verify Discord bot token via /users/@me
  * POST /api/v1/validate/telegram         — verify Telegram token via getMe
+ * POST /api/v1/validate/email-reset      — check email existence (+ adminOnly role)
+ * GET  /api/v1/validate/email-service-status — is transactional email configured?
+ * POST /api/v1/validate/email-status     — email existence + verification flag
+ * POST /api/v1/validate/reset-password/request      — issue HMAC-signed reset token
+ * POST /api/v1/validate/reset-password/verify-token — validate token without consuming it
+ * POST /api/v1/validate/reset-password/confirm      — apply new password and consume token
  *
- * Response contract for all endpoints:
- *   { valid: true, botName?: string }   — credentials accepted
- *   { valid: false, error: string }     — credentials rejected (still HTTP 200)
- *   HTTP 4xx/5xx                        — infrastructure errors
- *
- * WHY HTTP 200 for invalid credentials: this lets the React hook distinguish
- * between a network failure (throws) and a validation rejection (valid: false)
- * without try/catch branching at the call site.
+ * All validation endpoints return HTTP 200 with { valid: false, error } for rejected
+ * credentials so the React hook can distinguish network failures (throws) from
+ * validation failures without try/catch branching at the call site.
  */
 
 import type { Request, Response } from 'express';
-// randomBytes removed — HMAC-signed tokens no longer need random bytes for token generation.
-// createHmac: signs the token payload so validity is self-contained (no server-side Map).
-// timingSafeEqual: prevents HMAC oracle timing attacks during signature comparison.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { hashPassword } from 'better-auth/crypto';
 import { sendMail } from '@/server/lib/mailer.lib.js';
 import { env } from '@/engine/config/env.config.js';
 import { requireSession } from '@/server/validators/auth-session.validator.js';
-import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { auth } from '@/server/lib/better-auth.lib.js';
 import axios from 'axios';
-import {
-  isAuthError,
-  withRetry,
-  isNetworkError,
-} from '@/engine/lib/retry.lib.js';
-import {
-  buildEmailLayout,
-  buildButton,
-  COLORS,
-} from '@/server/email-template/index.js';
+import { isAuthError, withRetry, isNetworkError } from '@/engine/lib/retry.lib.js';
+import { buildEmailLayout, buildButton, COLORS } from '@/server/email-template/index.js';
 
 // ── Discord ───────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/v1/validate/discord
- * Body: { discordToken: string }
- *
- * Calls GET /v10/users/@me with Bot token authentication.
- * A 200 response proves the token is a valid bot token — no guild membership required.
- */
-export async function validateDiscord(
-  req: Request,
-  res: Response,
-): Promise<void> {
+/** POST /api/v1/validate/discord — body: { discordToken } */
+export async function validateDiscord(req: Request, res: Response): Promise<void> {
   const userId = await requireSession(req, res);
   if (!userId) return;
 
   const { discordToken } = req.body as { discordToken?: string };
-  if (!discordToken) {
-    res.status(400).json({ error: 'Missing discordToken' });
-    return;
-  }
+  if (!discordToken) { res.status(400).json({ error: 'Missing discordToken' }); return; }
 
   try {
     const response = await withRetry(
-      () =>
-        axios.get<{ username: string; id: string }>(
-          'https://discord.com/api/v10/users/@me',
-          { headers: { Authorization: `Bot ${discordToken}` } },
-        ),
-      {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        // 401 means an invalid token — retrying is futile; only retry transient network faults
-        shouldRetry: (err) => !isAuthError(err) && isNetworkError(err),
-      },
+      () => axios.get<{ username: string; id: string }>(
+        'https://discord.com/api/v10/users/@me',
+        { headers: { Authorization: `Bot ${discordToken}` } },
+      ),
+      { maxAttempts: 3, initialDelayMs: 1000, shouldRetry: (err) => !isAuthError(err) && isNetworkError(err) },
     );
-    res.status(200).json({
-      valid: true,
-      botName: response.data.username,
-      botId: response.data.id,
-    });
+    res.status(200).json({ valid: true, botName: response.data.username, botId: response.data.id });
   } catch (err) {
     const e = err as { response?: { status: number } };
-    if (e.response?.status === 401) {
-      res
-        .status(200)
-        .json({ valid: false, error: 'Invalid Discord bot token' });
-      return;
-    }
-    logger.error('[validate] Discord validation request failed', {
-      error: err,
-    });
+    if (e.response?.status === 401) { res.status(200).json({ valid: false, error: 'Invalid Discord bot token' }); return; }
+    logger.error('[validate] Discord validation request failed', { error: err });
     res.status(500).json({ error: 'Failed to validate Discord token' });
   }
 }
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/v1/validate/telegram
- * Body: { telegramToken: string }
- *
- * getMe is the canonical token check — responds immediately without requiring
- * any group membership or channel access.
- */
-export async function validateTelegram(
-  req: Request,
-  res: Response,
-): Promise<void> {
+/** POST /api/v1/validate/telegram — body: { telegramToken } */
+export async function validateTelegram(req: Request, res: Response): Promise<void> {
   const userId = await requireSession(req, res);
   if (!userId) return;
 
   const { telegramToken } = req.body as { telegramToken?: string };
-  if (!telegramToken) {
-    res.status(400).json({ error: 'Missing telegramToken' });
-    return;
-  }
+  if (!telegramToken) { res.status(400).json({ error: 'Missing telegramToken' }); return; }
 
   try {
     const response = await withRetry(
-      () =>
-        axios.get<{
-          ok: boolean;
-          result?: { first_name?: string; username?: string };
-        }>(`https://api.telegram.org/bot${telegramToken}/getMe`),
-      {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        // 401 from Telegram's Bot API means an invalid token — retrying is futile
-        shouldRetry: (err) => !isAuthError(err) && isNetworkError(err),
-      },
+      () => axios.get<{ ok: boolean; result?: { first_name?: string; username?: string } }>(
+        `https://api.telegram.org/bot${telegramToken}/getMe`,
+      ),
+      { maxAttempts: 3, initialDelayMs: 1000, shouldRetry: (err) => !isAuthError(err) && isNetworkError(err) },
     );
-
     if (response.data.ok) {
       const r = response.data.result;
-      res
-        .status(200)
-        .json({ valid: true, botName: r?.first_name ?? r?.username });
+      res.status(200).json({ valid: true, botName: r?.first_name ?? r?.username });
     } else {
-      res
-        .status(200)
-        .json({ valid: false, error: 'Invalid Telegram bot token' });
+      res.status(200).json({ valid: false, error: 'Invalid Telegram bot token' });
     }
   } catch (err) {
     const e = err as { response?: { status: number } };
-    if (e.response?.status === 401) {
-      res
-        .status(200)
-        .json({ valid: false, error: 'Invalid Telegram bot token' });
-      return;
-    }
-    logger.error('[validate] Telegram validation request failed', {
-      error: err,
-    });
+    if (e.response?.status === 401) { res.status(200).json({ valid: false, error: 'Invalid Telegram bot token' }); return; }
+    logger.error('[validate] Telegram validation request failed', { error: err });
     res.status(500).json({ error: 'Failed to validate Telegram token' });
   }
 }
 
-// ── Email Reset Validation ────────────────────────────────────────────────────
+// ── Email Reset Validation ─────────────────────────────────────────────────────
 
 /**
- * POST /api/v1/validate/email-reset
- * Body: { email: string; adminOnly?: boolean }
- *
- * Checks whether an email address is registered in the auth database and,
- * when adminOnly = true, verifies the account holds the 'admin' role.
- *
- * Called by the forgot-password pages BEFORE requestPasswordReset so the UI can
- * surface a clear "not found" or "not an admin account" error. better-auth
- * deliberately hides this information in requestPasswordReset to prevent user
- * enumeration — this endpoint restores that UX explicitly and is protected by
- * VALIDATE_LIMIT (20 req / 60 s per IP) applied at the app.ts routing layer.
+ * POST /api/v1/validate/email-reset — body: { email, adminOnly? }
+ * Checks email existence and, when adminOnly=true, verifies the admin role.
+ * Called before requestPasswordReset so the UI can surface clear errors.
+ * Protected by VALIDATE_LIMIT (20 req/60 s per IP) at the routing layer.
  */
-export async function validateEmailForPasswordReset(
-  req: Request,
-  res: Response,
-): Promise<void> {
-  const { email, adminOnly } = req.body as {
-    email?: string;
-    adminOnly?: boolean;
-  };
-
-  if (!email || typeof email !== 'string') {
-    res.status(400).json({ error: 'Missing email' });
-    return;
-  }
+export async function validateEmailForPasswordReset(req: Request, res: Response): Promise<void> {
+  const { email, adminOnly } = req.body as { email?: string; adminOnly?: boolean };
+  if (!email || typeof email !== 'string') { res.status(400).json({ error: 'Missing email' }); return; }
 
   try {
-    // auth.$context exposes the underlying database adapter — same pattern used
-    // in admin.controller.ts updateUser() to perform a pre-write email collision check.
     const ctx = await auth.$context;
     const user = await ctx.adapter.findOne<Record<string, unknown>>({
       model: 'user',
       where: [{ field: 'email', value: email.toLowerCase().trim() }],
     });
-
-    if (!user) {
-      res.status(200).json({
-        valid: false,
-        error: 'No account found with this email address.',
-      });
-      return;
-    }
-
-    // Admin-only path: reject accounts that exist but do not hold the admin role.
-    // Used by the admin forgot-password page to prevent non-admin users from
-    // probing for valid addresses via the admin portal password reset flow.
+    if (!user) { res.status(200).json({ valid: false, error: 'No account found with this email address.' }); return; }
     if (adminOnly === true && user['role'] !== 'admin') {
-      res.status(200).json({
-        valid: false,
-        error: 'No admin account found with this email address.',
-      });
-      return;
+      res.status(200).json({ valid: false, error: 'No admin account found with this email address.' }); return;
     }
-
     res.status(200).json({ valid: true });
   } catch (error) {
     logger.error('[validate] Email reset validation failed', { error });
@@ -223,54 +118,23 @@ export async function validateEmailForPasswordReset(
 
 /**
  * GET /api/v1/validate/email-service-status
- *
- * Returns whether transactional email (verification + password reset) is
- * actually deliverable right now, based on the SAME condition mailer.lib.ts
- * uses to decide whether to send or silently skip: GMAIL_USER and
- * GOOGLE_APP_PASSWORD must both be present.
- *
- * WHY THIS ENDPOINT EXISTS: the web app previously gated these flows behind
- * VITE_EMAIL_SERVICES_ENABLE, a build-time Vite variable baked into the
- * frontend bundle at `npm run build` time. That created a foot-gun — an
- * admin could configure GMAIL_USER/GOOGLE_APP_PASSWORD, restart the bot, and
- * still see "Feature Unavailable" because the *already-built* web assets
- * still had the old (false) value baked in, requiring a full frontend
- * rebuild to pick up the change. Checking real credential presence here, at
- * request time, on the server that actually sends the mail, removes that
- * split-brain entirely: flipping GMAIL_USER/GOOGLE_APP_PASSWORD and
- * restarting the bot process is now sufficient — no frontend rebuild
- * required.
- *
- * VITE_EMAIL_SERVICES_ENABLE is still honored as an explicit kill switch —
- * setting it to 'false' forces the feature off even when credentials are
- * present — but its absence no longer disables a fully-configured mailer.
+ * Returns whether transactional email is deliverable: GMAIL_USER + GOOGLE_APP_PASSWORD
+ * must both be present. VITE_EMAIL_SERVICES_ENABLE='false' acts as an explicit kill switch.
+ * Checked at request time so credential changes take effect on process restart — no
+ * frontend rebuild required.
  */
 export function getEmailServiceStatus(_req: Request, res: Response): void {
   const hasCredentials = Boolean(env.GMAIL_USER && env.GOOGLE_APP_PASSWORD);
   const explicitlyDisabled = env.VITE_EMAIL_SERVICES_ENABLE === 'false';
-
   res.status(200).json({ enabled: hasCredentials && !explicitlyDisabled });
 }
 
 // ── Email Status Check ────────────────────────────────────────────────────────
 
-/**
- * POST /api/v1/validate/email-status
- * Body: { email: string }
- * Returns the existence and verification status of an email address.
- * Used during sign-up to determine whether to surface an "already exists" error
- * or redirect the user to the verification flow.
- */
-export async function checkEmailStatus(
-  req: Request,
-  res: Response,
-): Promise<void> {
+/** POST /api/v1/validate/email-status — body: { email } — returns { exists, verified }. */
+export async function checkEmailStatus(req: Request, res: Response): Promise<void> {
   const { email } = req.body as { email?: string };
-
-  if (!email || typeof email !== 'string') {
-    res.status(400).json({ error: 'Missing email' });
-    return;
-  }
+  if (!email || typeof email !== 'string') { res.status(400).json({ error: 'Missing email' }); return; }
 
   try {
     const ctx = await auth.$context;
@@ -278,16 +142,8 @@ export async function checkEmailStatus(
       model: 'user',
       where: [{ field: 'email', value: email.toLowerCase().trim() }],
     });
-
-    if (!user) {
-      res.status(200).json({ exists: false, verified: false });
-      return;
-    }
-
-    res.status(200).json({
-      exists: true,
-      verified: user['emailVerified'] === true,
-    });
+    if (!user) { res.status(200).json({ exists: false, verified: false }); return; }
+    res.status(200).json({ exists: true, verified: user['emailVerified'] === true });
   } catch (error) {
     logger.error('[validate] Email status check failed', { error });
     res.status(500).json({ error: 'Failed to check email status' });
@@ -296,147 +152,64 @@ export async function checkEmailStatus(
 
 // ── HMAC-signed Password Reset Token Flow ─────────────────────────────────────
 //
-// WHY stateless HMAC tokens instead of the previous in-memory Map:
-//
-//   The old Map<string, ResetToken> lived at module scope. Every time `tsx watch`
-//   detects a file change and hot-reloads the module (which happens constantly
-//   during development — even an auto-save wipes it), the Map is re-initialised
-//   to empty. Tokens emailed a few seconds earlier become instantly invalid.
-//   The same wipe happens on any production process restart.
-//
-//   HMAC-signed tokens are self-validating: the email address, expiry timestamp,
-//   and adminOnly flag are embedded in a base64url-encoded JSON payload. The
-//   server signs that payload with BETTER_AUTH_SECRET via HMAC-SHA256. Verification
-//   only requires re-computing the signature — no server-side state needed.
-//   Tokens survive any number of process restarts because nothing is stored.
-//
-// Token format: <base64url(JSON payload)>.<hex HMAC-SHA256 signature>
-//
-// Single-use enforcement: only confirmed resets are tracked in usedTokenSigs
-// (a Set of hex signature strings). Pending tokens that were verified but never
-// submitted are not stored, keeping the Set tiny under all realistic usage patterns.
+// Stateless tokens: email/expiry/adminOnly encoded in base64url JSON, signed with HMAC-SHA256.
+// Token format: <base64url(JSON)>.<hex HMAC-SHA256 signature>
+// Single-use: consumed signatures tracked in usedTokenSigs (Set<string>).
 
-interface TokenPayload {
-  email: string;
-  expiresAt: number;
-  adminOnly: boolean;
-}
+interface TokenPayload { email: string; expiresAt: number; adminOnly: boolean; }
 
-/** Returns the HMAC signing key bound to this server's BETTER_AUTH_SECRET. */
 function getSigningKey(): string {
   const secret = process.env['BETTER_AUTH_SECRET'];
   if (!secret) {
-    // Warn loudly but don't crash — a weak fallback is safer than a boot failure.
-    // In production, BETTER_AUTH_SECRET must be set for tokens to be unguessable.
-    logger.warn(
-      '[validate] BETTER_AUTH_SECRET is not set — reset tokens are using an insecure fallback key. Set this env var before going to production.',
-    );
+    logger.warn('[validate] BETTER_AUTH_SECRET is not set — reset tokens are using an insecure fallback key.');
     return 'cat-bot-reset-fallback-insecure';
   }
   return secret;
 }
 
-/**
- * Creates a signed reset token encoding email, expiry, and adminOnly scope.
- * The token is safe to embed directly in a URL query string (base64url + hex).
- */
 function createSignedToken(email: string, adminOnly: boolean): string {
   const payload = Buffer.from(
-    JSON.stringify({
-      email: email.toLowerCase().trim(),
-      expiresAt: Date.now() + 3_600_000, // 1 hour
-      adminOnly,
-    } satisfies TokenPayload),
+    JSON.stringify({ email: email.toLowerCase().trim(), expiresAt: Date.now() + 3_600_000, adminOnly } satisfies TokenPayload),
   ).toString('base64url');
-
-  const sig = createHmac('sha256', getSigningKey())
-    .update(payload)
-    .digest('hex');
-
+  const sig = createHmac('sha256', getSigningKey()).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }
 
-/**
- * Verifies the HMAC signature, expiry, adminOnly scope, and single-use status.
- * Returns the decoded email on success so callers never need to re-parse the token.
- */
 function verifySignedToken(
   token: string,
   adminOnly: boolean,
 ): { valid: true; email: string; sig: string } | { valid: false } {
-  // Token must contain exactly one dot separator between payload and signature
   const dotIdx = token.lastIndexOf('.');
   if (dotIdx === -1) return { valid: false };
-
   const payload = token.slice(0, dotIdx);
   const sig = token.slice(dotIdx + 1);
 
-  // Re-compute expected signature and compare in constant time.
-  // timingSafeEqual prevents HMAC oracle attacks where an attacker probes one
-  // byte at a time by measuring response latency differences.
-  const expectedSig = createHmac('sha256', getSigningKey())
-    .update(payload)
-    .digest('hex');
-
-  let sigMatch: boolean;
+  const expectedSig = createHmac('sha256', getSigningKey()).update(payload).digest('hex');
   try {
     const sigBuf = Buffer.from(sig, 'hex');
     const expectedBuf = Buffer.from(expectedSig, 'hex');
-    // timingSafeEqual requires equal-length buffers; a length mismatch is itself a failure
     if (sigBuf.length !== expectedBuf.length) return { valid: false };
-    sigMatch = timingSafeEqual(sigBuf, expectedBuf);
-  } catch {
-    return { valid: false };
-  }
-  if (!sigMatch) return { valid: false };
+    if (!timingSafeEqual(sigBuf, expectedBuf)) return { valid: false };
+  } catch { return { valid: false }; }
 
-  // Reject already-consumed signatures before parsing payload — fast path avoids
-  // JSON.parse cost on replay attempts hitting an already-used token
   if (usedTokenSigs.has(sig)) return { valid: false };
 
   try {
-    const data = JSON.parse(
-      Buffer.from(payload, 'base64url').toString('utf-8'),
-    ) as TokenPayload;
-
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as TokenPayload;
     if (Date.now() > data.expiresAt) return { valid: false };
     if (data.adminOnly !== adminOnly) return { valid: false };
-
     return { valid: true, email: data.email, sig };
-  } catch {
-    return { valid: false };
-  }
+  } catch { return { valid: false }; }
 }
 
-// Tracks hex signatures of tokens that have been consumed by a successful reset.
-// One entry per completed password reset — far smaller than the old pending-tokens Map.
 const usedTokenSigs = new Set<string>();
+// Hourly sweep: clear if > 10k entries (10k completed resets/hour is unrealistic).
+setInterval(() => { if (usedTokenSigs.size > 10_000) usedTokenSigs.clear(); }, 3_600_000).unref();
 
-// Hourly sweep: if the Set has somehow grown beyond 10k entries (impossible under
-// any realistic traffic pattern — that would be 10k completed resets in one hour),
-// clear it entirely rather than letting it grow without bound.
-setInterval(() => {
-  if (usedTokenSigs.size > 10_000) usedTokenSigs.clear();
-}, 3_600_000).unref();
-
-/**
- * POST /api/v1/validate/reset-password/request
- * Body: { email: string, adminOnly: boolean }
- * Generates an HMAC-signed token and sends a reset email if the user exists.
- */
-export async function requestPasswordResetCustom(
-  req: Request,
-  res: Response,
-): Promise<void> {
-  const { email, adminOnly } = req.body as {
-    email?: string;
-    adminOnly?: boolean;
-  };
-
-  if (!email || typeof email !== 'string') {
-    res.status(400).json({ error: 'Missing email' });
-    return;
-  }
+/** POST /api/v1/validate/reset-password/request — issues HMAC-signed token and sends email. */
+export async function requestPasswordResetCustom(req: Request, res: Response): Promise<void> {
+  const { email, adminOnly } = req.body as { email?: string; adminOnly?: boolean };
+  if (!email || typeof email !== 'string') { res.status(400).json({ error: 'Missing email' }); return; }
 
   try {
     const ctx = await auth.$context;
@@ -444,43 +217,24 @@ export async function requestPasswordResetCustom(
       model: 'user',
       where: [{ field: 'email', value: email.toLowerCase().trim() }],
     });
+    // Prevent user enumeration — always return success even if user not found.
+    if (!user) { res.status(200).json({ success: true }); return; }
+    if (adminOnly && user['role'] !== 'admin') { res.status(200).json({ success: true }); return; }
 
-    // To prevent user enumeration, always return success even if user not found
-    if (!user) {
-      res.status(200).json({ success: true });
-      return;
-    }
-
-    if (adminOnly && user['role'] !== 'admin') {
-      res.status(200).json({ success: true });
-      return;
-    }
-
-    // HMAC-signed token — encodes email/expiry/adminOnly in a tamper-proof payload.
-    // No server-side Map entry needed; the token itself proves its own validity.
     const token = createSignedToken(email, !!adminOnly);
-
-    // Prevent malformed double slashes if env.VITE_URL contains a trailing slash
-    const baseUrl = (
-      env.VITE_URL || `${req.protocol}://${req.get('host')}`
-    ).replace(/\/$/, '');
-
+    const baseUrl = (env.VITE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
     const targetEmail = String(user['email'] ?? email);
     const url = `${baseUrl}${adminOnly ? '/admin' : ''}/reset-password?token=${token}&email=${encodeURIComponent(targetEmail)}`;
     const targetName = String(user['name'] ?? email);
 
     await sendMail({
       to: targetEmail,
-      subject: adminOnly
-        ? 'Reset your Cat-Bot Admin password'
-        : 'Reset your Cat-Bot password',
+      subject: adminOnly ? 'Reset your Cat-Bot Admin password' : 'Reset your Cat-Bot password',
       html: buildEmailLayout(
-        `
-        <p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${targetName},</p>
+        `<p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${targetName},</p>
         <p style="margin: 0 0 24px 0;">Click the button below to securely reset your ${adminOnly ? 'admin ' : ''}password:</p>
         ${buildButton(url, 'Reset Password')}
-        <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This link expires in 1 hour. If you did not request this, you can safely ignore this email.</p>
-      `,
+        <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This link expires in 1 hour. If you did not request this, you can safely ignore this email.</p>`,
         'Securely reset your password',
       ),
       text: `Reset your password by visiting: ${url}`,
@@ -493,66 +247,24 @@ export async function requestPasswordResetCustom(
   }
 }
 
-/**
- * POST /api/v1/validate/reset-password/verify-token
- * Body: { token: string, adminOnly: boolean }
- * Validates whether an HMAC-signed token has a valid signature, is unexpired,
- * and has not already been consumed by a successful reset.
- */
-export async function verifyResetTokenCustom(
-  req: Request,
-  res: Response,
-): Promise<void> {
+/** POST /api/v1/validate/reset-password/verify-token — body: { token, adminOnly } */
+export async function verifyResetTokenCustom(req: Request, res: Response): Promise<void> {
   const body = req.body as { token?: string; adminOnly?: boolean };
-  // Defensively strip any trailing whitespaces/newlines injected by email client link parsers
-  // or user copy-paste errors to prevent map lookup misses.
   const token = body.token?.trim();
-  const adminOnly = body.adminOnly;
-
-  if (!token) {
-    res.status(400).json({ error: 'Missing token' });
-    return;
-  }
-
-  const result = verifySignedToken(token, !!adminOnly);
-  if (!result.valid) {
-    res.status(200).json({ valid: false });
-    return;
-  }
-
-  res.status(200).json({ valid: true });
+  if (!token) { res.status(400).json({ error: 'Missing token' }); return; }
+  const result = verifySignedToken(token, !!body.adminOnly);
+  res.status(200).json({ valid: result.valid });
 }
 
-/**
- * POST /api/v1/validate/reset-password/confirm
- * Body: { token: string, password: string, adminOnly: boolean }
- * Verifies the HMAC token, updates the password, and marks the token signature
- * as consumed so it cannot be replayed.
- */
-export async function confirmPasswordResetCustom(
-  req: Request,
-  res: Response,
-): Promise<void> {
-  const body = req.body as {
-    token?: string;
-    password?: string;
-    adminOnly?: boolean;
-  };
-  // Protect against whitespace injection exactly as the verification endpoint does
+/** POST /api/v1/validate/reset-password/confirm — body: { token, password, adminOnly } */
+export async function confirmPasswordResetCustom(req: Request, res: Response): Promise<void> {
+  const body = req.body as { token?: string; password?: string; adminOnly?: boolean };
   const token = body.token?.trim();
-  const password = body.password;
-  const adminOnly = body.adminOnly;
-
-  if (!token || !password) {
-    res.status(400).json({ error: 'Missing token or password' });
-    return;
-  }
+  const { password, adminOnly } = body;
+  if (!token || !password) { res.status(400).json({ error: 'Missing token or password' }); return; }
 
   const tokenResult = verifySignedToken(token, !!adminOnly);
-  if (!tokenResult.valid) {
-    res.status(400).json({ error: 'Invalid or expired token' });
-    return;
-  }
+  if (!tokenResult.valid) { res.status(400).json({ error: 'Invalid or expired token' }); return; }
 
   try {
     const ctx = await auth.$context;
@@ -560,14 +272,9 @@ export async function confirmPasswordResetCustom(
       model: 'user',
       where: [{ field: 'email', value: tokenResult.email }],
     });
-
-    if (!user) {
-      res.status(400).json({ error: 'User no longer exists' });
-      return;
-    }
+    if (!user) { res.status(400).json({ error: 'User no longer exists' }); return; }
 
     const hashed = await hashPassword(password);
-
     const accounts = await ctx.adapter.findMany<Record<string, unknown>>({
       model: 'account',
       where: [
@@ -583,11 +290,10 @@ export async function confirmPasswordResetCustom(
         update: { password: hashed },
       });
     } else {
-      // In case they only had social login before
       await ctx.adapter.create({
         model: 'account',
         data: {
-          userId: user['id'] as string, // Cast required to satisfy strict generic DB interfaces
+          userId: user['id'] as string,
           accountId: tokenResult.email,
           providerId: 'credential',
           password: hashed,
@@ -597,11 +303,7 @@ export async function confirmPasswordResetCustom(
       });
     }
 
-    // Mark the token signature as consumed — prevents replay of the same link.
-    // Only one entry is added per completed reset; the Set stays tiny.
     usedTokenSigs.add(tokenResult.sig);
-
-    // Force sign-out of all devices by clearing sessions
     await ctx.adapter.deleteMany({
       model: 'session',
       where: [{ field: 'userId', value: user['id'] as string }],

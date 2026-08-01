@@ -1,37 +1,25 @@
 /**
  * REST Keep-Alive Heartbeat
  *
- * Root cause of the 200-400ms+ "cold" ping/uptime readings on Discord and Telegram:
- * chat.replyMessage()/editMessage() on those platforms time an ACTUAL round-trip to
- * discord.com / api.telegram.org (see ping.ts) — that number is real, not an artifact.
- * The slowness comes from the underlying HTTPS connection pool (undici for discord.js,
- * fetch/undici for grammY) tearing down its socket to the platform host after a period
- * of inactivity. The next REST call then pays a fresh DNS + TCP + TLS handshake before
- * the actual API round-trip even starts.
+ * Fires a cheap ping immediately and then on a fixed interval to keep the
+ * underlying HTTPS connection pool (undici) open between real commands.
+ * Without this, any idle gap causes the socket to close; the next command
+ * then pays a full TCP+TLS re-handshake that shows up as a latency spike.
  *
- * Both platform clients already make a REST call during boot (registerSlashCommands /
- * bot.api.getMe()), which briefly warms the pool — but by the time a person actually
- * types a command (seconds to minutes later), that connection has typically already
- * gone idle and been closed. The exact same thing happens after any sufficiently long
- * gap between commands mid-session, independent of restarts.
- *
- * Fix: periodically issue a cheap authenticated call on the SAME client instance used
- * for real sends, on an interval short enough that the pooled connection never goes
- * idle long enough to be reclaimed. This trades a small constant number of extra no-op
- * requests per session for consistently low, accurate first-command latency.
+ * 20 s interval stays below undici's default ~30 s idle-socket timeout.
+ * The immediate fire closes the gap between boot and the first tick.
  */
 
-const DEFAULT_INTERVAL_MS = 45_000;
+const DEFAULT_INTERVAL_MS = 20_000;
 
 export interface HeartbeatLogger {
   warn: (message: string, meta?: Record<string, unknown>) => void;
 }
 
 /**
- * Starts a recurring keep-alive call. Returns a handle to pass to stopHeartbeat().
- * Failures are swallowed (logged only) — a missed heartbeat must never crash or
- * destabilize the session; the next real command will simply pay the reconnect cost
- * once, same as today.
+ * Starts a keep-alive heartbeat. Fires once immediately, then every `intervalMs`.
+ * Returns a handle for `stopHeartbeat()`. All errors are swallowed — a missed
+ * ping must never crash or destabilize the session.
  */
 export function startHeartbeat(
   ping: () => Promise<unknown>,
@@ -39,11 +27,13 @@ export function startHeartbeat(
   label: string,
   intervalMs: number = DEFAULT_INTERVAL_MS,
 ): NodeJS.Timeout {
+  ping().catch((err: unknown) => {
+    logger.warn(`${label} keep-alive initial ping failed (non-fatal)`, { error: err });
+  });
+
   return setInterval(() => {
     ping().catch((err: unknown) => {
-      logger.warn(`${label} keep-alive heartbeat failed (non-fatal)`, {
-        error: err,
-      });
+      logger.warn(`${label} keep-alive heartbeat failed (non-fatal)`, { error: err });
     });
   }, intervalMs);
 }

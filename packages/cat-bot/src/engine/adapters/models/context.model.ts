@@ -1,198 +1,113 @@
 /**
  * Context factories for Cat-Bot's command execution layer.
- *
  * Each factory creates a scoped interface bound to the triggering event:
- *   createThreadContext  → ctx.thread  — group/server operations
- *   createChatContext    → ctx.chat    — message send/react/unsend
- *   createBotContext     → ctx.bot     — bot identity queries
- *   createUserContext    → ctx.user    — user info queries
- *   createStateContext   → ctx.state   — pending reply/react state management
- *
- * ARCHITECTURE:
- *   - Interfaces  → ./interfaces/ (ThreadContext, ChatContext, etc.)
- *   - Factories   → this file (createXxxContext functions)
+ *   createThreadContext  → ctx.thread
+ *   createChatContext    → ctx.chat
+ *   createBotContext     → ctx.bot
+ *   createUserContext    → ctx.user
+ *   createStateContext   → ctx.state
  */
 
-// stateStore is a runtime value from lib/ — cannot use `import type`
 import { stateStore } from '@/engine/lib/state.lib.js';
 import { buttonContextLib } from '@/engine/lib/button-context.lib.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
-// Instant-stop hook — invoked the moment a message is actually delivered so
-// the "bot is typing…" indicator never visibly lingers after the reply has
-// already appeared in the thread. See typing-indicator.lib.ts for the full
-// rationale; this is a no-op if no indicator happens to be active.
 import { stopTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import type { UnifiedUserInfo } from './user.model.js';
-
-// UnifiedApi is a class defined in api.model, not in the interfaces barrel.
-// ButtonItem is used locally in resolveButtons(); others are referenced only in re-exported types.
 import type { UnifiedApi } from './api.model.js';
 import type { ButtonItem } from './interfaces/index.js';
-import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
-import {
-  ButtonStyle,
-  type ButtonStyleValue,
-} from '@/engine/constants/button-style.constants.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { ButtonStyle, type ButtonStyleValue } from '@/engine/constants/button-style.constants.js';
 import { type UnifiedThreadInfo } from './thread.model.js';
 
-// Re-export interfaces for backward compatibility
 export type {
-  ThreadContext,
-  ReplyOptions,
-  EditOptions,
-  ChatContext,
-  BotContext,
-  UserContext,
-  StateContext,
-  ButtonContext,
+  ThreadContext, ReplyOptions, EditOptions, ChatContext,
+  BotContext, UserContext, StateContext, ButtonContext,
 } from './interfaces/index.js';
 
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 
-// ── getInfo cache TTL — platform-specific expiry for full thread/user info ─────
-// Discord and Telegram have generous rate-limits, so 30 min balances freshness with efficiency.
 const GETINFO_TTL_MS: Record<string, number> = {
   [Platforms.Discord]: 30 * 60 * 1000,
   [Platforms.Telegram]: 30 * 60 * 1000,
 };
 function getInfoCacheTTL(platform: string): number {
-  // Default to 5 min for unrecognised platforms — matches the base lruCache instance TTL.
   return GETINFO_TTL_MS[platform] ?? 5 * 60 * 1000;
 }
 
-// ============================================================================
-// FACTORIES
-// ============================================================================
+// ── Factories ─────────────────────────────────────────────────────────────────
 
-/**
- * Creates a thread-scoped context object bound to event.threadID.
- * All calls delegate to the platform UnifiedApi with threadID pre-filled.
- */
 export function createThreadContext(
   api: UnifiedApi,
   event: Record<string, unknown>,
   native?: { userId?: string; platform?: string; sessionId?: string },
 ): import('./interfaces/index.js').ThreadContext {
   const defaultThreadID = event['threadID'] as string;
-  logger.debug('[context.model] createThreadContext called', {
-    threadID: defaultThreadID,
-  });
+  logger.debug('[context.model] createThreadContext called', { threadID: defaultThreadID });
 
-  // Extract explicit thread ID from options, fallback to event context
   function getThreadID(opts: unknown): string {
     if (typeof opts === 'object' && opts !== null) {
       const o = opts as Record<string, unknown>;
-      return (
-        (o.threadID as string) || (o.thread_id as string) || defaultThreadID
-      );
+      return (o.threadID as string) || (o.thread_id as string) || defaultThreadID;
     }
     return defaultThreadID;
   }
 
   return {
     setName: (nameOrOpts) => {
-      const name =
-        typeof nameOrOpts === 'object' && nameOrOpts !== null
-          ? (nameOrOpts as unknown as Record<string, unknown>).name
-          : nameOrOpts;
+      const name = typeof nameOrOpts === 'object' && nameOrOpts !== null
+        ? (nameOrOpts as unknown as Record<string, unknown>).name
+        : nameOrOpts;
       const targetThreadID = getThreadID(nameOrOpts);
-      logger.debug('[context.model] ThreadContext.setName called', {
-        threadID: targetThreadID,
-        name,
-      });
+      logger.debug('[context.model] ThreadContext.setName called', { threadID: targetThreadID, name });
       return api.setGroupName(targetThreadID, name as string);
     },
     setImage: (sourceOrOpts) => {
-      const isObj =
-        typeof sourceOrOpts === 'object' &&
-        sourceOrOpts !== null &&
-        !Buffer.isBuffer(sourceOrOpts) &&
-        !('pipe' in sourceOrOpts);
-      const imageSource = isObj
-        ? (sourceOrOpts as unknown as Record<string, unknown>).imageSource
-        : sourceOrOpts;
+      const isObj = typeof sourceOrOpts === 'object' && sourceOrOpts !== null
+        && !Buffer.isBuffer(sourceOrOpts) && !('pipe' in sourceOrOpts);
+      const imageSource = isObj ? (sourceOrOpts as unknown as Record<string, unknown>).imageSource : sourceOrOpts;
       const targetThreadID = getThreadID(isObj ? sourceOrOpts : null);
-      logger.debug('[context.model] ThreadContext.setImage called', {
-        threadID: targetThreadID,
-      });
-      return api.setGroupImage(
-        targetThreadID,
-        imageSource as Buffer | import('stream').Readable | string,
-      );
+      logger.debug('[context.model] ThreadContext.setImage called', { threadID: targetThreadID });
+      return api.setGroupImage(targetThreadID, imageSource as Buffer | import('stream').Readable | string);
     },
     removeImage: (opts) => {
       const targetThreadID = getThreadID(opts);
-      logger.debug('[context.model] ThreadContext.removeImage called', {
-        threadID: targetThreadID,
-      });
+      logger.debug('[context.model] ThreadContext.removeImage called', { threadID: targetThreadID });
       return api.removeGroupImage(targetThreadID);
     },
     addUser: (userOrOpts) => {
-      const userID =
-        typeof userOrOpts === 'object' && userOrOpts !== null
-          ? (userOrOpts as unknown as Record<string, unknown>).userID
-          : userOrOpts;
+      const userID = typeof userOrOpts === 'object' && userOrOpts !== null
+        ? (userOrOpts as unknown as Record<string, unknown>).userID
+        : userOrOpts;
       const targetThreadID = getThreadID(userOrOpts);
-      logger.debug('[context.model] ThreadContext.addUser called', {
-        threadID: targetThreadID,
-        userID,
-      });
+      logger.debug('[context.model] ThreadContext.addUser called', { threadID: targetThreadID, userID });
       return api.addUserToGroup(targetThreadID, userID as string);
     },
     removeUser: (userOrOpts) => {
-      const userID =
-        typeof userOrOpts === 'object' && userOrOpts !== null
-          ? (userOrOpts as unknown as Record<string, unknown>).userID
-          : userOrOpts;
+      const userID = typeof userOrOpts === 'object' && userOrOpts !== null
+        ? (userOrOpts as unknown as Record<string, unknown>).userID
+        : userOrOpts;
       const targetThreadID = getThreadID(userOrOpts);
-      logger.debug('[context.model] ThreadContext.removeUser called', {
-        threadID: targetThreadID,
-        userID,
-      });
+      logger.debug('[context.model] ThreadContext.removeUser called', { threadID: targetThreadID, userID });
       return api.removeUserFromGroup(targetThreadID, userID as string);
     },
     setReaction: (emojiOrOpts) => {
-      const emoji =
-        typeof emojiOrOpts === 'object' && emojiOrOpts !== null
-          ? (emojiOrOpts as unknown as Record<string, unknown>).emoji
-          : emojiOrOpts;
+      const emoji = typeof emojiOrOpts === 'object' && emojiOrOpts !== null
+        ? (emojiOrOpts as unknown as Record<string, unknown>).emoji
+        : emojiOrOpts;
       const targetThreadID = getThreadID(emojiOrOpts);
-      logger.debug('[context.model] ThreadContext.setReaction called', {
-        threadID: targetThreadID,
-        emoji,
-      });
+      logger.debug('[context.model] ThreadContext.setReaction called', { threadID: targetThreadID, emoji });
       return api.setGroupReaction(targetThreadID, emoji as string);
     },
-
-    /**
-     * Set a participant's display nickname in this thread.
-     * Discord: member.setNickname; Telegram: setChatAdministratorCustomTitle.
-     */
     setNickname: (options) => {
       const targetThreadID = getThreadID(options);
-      logger.debug('[context.model] ThreadContext.setNickname called', {
-        threadID: targetThreadID,
-        user_id: options.user_id,
-        nickname: options.nickname,
-      });
+      logger.debug('[context.model] ThreadContext.setNickname called', { threadID: targetThreadID, user_id: options.user_id, nickname: options.nickname });
       return api.setNickname(targetThreadID, options.user_id, options.nickname);
     },
-
-    /**
-     * Fetch rich structured information about a thread / group / server.
-     * Defaults to the current event thread; pass a different ID to query any accessible thread.
-     */
     getInfo: async (targetThreadID): Promise<UnifiedThreadInfo> => {
-      const target =
-        typeof targetThreadID === 'object' && targetThreadID !== null
-          ? getThreadID(targetThreadID)
-          : targetThreadID || defaultThreadID;
-      logger.debug('[context.model] ThreadContext.getInfo called', {
-        threadID: target,
-      });
-
-      // Scope cache to (sessionOwner, platform, session, thread) — same composite key
-      // structure used by threads.repo.ts to isolate per-session data.
+      const target = typeof targetThreadID === 'object' && targetThreadID !== null
+        ? getThreadID(targetThreadID)
+        : targetThreadID || defaultThreadID;
+      logger.debug('[context.model] ThreadContext.getInfo called', { threadID: target });
       const nativeUserId = native?.userId ?? '';
       const nativePlatform = native?.platform ?? api.platform;
       const nativeSessionId = native?.sessionId ?? '';
@@ -203,7 +118,6 @@ export function createThreadContext(
         );
         if (cached !== undefined) return cached;
       }
-
       const result = await api.getFullThreadInfo(target as string);
       if (cacheEnabled) {
         lruCache.set(
@@ -214,34 +128,19 @@ export function createThreadContext(
       }
       return result;
     },
-    /**
-     * Cache-first (Discord/Telegram) or DB-backed (FB) display name lookup.
-     * Defaults to the triggering event's own threadID so callers can omit the argument.
-     */
     getName: (targetThreadID) => {
-      const target =
-        typeof targetThreadID === 'object' && targetThreadID !== null
-          ? getThreadID(targetThreadID)
-          : targetThreadID || defaultThreadID;
-      logger.debug('[context.model] ThreadContext.getName called', {
-        threadID: target,
-      });
+      const target = typeof targetThreadID === 'object' && targetThreadID !== null
+        ? getThreadID(targetThreadID)
+        : targetThreadID || defaultThreadID;
+      logger.debug('[context.model] ThreadContext.getName called', { threadID: target });
       return api.getThreadName(target as string);
     },
-    // Follows the same optional-target pattern as getName — defaults to event.threadID so
-    // callers can omit the argument entirely when querying the current conversation's group size.
     getMemberCount: (targetThreadID) => {
-      const target =
-        typeof targetThreadID === 'object' && targetThreadID !== null
-          ? getThreadID(targetThreadID)
-          : targetThreadID || defaultThreadID;
-      logger.debug('[context.model] ThreadContext.getMemberCount called', {
-        threadID: target,
-      });
-      // Short-circuit for current-thread queries: some platforms inject participantIDs on every
-      // raw event payload, giving us a real-time roster length at zero API cost.
-      // For cross-thread queries (target !== defaultThreadID), there is no event context, so we fall
-      // back to the platform API as before.
+      const target = typeof targetThreadID === 'object' && targetThreadID !== null
+        ? getThreadID(targetThreadID)
+        : targetThreadID || defaultThreadID;
+      logger.debug('[context.model] ThreadContext.getMemberCount called', { threadID: target });
+      // Use event-provided participantIDs when querying the current thread (zero API cost).
       if (target === defaultThreadID) {
         const participantIDs = event['participantIDs'] as string[] | undefined;
         if (Array.isArray(participantIDs) && participantIDs.length > 0) {
@@ -253,58 +152,29 @@ export function createThreadContext(
   };
 }
 
-/**
- * Creates the `chat` context injected as `ctx.chat` in every command.
- *
- * @param commandName - Lowercased command name; when set, button IDs are prefixed
- *                      "commandName:buttonId" so handleButtonAction can reverse-route.
- * @param buttonDef   - The command's exported button object; used to resolve label and style for each button.
- */
 export function createChatContext(
   api: UnifiedApi,
   event: Record<string, unknown>,
   commandName = '',
-  buttonDef: Record<
-    string,
-    {
-      label?: string;
-      style?: ButtonStyleValue;
-      onClick?: (...args: unknown[]) => unknown;
-    }
-  > | null = null,
+  buttonDef: Record<string, { label?: string; style?: ButtonStyleValue; onClick?: (...args: unknown[]) => unknown }> | null = null,
   platform?: string,
 ): import('./interfaces/index.js').ChatContext {
   const defaultThreadID = event['threadID'] as string;
   const defaultMessageID = event['messageID'] as string;
-  logger.debug('[context.model] createChatContext called', {
-    threadID: defaultThreadID,
-    messageID: defaultMessageID,
-  });
+  logger.debug('[context.model] createChatContext called', { threadID: defaultThreadID, messageID: defaultMessageID });
 
-  // DM/PM detection — scoped to Discord and Telegram only (per product requirement).
-  // event.isGroup === false means the triggering message came from a private/DM chat.
-  // Webchat has no group/DM distinction, so it's intentionally excluded here.
-  const isDmOrPm =
-    (platform === 'discord' || platform === 'telegram') &&
+  // In DM/PM chats (Discord/Telegram), send as plain new messages instead of reply threads.
+  const isDmOrPm = (platform === 'discord' || platform === 'telegram') &&
     (event['isGroup'] as boolean | undefined) === false;
 
-  // Extract explicit thread ID from options, fallback to event context
   function getThreadID(opts: unknown): string {
     if (typeof opts === 'object' && opts !== null) {
       const o = opts as Record<string, unknown>;
-      return (
-        (o.threadID as string) || (o.thread_id as string) || defaultThreadID
-      );
+      return (o.threadID as string) || (o.thread_id as string) || defaultThreadID;
     }
     return defaultThreadID;
   }
 
-  // True when the caller explicitly targets a different thread than the one that
-  // triggered this context (e.g. cross-thread admin↔user relays in callad.ts).
-  // Those sends are pinned to a specific message on purpose — threading is the whole
-  // mechanism that lets the other party know which conversation to continue — so they
-  // must keep working even inside a DM/PM, and are therefore not "replies to the user's
-  // own message in this chat" in the sense the DM/PM rule below cares about.
   function hasExplicitThreadOverride(opts: unknown): boolean {
     if (typeof opts === 'object' && opts !== null) {
       const o = opts as Record<string, unknown>;
@@ -313,33 +183,19 @@ export function createChatContext(
     return false;
   }
 
-  // In a DM/PM (Discord or Telegram), bot responses should land as plain new messages
-  // instead of Telegram/Discord "reply" threads — unless the send explicitly targets a
-  // different thread (see hasExplicitThreadOverride above).
   function shouldSendAsNewMessage(opts: unknown): boolean {
     return isDmOrPm && !hasExplicitThreadOverride(opts);
   }
 
-  // Extract explicit message ID from options, fallback to event context
   function getMessageID(opts: unknown): string {
     if (typeof opts === 'object' && opts !== null) {
       const o = opts as Record<string, unknown>;
-      return (
-        (o.messageID as string) ||
-        (o.reply_to_message_id as string) ||
-        (o.targetMessageID as string) ||
-        defaultMessageID
-      );
+      return (o.messageID as string) || (o.reply_to_message_id as string) || (o.targetMessageID as string) || defaultMessageID;
     }
     return defaultMessageID;
   }
 
-  /**
-   * Strips the optional ~userId scope suffix from a raw button ID.
-   * Scoped IDs embed the original requester's platform user ID so handleButtonAction
-   * can gate button presses — the suffix is routing metadata, not part of the menu key.
-   * Example: 'refresh~123456789' → 'refresh'; 'refresh' → 'refresh' (no-op).
-   */
+  /** Strips optional ~userId scope suffix and #instanceId from a raw button ID. */
   function baseKey(id: string): string {
     const tilde = id.indexOf('~');
     const withoutScope = tilde === -1 ? id : id.slice(0, tilde);
@@ -347,74 +203,33 @@ export function createChatContext(
     return hash === -1 ? withoutScope : withoutScope.slice(0, hash);
   }
 
-  /**
-   * Normalises a flat or 2-D button ID layout to an array of rows.
-   * A flat string[] is treated as a single row so callers don't need to wrap it.
-   * Guards the [0] access explicitly for noUncheckedIndexedAccess compliance.
-   */
+  /** Normalises flat string[] or 2-D string[][] to an array of rows. */
   function normalizeRows(buttonIds: string[] | string[][]): string[][] {
     if (buttonIds.length === 0) return [];
     const first = buttonIds[0];
     if (first === undefined) return [];
-    return Array.isArray(first)
-      ? (buttonIds as string[][])
-      : [buttonIds as string[]];
+    return Array.isArray(first) ? (buttonIds as string[][]) : [buttonIds as string[]];
   }
 
-  /**
-   * Resolves raw button ID strings to ButtonItem rows that platform
-   * replyMessage/editMessage implementations consume.
-   * Accepts a flat array (single row) or a 2-D array (multiple rows / grid).
-   */
   function resolveButtons(buttonIds: string[] | string[][]): ButtonItem[][] {
-    logger.debug('[context.model] resolveButtons called', {
-      count: buttonIds.length,
-    });
+    logger.debug('[context.model] resolveButtons called', { count: buttonIds.length });
     if (!buttonIds.length) return [];
     return normalizeRows(buttonIds).map((row) =>
       row.map((id) => {
         const bKey = baseKey(id);
-        // Overlay check — allows dynamic buttons to override static defaults cleanly per-instance or globally
-        const overrideFull = buttonContextLib.getOverride(
-          `${commandName}:${id}`,
-        );
-        const overrideBase = buttonContextLib.getOverride(
-          `${commandName}:${bKey}`,
-        );
+        const overrideFull = buttonContextLib.getOverride(`${commandName}:${id}`);
+        const overrideBase = buttonContextLib.getOverride(`${commandName}:${bKey}`);
         return {
           id: commandName ? `${commandName}:${id}` : id,
-          label:
-            overrideFull?.label ??
-            overrideBase?.label ??
-            buttonDef?.[bKey]?.label ??
-            id,
-          style: (overrideFull?.style ??
-            overrideBase?.style ??
-            buttonDef?.[bKey]?.style ??
-            ButtonStyle.SECONDARY) as ButtonStyleValue,
+          label: overrideFull?.label ?? overrideBase?.label ?? buttonDef?.[bKey]?.label ?? id,
+          style: (overrideFull?.style ?? overrideBase?.style ?? buttonDef?.[bKey]?.style ?? ButtonStyle.SECONDARY) as ButtonStyleValue,
         };
       }),
     );
   }
 
   return {
-    /**
-     * Send a plain message to the thread — no reply threading.
-     */
-    reply: async ({
-      message = '',
-      attachment = [],
-      attachment_url = [],
-      button = [],
-      style,
-      rich,
-      ...opts
-    } = {}) => {
-      // Guard: platforms uniformly support at most 1 total attachment when button components
-      // are present. stream attachments and URL attachments each occupy an attachment slot —
-      // 1 stream + 1 URL = 2 total, which is rejected. This is enforced here (earliest
-      // interception) before any platform-specific delivery attempt so command authors
-      // receive a clear error at the call site rather than a silent or cryptic platform failure.
+    reply: async ({ message = '', attachment = [], attachment_url = [], button = [], style, rich, ...opts } = {}) => {
       const totalAttachCount = attachment.length + attachment_url.length;
       if (button.length > 0 && totalAttachCount > 1) {
         throw new Error(
@@ -425,50 +240,22 @@ export function createChatContext(
       }
       const targetThreadID = getThreadID(opts);
       const customMessageID = opts.messageID || opts.reply_to_message_id;
-      // Suppress reply-threading in DM/PM (Discord/Telegram) even when a custom message ID
-      // was supplied, unless the send explicitly targets a different thread — see
-      // shouldSendAsNewMessage() above.
       const sendAsNewMessage = shouldSendAsNewMessage(opts);
-      logger.debug('[context.model] ChatContext.reply called', {
-        threadID: targetThreadID,
-        hasMessage: !!message,
-        buttonCount: button.length,
-      });
+      logger.debug('[context.model] ChatContext.reply called', { threadID: targetThreadID, hasMessage: !!message, buttonCount: button.length });
       const result = await api.replyMessage(targetThreadID, {
         message,
         attachment,
         attachment_url,
-        ...(customMessageID && !sendAsNewMessage
-          ? { reply_to_message_id: customMessageID }
-          : {}),
+        ...(customMessageID && !sendAsNewMessage ? { reply_to_message_id: customMessageID } : {}),
         button: resolveButtons(button),
         ...(style !== undefined ? { style } : {}),
         ...(rich !== undefined ? { rich } : {}),
       });
-      // Message is confirmed sent — kill any lingering typing/thinking
-      // indicator on this thread instantly, instead of leaving it to expire
-      // naturally or to wait for the rest of the command to finish running.
       stopTypingIndicator(targetThreadID);
       return result;
     },
 
-    /**
-     * Send as a threaded reply pinned to the current event message.
-     * Uses event.messageID implicitly so command code never has to reference raw IDs.
-     */
-    replyMessage: async ({
-      message = '',
-      attachment = [],
-      attachment_url = [],
-      button = [],
-      style,
-      rich,
-      ...opts
-    } = {}) => {
-      // Guard: same 1-attachment-maximum constraint as chat.reply — applied independently
-      // here so replyMessage (reply-threaded sends) enforces the limit regardless of which
-      // chat context path the caller used. Both paths must be guarded because command modules
-      // may call either depending on whether they need reply threading.
+    replyMessage: async ({ message = '', attachment = [], attachment_url = [], button = [], style, rich, ...opts } = {}) => {
       const totalAttachCount = attachment.length + attachment_url.length;
       if (button.length > 0 && totalAttachCount > 1) {
         throw new Error(
@@ -479,16 +266,8 @@ export function createChatContext(
       }
       const targetThreadID = getThreadID(opts);
       const targetMessageID = getMessageID(opts);
-      // In a DM/PM (Discord or Telegram), send as a plain new message instead of
-      // threading a reply onto the triggering message — see shouldSendAsNewMessage().
       const sendAsNewMessage = shouldSendAsNewMessage(opts);
-      logger.debug('[context.model] ChatContext.replyMessage called', {
-        threadID: targetThreadID,
-        messageID: targetMessageID,
-        hasMessage: !!message,
-        buttonCount: button.length,
-        sendAsNewMessage,
-      });
+      logger.debug('[context.model] ChatContext.replyMessage called', { threadID: targetThreadID, messageID: targetMessageID, hasMessage: !!message, buttonCount: button.length, sendAsNewMessage });
       const result = await api.replyMessage(targetThreadID, {
         message,
         attachment,
@@ -498,57 +277,30 @@ export function createChatContext(
         ...(style !== undefined ? { style } : {}),
         ...(rich !== undefined ? { rich } : {}),
       });
-      // Message is confirmed sent — kill any lingering typing/thinking
-      // indicator on this thread instantly. See ChatContext.reply above.
       stopTypingIndicator(targetThreadID);
       return result;
     },
 
-    /**
-     * React to the current event message.
-     */
     reactMessage: (options) => {
       const isObj = typeof options === 'object' && options !== null;
-      const emoji = isObj
-        ? (options as unknown as Record<string, unknown>).emoji
-        : options;
+      const emoji = isObj ? (options as unknown as Record<string, unknown>).emoji : options;
       const targetThreadID = getThreadID(isObj ? options : null);
       const targetMessageID = getMessageID(isObj ? options : null);
-      logger.debug('[context.model] ChatContext.reactMessage called', {
-        threadID: targetThreadID,
-        messageID: targetMessageID,
-        emoji,
-      });
-      return api.reactToMessage(
-        targetThreadID,
-        targetMessageID,
-        emoji as string,
-      );
+      logger.debug('[context.model] ChatContext.reactMessage called', { threadID: targetThreadID, messageID: targetMessageID, emoji });
+      return api.reactToMessage(targetThreadID, targetMessageID, emoji as string);
     },
 
-    /**
-     * Delete / unsend a specific message by its ID.
-     * callers must be explicit about which message to remove.
-     */
     unsendMessage: (options) => {
       const isObj = typeof options === 'object' && options !== null;
       const targetMessageID = isObj ? getMessageID(options) : options;
-      logger.debug('[context.model] ChatContext.unsendMessage called', {
-        targetMessageID,
-      });
+      logger.debug('[context.model] ChatContext.unsendMessage called', { targetMessageID });
       return api.unsendMessage(targetMessageID as string);
     },
 
-    editMessage: async (
-      options: import('./interfaces/index.js').EditOptions,
-    ) => {
-      const targetMessageID =
-        options.message_id_to_edit || getMessageID({ messageID: undefined });
+    editMessage: async (options: import('./interfaces/index.js').EditOptions) => {
+      const targetMessageID = options.message_id_to_edit || getMessageID({ messageID: undefined });
       const targetThreadID = getThreadID(options);
-      logger.debug('[context.model] ChatContext.editMessage called', {
-        targetMessageID,
-      });
-
+      logger.debug('[context.model] ChatContext.editMessage called', { targetMessageID });
       const finalMessage = options.message;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { message, button, ...restOpts } = options;
@@ -562,10 +314,6 @@ export function createChatContext(
   };
 }
 
-/**
- * Creates a bot-scoped context object that exposes bot-level operations.
- * Injected as `ctx.bot` in every command's context.
- */
 export function createBotContext(
   api: UnifiedApi,
   event?: Record<string, unknown>,
@@ -577,34 +325,21 @@ export function createBotContext(
       return api.getBotID();
     },
     leave: async (threadID?: string): Promise<void> => {
-      // Resolve threadID: explicit arg wins; fall back to the current event's thread so
-      // callers can omit the arg when they want to leave the conversation already in progress.
-      const targetThread =
-        threadID ?? (event?.['threadID'] as string | undefined) ?? '';
+      const targetThread = threadID ?? (event?.['threadID'] as string | undefined) ?? '';
       logger.debug('[context.model] BotContext.leave called', { targetThread });
       return api.leaveThread(targetThread);
     },
   };
 }
 
-/**
- * Creates a user-scoped context object for querying user information.
- * Injected as `ctx.user` in every command's context.
- */
 export function createUserContext(
   api: UnifiedApi,
   native?: { userId?: string; platform?: string; sessionId?: string },
 ): import('./interfaces/index.js').UserContext {
   logger.debug('[context.model] createUserContext called');
   return {
-    /**
-     * Fetch rich structured information about a user on this platform.
-     * Returns a UnifiedUserInfo (see models/user.model.ts).
-     */
     getInfo: async (userID): Promise<UnifiedUserInfo> => {
       logger.debug('[context.model] UserContext.getInfo called', { userID });
-      // Scope cache to session identity — same composite key structure as thread.fullInfo
-      // to keep namespace conventions consistent across the engine layer.
       const nativeUserId = native?.userId ?? '';
       const nativePlatform = native?.platform ?? api.platform;
       const nativeSessionId = native?.sessionId ?? '';
@@ -624,75 +359,40 @@ export function createUserContext(
       }
       return info;
     },
-    // Cache-first (Discord/Telegram) or DB-backed (FB) — no external API round-trip on supported platforms
     getName: (userID) => {
       logger.debug('[context.model] UserContext.getName called', { userID });
       return api.getUserName(userID);
     },
     getAvatarUrl: (userID) => {
-      logger.debug('[context.model] UserContext.getAvatarUrl called', {
-        userID,
-      });
+      logger.debug('[context.model] UserContext.getAvatarUrl called', { userID });
       return api.getAvatarUrl(userID);
     },
   };
 }
 
-/**
- * Creates a command-scoped states context injected as `ctx.state` in every command.
- * Bound to the triggering event at dispatch time so generateID() has access to
- * senderID and threadID without requiring callers to pass the event explicitly.
- *
- * @param commandName - Lowercased command name as registered in the commands Map
- * @param event       - The triggering message event (senderID / threadID source)
- */
 export function createStateContext(
   commandName: string,
   event: Record<string, unknown>,
 ): import('./interfaces/index.js').StateContext {
   logger.debug('[context.model] createStateContext called', { commandName });
   return {
-    /**
-     * Flat state surface — replaces the old onReply/onReact sub-objects.
-     * All pending states (reply flows AND react flows) share one store so command
-     * modules never need to choose the right sub-object.
-     */
     state: {
       /**
-       * Builds a composite routing key that scopes a pending state to either
-       * the original sender (private) or the whole thread (public).
-       *
+       * Builds a composite routing key scoped to the sender (private) or thread (public).
        * Default (private): `${id}:${senderID}` — only the triggering user can advance.
        * Public: `${id}:${threadID}` — any group member can advance (polls, shared flows).
        */
       generateID({ id, public: isPublic = false }) {
-        logger.debug('[context.model] state.generateID called', {
-          id,
-          isPublic,
-        });
+        logger.debug('[context.model] state.generateID called', { id, isPublic });
         if (event['type'] === 'message_reaction') {
-          return isPublic
-            ? `${id}:${event['threadID'] as string}`
-            : `${id}:${event['userID'] as string}`;
+          return isPublic ? `${id}:${event['threadID'] as string}` : `${id}:${event['userID'] as string}`;
         }
-        return isPublic
-          ? `${id}:${event['threadID'] as string}`
-          : `${id}:${event['senderID'] as string}`;
+        return isPublic ? `${id}:${event['threadID'] as string}` : `${id}:${event['senderID'] as string}`;
       },
-
-      /**
-       * Registers a pending state in the unified store.
-       */
       create({ id, state, context }) {
         logger.debug('[context.model] state.create called', { id, state });
         stateStore.create(id, { command: commandName, state, context });
       },
-
-      /**
-       * Removes a pending state from the unified store.
-       * Call this before registering the next step or after the flow completes
-       * to prevent the same bot message from re-triggering a stale handler.
-       */
       delete(id) {
         logger.debug('[context.model] state.delete called', { id });
         stateStore.delete(id);
@@ -701,13 +401,6 @@ export function createStateContext(
   };
 }
 
-/**
- * Creates a command-scoped button context injected as `ctx.button` in every command.
- * Bound to the triggering event so generateID() has access to senderID.
- *
- * @param commandName - Lowercased command name as registered in the commands Map
- * @param event       - The triggering message event (senderID source)
- */
 export function createButtonContext(
   commandName: string,
   event: Record<string, unknown>,
@@ -716,14 +409,9 @@ export function createButtonContext(
   return {
     button: {
       generateID({ id, public: isPublic = false }) {
-        logger.debug('[context.model] button.generateID called', {
-          id,
-          isPublic,
-        });
-        // Append a short random string to prevent context collision on repeated command invocations
+        logger.debug('[context.model] button.generateID called', { id, isPublic });
         const instanceId = Math.random().toString(36).substring(2, 8);
         const baseWithInstance = `${id}#${instanceId}`;
-
         if (isPublic) return baseWithInstance;
         return `${baseWithInstance}~${event['senderID'] as string}`;
       },
@@ -739,9 +427,7 @@ export function createButtonContext(
         buttonContextLib.delete(`${commandName}:${id}`);
       },
       update(options) {
-        logger.debug('[context.model] button.update called', {
-          id: options.id,
-        });
+        logger.debug('[context.model] button.update called', { id: options.id });
         const key = `${commandName}:${options.id}`;
         const existing = buttonContextLib.getOverride(key) || {};
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -749,9 +435,7 @@ export function createButtonContext(
         buttonContextLib.setOverride(key, { ...existing, ...payload });
       },
       create(options) {
-        logger.debug('[context.model] button.create called', {
-          id: options.id,
-        });
+        logger.debug('[context.model] button.create called', { id: options.id });
         const key = `${commandName}:${options.id}`;
         const existing = buttonContextLib.getOverride(key) || {};
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
