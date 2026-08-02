@@ -48,6 +48,71 @@ function createGroq(apiKey: string): Groq {
 }
 
 // ============================================================================
+// GROQ "json" TOOL-CALL QUIRK RECOVERY
+// ============================================================================
+// Groq's openai/gpt-oss-120b occasionally emits a synthetic tool call literally
+// named "json" (instead of the real tool name) when it produces what looks like
+// a final structured answer — the model's Harmony-format "commentary/final json"
+// channel leaking through the OpenAI-compatible tool-calling shim. Groq validates
+// tool-call names SERVER-SIDE against the requested `tools` list and rejects the
+// *entire* completion with a 400 ("tool_use_failed") when the name doesn't match
+// — even though the arguments the model generated are a perfectly valid call to
+// one of our real tools. Because the rejection happens before the SDK returns a
+// normal response, we can't intercept it in the usual tool-dispatch loop below;
+// we have to catch the thrown error, recover the intended call from the error
+// body's `failed_generation` field, and splice it back into the conversation as
+// if Groq had returned it normally.
+//
+// Only "json" → "send_result" is aliased for now: it's the only observed case,
+// and send_result is the sole tool whose argument shape (`message`, plus optional
+// `attachment_url` / `attachment` / `button`) matches what the model emits under
+// the bogus "json" name.
+const TOOL_NAME_ALIASES: Record<string, string> = {
+  json: 'send_result',
+};
+
+interface RecoveredToolCall {
+  name: string;
+  arguments: string;
+}
+
+/**
+ * Attempts to pull `{ name, arguments }` out of a Groq APIError's
+ * `error.error.failed_generation` field (the raw JSON text the model produced
+ * for the tool call Groq refused to accept). Returns null for any error shape
+ * that doesn't match — callers should rethrow the original error in that case.
+ */
+function extractFailedToolGeneration(err: unknown): RecoveredToolCall | null {
+  const failedGeneration = (
+    err as {
+      error?: { error?: { code?: string; failed_generation?: string } };
+    }
+  )?.error?.error;
+  if (
+    failedGeneration?.code !== 'tool_use_failed' ||
+    typeof failedGeneration.failed_generation !== 'string'
+  ) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(failedGeneration.failed_generation) as {
+      name?: string;
+      arguments?: unknown;
+    };
+    if (!parsed || typeof parsed.name !== 'string') return null;
+    return {
+      name: parsed.name,
+      arguments:
+        typeof parsed.arguments === 'string'
+          ? parsed.arguments
+          : JSON.stringify(parsed.arguments ?? {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
 // MODULAR TOOL LOADER
 // ============================================================================
 
@@ -299,12 +364,67 @@ export async function runAgent(
     // moment a tool call is actually dispatched.
     setAgentStatus(ctx, DEFAULT_AGENT_STATUS_TEXT);
 
-    const response = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
-      messages,
-      tools: groqTools,
-      tool_choice: 'auto',
-    });
+    let response: Awaited<ReturnType<typeof groq.chat.completions.create>>;
+    try {
+      response = await groq.chat.completions.create({
+        model: 'openai/gpt-oss-120b',
+        messages,
+        tools: groqTools,
+        tool_choice: 'auto',
+      });
+    } catch (err) {
+      const recovered = extractFailedToolGeneration(err);
+      const aliasedName = recovered ? TOOL_NAME_ALIASES[recovered.name] : undefined;
+      const aliasedTool = aliasedName ? cachedToolsMap!.get(aliasedName) : undefined;
+
+      if (!recovered || !aliasedName || !aliasedTool) {
+        // Not the known "json" quirk (or no alias/tool matches) — nothing to
+        // recover, surface the original error to the caller as before.
+        throw err;
+      }
+
+      // Splice the recovered call back into the conversation as if Groq had
+      // returned it normally, then execute it through the real tool.
+      const syntheticId = `recovered_${Date.now()}_${turns}`;
+      messages.push({
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: syntheticId,
+            type: 'function',
+            function: { name: aliasedName, arguments: recovered.arguments },
+          },
+        ],
+      });
+
+      let args: Record<string, unknown>;
+      try {
+        args = JSON.parse(recovered.arguments);
+      } catch {
+        args = {};
+      }
+
+      setAgentStatus(ctx, describeToolStatus(aliasedName, args));
+      try {
+        const result = await aliasedTool.run(args, ctx);
+        messages.push({
+          role: 'tool',
+          tool_call_id: syntheticId,
+          content: String(result),
+        });
+      } catch (toolErr) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: syntheticId,
+          content: `Tool execution error: ${
+            toolErr instanceof Error ? toolErr.message : String(toolErr)
+          }`,
+        });
+      }
+
+      continue; // Proceed to the next turn with the recovered result in context.
+    }
 
     const message = response.choices[0]?.message;
     if (!message) break;
