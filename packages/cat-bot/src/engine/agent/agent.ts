@@ -5,11 +5,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import Groq from 'groq-sdk';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { resolveAgentContext } from '@/engine/agent/agent.util.js';
-import { env } from '@/engine/config/env.config.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import {
   initAgentStatus,
@@ -32,26 +32,19 @@ const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
 );
 
 // ============================================================================
-// GROQ CLIENT SINGLETON
+// GROQ CLIENT FACTORY
 // ============================================================================
-// Creating a new Groq instance on every runAgent call is wasteful — the
-// client is stateless (just holds the API key and base URL) and safe to
-// reuse across calls.  Lazy-initialise once and reuse for the process lifetime.
+// Every AI request must use the *requesting user's own* Groq API key — the key is
+// resolved per invocation from the authenticated account id (see runAgent below)
+// and a fresh Groq client is built from it. There is deliberately NO process-wide
+// singleton here: the platform key (env GROQ_API_KEY) was previously shared by
+// every user, which violates the per-user ownership requirement. Building a client
+// per turn is negligible (the SDK client is a stateless config wrapper).
 /** Maximum bot commands a non-system-admin user may request per agent invocation. */
 export const AGENT_COMMAND_LIMIT = 5;
 
-let _groqInstance: Groq | null = null;
-function getGroq(): Groq {
-  if (!_groqInstance) {
-    const key = env.GROQ_API_KEY;
-    if (!key) {
-      throw new Error(
-        'GROQ_API_KEY environment variable is not set. AI capabilities are disabled.',
-      );
-    }
-    _groqInstance = new Groq({ apiKey: key });
-  }
-  return _groqInstance;
+function createGroq(apiKey: string): Groq {
+  return new Groq({ apiKey });
 }
 
 // ============================================================================
@@ -136,6 +129,12 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
 /**
  * Runs the ReAct-style agent loop, resolving tool calls recursively until a
  * final text answer is produced or the turn limit is reached.
+ *
+ * The Groq API key is ALWAYS the calling user's own (resolved from the bot
+ * session's account id). Callers that already resolved the key (e.g. the ai
+ * command's friendly pre-flight check) can pass it via `groqApiKey` to avoid a
+ * second DB read; when omitted it is resolved here. If the account has no key,
+ * AI is disabled and a clear error is thrown.
  */
 export async function runAgent(
   userInput: string,
@@ -143,8 +142,25 @@ export async function runAgent(
   nickname?: string | null,
   userName?: string | null,
   systemPromptOverride?: string | null,
+  groqApiKey?: string | null,
 ): Promise<string> {
-  const groq = getGroq();
+  // ── Per-user Groq API key ──────────────────────────────────────────────────
+  // AI requests must use the configured key of the account that owns the bot.
+  // No key → AI is disabled; the caller surfaces a friendly notice.
+  const { senderID, threadID, sessionUserId, sessionId, platform } =
+    resolveAgentContext(ctx);
+
+  let apiKey = groqApiKey ?? null;
+  if (!apiKey) {
+    apiKey = sessionUserId ? await getUserGroqApiKey(sessionUserId) : null;
+  }
+  if (!apiKey) {
+    throw new Error(
+      'AI is disabled — no Groq API key is configured for this account. ' +
+        'Add your key in Dashboard → Settings to enable AI.',
+    );
+  }
+  const groq = createGroq(apiKey);
 
   // Live status ref, read by withThinkingIndicator's refresh loop so the
   // "bot is typing/thinking" signal reflects the agent's actual current
@@ -157,8 +173,6 @@ export async function runAgent(
   const groqTools = cachedGroqTools!;
 
   // Inject dynamic context variables into the structured system prompt template.
-  const { senderID, threadID, sessionUserId, sessionId, platform } =
-    resolveAgentContext(ctx);
   let userRoleLabel = 'Regular User';
   // Hoisted out of the try block below (not just a local) — reused by the
   // agent command limit exemption further down, since "Bot Administrator"

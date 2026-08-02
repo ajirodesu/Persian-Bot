@@ -8,6 +8,7 @@ import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
@@ -69,6 +70,35 @@ export const meta: CommandMeta = {
 // AI as intended. Scoped to Telegram only, per platform.
 function stripTelegramMentions(message: string): string {
   return message.replace(/@\S+/g, ' ');
+}
+
+// ── Per-user Groq key gate ───────────────────────────────────────────────────
+// AI requires the requesting account to have configured its own Groq API key
+// (Dashboard → Settings). When the key is missing, reply with a friendly notice
+// and abort — this is the "AI features stay disabled until a valid key exists"
+// guarantee, applied identically to the /ai command and the passive onChat path.
+const NO_GROQ_KEY_MESSAGE =
+  '🤖 **AI is disabled.** No Groq API key is configured for this account.\n' +
+  'Add your key in **Dashboard → Settings** to enable AI features.';
+
+async function resolveGroqKeyOrWarn(ctx: AppCtx): Promise<string | null> {
+  const sessionUserId = ctx.native.userId ?? '';
+  let apiKey: string | null = null;
+  if (sessionUserId) {
+    try {
+      apiKey = await getUserGroqApiKey(sessionUserId);
+    } catch {
+      // Fail-closed — a DB error must not let the agent run keyless
+    }
+  }
+  if (!apiKey) {
+    await ctx.chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: NO_GROQ_KEY_MESSAGE,
+    });
+    return null;
+  }
+  return apiKey;
 }
 
 async function isBlockedByAdminRestrictions(
@@ -200,9 +230,14 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
   const threadID = (ctx.event['threadID'] ?? '') as string;
 
+  // Per-user Groq key gate — reply with a notice and abort when the account has
+  // no key configured (AI features stay disabled until a valid key is provided).
+  const groqApiKey = await resolveGroqKeyOrWarn(ctx);
+  if (!groqApiKey) return;
+
   try {
     const result = await withThinkingIndicator(ctx, threadID, () =>
-      runAgent(prompt, ctx, nickname, userName),
+      runAgent(prompt, ctx, nickname, userName, null, groqApiKey),
     );
     if (result) {
       await ctx.chat.replyMessage({
@@ -316,8 +351,21 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
         // Fail-open — a DB outage must not silently prevent the AI from responding
       }
 
+      // ── Per-user Groq key gate ─────────────────────────────────────────
+      // Resolve the account's own key; when absent, reply with a notice and
+      // abort so AI never runs keyless (or with another user's key).
+      const groqApiKey = await resolveGroqKeyOrWarn(ctx);
+      if (!groqApiKey) return;
+
       // ── Agent invocation ─────────────────────────────────────────────────
-      const result = await runAgent(message, ctx, nickname, userName);
+      const result = await runAgent(
+        message,
+        ctx,
+        nickname,
+        userName,
+        undefined,
+        groqApiKey,
+      );
       if (result) {
         await ctx.chat.replyMessage({
           style: MessageStyle.MARKDOWN,

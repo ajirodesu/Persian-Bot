@@ -121,3 +121,10 @@ export {
   deleteUser,
   resetAllDatabase,
 } from '../adapters/neondb/src/server/system-admin.repo.js';
+
+// --- USER GROQ KEY ---
+export {
+  getUserGroqKey,
+  upsertUserGroqKey,
+  deleteUserGroqKey,
+} from '../adapters/neondb/src/server/groq-key.repo.js';

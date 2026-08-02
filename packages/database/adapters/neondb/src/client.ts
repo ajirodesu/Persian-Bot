@@ -382,6 +382,14 @@ export async function initDb(): Promise<void> {
       admin_id   TEXT NOT NULL UNIQUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS bot_user_groq_key (
+      user_id       TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+      encrypted_key TEXT NOT NULL,
+      key_hint      TEXT NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 

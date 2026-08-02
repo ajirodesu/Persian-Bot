@@ -125,3 +125,10 @@ export {
   deleteUser,
   resetAllDatabase,
 } from '../adapters/turso/src/server/system-admin.repo.js';
+
+// --- USER GROQ KEY ---
+export {
+  getUserGroqKey,
+  upsertUserGroqKey,
+  deleteUserGroqKey,
+} from '../adapters/turso/src/server/groq-key.repo.js';

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import botRouter from './bot.routes.js';
 import validationRouter from './validation.routes.js';
 import adminRouter from './admin.routes.js';
+import settingsRouter from './settings.routes.js';
 
 const v1Router = Router();
 
@@ -11,5 +12,7 @@ v1Router.use('/bots', botRouter);
 v1Router.use('/validate', validationRouter);
 // Admin-only routes — each handler enforces adminAuth session + role check internally
 v1Router.use('/admin', adminRouter);
+// Account-level settings — each handler enforces the regular user session internally
+v1Router.use('/settings', settingsRouter);
 
 export default v1Router;

@@ -54,11 +54,6 @@ interface EnvConfig {
 
   // Security
   readonly ENCRYPTION_KEY: string;
-  /**
-   * Groq API key for AI-powered commands (ai, agent). Optional — bot
-   * starts normally when absent but AI features will gracefully reject.
-   */
-  readonly GROQ_API_KEY?: string | undefined;
 
   /**
    * Emoji the bot reacts with on the triggering message when a command
@@ -244,8 +239,6 @@ export const env: EnvConfig = {
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),
-  // Groq API — optional; only needed for AI-powered commands/agent
-  GROQ_API_KEY: getOptionalEnv('GROQ_API_KEY'),
   // Command-success reaction emoji — optional override, see command-reaction.constants.ts
   COMMAND_REACT_EMOJI: getOptionalEnv('COMMAND_REACT_EMOJI'),
   // Timezone for user-facing timestamps (ban notices, etc.) — defaults to Asia/Manila when unset.

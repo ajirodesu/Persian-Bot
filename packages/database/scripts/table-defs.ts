@@ -22,6 +22,7 @@ export const collectionsMap: Record<string, string> = {
   botDiscordServerSession: 'botDiscordServerSessions',
   botUserBanned: 'botUserBanned',
   botThreadBanned: 'botThreadBanned',
+  botUserGroqKey: 'botUserGroqKeys',
   user: 'user',
   session: 'session',
   account: 'account',
@@ -96,6 +97,17 @@ export const tablesDef = [
     jsonKey: 'systemAdmin',
     table: 'system_admin',
     cols: { id: 'id', adminId: 'admin_id', createdAt: 'created_at' },
+  },
+  {
+    jsonKey: 'botUserGroqKey',
+    table: 'bot_user_groq_key',
+    cols: {
+      userId: 'user_id',
+      encryptedKey: 'encrypted_key',
+      keyHint: 'key_hint',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
   },
   {
     jsonKey: 'botUser',

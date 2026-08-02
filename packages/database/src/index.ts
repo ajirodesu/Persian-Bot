@@ -213,3 +213,13 @@ export const deleteUser = m.deleteUser;
 // associated data of the admin userId passed in — adapter-agnostic interface.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const resetAllDatabase = m.resetAllDatabase;
+
+// --- USER GROQ KEY ---
+// Per-user Groq API keys (AES-256-GCM encrypted at rest). The key is always
+// scoped to a single user's own account — never shared or reused across users.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getUserGroqKey = m.getUserGroqKey;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const upsertUserGroqKey = m.upsertUserGroqKey;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteUserGroqKey = m.deleteUserGroqKey;

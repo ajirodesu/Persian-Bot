@@ -117,3 +117,10 @@ export {
 // getMongoDb  — factory returning the Db instance for MONGO_DATABASE_NAME.
 // dbReady     — resolves once the initial connection is established (boot readiness gate).
 export { mongoClient, getMongoDb, dbReady } from '../adapters/mongodb/src/client.js';
+
+// --- USER GROQ KEY ---
+export {
+  getUserGroqKey,
+  upsertUserGroqKey,
+  deleteUserGroqKey,
+} from '../adapters/mongodb/src/server/groq-key.repo.js';

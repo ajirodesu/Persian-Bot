@@ -1,5 +1,5 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
@@ -133,6 +133,84 @@ export default function SettingsPage() {
     window.location.assign(ROUTES.LOGIN)
   }
 
+  // ── Groq API key state ───────────────────────────────────────────────────
+  const [groqStatus, setGroqStatus] = useState<{
+    hasKey: boolean
+    keyHint: string | null
+  } | null>(null)
+  const [groqLoading, setGroqLoading] = useState(true)
+  const [groqKeyInput, setGroqKeyInput] = useState('')
+  const [groqEditing, setGroqEditing] = useState(false)
+  const [groqSaving, setGroqSaving] = useState(false)
+  const [groqError, setGroqError] = useState<string | null>(null)
+  const [groqSuccess, setGroqSuccess] = useState(false)
+
+  // Fetch the current key status once on mount — the API never returns the key
+  // itself, only whether one exists and a 4-char hint.
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .get<{ hasKey: boolean; keyHint: string | null }>(
+        '/api/v1/settings/groq-key',
+      )
+      .then((res) => {
+        if (!cancelled) setGroqStatus(res.data)
+      })
+      .catch(() => {
+        if (!cancelled) setGroqStatus({ hasKey: false, keyHint: null })
+      })
+      .finally(() => {
+        if (!cancelled) setGroqLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSaveGroqKey = async (): Promise<void> => {
+    const apiKey = groqKeyInput.trim()
+    if (!apiKey) {
+      setGroqError('Enter your Groq API key')
+      return
+    }
+    setGroqError(null)
+    setGroqSuccess(false)
+    setGroqSaving(true)
+    try {
+      const res = await apiClient.put<{ hasKey: boolean; keyHint: string }>(
+        '/api/v1/settings/groq-key',
+        { apiKey },
+      )
+      setGroqStatus(res.data)
+      setGroqKeyInput('')
+      setGroqEditing(false)
+      setGroqSuccess(true)
+      setTimeout(() => setGroqSuccess(false), 3000)
+    } catch (err) {
+      const e = err as { response?: { data?: { error?: string } } }
+      setGroqError(
+        e.response?.data?.error ?? 'Failed to save Groq API key',
+      )
+    } finally {
+      setGroqSaving(false)
+    }
+  }
+
+  const handleRemoveGroqKey = async (): Promise<void> => {
+    setGroqError(null)
+    setGroqSuccess(false)
+    try {
+      await apiClient.delete('/api/v1/settings/groq-key')
+      setGroqStatus({ hasKey: false, keyHint: null })
+      setGroqEditing(false)
+      setGroqKeyInput('')
+      setGroqSuccess(true)
+      setTimeout(() => setGroqSuccess(false), 3000)
+    } catch {
+      setGroqError('Failed to remove Groq API key')
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl pb-12">
       <Helmet>
@@ -165,6 +243,119 @@ export default function SettingsPage() {
           </div>
         </Card.Header>
         <ThemeToggle />
+      </Card.Root>
+
+      {/* ── AI Integration ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div>
+            <Card.Title as="h2">AI Integration</Card.Title>
+            <Card.Description>
+              AI features run on your own Groq API key. The key is stored
+              encrypted and used only by your bots.
+            </Card.Description>
+          </div>
+        </Card.Header>
+
+        <div className="flex flex-col gap-4">
+          {groqLoading ? (
+            <Skeleton textSize="body-sm" width="60%" />
+          ) : groqStatus?.hasKey ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
+              <div>
+                <p className="text-label-lg font-semibold text-on-surface">
+                  Groq API key connected
+                </p>
+                <p className="text-body-sm text-on-surface-variant">
+                  Ending in{' '}
+                  <span className="font-mono font-semibold text-on-surface">
+                    {groqStatus.keyHint ? `…${groqStatus.keyHint}` : '—'}
+                  </span>
+                </p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  variant="tonal"
+                  color="primary"
+                  size="sm"
+                  onClick={() => setGroqEditing(true)}
+                  disabled={groqSaving}
+                >
+                  Replace
+                </Button>
+                <Button
+                  variant="tonal"
+                  color="error"
+                  size="sm"
+                  onClick={() => {
+                    void handleRemoveGroqKey()
+                  }}
+                  disabled={groqSaving}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Alert
+              variant="tonal"
+              color="warning"
+              title="AI features are disabled"
+              message="No Groq API key is configured for your account. AI features won't work until you add your own key below."
+            />
+          )}
+
+          {(groqEditing || !groqStatus?.hasKey) && (
+            <Field.Root>
+              <Field.Label>Groq API key</Field.Label>
+              <div className="flex gap-2">
+                <PasswordInput
+                  value={groqKeyInput}
+                  onChange={(e) => {
+                    setGroqKeyInput(e.target.value)
+                    setGroqError(null)
+                  }}
+                  placeholder="gsk_…"
+                  disabled={groqSaving}
+                />
+                <Button
+                  variant="filled"
+                  color="primary"
+                  size="md"
+                  className="flex-shrink-0"
+                  onClick={() => {
+                    void handleSaveGroqKey()
+                  }}
+                  isLoading={groqSaving}
+                  disabled={groqSaving || !groqKeyInput.trim()}
+                >
+                  {groqStatus?.hasKey ? 'Save Key' : 'Save'}
+                </Button>
+              </div>
+            </Field.Root>
+          )}
+
+          {groqError && (
+            <Alert variant="tonal" color="error" title={groqError} size="sm" />
+          )}
+          {groqSuccess && (
+            <Alert
+              variant="tonal"
+              color="success"
+              title={
+                groqStatus?.hasKey
+                  ? 'Groq API key saved.'
+                  : 'Groq API key removed.'
+              }
+              size="sm"
+            />
+          )}
+        </div>
       </Card.Root>
 
       {/* ── Profile ── */}

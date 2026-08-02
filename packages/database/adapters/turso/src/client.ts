@@ -91,6 +91,20 @@ export async function initDb(): Promise<void> {
   const schemaCheck = await tursoClient.execute(
     `SELECT 1 FROM sqlite_master WHERE type='table' AND name='system_admin' LIMIT 1`,
   );
+
+  // Idempotent table that must exist even when the fast-path above returns early
+  // (already-initialised databases would otherwise never receive new tables that
+  // are added after their initial bootstrap). Run unconditionally before the guard.
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS bot_user_groq_key (
+      user_id       TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+      encrypted_key TEXT NOT NULL,
+      key_hint      TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at    TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+
   if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`
