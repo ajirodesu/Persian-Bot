@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
+import Dialog from '@/components/ui/overlay/Dialog'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
@@ -13,6 +14,7 @@ import ThemeToggle from '@/components/ui/ThemeToggle'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { ROUTES } from '@/constants/routes.constants'
 
 // ============================================================================
 // Page
@@ -96,6 +98,39 @@ export default function SettingsPage() {
       setTimeout(() => setPasswordSuccess(false), 3000)
     }
     setPasswordSaving(false)
+  }
+
+  // ── Delete account state ───────────────────────────────────────────────────
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDeleteAccount = async (): Promise<void> => {
+    if (!deletePassword) {
+      setDeleteError('Enter your password to confirm deletion')
+      return
+    }
+    setDeleteError(null)
+    setIsDeleting(true)
+
+    // Password is required here because the /delete-user route only accepts
+    // the request without it when the session is younger than 1 day
+    // (sensitiveSessionMiddleware). The full data wipe runs server-side via
+    // the deleteUser beforeDelete hook.
+    const { error } = await authUserClient.deleteUser({
+      password: deletePassword,
+    })
+
+    if (error) {
+      setDeleteError(error.message ?? 'Failed to delete account')
+      setIsDeleting(false)
+      return
+    }
+
+    // better-auth clears the session cookie on success — hard-redirect so the
+    // auth state provider re-mounts cleanly on the public route.
+    window.location.assign(ROUTES.LOGIN)
   }
 
   return (
@@ -351,6 +386,114 @@ export default function SettingsPage() {
           </div>
         </div>
       </Card.Root>
+
+      {/* ── Danger Zone ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-error/50"
+      >
+        <Card.Header>
+          <div>
+            <Card.Title as="h2">Danger Zone</Card.Title>
+            <Card.Description>
+              Permanently delete your account and all associated data.
+            </Card.Description>
+          </div>
+        </Card.Header>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <p className="text-body-sm text-on-surface-variant">
+            Deleting your account permanently removes your profile, chats,
+            sessions, and connected bot credentials. This action cannot be
+            undone.
+          </p>
+          <Button
+            variant="tonal"
+            color="error"
+            size="md"
+            className="flex-shrink-0"
+            onClick={() => {
+              setDeletePassword('')
+              setDeleteError(null)
+              setDeleteDialogOpen(true)
+            }}
+          >
+            Delete Account
+          </Button>
+        </div>
+      </Card.Root>
+
+      {/* Delete account confirmation dialog — requires the current password
+          (the /delete-user route only skips it for sessions younger than 1 day). */}
+      <Dialog.Root
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setDeleteDialogOpen(false)
+        }}
+        closeOnEsc={!isDeleting}
+        closeOnOverlayClick={!isDeleting}
+      >
+        <Dialog.Positioner position="center">
+          <Dialog.Backdrop />
+          <Dialog.Content size="sm">
+            <Dialog.Header>
+              <Dialog.Title>Delete account?</Dialog.Title>
+              <Dialog.CloseTrigger />
+            </Dialog.Header>
+            <Dialog.Body>
+              <p className="text-body-sm text-on-surface-variant">
+                This permanently deletes your account, chat history, sessions,
+                and connected bot credentials. This action cannot be undone.
+              </p>
+              <Field.Root>
+                <Field.Label>Confirm password</Field.Label>
+                <PasswordInput
+                  value={deletePassword}
+                  onChange={(e) => {
+                    setDeletePassword(e.target.value)
+                    setDeleteError(null)
+                  }}
+                  placeholder="Enter your password"
+                  disabled={isDeleting}
+                />
+              </Field.Root>
+              {deleteError && (
+                <Alert
+                  variant="tonal"
+                  color="error"
+                  title={deleteError}
+                  size="sm"
+                />
+              )}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Dialog.CloseTrigger asChild>
+                <Button
+                  variant="text"
+                  color="neutral"
+                  size="sm"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+              </Dialog.CloseTrigger>
+              <Button
+                color="error"
+                size="sm"
+                onClick={() => {
+                  void handleDeleteAccount()
+                }}
+                isLoading={isDeleting}
+                disabled={isDeleting || !deletePassword}
+              >
+                Delete account
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </div>
   )
 }

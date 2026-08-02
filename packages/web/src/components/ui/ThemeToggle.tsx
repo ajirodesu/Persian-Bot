@@ -53,6 +53,17 @@ const INDICATOR_SIZE = 36
  * ThemeToggle — a three-option segmented pill switch for choosing between
  * the "aqua" (default), "burnt", and "indigo" UI themes.
  *
+ * Layout:
+ *  - Mobile (< sm): compact pill of three 40px icon-only buttons, all
+ *    content-driven width so it never overflows a narrow nav bar.
+ *  - Desktop (sm+): stretches to fill its container as an even three-column
+ *    grid (`sm:grid-cols-3 sm:w-full`) with each segment fully equal in
+ *    width. Content is stacked vertically — icon chip centered on top, label
+ *    beneath — so the icon occupies the exact horizontal center of its
+ *    segment instead of sitting hugged against the label. Equal cells,
+ *    symmetric padding, and identical content stacking make every segment
+ *    pixel-identical and perfectly centered.
+ *
  * The sliding indicator is a fixed-diameter circle whose position is
  * derived directly from the *icon chip's* own measured center (via a ref
  * on the chip, not the button) — never from the button's outer box. That
@@ -113,7 +124,7 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
       role="radiogroup"
       aria-label="Interface theme"
       className={cn(
-        'relative inline-flex items-center rounded-full p-2 gap-1 max-w-full overflow-hidden',
+        'relative inline-flex sm:grid sm:grid-cols-3 sm:w-full items-center rounded-full p-2 gap-1 max-w-full overflow-hidden',
         'bg-surface-container-high border border-[var(--color-hairline-border,transparent)]',
         // Inset groove for depth + a soft outer shadow so the whole shell
         // reads as a raised, considered object rather than a flat strip.
@@ -155,12 +166,18 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
             onClick={() => setTheme(option.value)}
             className={cn(
               // On mobile (label hidden below sm:) this button is icon +
-              // 8px padding ≈ 40px — under the 44px HIG minimum. Hit-slop
-              // extends the tap area without disturbing the hand-tuned
-              // sliding-indicator geometry (which measures the icon chip's
-              // own rect, not this button's).
-              'relative z-10 flex items-center justify-center gap-2 rounded-full',
-              'pl-2 pr-2 sm:pr-4 py-2',
+              // 8px padding each side ≈ 40px — under the 44px HIG minimum.
+              // Hit-slop extends the tap area without disturbing the
+              // hand-tuned sliding-indicator geometry (which measures the
+              // icon chip's own rect, not this button's).
+              //
+              // On desktop (sm+) the button stacks vertically so the icon
+              // chip sits dead-center of its equal-width segment, never
+              // hugged against the label — the segment's center IS the
+              // icon's center, which is exactly what the sliding indicator
+              // is pinned to.
+              'relative z-10 flex sm:flex-col items-center justify-center gap-2 rounded-full',
+              'px-2 py-2',
               'text-label-md font-semibold transition-colors duration-medium-2 ease-standard',
               'tactile-press select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-high',
@@ -198,7 +215,7 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
             </span>
             <span
               className={cn(
-                'hidden sm:inline whitespace-nowrap transition-colors duration-medium-2 ease-standard',
+                'hidden sm:block whitespace-nowrap text-center transition-colors duration-medium-2 ease-standard',
                 isActive ? 'text-on-surface' : 'text-on-surface-variant',
               )}
             >

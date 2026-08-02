@@ -16,6 +16,7 @@ import {
   getMongoDb,
   pool as neonPool,
   tursoClient,
+  deleteUser,
 } from 'database';
 // Admin plugin — registers /api/auth/admin/* endpoints gated by user.role === 'admin'.
 import { admin } from 'better-auth/plugins';
@@ -64,6 +65,19 @@ export const auth = betterAuth({
   user: {
     changeEmail: {
       enabled: isEmailServicesEnabled,
+    },
+    // Self-service account deletion via POST /api/auth/delete-user. The route is
+    // protected by sensitiveSessionMiddleware, which requires the current password
+    // whenever the session is older than 1 day. beforeDelete wipes every bot-owned
+    // row for this user (bot_session_commands, bot_session_events, bot_users_session,
+    // bot_threads_session, ban tables, ...) AND the auth user row itself via the shared
+    // database deleteUser() — better-auth's internal delete then becomes a no-op.
+    // If the wipe throws, better-auth aborts the whole deletion (nothing is removed).
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        await deleteUser(user.id);
+      },
     },
   },
   // 30-day rolling sessions for regular users.
