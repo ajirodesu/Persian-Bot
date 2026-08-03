@@ -152,6 +152,26 @@ export class BotService {
     return response.data
   }
 
+  // Session-wide command-success reaction emoji — identical logic/effect to
+  // the value the command dispatcher reacts with after successful commands.
+  async getReactionEmoji(sessionId: string): Promise<{ emoji: string }> {
+    const response = await apiClient.get<{ emoji: string }>(
+      `/api/v1/bots/${sessionId}/reaction-emoji`,
+    )
+    return response.data
+  }
+
+  async setReactionEmoji(
+    sessionId: string,
+    emoji: string,
+  ): Promise<{ emoji: string }> {
+    const response = await apiClient.put<{ emoji: string }>(
+      `/api/v1/bots/${sessionId}/reaction-emoji`,
+      { emoji },
+    )
+    return response.data
+  }
+
   // Events toggle — reads and mutates bot_session_events rows for this session
   async getEvents(
     sessionId: string,

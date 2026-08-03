@@ -91,6 +91,18 @@ botRouter.put('/:id/events/:name', (req, res) => {
   void botSessionConfigController.toggleEvent(req, res);
 });
 
+// GET /api/v1/bots/:id/reaction-emoji — reads the session-wide command-success
+// reaction emoji (same value the command dispatcher reacts with).
+botRouter.get('/:id/reaction-emoji', (req, res) => {
+  void botSessionConfigController.getReactionEmoji(req, res);
+});
+
+// PUT /api/v1/bots/:id/reaction-emoji — persists the reaction emoji, validated
+// against the session's platform; takes effect on the next successful command.
+botRouter.put('/:id/reaction-emoji', (req, res) => {
+  void botSessionConfigController.setReactionEmoji(req, res);
+});
+
 // ── Database panel ─────────────────────────────────────────────────────────
 
 // GET /api/v1/bots/:id/database/users — list users for this bot session (paginated + searchable)

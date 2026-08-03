@@ -37,6 +37,7 @@ import type {
   ToggleEnabledRequestDto,
   AdminOnlyStateDto,
   ToggleIgnoreAdminOnlyRequestDto,
+  ReactionEmojiStateDto,
 } from '@/server/dtos/bot-session-config.dto.js';
 import {
   getSessionAdminOnlyEnabled,
@@ -44,6 +45,10 @@ import {
   getSessionAdminOnlyIgnoreList,
   setCommandIgnoredFromAdminOnly,
 } from '@/engine/repos/admin-only.repo.js';
+import {
+  getSessionReactionEmoji,
+  setSessionReactionEmoji,
+} from '@/engine/repos/reaction-emoji.repo.js';
 // Triggers slash command re-registration on live Discord/Telegram sessions when a command is toggled.
 // Resolves as a no-op for platforms without a registered sync (FB Messenger, FB Page) or stopped sessions.
 import { triggerSlashSync } from '@/engine/modules/prefix/slash-sync.lib.js';
@@ -465,6 +470,71 @@ export class BotSessionConfigController {
     } catch (error) {
       console.error('[BotSessionConfigController.toggleEvent]', error);
       res.status(500).json({ error: 'Failed to toggle event' });
+    }
+  }
+
+  // GET /api/v1/bots/:id/reaction-emoji
+  // Reads the session-wide command-success reaction emoji — same field the
+  // command dispatcher reads after every successful command, so the dashboard
+  // always reflects the live value (default 🔥 until explicitly configured).
+  async getReactionEmoji(req: Request, res: Response): Promise<void> {
+    const userId = await requireSession(req, res);
+    if (!userId) return;
+
+    const sessionId = String(req.params['id']);
+    if (!sessionId) {
+      res.status(400).json({ error: 'Missing session ID' });
+      return;
+    }
+
+    const platform = await resolvePlatform(userId, sessionId, res);
+    if (!platform) return;
+
+    try {
+      const emoji = await getSessionReactionEmoji(userId, platform, sessionId);
+      const body: ReactionEmojiStateDto = { emoji };
+      res.status(200).json(body);
+    } catch (error) {
+      console.error('[BotSessionConfigController.getReactionEmoji]', error);
+      res.status(500).json({ error: 'Failed to fetch reaction emoji' });
+    }
+  }
+
+  // PUT /api/v1/bots/:id/reaction-emoji
+  // Persists the session-wide reaction emoji, validated against the session's
+  // platform. Takes effect on the very next successful command (the write path
+  // refreshes the session-data LRU entry the dispatcher reads from).
+  async setReactionEmoji(req: Request, res: Response): Promise<void> {
+    const userId = await requireSession(req, res);
+    if (!userId) return;
+
+    const sessionId = String(req.params['id']);
+    if (!sessionId) {
+      res.status(400).json({ error: 'Missing session ID' });
+      return;
+    }
+
+    const platform = await resolvePlatform(userId, sessionId, res);
+    if (!platform) return;
+
+    const { emoji } = req.body as ReactionEmojiStateDto;
+    if (typeof emoji !== 'string' || emoji.trim() === '') {
+      res.status(400).json({ error: 'emoji must be a non-empty string' });
+      return;
+    }
+
+    try {
+      await setSessionReactionEmoji(userId, platform, sessionId, emoji);
+      const body: ReactionEmojiStateDto = { emoji: emoji.trim() };
+      res.status(200).json(body);
+    } catch (error) {
+      console.error('[BotSessionConfigController.setReactionEmoji]', error);
+      res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to update reaction emoji',
+      });
     }
   }
 }

@@ -62,3 +62,11 @@ export interface AdminOnlyStateDto {
 export interface ToggleIgnoreAdminOnlyRequestDto {
   ignored: boolean;
 }
+
+/**
+ * GET/PUT response+body for the session-wide command-success reaction emoji.
+ * The emoji is validated against the session's platform before persisting.
+ */
+export interface ReactionEmojiStateDto {
+  emoji: string;
+}

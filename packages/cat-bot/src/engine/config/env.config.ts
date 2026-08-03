@@ -54,14 +54,6 @@ interface EnvConfig {
 
   // Security
   readonly ENCRYPTION_KEY: string;
-
-  /**
-   * Emoji the bot reacts with on the triggering message when a command
-   * finishes successfully. Optional — falls back to the default defined in
-   * command-reaction.constants.ts when unset, so operators can override the
-   * reaction without touching source code.
-   */
-  readonly COMMAND_REACT_EMOJI?: string | undefined;
   // Derived boolean helpers
   readonly isDevelopment: boolean;
   readonly isProduction: boolean;
@@ -233,8 +225,6 @@ export const env: EnvConfig = {
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),
-  // Command-success reaction emoji — optional override, see command-reaction.constants.ts
-  COMMAND_REACT_EMOJI: getOptionalEnv('COMMAND_REACT_EMOJI'),
 
   // Derived boolean helpers for convenience
   isDevelopment: nodeEnv === 'development',

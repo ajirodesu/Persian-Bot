@@ -14,6 +14,7 @@ import Alert from '@/components/ui/feedback/Alert'
 import { useBotUpdate } from '@/features/users/hooks/useBotUpdate'
 import { useBotValidation } from '@/features/users/hooks/useBotValidation'
 import { useBotAdminOnly } from '@/features/users/hooks/useBotAdminOnly'
+import ReactionEmojiSettings from '@/features/users/components/ReactionEmojiSettings'
 import type { PlatformCredentials } from '@/features/users/dtos/bot.dto'
 import {
   PlatformFieldInputs,
@@ -609,6 +610,11 @@ export default function BotSettingsPage() {
           </div>
         )}
       </Card.Root>
+
+      <ReactionEmojiSettings
+        sessionId={sessionId}
+        platform={bot.credentials.platform}
+      />
 
       <div className="flex items-start gap-3">
         <div className="flex-1">
