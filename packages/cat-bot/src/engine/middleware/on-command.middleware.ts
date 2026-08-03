@@ -170,7 +170,7 @@ export const validateCommandOptions: MiddlewareFn<OnCommandCtx> = async function
 // ── Role Enforcement ──────────────────────────────────────────────────────────
 
 /**
- * Enforces meta.role: ANYONE (0), THREAD_ADMIN (1), BOT_ADMIN (2), PREMIUM (3),
+ * Enforces meta.role: ANYONE (0), THREAD_ADMIN (1), PREMIUM (2), BOT_ADMIN (3),
  * SYSTEM_ADMIN (4). System admins bypass all role gates. Registered before
  * enforceCooldown so unauthorised requests skip cooldown tracking.
  */

@@ -2,7 +2,7 @@ import type { AppCtx, CommandMap } from '@/engine/types/controller.types.js';
 import { resolveAgentContext } from '../agent.util.js';
 import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
+import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { Role } from '@/engine/constants/role.constants.js';
 
@@ -18,7 +18,9 @@ const HR = '─────────────────';
 const ROLE_LABEL: Record<number, string> = {
   [Role.ANYONE]: '0 (All users)',
   [Role.THREAD_ADMIN]: '1 (Group administrators)',
+  [Role.PREMIUM]: '2 (Premium)',
   [Role.BOT_ADMIN]: '3 (Bot admin)',
+  [Role.SYSTEM_ADMIN]: '4 (System admin)',
 };
 
 /**
@@ -137,9 +139,21 @@ export const run = async (
       );
       if (isAdmin) {
         userMaxRole = Role.BOT_ADMIN;
-      } else if (threadID) {
-        const isThreadAdm = await isThreadAdmin(threadID, senderID);
-        if (isThreadAdm) userMaxRole = Role.THREAD_ADMIN;
+      } else {
+        // Bot admin outranks premium: bot admins get BOT_ADMIN ceiling (above),
+        // while a premium-tier user ceiling is PREMIUM — above THREAD_ADMIN and ANYONE.
+        const isPremium = await isBotPremium(
+          sessionUserId,
+          platform,
+          sessionId,
+          senderID,
+        );
+        if (isPremium) {
+          userMaxRole = Role.PREMIUM;
+        } else if (threadID) {
+          const isThreadAdm = await isThreadAdmin(threadID, senderID);
+          if (isThreadAdm) userMaxRole = Role.THREAD_ADMIN;
+        }
       }
     } catch {
       // Fail-open
