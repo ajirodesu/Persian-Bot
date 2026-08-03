@@ -38,6 +38,20 @@ import type { RoleLevel } from '@/engine/constants/role.constants.js';
 import type { OptionTypeValue } from '@/engine/modules/command/command-option.constants.js';
 import type { PlatformName } from '@/engine/modules/platform/platform.constants.js';
 
+// ── Payment ────────────────────────────────────────────────────────────────────
+
+/**
+ * Cost of invoking a command, charged from the caller's dollar balance.
+ * `'free'` is the default when `meta.payment` is absent or not configured.
+ * A positive number charges that many dollars before the command runs.
+ */
+export type PaymentValue = 'free' | number;
+
+/** Resolves a command's configured payment, defaulting to 'free' when missing. */
+export function getPayment(cfg: Record<string, unknown> | undefined): PaymentValue {
+  return cfg?.['payment'] === undefined ? 'free' : (cfg['payment'] as PaymentValue);
+}
+
 // ── CommandOption ─────────────────────────────────────────────────────────────
 
 /**
@@ -154,6 +168,14 @@ export interface CommandMeta {
    * Takes precedence over the legacy `usage` string when present.
    */
   guide?: string[];
+
+  /**
+   * Cost (in dollars) to invoke this command, charged from the caller's
+   * balance before the command executes. When absent (or `'free'`), the
+   * command costs nothing. Set a positive number (e.g. 300) to charge users.
+   * Enforced by the payment middleware in on-command.middleware.ts.
+   */
+  payment?: PaymentValue;
 }
 
 // ── EventMeta ─────────────────────────────────────────────────────────────────

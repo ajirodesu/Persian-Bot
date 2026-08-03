@@ -134,7 +134,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Current Balance:** ${coins.toLocaleString()} coins`,
+        message: `💰 **Current Balance:** $${coins.toLocaleString()}`,
         ...(hasNativeButtons(native.platform) ? { button: [ctx.backId] } : {}),
       });
     },
@@ -221,7 +221,7 @@ export const onCommand = async ({
   if (balance < bet) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `❌ You don't have enough coins to bet **${bet.toLocaleString()}**.`,
+      message: `❌ You don't have enough dollars to bet **$${bet.toLocaleString()}**.`,
     });
     return;
   }
@@ -254,9 +254,9 @@ export const onCommand = async ({
     `${won ? '✅ **You won!**' : '❌ **You lost.**'}`,
     ``,
     `**Balance:**`,
-    `🪙 ${balance.toLocaleString()} ➜ ${Math.round(balAfter).toLocaleString()} (**${balSign}**)`,
+    `🪙 $${balance.toLocaleString()} ➜ $${Math.round(balAfter).toLocaleString()} (**${balSign}**)`,
     ``,
-    won ? `Payout: **${payout.toLocaleString()}** coins!` : 'Better luck next time!',
+    won ? `Payout: **$${payout.toLocaleString()}**!` : 'Better luck next time!',
   ].join('\n');
 
   const balanceId = btn.generateID({ id: BUTTON_ID.balance, public: false });

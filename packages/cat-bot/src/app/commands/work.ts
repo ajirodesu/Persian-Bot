@@ -26,7 +26,7 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Work a random job and earn coins once per hour.',
+  description: 'Work a random job and earn dollars once per hour.',
   category: 'Economy',
   usage: '',
   cooldown: 5,
@@ -254,7 +254,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Current Balance:** ${coins.toLocaleString()} coins`,
+        message: `💰 **Current Balance:** $${coins.toLocaleString()}`,
         ...(hasNativeButtons(native.platform) ? { button: [backId] } : {}),
       });
     },
@@ -306,7 +306,7 @@ export const button = {
         await chat.editMessage({
           style: MessageStyle.MARKDOWN,
           message_id_to_edit: event['messageID'] as string,
-          message: `✅ You're ready to work again!\nUse \`${prefix}work\` to earn coins.`,
+          message: `✅ You're ready to work again!\nUse \`${prefix}work\` to earn dollars.`,
           ...(hasNativeButtons(native.platform) ? { button: [balId] } : {}),
         });
       } else {
@@ -403,8 +403,8 @@ export const onCommand = async ({
       ``,
       `_${narrative}_`,
       ``,
-      `💰 Earned: **+${earned.toLocaleString()} coins**${mishapLine}`,
-      `📊 Total Jobs: **${(prevCount + 1).toLocaleString()}** | Lifetime: **${(prevTotal + earned).toLocaleString()} coins**`,
+      `💰 Earned: **+$${earned.toLocaleString()}**${mishapLine}`,
+      `📊 Total Jobs: **${(prevCount + 1).toLocaleString()}** | Lifetime: **$${(prevTotal + earned).toLocaleString()}**`,
       `⏰ Next shift available in **1 hour**`,
     ].join('\n'),
     ...(hasNativeButtons(native.platform) ? { button: [balanceButtonId] } : {}),

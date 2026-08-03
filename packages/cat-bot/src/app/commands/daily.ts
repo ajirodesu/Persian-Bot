@@ -73,7 +73,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Your balance:** ${formatCoins(coins)} coins`,
+        message: `💰 **Your balance:** ${formatCoins(coins)}`,
         ...(hasNativeButtons(native.platform) ? { button: [backId] } : {}),
       });
     },
@@ -228,14 +228,14 @@ export const onCommand = async ({
   // ── Respond ───────────────────────────────────────────────────────────────
   const streakLine =
     newStreak > 1
-      ? `🔥 Streak: **${newStreak} days** (+${streakBonus} bonus coins)`
-      : '🔥 Streak: **1 day** (maintain a streak for bonus coins!)';
+      ? `🔥 Streak: **${newStreak} days** (+$${streakBonus} bonus dollars)`
+      : '🔥 Streak: **1 day** (maintain a streak for bonus dollars!)';
 
   await chat.replyMessage({
     style: MessageStyle.MARKDOWN,
     message: [
       '✅ Daily reward claimed!',
-      `💰 Coins: **+${totalCoins}**`,
+      `💰 Dollars: **+$${totalCoins}**`,
       streakLine,
       '⏰ Come back in 24 hours to keep your streak going!',
     ].join('\n'),

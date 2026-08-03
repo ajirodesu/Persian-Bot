@@ -1,13 +1,13 @@
 /**
- * /balance — Coin Balance Viewer
+ * /balance — Dollar Balance Viewer
  *
- * Displays the current coin balance for the calling user, or for each
- * @mentioned user. Coins accumulate via /daily (and any future economy
+ * Displays the current dollar balance for the calling user, or for each
+ * @mentioned user. Dollars accumulate via /daily (and any future economy
  * commands) which write to the 'money' collection on bot_users_session.data.
  *
  * Collection schema (bot_users_session.data → "money" key):
  *   {
- *     coins:     number   — total accumulated coins
+ *     coins:     number   — total accumulated dollars
  *     lastClaim: number   — Unix timestamp (ms) of the most recent /daily claim
  *     streak:    number   — consecutive days claimed
  *   }
@@ -31,7 +31,7 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'John Lester',
-  description: 'View your coin balance, or the balance of a @mentioned user',
+  description: 'View your dollar balance, or the balance of a @mentioned user',
   category: 'Economy',
   usage: '[@mention]',
   cooldown: 5,
@@ -136,7 +136,7 @@ export const onCommand = async ({
       // Platforms embed '@' in the mention display name — strip it for cleaner output
       const displayName = (mentions?.[uid] ?? uid).replace(/^@/, '');
       const coins = await currencies.getMoney(uid);
-      lines.push(`**${displayName}:** ${formatCoins(coins)} coins`);
+      lines.push(`**${displayName}:** ${formatCoins(coins)}`);
     }
     // No button on the mention path — the balance is for the mentioned user, not the sender;
     // a daily_status button would check the SENDER's daily, which is confusing in context.
@@ -161,7 +161,7 @@ export const onCommand = async ({
   // Edit when navigating back via the ⬅ Back button; reply for fresh /balance invocations
   const payload = {
     style: MessageStyle.MARKDOWN,
-    message: `💰 **Your balance:** ${formatCoins(coins)} coins`,
+    message: `💰 **Your balance:** ${formatCoins(coins)}`,
     // Only inject on the self-balance path — button checks the sender's daily, which is correct here.
     ...(hasNativeButtons(native.platform)
       ? { button: [button.generateID({ id: BUTTON_ID.daily_status })] }

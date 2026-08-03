@@ -19,15 +19,15 @@ export const meta: CommandMeta = {
 } as const;
 
 const winTexts = [
-  'You trolled Kim Jong-un and won <amount> coins.',
-  'You slapped the rich guy and got <amount> coins.',
-  'You told Donald Trump that you were his missing son and he gave you <amount> coins.',
-  'You dated a gay and got <amount> coins.',
-  "You challenged Dwayne 'The Rock' Johnson to an arm wrestling match and won <amount> coins.",
+  'You trolled Kim Jong-un and won <amount>.',
+  'You slapped the rich guy and got <amount>.',
+  'You told Donald Trump that you were his missing son and he gave you <amount>.',
+  'You dated a gay and got <amount>.',
+  "You challenged Dwayne 'The Rock' Johnson to an arm wrestling match and won <amount>.",
   'You convinced Oprah to share her secret to success, earning you <amount> coins.',
   'You played poker with Elon Musk and won <amount> coins in Tesla stock.',
-  'You serenaded Beyoncé and she rewarded you with <amount> coins.',
-  "You made Gordon Ramsay's favorite dish perfectly and earned <amount> coins.",
+  'You serenaded Beyoncé and she rewarded you with <amount>.',
+  "You made Gordon Ramsay's favorite dish perfectly and earned <amount>.",
   'You impressed Jeff Bezos with your business idea and received <amount> coins in funding.',
   'You taught Taylor Swift a new dance move and she paid you <amount> coins for the lesson.',
   'You challenged Cristiano Ronaldo to a soccer match and scored the winning goal, earning <amount> coins.',
@@ -36,15 +36,15 @@ const winTexts = [
 ] as const;
 
 const loseTexts = [
-  'You got caught and lost <amount> coins.',
-  'You slipped and fell and lost <amount> coins.',
-  'You tried to outsmart Stephen Hawking in a chess game and lost <amount> coins.',
+  'You got caught and lost <amount>.',
+  'You slipped and fell and lost <amount>.',
+  'You tried to outsmart Stephen Hawking in a chess game and lost <amount>.',
   'You challenged Jackie Chan to a martial arts duel and ended up with <amount> coins in medical bills.',
-  'You attempted to race Usain Bolt and lost <amount> coins.',
-  'You tried to outeat Joey Chestnut in a hot dog eating contest and lost <amount> coins.',
+  'You attempted to race Usain Bolt and lost <amount>.',
+  'You tried to outeat Joey Chestnut in a hot dog eating contest and lost <amount>.',
   'You challenged Simon Cowell to a singing competition and received <amount> coins for earplugs.',
   'You tried to outcook Gordon Ramsay and ended up with <amount> coins in restaurant bills.',
-  'You challenged Serena Williams to a tennis match and lost <amount> coins.',
+  'You challenged Serena Williams to a tennis match and lost <amount>.',
   'You tried to outcode Bill Gates and ended up with <amount> coins in software bugs.',
   'You challenged LeBron James to a basketball game and ended up with <amount> coins for a broken hoop.',
   'You challenged Michael Phelps to a swimming race and ended up with <amount> coins for swim lessons.',
@@ -66,7 +66,7 @@ function pick<T>(arr: readonly T[]): T {
 }
 
 function formatCoins(amount: number): string {
-  return Math.floor(amount).toLocaleString('en-US');
+  return amount === Infinity ? '∞' : `$${Math.floor(amount).toLocaleString('en-US')}`;
 }
 
 function buildTrollMessage(text: string): string {
@@ -76,7 +76,7 @@ function buildTrollMessage(text: string): string {
 }
 
 function buildBalanceMessage(balance: number): string {
-  return `💰 **Current Balance:** ${formatCoins(balance)} coins`;
+  return `💰 **Current Balance:** ${formatCoins(balance)}`;
 }
 
 function readTrollButtonContext(

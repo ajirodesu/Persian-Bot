@@ -21,7 +21,7 @@ export const meta: CommandMeta = {
   role: Role.ANYONE,
   author: 'John Lester',
   description:
-    'Answer a True/False trivia question and earn coins for correct answers. Stats are tracked per user.',
+    'Answer a True/False trivia question and earn dollars for correct answers. Stats are tracked per user.',
   category: 'Economy',
   usage: '[easy | medium | hard]',
   cooldown: 10,
@@ -216,7 +216,7 @@ async function runButtonQuiz(ctx: AppCtx, difficulty: Difficulty): Promise<void>
     ``,
     question,
     ``,
-    `💰 Reward: **${reward} coins** for a correct answer`,
+    `💰 Reward: **$${reward}** for a correct answer`,
     ``,
     `_You have ${TIMEOUT_MS / 1000} seconds to answer!_`,
   ].join('\n');
@@ -362,8 +362,8 @@ async function showButtonResult(
     isCorrect && senderID
       ? [
           ``,
-          `💰 **+${reward} coins** earned!`,
-          `📊 Balance: **${newBalance.toLocaleString()} coins**`,
+          `💰 **+$${reward}** earned!`,
+          `📊 Balance: **$${newBalance.toLocaleString()}**`,
         ].join('\n')
       : '';
 
@@ -371,7 +371,7 @@ async function showButtonResult(
     ? [
         ``,
         `🏆 Wins: **${stats.wins}** | Losses: **${stats.losses}** | Win Rate: **${winRate}%**`,
-        `💎 Lifetime earned: **${stats.totalEarned.toLocaleString()} coins**`,
+        `💎 Lifetime earned: **$${stats.totalEarned.toLocaleString()}**`,
       ].join('\n')
     : '';
 
@@ -465,9 +465,9 @@ export const button = {
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: msgId,
         message: [
-          `💰 **Coin Balance**`,
+          `💰 **Dollar Balance**`,
           ``,
-          `📊 Current balance: **${coins.toLocaleString()} coins**`,
+          `📊 Current balance: **$${coins.toLocaleString()}**`,
         ].join('\n'),
         ...(hasNativeButtons(native.platform) ? { button: [btnCtx.backId] } : {}),
       });

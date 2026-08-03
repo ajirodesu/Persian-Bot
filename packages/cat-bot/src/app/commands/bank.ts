@@ -17,7 +17,7 @@ export const meta: CommandMeta = {
   role: Role.ANYONE,
   author: 'AjiroDesu',
   description:
-    'Deposit coins into or withdraw coins from your bank account. Withdrawals have a 5% tax.',
+    'Deposit dollars into or withdraw dollars from your bank account. Withdrawals have a 5% tax.',
   category: 'Economy',
   usage: '<deposit | withdraw> <amount>',
   cooldown: 5,
@@ -89,9 +89,9 @@ export const button = {
         message: [
           `🏦 **Bank Overview**`,
           ``,
-          `💰 Wallet : **${formatCoins(wallet)}** coins`,
-          `🏦 Bank   : **${formatCoins(bank)}** coins`,
-          `💎 Total  : **${formatCoins(total)}** coins`,
+          `💰 Wallet : **${formatCoins(wallet)}**`,
+          `🏦 Bank   : **${formatCoins(bank)}**`,
+          `💎 Total  : **${formatCoins(total)}**`,
           ``,
           `_5% tax applies on withdrawals._`,
         ].join('\n'),
@@ -143,7 +143,7 @@ export const button = {
           message: [
             `🏦 **Bank**`,
             ``,
-            `Use \`/bank deposit <amount>\` or \`/bank withdraw <amount>\` to manage your coins.`,
+            `Use \`/bank deposit <amount>\` or \`/bank withdraw <amount>\` to manage your dollars.`,
           ].join('\n'),
           ...(hasNativeButtons(native.platform) ? { button: [overviewId] } : {}),
         });
@@ -212,14 +212,14 @@ export const onCommand = async ({
     if (walletCoins === Infinity) {
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
-        message: `♾️ Your wallet already has **∞** coins — depositing into the bank isn't needed.`,
+        message: `♾️ Your wallet already has **∞** dollars — depositing into the bank isn't needed.`,
       });
       return;
     }
     if (walletCoins < amount) {
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
-        message: `❌ Not enough coins — you have **${formatCoins(walletCoins)}** but tried to deposit **${amount.toLocaleString()}**.`,
+        message: `❌ Not enough balance — you have **${formatCoins(walletCoins)}** but tried to deposit **$${amount.toLocaleString()}**.`,
       });
       return;
     }
@@ -232,9 +232,9 @@ export const onCommand = async ({
     const receiptMsg = [
       `🏦 **Bank — Deposit**`,
       ``,
-      `💰 Deposited : **${amount.toLocaleString()}** coins`,
-      `🏦 Bank      : **${formatCoins(newBank)}** coins`,
-      `🪙 Wallet    : **${formatCoins(newWallet)}** coins`,
+      `💰 Deposited : **$${amount.toLocaleString()}**`,
+      `🏦 Bank      : **${formatCoins(newBank)}**`,
+      `🪙 Wallet    : **${formatCoins(newWallet)}**`,
     ].join('\n');
 
     // Store the formatted string directly in the session database so the Back button can reconstruct the exact view later
@@ -251,7 +251,7 @@ export const onCommand = async ({
   if (bankBalance < amount) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `❌ Not enough bank balance — you have **${formatCoins(bankBalance)}** but tried to withdraw **${amount.toLocaleString()}**.`,
+      message: `❌ Not enough bank balance — you have **${formatCoins(bankBalance)}** but tried to withdraw **$${amount.toLocaleString()}**.`,
     });
     return;
   }
@@ -267,11 +267,11 @@ export const onCommand = async ({
   const receiptMsg = [
     `🏦 **Bank — Withdrawal**`,
     ``,
-    `💸 Withdrew : **${amount.toLocaleString()}** coins`,
-    `🧾 Tax (5%) : **${tax.toLocaleString()}** coins`,
-    `✅ Received : **${received.toLocaleString()}** coins`,
-    `🏦 Bank     : **${formatCoins(newBank)}** coins`,
-    `🪙 Wallet   : **${formatCoins(newWallet)}** coins`,
+    `💸 Withdrew : **$${amount.toLocaleString()}**`,
+    `🧾 Tax (5%) : **$${tax.toLocaleString()}**`,
+    `✅ Received : **$${received.toLocaleString()}**`,
+    `🏦 Bank     : **${formatCoins(newBank)}**`,
+    `🪙 Wallet   : **${formatCoins(newWallet)}**`,
   ].join('\n');
 
   // Store the formatted string for the Back button

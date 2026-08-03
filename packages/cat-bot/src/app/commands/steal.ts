@@ -155,7 +155,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Current Balance:** ${formatCoins(coins)} coins`,
+        message: `💰 **Current Balance:** ${formatCoins(coins)}`,
         ...(hasNativeButtons(native.platform) ? { button: [ctx.backId] } : {}),
       });
     },
@@ -253,7 +253,7 @@ export const onCommand = async ({
         ``,
         `**Result:**`,
         `🎯 Target: **${victimName}**`,
-        `🪙 Balance: **0** coins`,
+        `🪙 Balance: **$0**`,
         ``,
         `Can't rob the already broke.`,
       ].join('\n'),
@@ -264,7 +264,7 @@ export const onCommand = async ({
   if (victimCoins !== Infinity && victimCoins < amount) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `❌ **${victimName}** only has **${formatCoins(victimCoins)}** coins — lower your steal amount.`,
+      message: `❌ **${victimName}** only has **${formatCoins(victimCoins)}** dollars — lower your steal amount.`,
     });
     return;
   }
@@ -277,8 +277,8 @@ export const onCommand = async ({
         `Hold on... you can't even afford to fail this heist.`,
         ``,
         `**Info:**`,
-        `💸 Penalty if caught: **${penalty.toLocaleString()}** coins`,
-        `🪙 Your balance: **${formatCoins(authorCoins)}** coins`,
+        `💸 Penalty if caught: **$${penalty.toLocaleString()}**`,
+        `🪙 Your balance: **${formatCoins(authorCoins)}**`,
         ``,
         `Get more coins before attempting this steal.`,
       ].join('\n'),
@@ -362,7 +362,7 @@ export const onCommand = async ({
       ``,
       `**Result:**`,
       `🎯 Target: **${victimName}**`,
-      `💰 Stolen: **${amount.toLocaleString()}** coins`,
+      `💰 Stolen: **$${amount.toLocaleString()}**`,
       `🎲 Chance: **${(chance * 100).toFixed(0)}%**`,
       ``,
       `**Balance:**`,
@@ -398,7 +398,7 @@ export const onCommand = async ({
       ``,
       `**Result:**`,
       `🎯 Target: **${victimName}**`,
-      `💸 Penalty: **${penalty.toLocaleString()}** coins`,
+      `💸 Penalty: **$${penalty.toLocaleString()}**`,
       `🧾 Fee (10%): **${fee.toLocaleString()}** → returned to target`,
       `🎲 Chance: **${(chance * 100).toFixed(0)}%**`,
       ``,

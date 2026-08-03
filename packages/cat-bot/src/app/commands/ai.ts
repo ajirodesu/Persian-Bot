@@ -5,11 +5,13 @@ import { runAgent } from '@/engine/agent/agent.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
+import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
+import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
+import { getPayment } from '@/engine/types/module-config.types.js';
 import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
@@ -30,6 +32,7 @@ export const meta: CommandMeta = {
   usage: '<prompt>',
   cooldown: 5,
   hasPrefix: true,
+  payment: 10,
   options: [
     {
       type: OptionType.string,
@@ -349,6 +352,53 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
         }
       } catch {
         // Fail-open — a DB outage must not silently prevent the AI from responding
+      }
+
+      // ── Payment gate ─────────────────────────────────────────────────────
+      // Mirrors enforcePayment in the command middleware chain, which onChat
+      // bypasses. Charges the user unless they are a system admin, bot admin,
+      // or premium (unlimited access) user.
+      if (senderID) {
+        try {
+          const payment = getPayment(meta as unknown as Record<string, unknown>);
+          if (typeof payment === 'number' && payment > 0) {
+            const sessionUserId = ctx.native.userId ?? '';
+            const sessionId = ctx.native.sessionId ?? '';
+            const platform = ctx.native.platform;
+
+            const isSysAdmin = await isSystemAdmin(senderID);
+            const isAdmin = sessionUserId && sessionId
+              ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
+              : false;
+            const isPremiumUser = sessionUserId && sessionId
+              ? await isBotPremium(sessionUserId, platform, sessionId, senderID)
+              : false;
+            const bypass = isSysAdmin || isAdmin || isPremiumUser;
+
+            if (!bypass) {
+              const currencies = createCurrenciesContext(
+                sessionUserId,
+                platform,
+                sessionId,
+              );
+              const balance = await currencies.getMoney(senderID);
+              if (balance < payment) {
+                const noticeKey = `ai_payment_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+                if (cooldownStore.check(noticeKey, Date.now()) === null) {
+                  await ctx.chat.replyMessage({
+                    style: MessageStyle.MARKDOWN,
+                    message: `💳 **Insufficient balance to use this command.**\nRequired: **$${payment.toLocaleString()}**\nYour balance: **$${balance.toLocaleString()}**`,
+                  });
+                  cooldownStore.record(noticeKey, Date.now(), 15_000);
+                }
+                return; // Abort — insufficient balance
+              }
+              await currencies.decreaseMoney({ user_id: senderID, money: payment });
+            }
+          }
+        } catch {
+          // Fail-open — a DB hiccup must never block the AI from responding.
+        }
       }
 
       // ── Per-user Groq key gate ─────────────────────────────────────────

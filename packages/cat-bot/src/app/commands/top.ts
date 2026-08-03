@@ -87,7 +87,7 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'John Lester',
-  description: 'View top users by coin balance or EXP level',
+  description: 'View top users by dollar balance or EXP level',
   category: 'Economy',
   usage: '<money|level> [limit]',
   cooldown: 5,
@@ -155,10 +155,10 @@ export const button = {
         // getUserName is LRU-cached — repeated calls here hit memory, not the DB
         const name = await user.getName(entry.botUserId);
         lines.push(
-          `${position(i)} **${name}** — ${formatCoins(entry.coins)} coins`,
+`${position(i)} **${name}** — ${formatCoins(entry.coins)}`,
         );
       }
-      if (ranked.length === 0) lines.push('No users have earned coins yet.');
+if (ranked.length === 0) lines.push('No users have earned dollars yet.');
 
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
@@ -277,7 +277,7 @@ export const onCommand = async ({
       const entry = ranked[i]!; // safe: i is always < ranked.length
       const name = await user.getName(entry.botUserId);
       lines.push(
-        `${position(i)} **${name}** — ${formatCoins(entry.coins)} coins`,
+        `${position(i)} **${name}** — ${formatCoins(entry.coins)}`,
       );
     }
     if (ranked.length === 0) lines.push('No users have earned coins yet.');

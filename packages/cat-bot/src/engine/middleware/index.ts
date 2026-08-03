@@ -35,6 +35,7 @@ import {
   enforcePermission,
   enforceNotBanned,
   enforceAdminOnly,
+  enforcePayment,
 } from './on-command.middleware.js';
 import { chatPassthrough, chatLogThread } from './on-chat.middleware.js';
 import { replyStateValidation } from './on-reply.middleware.js';
@@ -64,6 +65,10 @@ use.onCommand([
   // Parses key:value options from the message body (or reads Discord's pre-resolved
   // optionsRecord), validates required fields, and rejects early on missing options.
   validateCommandOptions,
+  // Charges `meta.payment` dollars from the caller's balance (or denies the command
+  // for insufficient funds). No-ops for 'free' / absent payment. Runs after option
+  // parsing so only valid invocations are charged, and before the handler executes.
+  enforcePayment,
 ]);
 
 use.onChat([

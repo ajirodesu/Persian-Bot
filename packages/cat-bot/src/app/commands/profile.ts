@@ -222,7 +222,7 @@ export const onCommand = async ({
     `▫️ **Status:** ${statusLabel}`,
     '',
     `**💼 Economy**`,
-    `▫️ **Balance:** 💰 ${formatCoins(coins)} Coins`,
+    `▫️ **Balance:** 💰 ${formatCoins(coins)} Dollars`,
     `▫️ **Streak:** 🔥 ${streak} ${streakUnit}`,
     `▫️ **Last Claim:** ⏱️ ${lastClaimLabel}`,
     '',

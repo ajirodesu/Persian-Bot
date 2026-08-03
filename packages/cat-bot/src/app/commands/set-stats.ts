@@ -69,19 +69,19 @@ const STAT_CONFIGS: StatConfig[] = [
   {
     name: 'setmoney',
     description:
-      'Set the coin balance of yourself, a @mentioned user, or a user by ID. Use "infinity" for ∞ coins.',
+      'Set the dollar balance of yourself, a @mentioned user, or a user by ID. Use "infinity" for ∞ dollars.',
     collectionName: 'money',
     fieldKey: 'coins',
     allowInfinity: true,
     formatAmount: formatCoins,
     messages: {
-      setSelf: (formatted) => `✅ Set your balance to **${formatted}** coins.`,
-      setMention: (name, formatted) => `✅ Set **${name}**'s balance to **${formatted}** coins.`,
-      setUid: (name, formatted) => `✅ Set balance of **${name}** to **${formatted}** coins.`,
-      delSelf: (removed) => ['✅ Removed all your coins.', `💸 Coins removed: **${removed}**`],
+      setSelf: (formatted) => `✅ Set your balance to **${formatted}** dollars.`,
+      setMention: (name, formatted) => `✅ Set **${name}**'s balance to **${formatted}** dollars.`,
+      setUid: (name, formatted) => `✅ Set balance of **${name}** to **${formatted}** dollars.`,
+      delSelf: (removed) => ['✅ Removed all your dollars.', `💸 Dollars removed: **${removed}**`],
       delMention: (name, removed) => [
-        `✅ Removed all coins of **${name}**.`,
-        `💸 Coins removed: **${removed}**`,
+        `✅ Removed all dollars of **${name}**.`,
+        `💸 Dollars removed: **${removed}**`,
       ],
     },
   },

@@ -270,8 +270,8 @@ async function saveRpsStats(
 function buildQuestionMessage(bet: number): string {
   const betLine =
     bet > 0
-      ? `💰 Wager: **${bet.toLocaleString()} coins**`
-      : `🆓 Free-play — win **${FREE_WIN_COINS} coins** (+ streak bonus)`;
+      ? `💰 Wager: **$${bet.toLocaleString()}**`
+      : `🆓 Free-play — win **$${FREE_WIN_COINS}** (+ streak bonus)`;
   return [`🤜 **Rock, Paper, Scissors!**`, ``, betLine, ``, `Choose your weapon:`].join('\n');
 }
 
@@ -443,21 +443,21 @@ async function resolveChoice(ctx: AppCtx, playerChoice: Choice): Promise<void> {
   if (senderID && outcome === 'win') {
     const baseLine =
       bet > 0
-        ? `💰 **+${(bet).toLocaleString()} coins** won!`
-        : `💰 **+${FREE_WIN_COINS} coins** (free-play reward)`;
+        ? `💰 **+$${(bet).toLocaleString()}** won!`
+        : `💰 **+$${FREE_WIN_COINS}** (free-play reward)`;
     const bonusLine =
       streakBonusCoins > 0
-        ? `\n${streakBonusLabel} **+${streakBonusCoins.toLocaleString()} coins**`
+        ? `\n${streakBonusLabel} **+$${streakBonusCoins.toLocaleString()}**`
         : '';
     const totalLine =
       streakBonusCoins > 0
-        ? `\n💎 Total earned: **+${netChange.toLocaleString()} coins**`
+        ? `\n💎 Total earned: **+$${netChange.toLocaleString()}**`
         : '';
-    coinBlock = `\n${baseLine}${bonusLine}${totalLine}\n📊 Balance: **${newBalance.toLocaleString()} coins**`;
+    coinBlock = `\n${baseLine}${bonusLine}${totalLine}\n📊 Balance: **$${newBalance.toLocaleString()}**`;
   } else if (senderID && outcome === 'loss' && bet > 0) {
-    coinBlock = `\n💸 **−${bet.toLocaleString()} coins** lost!\n📊 Balance: **${newBalance.toLocaleString()} coins**`;
+    coinBlock = `\n💸 **−$${bet.toLocaleString()}** lost!\n📊 Balance: **$${newBalance.toLocaleString()}**`;
   } else if (senderID && outcome === 'draw' && bet > 0) {
-    coinBlock = `\n↩️ Wager **refunded** — no coins exchanged.\n📊 Balance: **${newBalance.toLocaleString()} coins**`;
+    coinBlock = `\n↩️ Wager **refunded** — no dollars exchanged.\n📊 Balance: **$${newBalance.toLocaleString()}**`;
   }
 
   // Streak line (quiz stats-line pattern)
@@ -466,7 +466,7 @@ async function resolveChoice(ctx: AppCtx, playerChoice: Choice): Promise<void> {
         ``,
         `🔥 Streak: **${stats.streak}** | Best: **${stats.bestStreak}**`,
         `🏆 W: **${stats.wins}** / L: **${stats.losses}** / D: **${stats.draws}**`,
-        `💎 Lifetime earned: **${stats.totalEarned.toLocaleString()} coins** | Lost: **${stats.totalLost.toLocaleString()} coins**`,
+        `💎 Lifetime earned: **$${stats.totalEarned.toLocaleString()}** | Lost: **$${stats.totalLost.toLocaleString()}**`,
       ].join('\n')
     : '';
 
@@ -563,9 +563,9 @@ export const button = {
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: msgId,
         message: [
-          `💰 **Coin Balance**`,
+          `💰 **Dollar Balance**`,
           ``,
-          `📊 Current balance: **${coins.toLocaleString()} coins**`,
+          `📊 Current balance: **$${coins.toLocaleString()}**`,
         ].join('\n'),
         // Back button ID is stable — taken from stored context (slot/quiz pattern)
         button: [btnCtx.backId],
@@ -638,7 +638,7 @@ export const onCommand = async ({
         message: [
           `❌ Invalid bet amount — use a number, **all**, **half**, or a shorthand like **10k**.`,
           ``,
-          `📊 Your balance: **${balance.toLocaleString()} coins**`,
+          `📊 Your balance: **$${balance.toLocaleString()}**`,
         ].join('\n'),
       });
       return;
@@ -648,9 +648,9 @@ export const onCommand = async ({
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
         message: [
-          `⚠️ You don't have enough coins.`,
+          `⚠️ You don't have enough dollars.`,
           ``,
-          `You tried to bet **${parsed.toLocaleString()} coins** but only have **${balance.toLocaleString()} coins**.`,
+          `You tried to bet **$${parsed.toLocaleString()}** but only have **$${balance.toLocaleString()}**.`,
         ].join('\n'),
       });
       return;
@@ -663,7 +663,7 @@ export const onCommand = async ({
         message: [
           `⚠️ You cannot bet more than **${Math.round(MAX_BET_PERCENTAGE * 100)}%** of your balance.`,
           ``,
-          `Maximum bet: **${maxBet.toLocaleString()} coins** (your balance: **${balance.toLocaleString()} coins**)`,
+          `Maximum bet: **$${maxBet.toLocaleString()}** (your balance: **$${balance.toLocaleString()}**)`,
         ].join('\n'),
       });
       return;

@@ -24,7 +24,7 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Toss a coin and bet some of your coins on the outcome.',
+  description: 'Toss a coin and bet some of your dollars on the outcome.',
   category: 'Economy',
   usage: '<bet> <heads | tails>',
   cooldown: 10,
@@ -88,7 +88,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Current Balance:** ${coins.toLocaleString()} coins`,
+        message: `💰 **Current Balance:** $${coins.toLocaleString()}`,
         ...(hasNativeButtons(native.platform) ? { button: [ctx.backId] } : {}),
       });
     },
@@ -161,7 +161,7 @@ export const onCommand = async ({
   if (balance < bet) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `❌ Not enough coins. You have **${balance.toLocaleString()}** but tried to bet **${bet.toLocaleString()}**.`,
+      message: `❌ Not enough balance. You have **$${balance.toLocaleString()}** but tried to bet **$${bet.toLocaleString()}**.`,
     });
     return;
   }
@@ -183,13 +183,13 @@ export const onCommand = async ({
         ``,
         `**Result:**`,
         `${coinEmoji} Side Won: **${cap(result)}**`,
-        `💰 Your Bet: **${bet.toLocaleString()}** coins`,
+        `💰 Your Bet: **$${bet.toLocaleString()}**`,
         `🎉 Outcome: **You won!**`,
         ``,
         `**Balance:**`,
-        `🪙 ${balance.toLocaleString()} → ${r2(newBalance).toLocaleString()} (**+${profit.toLocaleString()}**)`,
+        `🪙 $${balance.toLocaleString()} → $${r2(newBalance).toLocaleString()} (**+$${profit.toLocaleString()}**)`,
         ``,
-        `+${profit.toLocaleString()} coins richer. keep it up! 🤑`,
+        `+$${profit.toLocaleString()} richer. keep it up! 🤑`,
       ].join('\n')
     : [
         `🪙 **Coin Toss**`,
@@ -197,13 +197,13 @@ export const onCommand = async ({
         ``,
         `**Result:**`,
         `${coinEmoji} Side Won: **${cap(result)}**`,
-        `💰 Your Bet: **${bet.toLocaleString()}** coins`,
+        `💰 Your Bet: **$${bet.toLocaleString()}**`,
         `💸 Outcome: **You lost!**`,
         ``,
         `**Balance:**`,
-        `🪙 ${balance.toLocaleString()} → ${r2(newBalance).toLocaleString()} (**-${bet.toLocaleString()}**)`,
+        `🪙 $${balance.toLocaleString()} → $${r2(newBalance).toLocaleString()} (**-$${bet.toLocaleString()}**)`,
         ``,
-        `${bet.toLocaleString()} coins gone. better luck next time! 😬`,
+        `${bet.toLocaleString()} dollars gone. better luck next time! 😬`,
       ].join('\n');
 
   const balanceId = btn.generateID({ id: BUTTON_ID.balance, public: false });

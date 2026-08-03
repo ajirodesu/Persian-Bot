@@ -32,6 +32,9 @@ import {
   formatGroupBanMessage,
 } from '@/engine/lib/ban-message.lib.js';
 import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
+import { getPayment } from '@/engine/types/module-config.types.js';
+import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
+import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 
 // ── Cooldown ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +73,67 @@ export const enforceCooldown: MiddlewareFn<OnCommandCtx> = async function (
   }
 
   cooldownStore.record(key, now, cooldownSec * 1000);
+  await next();
+};
+
+// ── Payment Enforcement ───────────────────────────────────────────────────────
+
+/**
+ * Charges `meta.payment` dollars from the caller's balance before the command
+ * executes. When `meta.payment` is absent or configured as 'free', the command
+ * runs with no charge (the default). A positive number debits the caller's
+ * balance and rejects the command with an insufficient-funds notice if they
+ * cannot afford it.
+ */
+export const enforcePayment: MiddlewareFn<OnCommandCtx> = async function (
+  ctx,
+  next,
+): Promise<void> {
+  if (!ctx.mod) { await next(); return; }
+
+  const cfg = ctx.mod['meta'] as Record<string, unknown> | undefined;
+  const payment = getPayment(cfg);
+
+  if (payment === 'free' || typeof payment !== 'number' || payment <= 0) {
+    await next();
+    return;
+  }
+
+  const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
+  if (!senderID) { await next(); return; }
+
+  // System admins, bot admins, and premium users get unlimited (bypass) access to
+  // paid commands — they are never charged and never blocked for insufficient balance.
+  const sessionUserId = ctx.native.userId ?? '';
+  const sessionId = ctx.native.sessionId ?? '';
+  const platform = ctx.native.platform;
+  const isSystemAdmin = await cachedIsSystemAdmin(ctx, senderID);
+  if (isSystemAdmin) { await next(); return; }
+  if (sessionUserId && sessionId) {
+    const isBotAdmin = await cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID);
+    if (isBotAdmin) { await next(); return; }
+  }
+  if (sessionUserId && sessionId) {
+    const isPremium = await cachedIsBotPremium(ctx, sessionUserId, platform, sessionId, senderID);
+    if (isPremium) { await next(); return; }
+  }
+
+  const currencies = createCurrenciesContext(
+    ctx.native.userId ?? '',
+    ctx.native.platform,
+    ctx.native.sessionId ?? '',
+  );
+
+  const balance = await currencies.getMoney(senderID);
+  if (balance < payment) {
+    await ctx.chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: `💳 **Insufficient balance to use this command.**\nRequired: **$${payment.toLocaleString()}**\nYour balance: **$${balance.toLocaleString()}**`,
+    });
+    return; // blocked — do not call next()
+  }
+
+  await currencies.decreaseMoney({ user_id: senderID, money: payment });
   await next();
 };
 

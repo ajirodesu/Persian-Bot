@@ -89,7 +89,7 @@ export const button = {
         await chat.editMessage({
           style: MessageStyle.MARKDOWN,
           message_id_to_edit: event['messageID'] as string,
-          message: '💰 **Your balance:** 0 coins',
+          message: '💰 **Your balance:** $0',
           ...(hasNativeButtons(native.platform) ? { button: [backId] } : {}),
         });
         return;
@@ -104,7 +104,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Your balance:** ${formatCoins(coins)} coins`,
+        message: `💰 **Your balance:** ${formatCoins(coins)}`,
         ...(hasNativeButtons(native.platform) ? { button: [backId] } : {}),
       });
     },

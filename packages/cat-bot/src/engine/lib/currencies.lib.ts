@@ -25,12 +25,12 @@ import { createCollectionManager } from '@/engine/lib/db-collection.lib.js';
 export const INFINITY_SENTINEL = 'infinity' as const;
 
 /**
- * Formats a coin amount for display.
+ * Formats a dollar amount for display.
  * Returns "∞" for Infinity, otherwise delegates to toLocaleString()
  * so thousand separators are applied on every platform.
  */
 export function formatCoins(amount: number): string {
-  return amount === Infinity ? '∞' : amount.toLocaleString();
+  return amount === Infinity ? '∞' : `$${amount.toLocaleString()}`;
 }
 
 /** Economy interface exposed on AppCtx.currencies */

@@ -27,7 +27,7 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Cast your line and earn coins based on what you catch.',
+  description: 'Cast your line and earn dollars based on what you catch.',
   category: 'Economy',
   usage: '',
   cooldown: 5,
@@ -129,7 +129,7 @@ const CATCH_TABLE: CatchEntry[] = [
     emoji: '🐠',
     rarity: 'common',
     value: [25, 65],
-    flavour: 'A reliable catch. Not glamorous, but coins are coins.',
+    flavour: 'A reliable catch. Not glamorous, but dollars are dollars.',
   },
   {
     name: 'Catfish',
@@ -150,7 +150,7 @@ const CATCH_TABLE: CatchEntry[] = [
     emoji: '🐠',
     rarity: 'common',
     value: [28, 68],
-    flavour: 'Oily, flavourful, and worth a few coins at the market.',
+    flavour: 'Oily, flavourful, and worth a few dollars at the market.',
   },
 
   // ── Uncommon ──────────────────────────────────────────────────────────────
@@ -334,7 +334,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Your Balance:** ${coins.toLocaleString()} coins`,
+        message: `💰 **Your Balance:** $${coins.toLocaleString()}`,
         ...(hasNativeButtons(native.platform) ? { button: [backId] } : {}),
       });
     },
@@ -396,7 +396,7 @@ export const button = {
           ``,
           `🪣 Total Casts:   **${castCount.toLocaleString()}**`,
           `🐟 Total Catches: **${totalCaught.toLocaleString()}**`,
-          `💰 Lifetime Earned: **${totalEarned.toLocaleString()} coins**`,
+          `💰 Lifetime Earned: **$${totalEarned.toLocaleString()}**`,
           ``,
           castLine,
         ].join('\n'),
@@ -472,17 +472,17 @@ export const onCommand = async ({
         user_id: senderID,
         money: Math.abs(value),
       });
-      coinLine = `💸 Disposal fee: **${value.toLocaleString()} coins**`;
+      coinLine = `💸 Disposal fee: **$${Math.abs(value).toLocaleString()}**`;
     } else {
       if (value > 0)
         await currencies.increaseMoney({ user_id: senderID, money: value });
-      coinLine = `💰 Scrap value: **+${value.toLocaleString()} coins**`;
+      coinLine = `💰 Scrap value: **+$${value.toLocaleString()}**`;
     }
   } else {
     await currencies.increaseMoney({ user_id: senderID, money: value });
     await fishData.set('totalCaught', prevCaught + 1);
     await fishData.set('totalEarned', prevEarned + value);
-    coinLine = `💰 Sold for: **+${value.toLocaleString()} coins**`;
+    coinLine = `💰 Sold for: **+$${value.toLocaleString()}**`;
   }
 
   // ── Build response ────────────────────────────────────────────────────────
@@ -491,7 +491,7 @@ export const onCommand = async ({
 
   const statsLine = isTrash
     ? `📊 Total Casts: **${(prevCasts + 1).toLocaleString()}**`
-    : `📊 Catches: **${(prevCaught + 1).toLocaleString()}** | Lifetime: **${(prevEarned + value).toLocaleString()} coins**`;
+    : `📊 Catches: **${(prevCaught + 1).toLocaleString()}** | Lifetime: **$${(prevEarned + value).toLocaleString()}**`;
 
   const balanceButtonId = btn.generateID({
     id: BUTTON_ID.balance,

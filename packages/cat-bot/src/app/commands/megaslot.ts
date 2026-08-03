@@ -176,7 +176,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Current Balance:** ${coins.toLocaleString()} coins`,
+        message: `💰 **Current Balance:** $${coins.toLocaleString()}`,
         ...(hasNativeButtons(native.platform) ? { button: [ctx.backId] } : {}),
       });
     },
@@ -240,7 +240,7 @@ export const onCommand = async ({
   if (balance < bet) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `❌ Not enough coins. You have **${balance.toLocaleString()}** but tried to bet **${bet.toLocaleString()}**.`,
+      message: `❌ Not enough balance. You have **$${balance.toLocaleString()}** but tried to bet **$${bet.toLocaleString()}**.`,
     });
     return;
   }
@@ -286,15 +286,15 @@ export const onCommand = async ({
     ``,
     `**Result:**`,
     `🎯 Outcome: **${getOutcomeLabel(matches)}**`,
-    `💰 Bet: **${bet.toLocaleString()}** coins`,
+    `💰 Bet: **$${bet.toLocaleString()}**`,
     `⚖️ Multiplier: **${multiplierDisplay}**`,
     ``,
     `**Balance:**`,
-    `🪙 ${balance.toLocaleString()} → ${Math.round(balAfter).toLocaleString()} (**${deltaStr}**)`,
+    `🪙 $${balance.toLocaleString()} → $${Math.round(balAfter).toLocaleString()} (**${deltaStr}**)`,
     ``,
     `**Your Stats:**`,
     `🎰 Total Spins: **${newStats.totalSpins.toLocaleString()}**`,
-    `💰 Total Earned: **${newStats.totalEarned.toLocaleString()}** coins`,
+    `💰 Total Earned: **$${newStats.totalEarned.toLocaleString()}**`,
     `🎉 Jackpots: **${newStats.jackpots.toLocaleString()}**`,
     ``,
     getFooter(matches),

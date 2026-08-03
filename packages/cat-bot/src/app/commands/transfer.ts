@@ -31,7 +31,7 @@ export const meta: CommandMeta = {
   role: Role.ANYONE,
   author: 'AjiroDesu',
   description:
-    'Transfer coins to another user via reply, @mention, or user ID.',
+    'Transfer dollars to another user via reply, @mention, or user ID.',
   category: 'Economy',
   usage: '[@mention | uid] <amount>',
   guide: [
@@ -45,7 +45,7 @@ export const meta: CommandMeta = {
     {
       type: OptionType.user,
       name: 'user',
-      description: 'Target user to send coins to',
+      description: 'Target user to send dollars to',
       required: false,
     },
   ],
@@ -117,7 +117,7 @@ export const onCommand = async ({
   if (senderBalance !== Infinity && senderBalance < coinAmount) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `❌ Insufficient coins. Your balance: **${formatCoins(senderBalance)}** coins.`,
+      message: `❌ Insufficient balance. Your balance: **${formatCoins(senderBalance)}**.`,
     });
     return;
   }
@@ -126,7 +126,7 @@ export const onCommand = async ({
   if (targetID === senderID) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: '❌ You cannot transfer coins to yourself.',
+      message: '❌ You cannot transfer dollars to yourself.',
     });
     return;
   }
@@ -143,8 +143,8 @@ export const onCommand = async ({
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: [
-        `✅ Successfully transferred **${coinAmount.toLocaleString()} coins** to **${targetName}**.`,
-        `💰 Your remaining balance: **${formatCoins(newBalance)} coins**`,
+        `✅ Successfully transferred **$${coinAmount.toLocaleString()}** to **${targetName}**.`,
+        `💰 Your remaining balance: **${formatCoins(newBalance)}**`,
       ].join('\n'),
     });
   } catch (error) {

@@ -120,7 +120,7 @@ export const button = {
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
-        message: `💰 **Current Balance:** ${coins.toLocaleString()} coins`,
+        message: `💰 **Current Balance:** $${coins.toLocaleString()}`,
         ...(hasNativeButtons(native.platform) ? { button: [ctx.backId] } : {}),
       });
     },
@@ -225,8 +225,8 @@ export const onCommand = async ({
         `Your pockets aren't deep enough for this bet… 😬`,
         ``,
         `**Error:** Insufficient balance`,
-        `💸 Total Bet    : **${totalBet.toLocaleString()}** coins`,
-        `🪙 Your Balance : **${balance.toLocaleString()}** coins`,
+        `💸 Total Bet    : **$${totalBet.toLocaleString()}**`,
+        `🪙 Your Balance : **$${balance.toLocaleString()}**`,
         ``,
         `Top up and try again… the wheel waits for no one. 🎡`,
       ].join('\n'),
@@ -270,7 +270,7 @@ export const onCommand = async ({
 
   const closingLine = didWin
     ? `${wonEmoji} ${cap(wonColor)} hit… luck actually showed up this time! ✨`
-    : `${totalBet.toLocaleString()} coins gone in a blink... the wheel showed no mercy. 😬`;
+    : `${totalBet.toLocaleString()} dollars gone in a blink... the wheel showed no mercy. 😬`;
 
   const resultMessage = [
     `🎡 **Color Game**`,
@@ -278,7 +278,7 @@ export const onCommand = async ({
     ``,
     `**Result:**`,
     `🎯 Winning Color: ${wonEmoji} **${cap(wonColor)}**`,
-    `💰 Total Bet: **${totalBet.toLocaleString()}** coins`,
+    `💰 Total Bet: **$${totalBet.toLocaleString()}**`,
     `🧾 Outcome: **${didWin ? 'You won!' : 'You lost!'}**`,
     ``,
     `**Bets Breakdown:**`,
