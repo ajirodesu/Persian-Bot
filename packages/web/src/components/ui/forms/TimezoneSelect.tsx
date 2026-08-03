@@ -29,6 +29,10 @@ const LIST_MAX_HEIGHT = 288
 // Extra rows rendered above/below the visible window so fast scrolling/arrow
 // keys never reveal an unrendered gap for a frame.
 const OVERSCAN = 8
+// Matches Tailwind's `sm` breakpoint (min-width: 640px). Below this we render
+// the menu as a fixed, viewport-anchored sheet instead of a button-anchored
+// popover — see `isMobile` below.
+const MOBILE_MEDIA_QUERY = '(max-width: 639px)'
 
 /**
  * Searchable timezone picker.
@@ -67,6 +71,26 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
     width: number
     openAbove: boolean
   } | null>(null)
+  // Mobile (<640px) switches to a fixed, viewport-anchored sheet instead of a
+  // button-anchored popover. Why: on phones the on-screen keyboard resizes the
+  // viewport and the browser auto-scrolls to keep the focused input visible, so
+  // the absolute popover jumps/re-anchors on every keystroke. A fixed sheet
+  // ignores both, so it stays put while typing. The VisualViewport is tracked
+  // so the sheet also lifts above the keyboard instead of hiding under it.
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia(MOBILE_MEDIA_QUERY).matches
+      : false,
+  )
+  const [visualViewport, setVisualViewport] = useState<{
+    height: number
+    offsetTop: number
+  } | null>(() => {
+    if (typeof window === 'undefined') return null
+    if (!window.matchMedia(MOBILE_MEDIA_QUERY).matches) return null
+    const vv = window.visualViewport
+    return vv ? { height: vv.height, offsetTop: vv.offsetTop } : null
+  })
 
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -105,7 +129,13 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
   // value of at the point the user interacts.
 
   const totalHeight = filtered.length * ROW_HEIGHT
-  const listHeight = Math.min(LIST_MAX_HEIGHT, totalHeight) || ROW_HEIGHT
+  // On mobile the list is bounded by the sheet's usable height instead of the
+  // fixed desktop cap, so it stays fully reachable (and never hides under the
+  // keyboard). The `- 120` reserves room for the search bar, sheet margins,
+  // and some breathing space.
+  const listHeight = isMobile
+    ? Math.max(ROW_HEIGHT * 4, Math.min(LIST_MAX_HEIGHT, (visualViewport?.height ?? 0) - 120))
+    : Math.min(LIST_MAX_HEIGHT, totalHeight) || ROW_HEIGHT
   const visibleRowCount = Math.ceil(LIST_MAX_HEIGHT / ROW_HEIGHT) + OVERSCAN * 2
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN)
   const endIndex = Math.min(filtered.length, startIndex + visibleRowCount)
@@ -127,10 +157,43 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
     }
   }, [])
 
-  // Position the menu relative to the trigger button, flipping above it when
-  // there isn't room below — identical approach to Select.tsx.
+  // Track the viewport so the menu can switch between the anchored popover
+  // (desktop) and the fixed sheet (mobile) at runtime — e.g. when the device is
+  // rotated or a desktop window is resized mid-interaction. State is only
+  // updated from event callbacks (media-query / VisualViewport changes), never
+  // synchronously in the effect body. `window.innerHeight` does NOT shrink when
+  // the on-screen keyboard opens (and `100vh` doesn't either), which is why the
+  // VisualViewport is needed to size the sheet to the area actually visible.
   useEffect(() => {
-    if (!isOpen || !buttonRef.current) return
+    const mq = window.matchMedia(MOBILE_MEDIA_QUERY)
+    const vv = window.visualViewport
+
+    const sync = () => {
+      setIsMobile(mq.matches)
+      setVisualViewport(
+        vv ? { height: vv.height, offsetTop: vv.offsetTop } : null,
+      )
+    }
+
+    mq.addEventListener('change', sync)
+    if (vv) {
+      vv.addEventListener('resize', sync)
+      vv.addEventListener('scroll', sync)
+    }
+    return () => {
+      mq.removeEventListener('change', sync)
+      vv?.removeEventListener('resize', sync)
+      vv?.removeEventListener('scroll', sync)
+    }
+  }, [])
+
+  // Position the menu relative to the trigger button, flipping above it when
+  // there isn't room below — identical approach to Select.tsx. Skipped on
+  // mobile, where the menu is a fixed viewport-anchored sheet instead: running
+  // this against the button's document coordinates would make the sheet jump
+  // every time the keyboard resizes the viewport or the page auto-scrolls.
+  useEffect(() => {
+    if (!isOpen || isMobile || !buttonRef.current) return
 
     const updatePosition = () => {
       if (!buttonRef.current) return
@@ -153,7 +216,7 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
     updatePosition()
     window.addEventListener('resize', updatePosition)
     return () => window.removeEventListener('resize', updatePosition)
-  }, [isOpen])
+  }, [isOpen, isMobile])
 
   // Focus the search field the moment the menu opens.
   useEffect(() => {
@@ -172,9 +235,12 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
     setQuery('')
   }
 
-  // Close on outside click / scroll, same as Select.tsx.
+  // Close on outside click / scroll, same as Select.tsx. On mobile, scrolling
+  // the page doesn't close the fixed sheet (the browser itself scrolls when the
+  // keyboard opens/auto-focuses, which would otherwise yank the menu shut mid-
+  // search); the touch-outside handler below covers dismissal there instead.
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || isMobile) return
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node
@@ -200,7 +266,32 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
       document.removeEventListener('mousedown', handleClickOutside)
       window.removeEventListener('scroll', handleScroll, true)
     }
-  }, [isOpen])
+  }, [isOpen, isMobile])
+
+  // On mobile, `mousedown` alone is unreliable for dismissing the sheet (iOS
+  // synthesises it lazily / after the tap), so also listen for touch start on
+  // any element outside the menu and trigger button.
+  useEffect(() => {
+    if (!isOpen || !isMobile) return
+
+    const handleTouchOutside = (event: TouchEvent) => {
+      const target = event.target as Node
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
+        closeMenu()
+      }
+    }
+
+    document.addEventListener('touchstart', handleTouchOutside, {
+      passive: true,
+    })
+    return () =>
+      document.removeEventListener('touchstart', handleTouchOutside)
+  }, [isOpen, isMobile])
 
   const handleSelect = (tz: string) => {
     onChange(tz)
@@ -211,18 +302,41 @@ const TimezoneSelect: React.FC<TimezoneSelectProps> = ({
   const generatedId = React.useId()
   const menuId = `timezone-select-menu-${generatedId}`
 
-  const menu = isOpen && menuRect && (
+  // Mobile renders a fixed, viewport-anchored sheet that fills the space the
+  // keyboard leaves free. Because it's positioned against the VisualViewport
+  // (not the trigger's document coordinates) and never re-computed on resize,
+  // it stays perfectly still while the user types. Desktop keeps the existing
+  // button-anchored popover.
+  const menuStyle: React.CSSProperties | null = isMobile
+    ? {
+        position: 'fixed',
+        left: 12,
+        right: 12,
+        top: visualViewport ? visualViewport.offsetTop + 12 : undefined,
+        bottom: visualViewport ? undefined : 12,
+        maxHeight: visualViewport
+          ? visualViewport.height - 24
+          : 'min(60dvh, calc(100dvh - 1.5rem))',
+        zIndex: 'var(--z-dropdown)',
+      }
+    : menuRect
+      ? {
+          position: 'absolute',
+          top: `${menuRect.top}px`,
+          left: `${menuRect.left}px`,
+          minWidth: `${menuRect.width}px`,
+          transform: menuRect.openAbove
+            ? 'translateY(calc(-100% - 8px))'
+            : undefined,
+          zIndex: 'var(--z-dropdown)',
+        }
+      : null
+
+  const menu = isOpen && menuStyle && (
     <div
       ref={menuRef}
       id={menuId}
-      style={{
-        position: 'absolute',
-        top: `${menuRect.top}px`,
-        left: `${menuRect.left}px`,
-        minWidth: `${menuRect.width}px`,
-        transform: menuRect.openAbove ? 'translateY(calc(-100% - 8px))' : undefined,
-        zIndex: 'var(--z-dropdown)',
-      }}
+      style={menuStyle}
       className="flex flex-col overflow-hidden rounded-[var(--radius-input)] border border-outline-variant bg-surface/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-2"
     >
       <div className="flex items-center gap-2 border-b border-outline-variant px-3 py-2">
