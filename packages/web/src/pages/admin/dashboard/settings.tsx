@@ -10,6 +10,8 @@ import Skeleton from '@/components/ui/feedback/Skeleton'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
 import ThemeToggle from '@/components/ui/ThemeToggle'
+import TimezoneSelect from '@/components/ui/forms/TimezoneSelect'
+import { useTimezone } from '@/contexts/TimezoneContext'
 import { authAdminClient } from '@/lib/better-auth-admin-client.lib'
 import { Plus, Trash2, TriangleAlert } from 'lucide-react'
 import Dialog from '@/components/ui/overlay/Dialog'
@@ -30,6 +32,41 @@ export default function AdminSettingsPage() {
 
   const { data: session, isPending: sessionLoading } =
     authAdminClient.useSession()
+
+  // ── Timezone state ──────────────────────────────────────────────────────────
+  const {
+    timezone: activeTimezone,
+    savedTimezone,
+    browserTimezone,
+    isLoading: timezoneLoading,
+    setTimezone: persistTimezone,
+  } = useTimezone()
+  const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null)
+  const [timezoneSaving, setTimezoneSaving] = useState(false)
+  const [timezoneError, setTimezoneError] = useState<string | null>(null)
+  const [timezoneSuccess, setTimezoneSuccess] = useState(false)
+
+  const timezoneValue = timezoneDraft ?? activeTimezone
+  const timezoneDirty = timezoneDraft !== null && timezoneDraft !== savedTimezone
+
+  const handleSaveTimezone = async (): Promise<void> => {
+    if (!timezoneDraft) return
+    setTimezoneSaving(true)
+    setTimezoneError(null)
+    setTimezoneSuccess(false)
+    try {
+      await persistTimezone(timezoneDraft)
+      setTimezoneDraft(null)
+      setTimezoneSuccess(true)
+      setTimeout(() => setTimezoneSuccess(false), 3000)
+    } catch (err) {
+      setTimezoneError(
+        err instanceof Error ? err.message : 'Failed to save timezone',
+      )
+    } finally {
+      setTimezoneSaving(false)
+    }
+  }
 
   // ── Profile edit state ─────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState('')
@@ -257,6 +294,65 @@ export default function AdminSettingsPage() {
           </div>
         </Card.Header>
         <ThemeToggle />
+      </Card.Root>
+
+      {/* ── Timezone ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div>
+            <Card.Title as="h2">Timezone</Card.Title>
+            <Card.Description>
+              Used across the admin portal for timestamps and logs.
+            </Card.Description>
+          </div>
+        </Card.Header>
+
+        {timezoneLoading ? (
+          <Skeleton className="h-11 w-full max-w-sm rounded-[var(--radius-input)]" />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <Field.Root className="max-w-sm">
+              <TimezoneSelect
+                value={timezoneValue}
+                onChange={(tz) => {
+                  setTimezoneDraft(tz)
+                  setTimezoneError(null)
+                }}
+              />
+            </Field.Root>
+
+            {!savedTimezone && !timezoneDirty && (
+              <p className="text-body-sm text-on-surface-variant">
+                No timezone saved yet — currently showing your browser's
+                timezone ({browserTimezone}). Pick one below and save it.
+              </p>
+            )}
+
+            {timezoneError && (
+              <Alert variant="tonal" color="error" title={timezoneError} size="sm" />
+            )}
+            {timezoneSuccess && (
+              <Alert
+                variant="tonal"
+                color="success"
+                title="Timezone updated successfully."
+                size="sm"
+              />
+            )}
+
+            <div>
+              <Button
+                variant="filled"
+                color="primary"
+                onClick={handleSaveTimezone}
+                disabled={!timezoneDirty || timezoneSaving}
+                isLoading={timezoneSaving}
+              >
+                Save Timezone
+              </Button>
+            </div>
+          </div>
+        )}
       </Card.Root>
 
       {/* ── Profile ── */}

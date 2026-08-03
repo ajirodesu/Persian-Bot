@@ -82,6 +82,7 @@ export async function deleteUser(userId: string): Promise<void> {
   await db.collection('botThreadSessions').deleteMany({ userId });
   await db.collection('botDiscordServerSessions').deleteMany({ userId });
   await db.collection('botUserGroqKeys').deleteMany({ userId });
+  await db.collection('botUserTimezones').deleteMany({ userId });
 
   // Collections that would cascade automatically in a relational adapter —
   // deleted explicitly here since MongoDB has no FK enforcement.
@@ -137,6 +138,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
   await db.collection('botThreadSessions').deleteMany({});
   await db.collection('botDiscordServerSessions').deleteMany(notAdmin);
   await db.collection('botUserGroqKeys').deleteMany(notAdmin);
+  await db.collection('botUserTimezones').deleteMany(notAdmin);
 
   // ── Step 2: collections that would cascade automatically in a relational adapter ──
   await db.collection('session').deleteMany(notAdmin);

@@ -223,3 +223,13 @@ export const getUserGroqKey = m.getUserGroqKey;
 export const upsertUserGroqKey = m.upsertUserGroqKey;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const deleteUserGroqKey = m.deleteUserGroqKey;
+
+// --- USER TIMEZONE ---
+// Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
+// Scoped to a single user's own account, same ownership model as the Groq key above.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getUserTimezone = m.getUserTimezone;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const upsertUserTimezone = m.upsertUserTimezone;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteUserTimezone = m.deleteUserTimezone;

@@ -390,6 +390,14 @@ export async function initDb(): Promise<void> {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
+    CREATE TABLE IF NOT EXISTS bot_user_timezone (
+      user_id    TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+      timezone   TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 

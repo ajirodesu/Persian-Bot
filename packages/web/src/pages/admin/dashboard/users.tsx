@@ -15,6 +15,8 @@ import { useAdminBots } from '@/features/admin/hooks/useAdminBots'
 import { useAdminUsers } from '@/features/admin/hooks/useAdminUsers'
 import { useDebounce } from '@/hooks/useDebounce'
 import adminService from '@/features/admin/services/admin.service'
+import { useTimezone } from '@/contexts/TimezoneContext'
+import { formatDate } from '@/utils/datetime.util'
 
 interface ManagedUser {
   id: string
@@ -33,6 +35,7 @@ interface ManagedUser {
  * page doesn't unnecessarily pull the entire user payload when not needed.
  */
 export default function AdminUsersPage() {
+  const { timezone } = useTimezone()
   const [page, setPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearch = useDebounce(searchQuery, 300)
@@ -381,7 +384,7 @@ export default function AdminUsersPage() {
                     })()}
                   </Table.Cell>
                   <Table.Cell className="text-on-surface-variant">
-                    {new Date(u.createdAt).toLocaleDateString()}
+                    {formatDate(u.createdAt, timezone)}
                   </Table.Cell>
                   <Table.Cell align="right">
                     <div className="flex items-center justify-end gap-2">

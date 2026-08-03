@@ -54,6 +54,37 @@ export async function requireAdmin(
 }
 
 /**
+ * Verifies EITHER auth session cookie — the regular user portal's
+ * better-auth.session_token OR the admin portal's ba-admin.session_token —
+ * and returns the userId on success.
+ *
+ * WHY: a handful of endpoints (e.g. the timezone setting) are shared verbatim
+ * between the regular dashboard (dashboard/settings.tsx, authUserClient) and
+ * the admin portal (admin/dashboard/settings.tsx, authAdminClient). Both call
+ * the same apiClient against the same origin, so the request may carry either
+ * cookie depending on which portal the person is signed into. Trying `auth`
+ * first keeps the common case (regular users) to a single lookup; `adminAuth`
+ * is only consulted when the regular cookie is absent/invalid.
+ *
+ * Returns the authenticated userId string on success, or writes a 401 response
+ * and returns null so the caller can do `if (!userId) return;` cleanly.
+ */
+export async function requireAnySession(
+  req: Request,
+  res: Response,
+): Promise<string | null> {
+  const headers = toHeaders(req);
+  const sessionData = await auth.api.getSession({ headers });
+  if (sessionData) return sessionData.user.id;
+
+  const adminSessionData = await adminAuth.api.getSession({ headers });
+  if (adminSessionData) return adminSessionData.user.id;
+
+  res.status(401).json({ error: 'Unauthorized' });
+  return null;
+}
+
+/**
  * Non-throwing admin role probe via the REGULAR user auth session.
  *
  * WHY `auth` and NOT `adminAuth`:

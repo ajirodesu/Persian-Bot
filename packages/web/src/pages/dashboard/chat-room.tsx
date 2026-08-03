@@ -59,6 +59,7 @@ import { cn } from '@/utils/cn.util'
 import Logo from '@/components/ui/Logo'
 import IconButton from '@/components/ui/buttons/IconButton'
 import { useUserAuth } from '@/contexts/UserAuthContext'
+import { useTimezone } from '@/contexts/TimezoneContext'
 import { useDashboardSidebar } from '@/contexts/DashboardSidebarContext'
 import {
   H_HEIGHT,
@@ -176,12 +177,17 @@ function deriveUsername(fullName: string): string {
   return handle || 'user'
 }
 
-function formatTime(ts: number): string {
-  const d = new Date(ts)
-  const h = d.getHours()
-  const m = d.getMinutes().toString().padStart(2, '0')
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m} ${ampm}`
+function formatTime(ts: number, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(new Date(ts))
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '12'
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00'
+  const dayPeriod = (parts.find((p) => p.type === 'dayPeriod')?.value ?? 'AM').toUpperCase()
+  return `${hour}:${minute} ${dayPeriod}`
 }
 
 /** Formats a duration in seconds as "m:ss" for the audio player transport. */
@@ -192,14 +198,30 @@ function formatAudioTime(seconds: number): string {
   return `${m}:${s}`
 }
 
-function formatDateLabel(ts: number): string {
-  const d = new Date(ts)
-  const today = new Date()
-  const yesterday = new Date(today)
-  yesterday.setDate(today.getDate() - 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+/** Returns a timezone-scoped "YYYY-MM-DD" key so day-boundary comparisons
+ * (Today/Yesterday, date dividers) reflect the account's selected timezone
+ * rather than the browser's local one. */
+function dayKeyInTimezone(ts: number, timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(ts))
+}
+
+function formatDateLabel(ts: number, timezone: string): string {
+  const todayKey = dayKeyInTimezone(Date.now(), timezone)
+  const yesterdayKey = dayKeyInTimezone(Date.now() - 24 * 60 * 60 * 1000, timezone)
+  const msgKey = dayKeyInTimezone(ts, timezone)
+  if (msgKey === todayKey) return 'Today'
+  if (msgKey === yesterdayKey) return 'Yesterday'
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(ts))
 }
 
 // ── Markdown Renderer ─────────────────────────────────────────────────────────
@@ -1126,13 +1148,14 @@ function FlushMedia({
    *  settled at its final height. */
   onMediaLoad?: () => void
 }) {
+  const { timezone } = useTimezone()
   const url = att.localUrl ?? att.url
   if (!url) return null
 
   const MetaOverlay = showMeta ? (
     <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-scrim/55 [backdrop-filter:var(--surface-blur-sm)] text-on-surface shadow-sm pointer-events-none">
       <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
-        {formatTime(timestamp)}
+        {formatTime(timestamp, timezone)}
       </span>
       {!isBot && <CheckCheck className="h-3 w-3 opacity-90" />}
     </div>
@@ -1243,6 +1266,7 @@ function ImageGrid({
   timestamp: number
   onMediaLoad?: () => void
 }) {
+  const { timezone } = useTimezone()
   const MAX_TILES = 4
   const visible = images.slice(0, MAX_TILES)
   const extra = images.length - visible.length
@@ -1291,7 +1315,7 @@ function ImageGrid({
             {showMeta && isLastVisible && (
     <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 py-[3px] rounded-full bg-scrim/55 [backdrop-filter:var(--surface-blur-sm)] text-on-surface shadow-sm pointer-events-none">
                 <span className="text-[10px] leading-none select-none tabular-nums opacity-90">
-                  {formatTime(timestamp)}
+                  {formatTime(timestamp, timezone)}
                 </span>
                 {!isBot && <CheckCheck className="h-3 w-3 opacity-90" />}
               </div>
@@ -1488,6 +1512,7 @@ const MessageBubble = memo(function MessageBubble({
   botNickname: string
   displayName: string
 }) {
+  const { timezone } = useTimezone()
   const [swipeReplyVisible, setSwipeReplyVisible] = useState(false)
   const isBot = msg.type === 'bot'
 
@@ -1692,7 +1717,7 @@ const MessageBubble = memo(function MessageBubble({
               {(!hasMedia || !trailingIsVisual) && (
                 <div className={cn('flex items-center gap-1 mt-1', isBot ? 'justify-start' : 'justify-end')}>
                   <span className="text-[10px] opacity-40 leading-none select-none tabular-nums">
-                    {formatTime(msg.timestamp)}
+                    {formatTime(msg.timestamp, timezone)}
                   </span>
                   {!isBot && <CheckCheck className="h-3 w-3 opacity-40 shrink-0" />}
                 </div>
@@ -2994,6 +3019,7 @@ const CR_STYLES = `
 
 export default function ChatRoomPage() {
   const { user } = useUserAuth()
+  const { timezone } = useTimezone()
   const { mobileOpen, toggle: toggleMobileSidebar } = useDashboardSidebar()
 
   // Derive stable identity from the logged-in account. userId is the account's
@@ -3548,8 +3574,8 @@ export default function ChatRoomPage() {
                   const prevMsg = i > 0 ? messages[i - 1] : null
                   const showDate =
                     !prevMsg ||
-                    new Date(msg.timestamp).toDateString() !==
-                      new Date(prevMsg.timestamp).toDateString()
+                    dayKeyInTimezone(msg.timestamp, timezone) !==
+                      dayKeyInTimezone(prevMsg.timestamp, timezone)
                   const showSpacing = !prevMsg || prevMsg.type !== msg.type
 
                   return (
@@ -3558,7 +3584,7 @@ export default function ChatRoomPage() {
                         <div className="flex items-center gap-3 my-4 px-4">
                           <div className="flex-1 h-px bg-outline-variant/20" />
                           <span className="text-[10px] font-semibold text-on-surface-variant/40 px-2 select-none uppercase tracking-widest">
-                            {formatDateLabel(msg.timestamp)}
+                            {formatDateLabel(msg.timestamp, timezone)}
                           </span>
                           <div className="flex-1 h-px bg-outline-variant/20" />
                         </div>

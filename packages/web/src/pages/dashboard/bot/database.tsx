@@ -38,6 +38,7 @@ import Table from '@/components/ui/data-display/Table'
 import Dialog from '@/components/ui/overlay/Dialog'
 import DataList from '@/components/ui/data-display/DataList'
 import { useSnackbar } from '@/contexts/SnackbarContext'
+import { useTimezone } from '@/contexts/TimezoneContext'
 import { useBotContext } from '@/features/users/components/DashboardBotLayout'
 import {
   useBotDatabaseUsers,
@@ -49,18 +50,12 @@ import type {
   BotDatabaseStatusFilter,
   BotDatabaseSortBy,
 } from '@/features/users/services/bot.service'
+import { formatDateTime } from '@/utils/datetime.util'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+function formatDate(iso: string | null, timezone: string): string {
+  return formatDateTime(iso, timezone)
 }
 
 function userDisplayName(u: {
@@ -216,6 +211,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
     unbanUser,
   } = useBotDatabaseUsers(sessionId, sessionKey)
   const { snackbar, setPosition } = useSnackbar()
+  const { timezone } = useTimezone()
 
   const notify = (message: string, color: 'success' | 'warning') => {
     setPosition('bottom-right')
@@ -383,7 +379,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
                     </Badge>
                   </Table.Cell>
                   <Table.Cell className="text-on-surface-variant">
-                    {formatDate(user.last_seen)}
+                    {formatDate(user.last_seen, timezone)}
                   </Table.Cell>
                   <Table.Cell align="right">
                     <div className="flex items-center justify-end gap-2">
@@ -638,7 +634,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
                 { label: 'Display name', value: detailUser.name },
                 { label: 'Username', value: detailUser.username ? `@${detailUser.username}` : '—' },
                 { label: 'First name', value: detailUser.first_name ?? '—' },
-                { label: 'Last seen', value: formatDate(detailUser.last_seen) },
+                { label: 'Last seen', value: formatDate(detailUser.last_seen, timezone) },
                 { label: 'Ban reason', value: detailUser.ban_reason ?? '—' },
               ]
             : []
@@ -672,6 +668,7 @@ function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: 
     unbanGroup,
   } = useBotDatabaseGroups(sessionId, sessionKey)
   const { snackbar, setPosition } = useSnackbar()
+  const { timezone } = useTimezone()
 
   const notify = (message: string, color: 'success' | 'warning') => {
     setPosition('bottom-right')
@@ -852,7 +849,7 @@ function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: 
                     </Badge>
                   </Table.Cell>
                   <Table.Cell className="text-on-surface-variant">
-                    {formatDate(group.last_seen)}
+                    {formatDate(group.last_seen, timezone)}
                   </Table.Cell>
                   <Table.Cell align="right">
                     <div className="flex items-center justify-end gap-2">
@@ -1112,7 +1109,7 @@ function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: 
                       ? detailGroup.member_count.toLocaleString()
                       : '—',
                 },
-                { label: 'Last seen', value: formatDate(detailGroup.last_seen) },
+                { label: 'Last seen', value: formatDate(detailGroup.last_seen, timezone) },
                 { label: 'Ban reason', value: detailGroup.ban_reason ?? '—' },
               ]
             : []

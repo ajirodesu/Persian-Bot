@@ -105,6 +105,18 @@ export async function initDb(): Promise<void> {
     );
   `);
 
+  // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
+  // Same idempotent-outside-the-fast-path pattern as bot_user_groq_key above, so
+  // already-initialised databases pick up this table without a manual migration.
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS bot_user_timezone (
+      user_id     TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+      timezone    TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at  TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+
   if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`

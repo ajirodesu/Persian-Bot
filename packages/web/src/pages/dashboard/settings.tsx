@@ -11,6 +11,8 @@ import Alert from '@/components/ui/feedback/Alert'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
 import ThemeToggle from '@/components/ui/ThemeToggle'
+import TimezoneSelect from '@/components/ui/forms/TimezoneSelect'
+import { useTimezone } from '@/contexts/TimezoneContext'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
@@ -25,6 +27,41 @@ export default function SettingsPage() {
 
   const { data: session, isPending: sessionLoading } =
     authUserClient.useSession()
+
+  // ── Timezone state ──────────────────────────────────────────────────────────
+  const {
+    timezone: activeTimezone,
+    savedTimezone,
+    browserTimezone,
+    isLoading: timezoneLoading,
+    setTimezone: persistTimezone,
+  } = useTimezone()
+  const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null)
+  const [timezoneSaving, setTimezoneSaving] = useState(false)
+  const [timezoneError, setTimezoneError] = useState<string | null>(null)
+  const [timezoneSuccess, setTimezoneSuccess] = useState(false)
+
+  const timezoneValue = timezoneDraft ?? activeTimezone
+  const timezoneDirty = timezoneDraft !== null && timezoneDraft !== savedTimezone
+
+  const handleSaveTimezone = async (): Promise<void> => {
+    if (!timezoneDraft) return
+    setTimezoneSaving(true)
+    setTimezoneError(null)
+    setTimezoneSuccess(false)
+    try {
+      await persistTimezone(timezoneDraft)
+      setTimezoneDraft(null)
+      setTimezoneSuccess(true)
+      setTimeout(() => setTimezoneSuccess(false), 3000)
+    } catch (err) {
+      setTimezoneError(
+        err instanceof Error ? err.message : 'Failed to save timezone',
+      )
+    } finally {
+      setTimezoneSaving(false)
+    }
+  }
 
   // ── Profile state ──────────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState('')
@@ -243,6 +280,71 @@ export default function SettingsPage() {
           </div>
         </Card.Header>
         <ThemeToggle />
+      </Card.Root>
+
+      {/* ── Timezone ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div>
+            <Card.Title as="h2">Timezone</Card.Title>
+            <Card.Description>
+              Used across the dashboard for timestamps, logs, and bot
+              notices — like ban messages sent on your behalf.
+            </Card.Description>
+          </div>
+        </Card.Header>
+
+        {timezoneLoading ? (
+          <Skeleton className="h-11 w-full max-w-sm rounded-[var(--radius-input)]" />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <Field.Root className="max-w-sm">
+              <TimezoneSelect
+                value={timezoneValue}
+                onChange={(tz) => {
+                  setTimezoneDraft(tz)
+                  setTimezoneError(null)
+                }}
+              />
+            </Field.Root>
+
+            {!savedTimezone && !timezoneDirty && (
+              <p className="text-body-sm text-on-surface-variant">
+                No timezone saved yet — currently showing your browser's
+                timezone ({browserTimezone}). Pick one below and save it.
+              </p>
+            )}
+
+            {timezoneError && (
+              <Alert variant="tonal" color="error" title={timezoneError} size="sm" />
+            )}
+            {timezoneSuccess && (
+              <Alert
+                variant="tonal"
+                color="success"
+                title="Timezone updated successfully."
+                size="sm"
+              />
+            )}
+
+            <div>
+              <Button
+                variant="filled"
+                color="primary"
+                onClick={handleSaveTimezone}
+                disabled={!timezoneDirty || timezoneSaving}
+                isLoading={timezoneSaving}
+              >
+                Save Timezone
+              </Button>
+            </div>
+          </div>
+        )}
       </Card.Root>
 
       {/* ── AI Integration ── */}

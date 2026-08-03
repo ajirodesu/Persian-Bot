@@ -31,6 +31,7 @@ import {
   formatUserBanMessage,
   formatGroupBanMessage,
 } from '@/engine/lib/ban-message.lib.js';
+import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
 
 // ── Cooldown ──────────────────────────────────────────────────────────────────
 
@@ -316,8 +317,11 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   if (userBanned) {
     const key = `ban_u:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
     if (!cooldownStore.check(key, now)) {
-      const reason = await getUserBanReason(sessionUserId, platform, sessionId, senderID);
-      await ctx.chat.replyMessage({ message: formatUserBanMessage({ reason, userId: senderID }) });
+      const [reason, timezone] = await Promise.all([
+        getUserBanReason(sessionUserId, platform, sessionId, senderID),
+        getUserTimezoneOrDefault(sessionUserId),
+      ]);
+      await ctx.chat.replyMessage({ message: formatUserBanMessage({ reason, userId: senderID, timezone }) });
       cooldownStore.record(key, now, 15000);
     }
     return;
@@ -326,8 +330,11 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   if (threadBanned) {
     const key = `ban_t:${sessionUserId}:${platform}:${sessionId}:${threadID}`;
     if (!cooldownStore.check(key, now)) {
-      const reason = await getThreadBanReason(sessionUserId, platform, sessionId, threadID);
-      await ctx.chat.replyMessage({ message: formatGroupBanMessage({ reason, threadId: threadID }) });
+      const [reason, timezone] = await Promise.all([
+        getThreadBanReason(sessionUserId, platform, sessionId, threadID),
+        getUserTimezoneOrDefault(sessionUserId),
+      ]);
+      await ctx.chat.replyMessage({ message: formatGroupBanMessage({ reason, threadId: threadID, timezone }) });
       cooldownStore.record(key, now, 15000);
     }
     return;

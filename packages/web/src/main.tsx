@@ -5,17 +5,20 @@ import { HelmetProvider } from '@dr.pogodin/react-helmet'
 import { UserAuthProvider } from '@/contexts/UserAuthContext'
 import { SnackbarProvider } from '@/contexts/SnackbarContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { TimezoneProvider } from '@/contexts/TimezoneContext'
 import App from '@/App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <HelmetProvider>
-        <UserAuthProvider>
-          <SnackbarProvider position="bottom-center" defaultDuration={4000}>
-            <App />
-          </SnackbarProvider>
-        </UserAuthProvider>
+        <TimezoneProvider>
+          <UserAuthProvider>
+            <SnackbarProvider position="bottom-center" defaultDuration={4000}>
+              <App />
+            </SnackbarProvider>
+          </UserAuthProvider>
+        </TimezoneProvider>
       </HelmetProvider>
     </ThemeProvider>
   </StrictMode>,
