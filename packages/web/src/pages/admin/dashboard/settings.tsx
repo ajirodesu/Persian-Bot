@@ -2,6 +2,7 @@ import { Helmet } from '@dr.pogodin/react-helmet'
 import { useEffect, useState } from 'react'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
+import Badge from '@/components/ui/data-display/Badge'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
@@ -26,6 +27,10 @@ import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
  *
  * System Admins section now persists to and loads from /api/v1/admin/system-admins
  * so registered IDs survive server restarts and are visible to all admin accounts.
+ *
+ * Timezone, Profile, and System Administrators share a single "Save Changes"
+ * button — Security (password) and Danger Zone remain separate since they're
+ * distinct, higher-stakes actions.
  */
 export default function AdminSettingsPage() {
   const { isEmailEnabled } = useEmailServiceEnabled()
@@ -42,63 +47,23 @@ export default function AdminSettingsPage() {
     setTimezone: persistTimezone,
   } = useTimezone()
   const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null)
-  const [timezoneSaving, setTimezoneSaving] = useState(false)
-  const [timezoneError, setTimezoneError] = useState<string | null>(null)
-  const [timezoneSuccess, setTimezoneSuccess] = useState(false)
 
   const timezoneValue = timezoneDraft ?? activeTimezone
   const timezoneDirty = timezoneDraft !== null && timezoneDraft !== savedTimezone
 
-  const handleSaveTimezone = async (): Promise<void> => {
-    if (!timezoneDraft) return
-    setTimezoneSaving(true)
-    setTimezoneError(null)
-    setTimezoneSuccess(false)
-    try {
-      await persistTimezone(timezoneDraft)
-      setTimezoneDraft(null)
-      setTimezoneSuccess(true)
-      setTimeout(() => setTimezoneSuccess(false), 3000)
-    } catch (err) {
-      setTimezoneError(
-        err instanceof Error ? err.message : 'Failed to save timezone',
-      )
-    } finally {
-      setTimezoneSaving(false)
-    }
-  }
-
   // ── Profile edit state ─────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState('')
   const [nameInitialized, setNameInitialized] = useState(false)
-  const [profileSaving, setProfileSaving] = useState(false)
-  const [profileError, setProfileError] = useState<string | null>(null)
-  const [profileSuccess, setProfileSuccess] = useState(false)
 
   if (session?.user?.name && !nameInitialized) {
     setProfileName(session.user.name)
     setNameInitialized(true)
   }
 
-  const handleUpdateProfile = async (): Promise<void> => {
-    if (!profileName.trim()) {
-      setProfileError('Name cannot be empty')
-      return
-    }
-    setProfileSaving(true)
-    setProfileError(null)
-    setProfileSuccess(false)
-    const { error } = await authAdminClient.updateUser({
-      name: profileName.trim(),
-    })
-    if (error) {
-      setProfileError(error.message ?? 'Failed to update profile')
-    } else {
-      setProfileSuccess(true)
-      setTimeout(() => setProfileSuccess(false), 3000)
-    }
-    setProfileSaving(false)
-  }
+  const profileDirty =
+    nameInitialized &&
+    profileName.trim() !== '' &&
+    profileName.trim() !== (session?.user?.name ?? '')
 
   // ── Password change state ──────────────────────────────────────────────────
   const [currentPassword, setCurrentPassword] = useState('')
@@ -142,9 +107,7 @@ export default function AdminSettingsPage() {
   const [systemAdmins, setSystemAdmins] = useState<SystemAdminDto[]>([])
   const [adminIds, setAdminIds] = useState<string[]>([''])
   const [adminLoading, setAdminLoading] = useState(true)
-  const [adminError, setAdminError] = useState<string | null>(null)
-  const [adminSaving, setAdminSaving] = useState(false)
-  const [adminSuccess, setAdminSuccess] = useState(false)
+  const [adminLoadError, setAdminLoadError] = useState<string | null>(null)
 
   // Load persisted system admins on mount
   useEffect(() => {
@@ -156,7 +119,7 @@ export default function AdminSettingsPage() {
           result.admins.length > 0 ? result.admins.map((a) => a.adminId) : [''],
         )
       } catch (err) {
-        setAdminError(
+        setAdminLoadError(
           err instanceof Error ? err.message : 'Failed to load system admins',
         )
       } finally {
@@ -172,8 +135,6 @@ export default function AdminSettingsPage() {
       ids[index] = value
       return ids
     })
-    setAdminError(null)
-    setAdminSuccess(false)
   }
 
   const handleAddAdminRow = () => {
@@ -195,35 +156,6 @@ export default function AdminSettingsPage() {
     targetIds.length !== currentIds.length ||
     targetIds.some((id) => !currentIds.includes(id)) ||
     currentIds.some((id) => !targetIds.includes(id))
-
-  const handleSaveAdmins = async (): Promise<void> => {
-    setAdminSaving(true)
-    setAdminError(null)
-    setAdminSuccess(false)
-    try {
-      const toAdd = targetIds.filter((id) => !currentIds.includes(id))
-      const toRemove = currentIds.filter((id) => !targetIds.includes(id))
-
-      // Execute operations iteratively to avoid DB lock issues with concurrent operations on the same table
-      for (const id of toRemove) await adminService.removeSystemAdmin(id)
-      for (const id of toAdd) await adminService.addSystemAdmin(id)
-
-      const result = await adminService.getSystemAdmins()
-      setSystemAdmins(result.admins)
-      setAdminIds(
-        result.admins.length > 0 ? result.admins.map((a) => a.adminId) : [''],
-      )
-
-      setAdminSuccess(true)
-      setTimeout(() => setAdminSuccess(false), 3000)
-    } catch (err) {
-      setAdminError(
-        err instanceof Error ? err.message : 'Failed to update system admins',
-      )
-    } finally {
-      setAdminSaving(false)
-    }
-  }
 
   // ── Reset All Database — destructive, admin-only ─────────────────────────────
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -268,6 +200,51 @@ export default function AdminSettingsPage() {
     }
   }
 
+  // ── Unified save — Timezone + Profile + System Administrators ──────────────
+  const hasUnsavedChanges = timezoneDirty || profileDirty || isAdminsModified
+  const [isSavingAll, setIsSavingAll] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  const handleSaveChanges = async (): Promise<void> => {
+    setSaveError(null)
+    setSaveSuccess(false)
+    setIsSavingAll(true)
+    try {
+      if (timezoneDirty && timezoneDraft) {
+        await persistTimezone(timezoneDraft)
+      }
+      if (profileDirty) {
+        const { error } = await authAdminClient.updateUser({
+          name: profileName.trim(),
+        })
+        if (error) throw new Error(error.message ?? 'Failed to update profile')
+      }
+      if (isAdminsModified) {
+        const toAdd = targetIds.filter((id) => !currentIds.includes(id))
+        const toRemove = currentIds.filter((id) => !targetIds.includes(id))
+        // Execute operations iteratively to avoid DB lock issues with
+        // concurrent operations on the same table
+        for (const id of toRemove) await adminService.removeSystemAdmin(id)
+        for (const id of toAdd) await adminService.addSystemAdmin(id)
+        const result = await adminService.getSystemAdmins()
+        setSystemAdmins(result.admins)
+        setAdminIds(
+          result.admins.length > 0 ? result.admins.map((a) => a.adminId) : [''],
+        )
+      }
+      setTimezoneDraft(null)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : 'Failed to save changes',
+      )
+    } finally {
+      setIsSavingAll(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto pb-12">
       <Helmet>
@@ -299,11 +276,18 @@ export default function AdminSettingsPage() {
       {/* ── Timezone ── */}
       <Card.Root variant="elevated" shadowElevation={1} padding="md">
         <Card.Header>
-          <div>
-            <Card.Title as="h2">Timezone</Card.Title>
-            <Card.Description>
-              Used across the admin portal for timestamps and logs.
-            </Card.Description>
+          <div className="flex items-start justify-between w-full">
+            <div>
+              <Card.Title as="h2">Timezone</Card.Title>
+              <Card.Description>
+                Used across the admin portal for timestamps and logs.
+              </Card.Description>
+            </div>
+            {timezoneDirty && (
+              <Badge color="primary" size="sm" variant="tonal" pill>
+                Unsaved
+              </Badge>
+            )}
           </div>
         </Card.Header>
 
@@ -316,7 +300,6 @@ export default function AdminSettingsPage() {
                 value={timezoneValue}
                 onChange={(tz) => {
                   setTimezoneDraft(tz)
-                  setTimezoneError(null)
                 }}
               />
             </Field.Root>
@@ -324,33 +307,10 @@ export default function AdminSettingsPage() {
             {!savedTimezone && !timezoneDirty && (
               <p className="text-body-sm text-on-surface-variant">
                 No timezone saved yet — currently showing your browser's
-                timezone ({browserTimezone}). Pick one below and save it.
+                timezone ({browserTimezone}). Pick one and click Save
+                Changes below.
               </p>
             )}
-
-            {timezoneError && (
-              <Alert variant="tonal" color="error" title={timezoneError} size="sm" />
-            )}
-            {timezoneSuccess && (
-              <Alert
-                variant="tonal"
-                color="success"
-                title="Timezone updated successfully."
-                size="sm"
-              />
-            )}
-
-            <div>
-              <Button
-                variant="filled"
-                color="primary"
-                onClick={handleSaveTimezone}
-                disabled={!timezoneDirty || timezoneSaving}
-                isLoading={timezoneSaving}
-              >
-                Save Timezone
-              </Button>
-            </div>
           </div>
         )}
       </Card.Root>
@@ -358,9 +318,16 @@ export default function AdminSettingsPage() {
       {/* ── Profile ── */}
       <Card.Root variant="elevated" shadowElevation={1} padding="md">
         <Card.Header>
-          <div>
-            <Card.Title as="h2">Admin Profile</Card.Title>
-            <Card.Description>Update your display name.</Card.Description>
+          <div className="flex items-start justify-between w-full">
+            <div>
+              <Card.Title as="h2">Admin Profile</Card.Title>
+              <Card.Description>Update your display name.</Card.Description>
+            </div>
+            {profileDirty && (
+              <Badge color="primary" size="sm" variant="tonal" pill>
+                Unsaved
+              </Badge>
+            )}
           </div>
         </Card.Header>
         <div className="flex flex-col gap-5">
@@ -380,48 +347,15 @@ export default function AdminSettingsPage() {
           </DataList.Root>
           <Field.Root>
             <Field.Label>Display name</Field.Label>
-            <div className="flex gap-2">
-              <Input
-                value={profileName}
-                onChange={(e) => {
-                  setProfileName(e.target.value)
-                  setProfileError(null)
-                  setProfileSuccess(false)
-                }}
-                placeholder={sessionLoading ? 'Loading…' : 'Your name'}
-                disabled={sessionLoading || profileSaving}
-              />
-              <Button
-                variant="tonal"
-                color="primary"
-                size="md"
-                onClick={() => {
-                  void handleUpdateProfile()
-                }}
-                disabled={sessionLoading || profileSaving}
-                isLoading={profileSaving}
-                className="flex-shrink-0"
-              >
-                Save
-              </Button>
-            </div>
+            <Input
+              value={profileName}
+              onChange={(e) => {
+                setProfileName(e.target.value)
+              }}
+              placeholder={sessionLoading ? 'Loading…' : 'Your name'}
+              disabled={sessionLoading}
+            />
           </Field.Root>
-          {profileError && (
-            <Alert
-              variant="tonal"
-              color="error"
-              title={profileError}
-              size="sm"
-            />
-          )}
-          {profileSuccess && (
-            <Alert
-              variant="tonal"
-              color="success"
-              title="Profile updated successfully."
-              size="sm"
-            />
-          )}
         </div>
       </Card.Root>
 
@@ -437,17 +371,24 @@ export default function AdminSettingsPage() {
                 checks.
               </Card.Description>
             </div>
-            <Button
-              variant="text"
-              color="primary"
-              size="sm"
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
-              onClick={handleAddAdminRow}
-              disabled={adminSaving || adminLoading}
-              aria-label="Add another system admin user ID"
-            >
-              Add
-            </Button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {isAdminsModified && (
+                <Badge color="primary" size="sm" variant="tonal" pill>
+                  Unsaved
+                </Badge>
+              )}
+              <Button
+                variant="text"
+                color="primary"
+                size="sm"
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={handleAddAdminRow}
+                disabled={adminLoading}
+                aria-label="Add another system admin user ID"
+              >
+                Add
+              </Button>
+            </div>
           </div>
         </Card.Header>
         <div className="flex flex-col gap-3">
@@ -469,7 +410,6 @@ export default function AdminSettingsPage() {
                       placeholder={`System admin user ID ${index + 1}`}
                       value={adminId}
                       onChange={(e) => handleAdminChange(index, e.target.value)}
-                      disabled={adminSaving}
                       aria-label={`System admin user ID ${index + 1}`}
                     />
                   </div>
@@ -481,7 +421,6 @@ export default function AdminSettingsPage() {
                       onClick={() => handleRemoveAdminRow(index)}
                       aria-label={`Remove system admin ${index + 1}`}
                       leftIcon={<Trash2 className="h-4 w-4" />}
-                      disabled={adminSaving}
                     />
                   )}
                 </div>
@@ -489,32 +428,39 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
-          {adminError !== null && (
-            <Alert variant="tonal" color="error" title={adminError} size="sm" />
-          )}
-          {adminSuccess && (
+          {adminLoadError !== null && (
             <Alert
               variant="tonal"
-              color="success"
-              title="System administrators updated successfully."
+              color="error"
+              title={adminLoadError}
               size="sm"
             />
           )}
-
-          <div className="flex justify-end pt-1">
-            <Button
-              variant="filled"
-              color="primary"
-              size="sm"
-              onClick={() => void handleSaveAdmins()}
-              disabled={adminSaving || !isAdminsModified || adminLoading}
-              isLoading={adminSaving}
-            >
-              Save changes
-            </Button>
-          </div>
         </div>
       </Card.Root>
+
+      {/* ── Unified save bar — Timezone + Profile + System Administrators ── */}
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          {saveError && <p className="text-body-sm text-error">{saveError}</p>}
+          {saveSuccess && (
+            <p className="text-body-sm text-success">
+              Changes saved successfully.
+            </p>
+          )}
+        </div>
+        <Button
+          variant="filled"
+          color="primary"
+          onClick={() => void handleSaveChanges()}
+          disabled={!hasUnsavedChanges || isSavingAll || adminLoading}
+          isLoading={isSavingAll}
+        >
+          Save Changes
+        </Button>
+      </div>
+
+      <Divider spacing="sm" />
 
       {/* ── Security ── */}
       <Card.Root variant="elevated" shadowElevation={1} padding="md">

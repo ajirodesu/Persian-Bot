@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
+import Badge from '@/components/ui/data-display/Badge'
 import Dialog from '@/components/ui/overlay/Dialog'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
@@ -37,64 +38,23 @@ export default function SettingsPage() {
     setTimezone: persistTimezone,
   } = useTimezone()
   const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null)
-  const [timezoneSaving, setTimezoneSaving] = useState(false)
-  const [timezoneError, setTimezoneError] = useState<string | null>(null)
-  const [timezoneSuccess, setTimezoneSuccess] = useState(false)
 
   const timezoneValue = timezoneDraft ?? activeTimezone
   const timezoneDirty = timezoneDraft !== null && timezoneDraft !== savedTimezone
 
-  const handleSaveTimezone = async (): Promise<void> => {
-    if (!timezoneDraft) return
-    setTimezoneSaving(true)
-    setTimezoneError(null)
-    setTimezoneSuccess(false)
-    try {
-      await persistTimezone(timezoneDraft)
-      setTimezoneDraft(null)
-      setTimezoneSuccess(true)
-      setTimeout(() => setTimezoneSuccess(false), 3000)
-    } catch (err) {
-      setTimezoneError(
-        err instanceof Error ? err.message : 'Failed to save timezone',
-      )
-    } finally {
-      setTimezoneSaving(false)
-    }
-  }
-
   // ── Profile state ──────────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState('')
   const [nameInitialized, setNameInitialized] = useState(false)
-  const [profileSaving, setProfileSaving] = useState(false)
-  const [profileError, setProfileError] = useState<string | null>(null)
-  const [profileSuccess, setProfileSuccess] = useState(false)
 
   if (session?.user?.name && !nameInitialized) {
     setProfileName(session.user.name)
     setNameInitialized(true)
   }
 
-  const handleUpdateProfile = async (): Promise<void> => {
-    if (!profileName.trim()) {
-      setProfileError('Name cannot be empty')
-      return
-    }
-    setProfileSaving(true)
-    setProfileError(null)
-    setProfileSuccess(false)
-
-    const { error } = await authUserClient.updateUser({
-      name: profileName.trim(),
-    })
-    if (error) {
-      setProfileError(error.message ?? 'Failed to update profile')
-    } else {
-      setProfileSuccess(true)
-      setTimeout(() => setProfileSuccess(false), 3000)
-    }
-    setProfileSaving(false)
-  }
+  const profileDirty =
+    nameInitialized &&
+    profileName.trim() !== '' &&
+    profileName.trim() !== (session?.user?.name ?? '')
 
   // ── Password state ─────────────────────────────────────────────────────────
   const [currentPassword, setCurrentPassword] = useState('')
@@ -178,9 +138,8 @@ export default function SettingsPage() {
   const [groqLoading, setGroqLoading] = useState(true)
   const [groqKeyInput, setGroqKeyInput] = useState('')
   const [groqEditing, setGroqEditing] = useState(false)
-  const [groqSaving, setGroqSaving] = useState(false)
-  const [groqError, setGroqError] = useState<string | null>(null)
-  const [groqSuccess, setGroqSuccess] = useState(false)
+  const [groqRemoving, setGroqRemoving] = useState(false)
+  const [groqRemoveError, setGroqRemoveError] = useState<string | null>(null)
 
   // Fetch the current key status once on mount — the API never returns the key
   // itself, only whether one exists and a 4-char hint.
@@ -204,47 +163,64 @@ export default function SettingsPage() {
     }
   }, [])
 
-  const handleSaveGroqKey = async (): Promise<void> => {
-    const apiKey = groqKeyInput.trim()
-    if (!apiKey) {
-      setGroqError('Enter your Groq API key')
-      return
-    }
-    setGroqError(null)
-    setGroqSuccess(false)
-    setGroqSaving(true)
-    try {
-      const res = await apiClient.put<{ hasKey: boolean; keyHint: string }>(
-        '/api/v1/settings/groq-key',
-        { apiKey },
-      )
-      setGroqStatus(res.data)
-      setGroqKeyInput('')
-      setGroqEditing(false)
-      setGroqSuccess(true)
-      setTimeout(() => setGroqSuccess(false), 3000)
-    } catch (err) {
-      const e = err as { response?: { data?: { error?: string } } }
-      setGroqError(
-        e.response?.data?.error ?? 'Failed to save Groq API key',
-      )
-    } finally {
-      setGroqSaving(false)
-    }
-  }
+  const groqDirty =
+    (groqEditing || !groqStatus?.hasKey) && groqKeyInput.trim() !== ''
 
   const handleRemoveGroqKey = async (): Promise<void> => {
-    setGroqError(null)
-    setGroqSuccess(false)
+    setGroqRemoveError(null)
+    setGroqRemoving(true)
     try {
       await apiClient.delete('/api/v1/settings/groq-key')
       setGroqStatus({ hasKey: false, keyHint: null })
       setGroqEditing(false)
       setGroqKeyInput('')
-      setGroqSuccess(true)
-      setTimeout(() => setGroqSuccess(false), 3000)
     } catch {
-      setGroqError('Failed to remove Groq API key')
+      setGroqRemoveError('Failed to remove Groq API key')
+    } finally {
+      setGroqRemoving(false)
+    }
+  }
+
+  // ── Unified save — Timezone + AI key + Profile ──────────────────────────────
+  const hasUnsavedChanges = timezoneDirty || profileDirty || groqDirty
+  const [isSavingAll, setIsSavingAll] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  const handleSaveChanges = async (): Promise<void> => {
+    setSaveError(null)
+    setSaveSuccess(false)
+    setIsSavingAll(true)
+    try {
+      if (timezoneDirty && timezoneDraft) {
+        await persistTimezone(timezoneDraft)
+      }
+      if (profileDirty) {
+        const { error } = await authUserClient.updateUser({
+          name: profileName.trim(),
+        })
+        if (error) throw new Error(error.message ?? 'Failed to update profile')
+      }
+      if (groqDirty) {
+        const res = await apiClient.put<{ hasKey: boolean; keyHint: string }>(
+          '/api/v1/settings/groq-key',
+          { apiKey: groqKeyInput.trim() },
+        )
+        setGroqStatus(res.data)
+        setGroqKeyInput('')
+        setGroqEditing(false)
+      }
+      setTimezoneDraft(null)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err) {
+      const e = err as { response?: { data?: { error?: string } } }
+      setSaveError(
+        e.response?.data?.error ??
+          (err instanceof Error ? err.message : 'Failed to save changes'),
+      )
+    } finally {
+      setIsSavingAll(false)
     }
   }
 
@@ -290,12 +266,19 @@ export default function SettingsPage() {
         className="border border-outline-variant/60"
       >
         <Card.Header>
-          <div>
-            <Card.Title as="h2">Timezone</Card.Title>
-            <Card.Description>
-              Used across the dashboard for timestamps, logs, and bot
-              notices — like ban messages sent on your behalf.
-            </Card.Description>
+          <div className="flex items-start justify-between w-full">
+            <div>
+              <Card.Title as="h2">Timezone</Card.Title>
+              <Card.Description>
+                Used across the dashboard for timestamps, logs, and bot
+                notices — like ban messages sent on your behalf.
+              </Card.Description>
+            </div>
+            {timezoneDirty && (
+              <Badge color="primary" size="sm" variant="tonal" pill>
+                Unsaved
+              </Badge>
+            )}
           </div>
         </Card.Header>
 
@@ -308,7 +291,6 @@ export default function SettingsPage() {
                 value={timezoneValue}
                 onChange={(tz) => {
                   setTimezoneDraft(tz)
-                  setTimezoneError(null)
                 }}
               />
             </Field.Root>
@@ -316,33 +298,10 @@ export default function SettingsPage() {
             {!savedTimezone && !timezoneDirty && (
               <p className="text-body-sm text-on-surface-variant">
                 No timezone saved yet — currently showing your browser's
-                timezone ({browserTimezone}). Pick one below and save it.
+                timezone ({browserTimezone}). Pick one and click Save
+                Changes below.
               </p>
             )}
-
-            {timezoneError && (
-              <Alert variant="tonal" color="error" title={timezoneError} size="sm" />
-            )}
-            {timezoneSuccess && (
-              <Alert
-                variant="tonal"
-                color="success"
-                title="Timezone updated successfully."
-                size="sm"
-              />
-            )}
-
-            <div>
-              <Button
-                variant="filled"
-                color="primary"
-                onClick={handleSaveTimezone}
-                disabled={!timezoneDirty || timezoneSaving}
-                isLoading={timezoneSaving}
-              >
-                Save Timezone
-              </Button>
-            </div>
           </div>
         )}
       </Card.Root>
@@ -355,12 +314,19 @@ export default function SettingsPage() {
         className="border border-outline-variant/60"
       >
         <Card.Header>
-          <div>
-            <Card.Title as="h2">AI Integration</Card.Title>
-            <Card.Description>
-              AI features run on your own Groq API key. The key is stored
-              encrypted and used only by your bots.
-            </Card.Description>
+          <div className="flex items-start justify-between w-full">
+            <div>
+              <Card.Title as="h2">AI Integration</Card.Title>
+              <Card.Description>
+                AI features run on your own Groq API key. The key is stored
+                encrypted and used only by your bots.
+              </Card.Description>
+            </div>
+            {groqDirty && (
+              <Badge color="primary" size="sm" variant="tonal" pill>
+                Unsaved
+              </Badge>
+            )}
           </div>
         </Card.Header>
 
@@ -386,7 +352,7 @@ export default function SettingsPage() {
                   color="primary"
                   size="sm"
                   onClick={() => setGroqEditing(true)}
-                  disabled={groqSaving}
+                  disabled={groqRemoving}
                 >
                   Replace
                 </Button>
@@ -397,7 +363,8 @@ export default function SettingsPage() {
                   onClick={() => {
                     void handleRemoveGroqKey()
                   }}
-                  disabled={groqSaving}
+                  disabled={groqRemoving}
+                  isLoading={groqRemoving}
                 >
                   Remove
                 </Button>
@@ -415,45 +382,24 @@ export default function SettingsPage() {
           {(groqEditing || !groqStatus?.hasKey) && (
             <Field.Root>
               <Field.Label>Groq API key</Field.Label>
-              <div className="flex gap-2">
-                <PasswordInput
-                  value={groqKeyInput}
-                  onChange={(e) => {
-                    setGroqKeyInput(e.target.value)
-                    setGroqError(null)
-                  }}
-                  placeholder="gsk_…"
-                  disabled={groqSaving}
-                />
-                <Button
-                  variant="filled"
-                  color="primary"
-                  size="md"
-                  className="flex-shrink-0"
-                  onClick={() => {
-                    void handleSaveGroqKey()
-                  }}
-                  isLoading={groqSaving}
-                  disabled={groqSaving || !groqKeyInput.trim()}
-                >
-                  {groqStatus?.hasKey ? 'Save Key' : 'Save'}
-                </Button>
-              </div>
+              <PasswordInput
+                value={groqKeyInput}
+                onChange={(e) => {
+                  setGroqKeyInput(e.target.value)
+                }}
+                placeholder="gsk_…"
+              />
+              <p className="mt-1.5 text-body-sm text-on-surface-variant">
+                Enter your key, then click Save Changes below.
+              </p>
             </Field.Root>
           )}
 
-          {groqError && (
-            <Alert variant="tonal" color="error" title={groqError} size="sm" />
-          )}
-          {groqSuccess && (
+          {groqRemoveError && (
             <Alert
               variant="tonal"
-              color="success"
-              title={
-                groqStatus?.hasKey
-                  ? 'Groq API key saved.'
-                  : 'Groq API key removed.'
-              }
+              color="error"
+              title={groqRemoveError}
               size="sm"
             />
           )}
@@ -468,11 +414,18 @@ export default function SettingsPage() {
         className="border border-outline-variant/60"
       >
         <Card.Header>
-          <div>
-            <Card.Title as="h2">Profile</Card.Title>
-            <Card.Description>
-              Update your display name and account information.
-            </Card.Description>
+          <div className="flex items-start justify-between w-full">
+            <div>
+              <Card.Title as="h2">Profile</Card.Title>
+              <Card.Description>
+                Update your display name and account information.
+              </Card.Description>
+            </div>
+            {profileDirty && (
+              <Badge color="primary" size="sm" variant="tonal" pill>
+                Unsaved
+              </Badge>
+            )}
           </div>
         </Card.Header>
 
@@ -496,46 +449,40 @@ export default function SettingsPage() {
           {/* Editable display name */}
           <Field.Root>
             <Field.Label>Display name</Field.Label>
-            <div className="flex gap-2">
-              <Input
-                value={profileName}
-                onChange={(e) => {
-                  setProfileName(e.target.value)
-                  setProfileError(null)
-                  setProfileSuccess(false)
-                }}
-                placeholder={sessionLoading ? 'Loading…' : 'Your name'}
-                disabled={sessionLoading || profileSaving}
-              />
-              <Button
-                variant="tonal"
-                color="primary"
-                size="md"
-                onClick={() => {
-                  void handleUpdateProfile()
-                }}
-                disabled={sessionLoading || profileSaving}
-                isLoading={profileSaving}
-                className="flex-shrink-0"
-              >
-                Save
-              </Button>
-            </div>
-          </Field.Root>
-
-          {profileError && (
-            <Alert variant="tonal" color="error" title={profileError} size="sm" />
-          )}
-          {profileSuccess && (
-            <Alert
-              variant="tonal"
-              color="success"
-              title="Profile updated successfully."
-              size="sm"
+            <Input
+              value={profileName}
+              onChange={(e) => {
+                setProfileName(e.target.value)
+              }}
+              placeholder={sessionLoading ? 'Loading…' : 'Your name'}
+              disabled={sessionLoading}
             />
-          )}
+          </Field.Root>
         </div>
       </Card.Root>
+
+      {/* ── Unified save bar — Timezone + AI Integration + Profile ── */}
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          {saveError && <p className="text-body-sm text-error">{saveError}</p>}
+          {saveSuccess && (
+            <p className="text-body-sm text-success">
+              Changes saved successfully.
+            </p>
+          )}
+        </div>
+        <Button
+          variant="filled"
+          color="primary"
+          onClick={() => void handleSaveChanges()}
+          disabled={!hasUnsavedChanges || isSavingAll}
+          isLoading={isSavingAll}
+        >
+          Save Changes
+        </Button>
+      </div>
+
+      <Divider spacing="sm" />
 
       {/* ── Security ── */}
       <Card.Root

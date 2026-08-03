@@ -14,6 +14,7 @@ import Alert from '@/components/ui/feedback/Alert'
 import { useBotUpdate } from '@/features/users/hooks/useBotUpdate'
 import { useBotValidation } from '@/features/users/hooks/useBotValidation'
 import { useBotAdminOnly } from '@/features/users/hooks/useBotAdminOnly'
+import { useBotReactionEmoji } from '@/features/users/hooks/useBotReactionEmoji'
 import ReactionEmojiSettings from '@/features/users/components/ReactionEmojiSettings'
 import type { PlatformCredentials } from '@/features/users/dtos/bot.dto'
 import {
@@ -66,6 +67,18 @@ export default function BotSettingsPage() {
   )
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // ── Reaction emoji — folded into the single page-level Save Changes button
+  const {
+    emoji: reactionEmoji,
+    isLoading: reactionLoading,
+    isSaving: reactionSaving,
+    error: reactionError,
+    save: saveReactionEmoji,
+  } = useBotReactionEmoji(sessionId)
+  const [reactionPending, setReactionPending] = useState<string | null>(null)
+  const reactionDirty =
+    reactionPending !== null && reactionPending !== reactionEmoji
 
   const navigate = useNavigate()
   const {
@@ -221,6 +234,7 @@ export default function BotSettingsPage() {
   const disableSave =
     savePhase !== 'idle' ||
     isLoading ||
+    reactionSaving ||
     (isCredentialsModified && verificationStatus.phase !== 'success') ||
     !hasValidAdmins
 
@@ -278,6 +292,11 @@ export default function BotSettingsPage() {
       })
 
       setBot(updated)
+
+      if (reactionDirty && reactionPending !== null) {
+        const reactionSaved = await saveReactionEmoji(reactionPending)
+        if (reactionSaved) setReactionPending(null)
+      }
 
       if (isCredentialsModified && isActive) {
         await botService.restartBot(bot.sessionId).catch(console.error)
@@ -612,8 +631,12 @@ export default function BotSettingsPage() {
       </Card.Root>
 
       <ReactionEmojiSettings
-        sessionId={sessionId}
         platform={bot.credentials.platform}
+        emoji={reactionEmoji}
+        pending={reactionPending}
+        onPick={setReactionPending}
+        isLoading={reactionLoading}
+        error={reactionError}
       />
 
       <div className="flex items-start gap-3">
@@ -624,7 +647,7 @@ export default function BotSettingsPage() {
           variant="filled"
           color="primary"
           disabled={disableSave}
-          isLoading={savePhase !== 'idle' || isLoading}
+          isLoading={savePhase !== 'idle' || isLoading || reactionSaving}
           onClick={() => void handleSubmit()}
         >
           {savePhase === 'clearing'

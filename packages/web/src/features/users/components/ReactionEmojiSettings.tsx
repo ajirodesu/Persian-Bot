@@ -1,13 +1,10 @@
-import { useState } from 'react'
-import { Smile, Check } from 'lucide-react'
+import { Smile } from 'lucide-react'
 import Card from '@/components/ui/data-display/Card'
 import Badge from '@/components/ui/data-display/Badge'
 import Skeleton from '@/components/ui/feedback/Skeleton'
-import Button from '@/components/ui/buttons/Button'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import Alert from '@/components/ui/feedback/Alert'
-import { useBotReactionEmoji } from '@/features/users/hooks/useBotReactionEmoji'
 import {
   TELEGRAM_REACTION_EMOJIS,
   DISCORD_COMMON_REACTION_EMOJIS,
@@ -16,45 +13,40 @@ import {
 import { getPlatformLabel } from '@/utils/bot.util'
 
 interface ReactionEmojiSettingsProps {
-  sessionId: string
   platform: string
+  /** Persisted value loaded from the server. */
+  emoji: string
+  /** Unsaved local selection, or null when showing the persisted value. */
+  pending: string | null
+  onPick: (next: string) => void
+  isLoading: boolean
+  error?: string | null
 }
 
 /**
  * Reaction Emoji Settings — lets the bot owner pick the emoji the bot reacts
  * with on the user's message after a successful command. Platform-aware:
  * Telegram restricts to its documented supported set, Discord accepts unicode
- * or custom-emoji references. Saves live — no bot restart required.
+ * or custom-emoji references.
+ *
+ * Controlled component: selection lives in the parent's form state and is
+ * persisted together with the rest of the page via the single page-level
+ * "Save Changes" button, instead of its own save action.
  */
 export default function ReactionEmojiSettings({
-  sessionId,
   platform,
+  emoji,
+  pending,
+  onPick,
+  isLoading,
+  error,
 }: ReactionEmojiSettingsProps) {
-  const { emoji, isLoading, isSaving, error, save } =
-    useBotReactionEmoji(sessionId)
-  // null → using the persisted value; otherwise an unsaved local selection.
-  const [pending, setPending] = useState<string | null>(null)
-  const [isSaved, setIsSaved] = useState(false)
-
   const isDiscord = platform === 'discord'
   const isTelegram = platform === 'telegram'
   const effective = pending ?? emoji
   const draftInvalid =
     isDiscord && effective !== '' && !isDiscordReactionEmoji(effective)
   const dirty = pending !== null && pending !== emoji
-
-  const handlePick = (next: string): void => {
-    setIsSaved(false)
-    setPending(next)
-  }
-
-  const handleSave = async (): Promise<void> => {
-    const ok = await save(effective)
-    if (ok) {
-      setPending(null)
-      setIsSaved(true)
-    }
-  }
 
   return (
     <Card.Root
@@ -64,12 +56,19 @@ export default function ReactionEmojiSettings({
       className="border border-outline-variant/60"
     >
       <Card.Header>
-        <div>
-          <Card.Title as="h3">Command Reaction Emoji</Card.Title>
-          <Card.Description>
-            Emoji the bot reacts with on your message once a command finishes
-            successfully.
-          </Card.Description>
+        <div className="flex items-start justify-between w-full">
+          <div>
+            <Card.Title as="h3">Command Reaction Emoji</Card.Title>
+            <Card.Description>
+              Emoji the bot reacts with on your message once a command finishes
+              successfully.
+            </Card.Description>
+          </div>
+          {!isLoading && dirty && (
+            <Badge color="primary" size="sm" variant="tonal" pill>
+              Unsaved
+            </Badge>
+          )}
         </div>
       </Card.Header>
 
@@ -79,22 +78,9 @@ export default function ReactionEmojiSettings({
           {effective || '🔥'}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-label-lg font-semibold text-on-surface">
-              {effective || 'Not configured'}
-            </p>
-            {!isLoading && dirty && (
-              <Badge color="primary" size="sm" variant="tonal" pill>
-                Unsaved
-              </Badge>
-            )}
-            {!isLoading && !dirty && isSaved && (
-              <Badge color="success" size="sm" variant="tonal" pill>
-                <Check className="h-3 w-3 mr-1" />
-                Saved
-              </Badge>
-            )}
-          </div>
+          <p className="text-label-lg font-semibold text-on-surface">
+            {effective || 'Not configured'}
+          </p>
           <p className="text-body-sm text-on-surface-variant mt-0.5">
             Applies to the{' '}
             <Badge color="secondary" size="sm" variant="outlined">
@@ -121,7 +107,7 @@ export default function ReactionEmojiSettings({
                 <button
                   key={e}
                   type="button"
-                  onClick={() => handlePick(e)}
+                  onClick={() => onPick(e)}
                   aria-label={`Select ${e}`}
                   className={[
                     'flex h-11 items-center justify-center rounded-lg text-2xl transition-colors duration-normal',
@@ -142,7 +128,7 @@ export default function ReactionEmojiSettings({
               <Field.Label>Custom emoji reference</Field.Label>
               <Input
                 value={effective}
-                onChange={(e) => handlePick(e.target.value)}
+                onChange={(e) => onPick(e.target.value)}
                 placeholder="e.g. <:cat:123456789012345678> or <a:party:123456789012345678>"
                 leftIcon={<Smile className="h-4 w-4" />}
               />
@@ -174,7 +160,7 @@ export default function ReactionEmojiSettings({
                   <button
                     key={e}
                     type="button"
-                    onClick={() => handlePick(e)}
+                    onClick={() => onPick(e)}
                     aria-label={`Select ${e}`}
                     className={[
                       'flex h-11 items-center justify-center rounded-lg text-2xl transition-colors duration-normal',
@@ -203,19 +189,6 @@ export default function ReactionEmojiSettings({
           />
         </div>
       )}
-
-      <div className="flex items-center justify-end mt-5">
-        <Button
-          variant="filled"
-          color="primary"
-          size="sm"
-          isLoading={isSaving}
-          disabled={isLoading || !dirty || draftInvalid}
-          onClick={() => void handleSave()}
-        >
-          Save Reaction
-        </Button>
-      </div>
     </Card.Root>
   )
 }
