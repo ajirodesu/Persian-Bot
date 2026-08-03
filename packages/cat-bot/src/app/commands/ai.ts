@@ -9,6 +9,7 @@ import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
+import { reactOnSuccess } from '@/engine/lib/react-on-success.lib.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { getPayment } from '@/engine/types/module-config.types.js';
@@ -421,6 +422,11 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
           style: MessageStyle.MARKDOWN,
           message: result,
         });
+
+        // AI replied successfully — mirror the shared success-reaction contract:
+        // react to the triggering message with the session's dynamic emoji, and
+        // never let a reaction failure surface as an AI error (best-effort).
+        await reactOnSuccess(ctx, ctx.event);
       }
     });
   } catch (err) {

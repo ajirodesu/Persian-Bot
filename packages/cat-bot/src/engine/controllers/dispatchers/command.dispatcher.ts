@@ -32,7 +32,7 @@ import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 // Per-session reaction emoji — reads the dashboard-configured value (LRU-cached
 // via session.repo.ts) so edits apply live without a restart or env reload.
-import { getSessionReactionEmoji } from '@/engine/repos/reaction-emoji.repo.js';
+import { reactOnSuccess } from '@/engine/lib/react-on-success.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 /**
@@ -113,26 +113,7 @@ export async function dispatchCommand(
   }
 
   // Command completed successfully — react to the exact triggering message.
-  // The emoji is resolved inside the guard so a session with no configured
-  // value still reacts with the default, and a DB hiccup here can never crash
-  // the dispatch pipeline (reaction stays best-effort).
-  if (threadID && messageID) {
-    try {
-      const reactionEmoji = await getSessionReactionEmoji(
-        ctx.native.userId ?? '',
-        ctx.native.platform,
-        ctx.native.sessionId ?? '',
-      );
-      await api.reactToMessage(threadID, messageID, reactionEmoji);
-    } catch (err: unknown) {
-      // Reaction is a best-effort UX touch — never let a failed reaction surface
-      // as a command failure or crash the dispatch pipeline.
-      logger.debug('[command.dispatcher] reactToMessage failed', {
-        command: parsed.name,
-        threadID,
-        messageID,
-        error: err,
-      });
-    }
-  }
+  // Uses the shared react-on-succss helper (session emoji, best-effort, never
+  // throws), so a reaction failure can never crash the dispatch pipeline.
+  await reactOnSuccess(ctx, ctx.event);
 }
