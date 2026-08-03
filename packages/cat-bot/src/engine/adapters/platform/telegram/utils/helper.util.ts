@@ -160,7 +160,12 @@ export function normalizeTelegramEvent(
 /**
  * Normalises a Telegram new_chat_members update into the EventType.EVENT shape
  * with logMessageType 'log:subscribe'.
- * Bots are filtered out — only human member joins trigger the handler.
+ *
+ * Bots are KEPT (tagged `isBot: true`) rather than filtered out so the notice.ts
+ * handler — which listens for the BOT itself being added to a group — can detect
+ * a self-join via addedParticipants.userFbId. welcome.ts/checkwarn.ts skip bot
+ * participants on their own (`isBot` / no-warn), so keeping bots here does not
+ * change their human-only behaviour.
  */
 export function normalizeNewChatMembersEvent(
   ctx: Context,
@@ -180,22 +185,21 @@ export function normalizeNewChatMembersEvent(
         | undefined
     )?.new_chat_members ?? [];
 
-  const addedParticipants = newMembers
-    .filter((m) => !m.is_bot)
-    .map((m) => ({
-      userFbId: String(m.id),
-      firstName: m.first_name || '',
-      fullName:
-        `${m.first_name || ''} ${m.last_name || ''}`.trim() ||
-        m.username ||
-        String(m.id),
-      groupJoinStatus: 'MEMBER',
-      initialFolder: 'FOLDER_INBOX',
-      initialFolderId: { systemFolderId: 'INBOX' },
-      isMessengerUser: false,
-      fanoutPolicy: '',
-      lastUnsubscribeTimestampMs: '',
-    }));
+  const addedParticipants = newMembers.map((m) => ({
+    userFbId: String(m.id),
+    isBot: m.is_bot,
+    firstName: m.first_name || '',
+    fullName:
+      `${m.first_name || ''} ${m.last_name || ''}`.trim() ||
+      m.username ||
+      String(m.id),
+    groupJoinStatus: 'MEMBER',
+    initialFolder: 'FOLDER_INBOX',
+    initialFolderId: { systemFolderId: 'INBOX' },
+    isMessengerUser: false,
+    fanoutPolicy: '',
+    lastUnsubscribeTimestampMs: '',
+  }));
 
   const names = addedParticipants.map((p) => p.fullName).join(', ');
 

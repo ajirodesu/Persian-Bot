@@ -2,7 +2,7 @@
  * Event Dispatcher — fans out to registered event handlers for a given type.
  *
  * Simple, reusable pattern: any module that registers for an event type via
- * meta.eventType[] gets its onEvent handler called in registration order.
+ * meta.type[] gets its onEvent handler called in registration order.
  */
 
 import type {

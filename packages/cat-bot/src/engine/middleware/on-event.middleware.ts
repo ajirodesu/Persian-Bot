@@ -6,35 +6,34 @@
  * per-module guards without modifying module code or coupling modules to each other.
  *
  * ── enforceWarnBan ────────────────────────────────────────────────────────────
- * Suppresses both the `join` and `leave` modules when a member's removal is
+ * Suppresses both the `welcome` and `goodbye` modules when a member's removal is
  * driven by the warn-ban system (≥3 active warnings in the thread's warn collection).
  *
- * log:subscribe — `join.ts` and `checkwarn.ts` both subscribe to this event.
+ * log:subscribe — `welcome.ts` and `checkwarn.ts` both subscribe to this event.
  * Without this guard the bot would send "Welcome!" immediately before checkwarn.ts
  * fires its "You are banned and will be removed" notification — confusing UX.
  *
- * log:unsubscribe — `leave.ts` fires a goodbye message for every removal.
+ * log:unsubscribe — `goodbye.ts` fires a farewell for every removal.
  * When checkwarn.ts kicks a warn-banned member the same event fires, producing
- * an unwanted "👋 A member has been removed" alongside the ban notification.
- * This guard suppresses leave.ts for any departure where the member has ≥3 warns.
+ * an unwanted "👋 Goodbye" alongside the ban notification.
+ * This guard suppresses goodbye.ts for any departure where the member has ≥3 warns.
  *
  * NOTE: No wasRemoved check is applied on log:unsubscribe. Telegram and Discord
- * normalizers always emit author = '' (leave.ts documents this), making
+ * normalizers always emit author = '' (goodbye.ts documents this), making
  * wasRemoved permanently false on those platforms — the check would be a no-op
- * and leave.ts would fire regardless. Gating purely on warn count is the correct
+ * and goodbye.ts would fire regardless. Gating purely on warn count is the correct
  * approach: if a warn-banned member leaves for any reason, checkwarn.ts already
- * owns the moderation narrative and a goodbye message contradicts it.
+ * owns the moderation narrative and a farewell message contradicts it.
  *
  * ── enforceCommandKick ────────────────────────────────────────────────────────
- * Suppresses leave.ts when a removal was explicitly triggered by the `kick`
- * command or the `badwords` passive scanner (second-offence auto-kick).
+ * Suppresses goodbye.ts when a removal was explicitly triggered by the `kick`
+ * command or the `badwords`/`antispam` passive scanners (auto-kick).
  *
  * Both commands send their own targeted removal notification:
  *   kick.ts     → "✅ <name> has been removed from the group."
  *   badwords.ts → "⚠️ Banned word detected. You have violated 2 times and will be kicked."
  *
- * Allowing leave.ts to also fire produces a contradictory "👋 A member has been
- * removed" alongside the command's own message. This guard suppresses it.
+ * Allowing goodbye.ts to also fire produces a contradictory "👋 Goodbye" alongside the command's own message. This guard suppresses it.
  *
  * The detection mechanism is a transient in-memory kick registry
  * (kick-registry.lib.ts). Each command writes the target uid to the registry
@@ -46,7 +45,7 @@
  * enforceCommandKick runs first on log:unsubscribe because it is a cheaper
  * O(1) in-memory lookup that short-circuits immediately on a registry hit,
  * avoiding the DB round-trip that enforceWarnBan would perform. Both guards
- * share the same leave module target, so only one needs to succeed per event.
+ * share the same goodbye module target, so only one needs to succeed per event.
  *
  * ── Fail-open policy ─────────────────────────────────────────────────────────
  * Any DB error during the warn-list lookup falls through to next() so a
@@ -66,21 +65,21 @@ import { kickRegistry } from '@/engine/lib/kick-registry.lib.js';
 // ── enforceWarnBan ────────────────────────────────────────────────────────────
 
 /**
- * Suppresses the `join` and `leave` event modules when the relevant member(s)
+ * Suppresses the `welcome` and `goodbye` event modules when the relevant member(s)
  * are warn-banned (≥3 active warnings in the thread's warn collection).
  *
  * log:subscribe scope — activates when ALL of the following are true:
  *   1. eventType === 'log:subscribe'
- *   2. The current module's meta.name === 'join'
+ *   2. The current module's meta.name === 'welcome'
  *   3. At least one joining participant has ≥3 warn entries in the thread store
  *
  * log:unsubscribe scope — activates when ALL of the following are true:
  *   1. eventType === 'log:unsubscribe'
- *   2. The current module's meta.name === 'leave'
+ *   2. The current module's meta.name === 'goodbye'
  *   3. The departing participant has ≥3 warn entries in the thread store
  *
  * checkwarn.ts is intentionally NOT blocked in either case — it owns the kick
- * and ban notification end-to-end. Allowing join.ts or leave.ts to fire alongside
+ * and ban notification end-to-end. Allowing welcome.ts or goodbye.ts to fire alongside
  * it produces contradictory UX ("Welcome!" before a ban, or a goodbye after a kick).
  */
 export const enforceWarnBan: MiddlewareFn<OnEventCtx> = async function (
@@ -91,10 +90,10 @@ export const enforceWarnBan: MiddlewareFn<OnEventCtx> = async function (
     (ctx.mod['meta'] as { name?: string } | undefined)?.name ?? ''
   ).toLowerCase();
 
-  // ── log:subscribe guard — suppress join.ts for warn-banned rejoining members ──
+  // ── log:subscribe guard — suppress welcome.ts for warn-banned rejoining members ──
   if (ctx.eventType === 'log:subscribe') {
-    // Only suppress the join module — checkwarn.ts and any other log:subscribe handlers run freely
-    if (modName !== 'join') {
+    // Only suppress the welcome module — checkwarn.ts and any other log:subscribe handlers run freely
+    if (modName !== 'welcome') {
       await next();
       return;
     }
@@ -148,10 +147,10 @@ export const enforceWarnBan: MiddlewareFn<OnEventCtx> = async function (
     return;
   }
 
-  // ── log:unsubscribe guard — suppress leave.ts for warn-banned departing members ──
+  // ── log:unsubscribe guard — suppress goodbye.ts for warn-banned departing members ──
   if (ctx.eventType === 'log:unsubscribe') {
-    // Only suppress the leave module — all other log:unsubscribe handlers run freely
-    if (modName !== 'leave') {
+    // Only suppress the goodbye module — all other log:unsubscribe handlers run freely
+    if (modName !== 'goodbye') {
       await next();
       return;
     }
@@ -236,7 +235,7 @@ export const enforceCommandKick: MiddlewareFn<OnEventCtx> = async function (
   ctx,
   next,
 ): Promise<void> {
-  // Only intercept log:unsubscribe events targeting the leave module
+  // Only intercept log:unsubscribe events targeting the goodbye module
   if (ctx.eventType !== 'log:unsubscribe') {
     await next();
     return;
@@ -246,7 +245,7 @@ export const enforceCommandKick: MiddlewareFn<OnEventCtx> = async function (
     (ctx.mod['meta'] as { name?: string } | undefined)?.name ?? ''
   ).toLowerCase();
 
-  if (modName !== 'leave') {
+  if (modName !== 'goodbye') {
     await next();
     return;
   }

@@ -36,6 +36,7 @@ import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
 
 // ─── Data shapes ─────────────────────────────────────────────────────────────
 
@@ -94,13 +95,23 @@ export const meta: CommandMeta = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Returns current local time as DD/MM/YYYY HH:mm:ss */
-function getDateTime(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
+/** Returns current local time as DD/MM/YYYY HH:mm:ss in the given IANA timezone. */
+function getDateTime(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const pick = (type: 'day' | 'month' | 'year' | 'hour' | 'minute' | 'second') =>
+    parts.find((p) => p.type === type)?.value ?? '';
   return (
-    `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ` +
-    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    `${pick('day')}/${pick('month')}/${pick('year')} ` +
+    `${pick('hour')}:${pick('minute')}:${pick('second')}`
   );
 }
 
@@ -446,7 +457,10 @@ export const onCommand = async ({
 
       if (!reason) reason = 'No reason provided';
 
-      const dateTime = getDateTime();
+      // Timestamp rendered in the bot session owner's configured timezone
+      // (their dashboard Settings → Timezone), falling back to UTC when unset.
+      const timeZone = await getUserTimezoneOrDefault(native.userId ?? '');
+      const dateTime = getDateTime(timeZone);
       const existing = warnList.find((u) => u.uid === uid);
 
       if (!existing) {

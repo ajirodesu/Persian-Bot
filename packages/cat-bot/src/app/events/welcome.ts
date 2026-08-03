@@ -21,7 +21,7 @@
 //   undefined. `logMessageData.addedParticipants` is the correct — and only —
 //   place to read joiners from in onEvent.
 //
-// NOTE: This supersedes src/app/events/join.ts (same eventType, same job).
+// NOTE: This supersedes src/app/events/join.ts (same type, same job).
 //       Delete/rename join.ts so both handlers don't fire and double-post.
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
@@ -35,7 +35,7 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
   name: 'welcome',
-  eventType: [LogMessageType.SUBSCRIBE],
+  type: ['log:subscribe'],
   version: '2.0.0',
   author: 'AjiroDesu',
   description:
@@ -59,13 +59,13 @@ export const onEvent = async ({
       [];
     if (!added.length) return;
 
-    // Skip the bot's own join (self-add on invite). Telegram's normalizer already
-    // filters bots out of addedParticipants before this handler ever sees them;
-    // Discord's guildMemberAdd does not carry an is_bot flag once normalised, so
-    // the bot-self check below is what prevents the bot from "welcoming itself".
+    // Skip the bot's own join (self-add on invite) and any other bot participants.
+    // Telegram's normalizer now tags bots with `isBot: true` (so notice.ts can hear
+    // the bot's own self-join from the same event); Discord's guildMemberAdd does not
+    // carry an isBot flag, so the bot-self check below remains the guard there.
     const botId = await bot.getID();
     const joiners = added.filter(
-      (p) => String(p['userFbId'] ?? '') !== botId,
+      (p) => !p['isBot'] && String(p['userFbId'] ?? '') !== botId,
     );
     if (!joiners.length) return;
 

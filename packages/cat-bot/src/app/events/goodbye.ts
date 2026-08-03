@@ -21,7 +21,7 @@
 //   name baked in — no extra API round-trip needed, and it works identically
 //   whether the member left on their own or was removed.
 //
-// NOTE: This supersedes src/app/events/leave.ts (same eventType, same job).
+// NOTE: This supersedes src/app/events/leave.ts (same type, same job).
 //       Delete/rename leave.ts so both handlers don't fire and double-post.
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
@@ -33,7 +33,7 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
   name: 'goodbye',
-  eventType: [LogMessageType.UNSUBSCRIBE],
+  type: ['log:unsubscribe'],
   version: '2.0.0',
   author: 'AjiroDesu',
   description:

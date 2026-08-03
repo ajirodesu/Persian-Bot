@@ -10,11 +10,10 @@
  *   db.threads.collection(threadID) → 'warn' collection → key 'list'
  *   Shape: WarnedUser[]
  *
- * ⚠️ GAP — prefix in event context:
- *   'prefix' is documented as available in onCommand only.
- *   The unban hint in the notification message uses the literal
- *   command name 'warn unban' without a prefix symbol.
- *   Update the COMMAND_NAME constant below if your bot prefix differs.
+ * Prefix resolution: 'prefix' is documented as available in onCommand only,
+ * so the unban hint in the notification message resolves the live prefix via
+ * prefixManager (thread override first, then session prefix, '/' fallback) —
+ * identical to welcome.ts — instead of printing a bare 'warn unban' hint.
  *
  * ⚠️ GAP — deferred kick queue:
  *   The original GoatBot version queued a re-kick for when the bot
@@ -26,6 +25,7 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { EventMeta } from '@/engine/types/module-config.types.js';
+import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 
 // Update this if your bot's warn command is named differently
 const COMMAND_NAME = 'warn';
@@ -41,7 +41,7 @@ interface WarnedUser {
 
 export const meta: EventMeta = {
   name: 'checkwarn',
-  eventType: ['log:subscribe'],
+  type: ['log:subscribe'],
   version: '1.3.0',
   author: 'NTKhang (Cat-Bot port)',
   description:
@@ -55,11 +55,21 @@ export const onEvent = async ({
   event,
   db,
   thread,
+  native,
 }: AppCtx): Promise<void> => {
   const threadID = event['threadID'] as string;
   const data = event['logMessageData'] as Record<string, unknown> | undefined;
   const added =
     (data?.['addedParticipants'] as Record<string, unknown>[]) ?? [];
+
+  // Resolve the live prefix for the unban hint: thread-level override first
+  // (set via the /prefix command), falling back to the session-wide prefix.
+  // Matches welcome.ts's resolution so the hint always shows a runnable command.
+  const prefix =
+    (threadID && prefixManager.getThreadPrefix(threadID)) ||
+    (native.userId && native.sessionId
+      ? prefixManager.getPrefix(native.userId, native.platform, native.sessionId)
+      : '/');
 
   // Nothing to do if no participants were added
   if (!added.length) return;
@@ -90,7 +100,7 @@ export const onEvent = async ({
         `⚠️ **${fullName}** rejoined but is still banned (${entry.list.length} warnings).`,
         `- **Name:** ${fullName}`,
         `- **Uid:** ${uid}`,
-        `\nTo lift the ban: \`${COMMAND_NAME} unban ${uid}\``,
+        `\nTo lift the ban: \`${prefix}${COMMAND_NAME} unban ${uid}\``,
       ].join('\n'),
     });
 

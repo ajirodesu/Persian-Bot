@@ -21,17 +21,17 @@
  *     cooldown: 5,
  *   };
  *
- * Usage in an event module:
+ *  Usage in an event module:
  *
- *   import type { EventMeta } from '@/engine/types/module-config.types.js';
+ *  import type { EventMeta } from '@/engine/types/module-config.types.js';
  *
- *   export const meta: EventMeta = {
- *     name: 'join',
- *     eventType: ['log:subscribe'],
- *     version: '1.0.0',
- *     author: 'John Lester',
- *     description: 'Sends a welcome message when members join the group',
- *   };
+ *  export const meta: EventMeta = {
+ *    name: 'join',
+ *    type: ['log:subscribe'],
+ *    version: '1.0.0',
+ *    author: 'John Lester',
+ *    description: 'Sends a welcome message when members join the group',
+ *  };
  */
 
 import type { RoleLevel } from '@/engine/constants/role.constants.js';
@@ -183,9 +183,9 @@ export interface CommandMeta {
 /**
  * Typed contract for event module meta exports.
  *
- * Event modules live in src/app/events/ and are keyed by eventType[] in the
+ * Event modules live in src/app/events/ and are keyed by type[] in the
  * EventModuleMap. The module loader (app.ts loadEventModules) validates
- * name and eventType before registering the module.
+ * name and type before registering the module.
  */
 export interface EventMeta {
   // ── Mandatory ──────────────────────────────────────────────────────────────
@@ -197,9 +197,9 @@ export interface EventMeta {
    * Unified event type strings this handler subscribes to.
    * The module is registered under every type in this array — one file may handle
    * multiple event types (e.g. ['log:subscribe', 'log:unsubscribe']).
-   * Values correspond to UnifiedEvent.eventType from event.model.ts.
+   * Values correspond to the logMessageType field on EventType.EVENT events.
    */
-  eventType: string[];
+  type: string[];
 
   /** Semantic version string (e.g. '1.0.0'). */
   version: string;

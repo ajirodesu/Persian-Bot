@@ -168,17 +168,17 @@ async function loadEventModules(): Promise<Map<string, Array<Record<string, unkn
           pathToFileURL(path.join(dir, file)).href
         )) as Record<string, unknown>;
         const cfg = mod['meta'] as
-          | { name?: string; eventType?: string[]; onEvent?: (...args: unknown[]) => unknown }
+          | { name?: string; type?: string[]; onEvent?: (...args: unknown[]) => unknown }
           | undefined;
 
-        if (!cfg?.name || !Array.isArray(cfg.eventType)) return;
+        if (!cfg?.name || !Array.isArray(cfg.type)) return;
 
         if (typeof mod['onEvent'] !== 'function') {
           logger.warn(`⚠️  Skipping ${file}: missing onEvent handler`);
           return;
         }
 
-        for (const type of cfg.eventType) {
+        for (const type of cfg.type) {
           if (!events.has(type)) events.set(type, []);
           events.get(type)!.push(mod);
         }
