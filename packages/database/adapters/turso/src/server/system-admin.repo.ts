@@ -96,6 +96,10 @@ export async function deleteUser(userId: string): Promise<void> {
       args: { userId },
     });
     await tx.execute({
+      sql: `DELETE FROM bot_discord_server_session_banned WHERE user_id = :userId`,
+      args: { userId },
+    });
+    await tx.execute({
       sql: `DELETE FROM bot_users_session WHERE user_id = :userId`,
       args: { userId },
     });
@@ -162,6 +166,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
     // which trips the bot_threads_session/bot_users_session FK.
     await tx.execute('DELETE FROM bot_users_session_banned');
     await tx.execute('DELETE FROM bot_threads_session_banned');
+    await tx.execute('DELETE FROM bot_discord_server_session_banned');
     await tx.execute('DELETE FROM bot_users_session');
     await tx.execute('DELETE FROM bot_threads_session');
     await tx.execute({

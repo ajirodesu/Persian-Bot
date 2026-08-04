@@ -168,6 +168,14 @@ export const unbanThread = m.unbanThread;
 export const isThreadBanned = m.isThreadBanned;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getThreadBanReason = m.getThreadBanReason;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const banDiscordServer = m.banDiscordServer;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const unbanDiscordServer = m.unbanDiscordServer;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const isDiscordServerBanned = m.isDiscordServerBanned;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getDiscordServerBanReason = m.getDiscordServerBanReason;
 
 // --- MONGODB ---
 // mongoClient and getMongoDb are undefined at runtime when DATABASE_TYPE!='mongodb' —

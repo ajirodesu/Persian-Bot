@@ -162,3 +162,76 @@ export async function getThreadBanReason(
     return null;
   }
 }
+
+// ── Discord Server Bans ───────────────────────────────────────────────────────
+// Keyed by server id (not channel) so a ban covers every channel in the guild.
+// bot_discord_server_session carries no platform_id column, so neither does this.
+
+/** Bans a Discord server. Idempotent — reason is updated on re-ban. */
+export async function banDiscordServer(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+  reason?: string,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO bot_discord_server_session_banned (user_id, session_id, bot_server_id, is_banned, reason)
+     VALUES ($1, $2, $3, TRUE, $4)
+     ON CONFLICT (user_id, session_id, bot_server_id)
+     DO UPDATE SET is_banned = TRUE, reason = EXCLUDED.reason`,
+    [userId, sessionId, botServerId, reason ?? null],
+  );
+}
+
+/** Lifts a Discord server ban. Preserves the row so reason is retained for audit. */
+export async function unbanDiscordServer(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE bot_discord_server_session_banned
+     SET is_banned = FALSE
+     WHERE user_id = $1 AND session_id = $2 AND bot_server_id = $3`,
+    [userId, sessionId, botServerId],
+  );
+}
+
+/** Returns true when the Discord server is actively banned. Fail-open on DB error. */
+export async function isDiscordServerBanned(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<boolean> {
+  try {
+    const res = await pool.query<{ is_banned: boolean }>(
+      `SELECT is_banned FROM bot_discord_server_session_banned
+       WHERE user_id = $1 AND session_id = $2 AND bot_server_id = $3`,
+      [userId, sessionId, botServerId],
+    );
+    return res.rows[0]?.is_banned ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the stored ban reason for a Discord server, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getDiscordServerBanReason(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<string | null> {
+  try {
+    const res = await pool.query<{ reason: string | null }>(
+      `SELECT reason FROM bot_discord_server_session_banned
+       WHERE user_id = $1 AND session_id = $2 AND bot_server_id = $3`,
+      [userId, sessionId, botServerId],
+    );
+    return res.rows[0]?.reason ?? null;
+  } catch {
+    return null;
+  }
+}

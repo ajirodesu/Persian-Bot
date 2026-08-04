@@ -102,6 +102,10 @@ export {
   unbanThread,
   isThreadBanned,
   getThreadBanReason,
+  banDiscordServer,
+  unbanDiscordServer,
+  isDiscordServerBanned,
+  getDiscordServerBanReason,
 } from '../adapters/neondb/src/cat-bot/banned.repo.js';
 
 // --- SERVER ---

@@ -27,10 +27,13 @@ import {
   unbanUser,
   banThread,
   unbanThread,
+  banDiscordServer,
+  unbanDiscordServer,
 } from '@/engine/repos/banned.repo.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 import { invalidateUserSessionCache } from '@/engine/repos/users.repo.js';
 import { invalidateThreadSessionCache } from '@/engine/repos/threads.repo.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -183,6 +186,10 @@ export class BotDatabaseController {
   /**
    * GET /api/v1/bots/:id/database/groups
    * Returns paginated list of groups/threads seen by this bot session.
+   *
+   * Discord guilds are recorded in bot_discord_server_session (keyed by server id),
+   * not bot_threads_session — so the query branches per platform. All other platforms
+   * (Telegram, webchat) keep using the thread-session tables.
    */
   async listGroups(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -195,59 +202,105 @@ export class BotDatabaseController {
     const offset = (page - 1) * limit;
     const searchParam = search ? `%${search}%` : '%';
 
-    const banExpr = 'COALESCE(btsb.is_banned, FALSE)';
+    const isDiscord = ctx.platform === Platforms.Discord;
+
+    // Discord server sessions carry no platform_id column — the session id itself
+    // uniquely identifies the guild scope, so the ban key omits it.
+    const banExpr = isDiscord
+      ? 'COALESCE(bdsb.is_banned, FALSE)'
+      : 'COALESCE(btsb.is_banned, FALSE)';
     const extraClause = statusClause(banExpr, status);
     const whereExtra = extraClause ? ` AND ${extraClause}` : '';
 
     const sortColumn = resolveSortColumn(
       req.query.sortBy,
-      { name: 'bt.name', last_seen: 'bts.last_updated_at' },
-      'bts.last_updated_at',
+      isDiscord
+        ? { name: 'bds.name', last_seen: 'bdss.last_updated_at' }
+        : { name: 'bt.name', last_seen: 'bts.last_updated_at' },
+      isDiscord ? 'bdss.last_updated_at' : 'bts.last_updated_at',
     );
     const sortDir = parseSortDir(req.query.sortDir);
 
     try {
       const [rowsResult, countResult] = await Promise.all([
-        dbQuery(
-          `SELECT
-             bt.id,
-             bt.name,
-             bt.is_group,
-             bt.member_count,
-             bt.avatar_url,
-             bts.last_updated_at AS last_seen,
-             COALESCE(btsb.is_banned, FALSE) AS is_banned,
-             btsb.reason AS ban_reason
-           FROM bot_threads_session bts
-           JOIN bot_threads bt ON bt.id = bts.bot_thread_id
-           LEFT JOIN bot_threads_session_banned btsb
-             ON btsb.user_id      = bts.user_id
-            AND btsb.platform_id  = bts.platform_id
-            AND btsb.session_id   = bts.session_id
-            AND btsb.bot_thread_id = bts.bot_thread_id
-           WHERE bts.user_id     = $1
-             AND bts.platform_id = $2
-             AND bts.session_id  = $3
-             AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}
-           ORDER BY ${sortColumn} ${sortDir} NULLS LAST, bts.last_updated_at DESC NULLS LAST
-           LIMIT $5 OFFSET $6`,
-          [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, limit, offset],
-        ),
-        dbQuery(
-          `SELECT COUNT(*) AS count
-           FROM bot_threads_session bts
-           JOIN bot_threads bt ON bt.id = bts.bot_thread_id
-           LEFT JOIN bot_threads_session_banned btsb
-             ON btsb.user_id      = bts.user_id
-            AND btsb.platform_id  = bts.platform_id
-            AND btsb.session_id   = bts.session_id
-            AND btsb.bot_thread_id = bts.bot_thread_id
-           WHERE bts.user_id     = $1
-             AND bts.platform_id = $2
-             AND bts.session_id  = $3
-             AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}`,
-          [ctx.userId, ctx.platformId, ctx.sessionId, searchParam],
-        ),
+        isDiscord
+          ? dbQuery(
+              `SELECT
+                 bds.id,
+                 bds.name,
+                 CAST(1 AS BOOLEAN) AS is_group,
+                 bds.member_count,
+                 bds.avatar_url,
+                 bdss.last_updated_at AS last_seen,
+                 COALESCE(bdsb.is_banned, FALSE) AS is_banned,
+                 bdsb.reason AS ban_reason
+               FROM bot_discord_server_session bdss
+               JOIN bot_discord_server bds ON bds.id = bdss.bot_server_id
+               LEFT JOIN bot_discord_server_session_banned bdsb
+                 ON bdsb.user_id      = bdss.user_id
+                AND bdsb.session_id   = bdss.session_id
+                AND bdsb.bot_server_id = bdss.bot_server_id
+               WHERE bdss.user_id     = $1
+                 AND bdss.session_id  = $3
+                 AND (bds.name ILIKE $4 OR bds.id ILIKE $4)${whereExtra}
+               ORDER BY ${sortColumn} ${sortDir} NULLS LAST, bdss.last_updated_at DESC NULLS LAST
+               LIMIT $5 OFFSET $6`,
+              [ctx.userId, ctx.sessionId, searchParam, limit, offset],
+            )
+          : dbQuery(
+              `SELECT
+                 bt.id,
+                 bt.name,
+                 bt.is_group,
+                 bt.member_count,
+                 bt.avatar_url,
+                 bts.last_updated_at AS last_seen,
+                 COALESCE(btsb.is_banned, FALSE) AS is_banned,
+                 btsb.reason AS ban_reason
+               FROM bot_threads_session bts
+               JOIN bot_threads bt ON bt.id = bts.bot_thread_id
+               LEFT JOIN bot_threads_session_banned btsb
+                 ON btsb.user_id      = bts.user_id
+                AND btsb.platform_id  = bts.platform_id
+                AND btsb.session_id   = bts.session_id
+                AND btsb.bot_thread_id = bts.bot_thread_id
+               WHERE bts.user_id     = $1
+                 AND bts.platform_id = $2
+                 AND bts.session_id  = $3
+                 AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}
+               ORDER BY ${sortColumn} ${sortDir} NULLS LAST, bts.last_updated_at DESC NULLS LAST
+               LIMIT $5 OFFSET $6`,
+              [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, limit, offset],
+            ),
+        isDiscord
+          ? dbQuery(
+              `SELECT COUNT(*) AS count
+               FROM bot_discord_server_session bdss
+               JOIN bot_discord_server bds ON bds.id = bdss.bot_server_id
+               LEFT JOIN bot_discord_server_session_banned bdsb
+                 ON bdsb.user_id      = bdss.user_id
+                AND bdsb.session_id   = bdss.session_id
+                AND bdsb.bot_server_id = bdss.bot_server_id
+               WHERE bdss.user_id     = $1
+                 AND bdss.session_id  = $3
+                 AND (bds.name ILIKE $4 OR bds.id ILIKE $4)${whereExtra}`,
+              [ctx.userId, ctx.sessionId, searchParam],
+            )
+          : dbQuery(
+              `SELECT COUNT(*) AS count
+               FROM bot_threads_session bts
+               JOIN bot_threads bt ON bt.id = bts.bot_thread_id
+               LEFT JOIN bot_threads_session_banned btsb
+                 ON btsb.user_id      = bts.user_id
+                AND btsb.platform_id  = bts.platform_id
+                AND btsb.session_id   = bts.session_id
+                AND btsb.bot_thread_id = bts.bot_thread_id
+               WHERE bts.user_id     = $1
+                 AND bts.platform_id = $2
+                 AND bts.session_id  = $3
+                 AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}`,
+              [ctx.userId, ctx.platformId, ctx.sessionId, searchParam],
+            ),
       ]);
 
       const total = parseInt(String(countResult.rows[0]?.count ?? '0'), 10);
@@ -361,6 +414,9 @@ export class BotDatabaseController {
   /**
    * DELETE /api/v1/bots/:id/database/groups/:groupId
    * Removes a group's session association with this bot.
+   *
+   * For Discord the group id is a server (guild) id, so the session link is removed
+   * from bot_discord_server_session instead of bot_threads_session.
    */
   async deleteGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -373,11 +429,19 @@ export class BotDatabaseController {
     }
 
     try {
-      await dbQuery(
-        `DELETE FROM bot_threads_session
-         WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
-        [ctx.userId, ctx.platformId, ctx.sessionId, botThreadId],
-      );
+      if (ctx.platform === Platforms.Discord) {
+        await dbQuery(
+          `DELETE FROM bot_discord_server_session
+           WHERE user_id = $1 AND session_id = $3 AND bot_server_id = $4`,
+          [ctx.userId, ctx.sessionId, botThreadId],
+        );
+      } else {
+        await dbQuery(
+          `DELETE FROM bot_threads_session
+           WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
+          [ctx.userId, ctx.platformId, ctx.sessionId, botThreadId],
+        );
+      }
       // Same rationale as deleteUser: the raw delete bypassed the repo layer, so
       // evict the engine LRU cache to force a fresh DB read on the next message —
       // otherwise the group's stale cached timestamp suppresses the re-sync and
@@ -403,7 +467,7 @@ export class BotDatabaseController {
 
   /**
    * POST /api/v1/bots/:id/database/groups/:groupId/ban
-   * Bans a group from this bot session.
+   * Bans a group from this bot session. Discord groups are keyed by server id.
    */
   async banGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -419,7 +483,11 @@ export class BotDatabaseController {
     const reason = typeof req.body?.reason === 'string' ? (req.body.reason as string) : undefined;
 
     try {
-      await banThread(ctx.userId, ctx.platform, ctx.sessionId, botThreadId, reason);
+      if (ctx.platform === Platforms.Discord) {
+        await banDiscordServer(ctx.userId, ctx.sessionId, botThreadId, reason);
+      } else {
+        await banThread(ctx.userId, ctx.platform, ctx.sessionId, botThreadId, reason);
+      }
       res.json({ success: true });
     } catch (err) {
       console.error('[BotDatabaseController.banGroup]', err);
@@ -429,7 +497,7 @@ export class BotDatabaseController {
 
   /**
    * DELETE /api/v1/bots/:id/database/groups/:groupId/ban
-   * Lifts a group ban for this bot session.
+   * Lifts a group ban for this bot session. Discord groups are keyed by server id.
    */
   async unbanGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -442,7 +510,11 @@ export class BotDatabaseController {
     }
 
     try {
-      await unbanThread(ctx.userId, ctx.platform, ctx.sessionId, botThreadId);
+      if (ctx.platform === Platforms.Discord) {
+        await unbanDiscordServer(ctx.userId, ctx.sessionId, botThreadId);
+      } else {
+        await unbanThread(ctx.userId, ctx.platform, ctx.sessionId, botThreadId);
+      }
       res.json({ success: true });
     } catch (err) {
       console.error('[BotDatabaseController.unbanGroup]', err);

@@ -240,6 +240,18 @@ export async function initDb(): Promise<void> {
       PRIMARY KEY (user_id, session_id, bot_server_id)
     );
 
+    -- Discord server bans are keyed by server id (not channel) so a ban covers
+    -- every channel in the guild. Mirrors bot_threads_session_banned's audit style:
+    -- is_banned defaults to 1, an explicit unban sets it 0 and keeps the reason row.
+    CREATE TABLE IF NOT EXISTS bot_discord_server_session_banned (
+      user_id       TEXT    NOT NULL,
+      session_id    TEXT    NOT NULL,
+      bot_server_id TEXT    NOT NULL,
+      is_banned     INTEGER NOT NULL DEFAULT 1,
+      reason        TEXT,
+      PRIMARY KEY (user_id, session_id, bot_server_id)
+    );
+
     CREATE TABLE IF NOT EXISTS bot_session (
       user_id     TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
       platform_id INTEGER NOT NULL,

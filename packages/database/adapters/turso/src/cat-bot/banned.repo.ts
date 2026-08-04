@@ -172,3 +172,78 @@ export async function getThreadBanReason(
     return null;
   }
 }
+
+// ── Discord Server Bans ───────────────────────────────────────────────────────
+// Keyed by server id (not channel) so a ban covers every channel in the guild.
+// bot_discord_server_session carries no platform_id column, so neither does this.
+
+/** Bans a Discord server. Idempotent — reason is updated on re-ban. */
+export async function banDiscordServer(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+  reason?: string,
+): Promise<void> {
+  await tursoClient.execute({
+    sql: `INSERT INTO bot_discord_server_session_banned (user_id, session_id, bot_server_id, is_banned, reason)
+          VALUES (:userId, :sessionId, :botServerId, 1, :reason)
+          ON CONFLICT (user_id, session_id, bot_server_id)
+          DO UPDATE SET is_banned = 1, reason = excluded.reason`,
+    args: { userId, sessionId, botServerId, reason: reason ?? null },
+  });
+}
+
+/** Lifts a Discord server ban. Preserves the row so reason is retained for audit. */
+export async function unbanDiscordServer(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<void> {
+  await tursoClient.execute({
+    sql: `UPDATE bot_discord_server_session_banned
+          SET is_banned = 0
+          WHERE user_id = :userId AND session_id = :sessionId AND bot_server_id = :botServerId`,
+    args: { userId, sessionId, botServerId },
+  });
+}
+
+/** Returns true when the Discord server is actively banned. Fail-open on DB error. */
+export async function isDiscordServerBanned(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<boolean> {
+  try {
+    const res = await tursoClient.execute({
+      sql: `SELECT is_banned FROM bot_discord_server_session_banned
+            WHERE user_id = :userId AND session_id = :sessionId AND bot_server_id = :botServerId`,
+      args: { userId, sessionId, botServerId },
+    });
+    const row = res.rows[0] as { is_banned: number } | undefined;
+    return row ? intToBool(row.is_banned) : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the stored ban reason for a Discord server, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getDiscordServerBanReason(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<string | null> {
+  try {
+    const res = await tursoClient.execute({
+      sql: `SELECT reason FROM bot_discord_server_session_banned
+            WHERE user_id = :userId AND session_id = :sessionId AND bot_server_id = :botServerId`,
+      args: { userId, sessionId, botServerId },
+    });
+    const row = res.rows[0] as { reason: string | null } | undefined;
+    return row?.reason ?? null;
+  } catch {
+    return null;
+  }
+}

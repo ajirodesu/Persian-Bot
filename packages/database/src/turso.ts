@@ -104,6 +104,10 @@ export {
   unbanThread,
   isThreadBanned,
   getThreadBanReason,
+  banDiscordServer,
+  unbanDiscordServer,
+  isDiscordServerBanned,
+  getDiscordServerBanReason,
 } from '../adapters/turso/src/cat-bot/banned.repo.js';
 
 // --- SERVER ---

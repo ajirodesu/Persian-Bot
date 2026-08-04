@@ -136,6 +136,18 @@ CREATE TABLE IF NOT EXISTS bot_discord_server_session (
   PRIMARY KEY (user_id, session_id, bot_server_id)
 );
 
+-- Discord server bans are keyed by server id (not channel) so a ban covers every
+-- channel in the guild. Mirrors bot_threads_session_banned's audit style: is_banned
+-- defaults to TRUE, an explicit unban sets it FALSE and keeps the reason row.
+CREATE TABLE IF NOT EXISTS bot_discord_server_session_banned (
+  user_id       TEXT    NOT NULL,
+  session_id    TEXT    NOT NULL,
+  bot_server_id TEXT    NOT NULL,
+  is_banned     BOOLEAN NOT NULL DEFAULT TRUE,
+  reason        TEXT,
+  PRIMARY KEY (user_id, session_id, bot_server_id)
+);
+
 -- ── Session-level config ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bot_session (
   user_id     TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,

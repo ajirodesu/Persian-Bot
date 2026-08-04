@@ -101,6 +101,10 @@ export {
   unbanThread,
   isThreadBanned,
   getThreadBanReason,
+  banDiscordServer,
+  unbanDiscordServer,
+  isDiscordServerBanned,
+  getDiscordServerBanReason,
 } from '../adapters/mongodb/src/cat-bot/banned.repo.js';
 
 // --- SERVER ---

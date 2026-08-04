@@ -191,3 +191,87 @@ export async function getThreadBanReason(
     return null;
   }
 }
+
+// ── Discord Server Bans ───────────────────────────────────────────────────────
+// Keyed by server id (not channel) so a ban covers every channel in the guild.
+
+/** Bans a Discord server. Idempotent — reason is updated on re-ban. */
+export async function banDiscordServer(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+  reason?: string,
+): Promise<void> {
+  const db = getMongoDb();
+  await db.collection('botDiscordServerBanned').updateOne(
+    { userId, sessionId, botServerId },
+    {
+      $set: {
+        userId,
+        sessionId,
+        botServerId,
+        isBanned: true,
+        reason: reason ?? null,
+      },
+    },
+    { upsert: true },
+  );
+}
+
+/** Lifts a Discord server ban. Preserves the row so reason is retained for audit. */
+export async function unbanDiscordServer(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<void> {
+  const db = getMongoDb();
+  await db
+    .collection('botDiscordServerBanned')
+    .updateOne(
+      { userId, sessionId, botServerId },
+      { $set: { isBanned: false } },
+    );
+}
+
+/** Returns true when the Discord server is actively banned. Fail-open on DB error. */
+export async function isDiscordServerBanned(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<boolean> {
+  try {
+    const db = getMongoDb();
+    const rec = await db
+      .collection<{ isBanned: boolean }>('botDiscordServerBanned')
+      .findOne(
+        { userId, sessionId, botServerId },
+        { projection: { isBanned: 1, _id: 0 } },
+      );
+    return rec?.isBanned ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the stored ban reason for a Discord server, or null when unbanned/absent/on error.
+ * Fail-open — never throws, so a message-formatting call site can't crash on a DB blip.
+ */
+export async function getDiscordServerBanReason(
+  userId: string,
+  sessionId: string,
+  botServerId: string,
+): Promise<string | null> {
+  try {
+    const db = getMongoDb();
+    const rec = await db
+      .collection<{ reason: string | null }>('botDiscordServerBanned')
+      .findOne(
+        { userId, sessionId, botServerId },
+        { projection: { reason: 1, _id: 0 } },
+      );
+    return rec?.reason ?? null;
+  } catch {
+    return null;
+  }
+}
