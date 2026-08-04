@@ -4,7 +4,7 @@ import type { EventMeta } from '@/engine/types/module-config.types.js';
 
 export const meta: EventMeta = {
   name: 'leave',
-  eventType: ['log:unsubscribe'],
+  type: ['log:unsubscribe'],
   version: '1.0.0',
   author: 'John Lester',
   description: 'Sends a goodbye message when members leave the group',

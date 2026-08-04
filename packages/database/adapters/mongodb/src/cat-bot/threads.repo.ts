@@ -196,6 +196,66 @@ export async function getAllGroupThreadIds(
   return groupRows.map((r) => r.id);
 }
 
+// ── Deletion (bot removed from chat/guild) ───────────────────────────────────
+
+/**
+ * Removes this bot instance's thread records for a chat the bot has left.
+ *
+ * Deletes the (userId, platform, sessionId) scoped botThreadSessions document and
+ * the matching botThreadBanned document, then garbage-collects the global
+ * botThreads document only when no other session still references the thread.
+ */
+export async function deleteThread(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  threadId: string,
+): Promise<void> {
+  const db = getMongoDb();
+  const platformId = toPlatformNumericId(platform);
+  await db
+    .collection('botThreadSessions')
+    .deleteMany({ userId, platformId, sessionId, botThreadId: threadId });
+  await db
+    .collection('botThreadBanned')
+    .deleteMany({ userId, platformId, sessionId, botThreadId: threadId });
+
+  // Orphan cleanup — delete the shared thread document only if no session still uses it.
+  const remaining = await db
+    .collection('botThreadSessions')
+    .countDocuments({ botThreadId: threadId });
+  if (remaining === 0) {
+    await db.collection('botThreads').deleteOne({ id: threadId });
+  }
+}
+
+/**
+ * Removes this bot instance's Discord server records when the bot leaves a guild.
+ *
+ * Deletes the (userId, sessionId) scoped botDiscordServerSessions document, then
+ * garbage-collects the global botDiscordServers document (and its channel links)
+ * only when no other session still references the server.
+ */
+export async function deleteDiscordServer(
+  userId: string,
+  sessionId: string,
+  serverId: string,
+): Promise<void> {
+  const db = getMongoDb();
+  await db
+    .collection('botDiscordServerSessions')
+    .deleteMany({ userId, sessionId, botServerId: serverId });
+
+  // Orphan cleanup — delete the shared server document only if no session still uses it.
+  const remaining = await db
+    .collection('botDiscordServerSessions')
+    .countDocuments({ botServerId: serverId });
+  if (remaining === 0) {
+    await db.collection('botDiscordChannels').deleteMany({ serverId });
+    await db.collection('botDiscordServers').deleteOne({ id: serverId });
+  }
+}
+
 // ── Discord Server Support ──────────────────────────────────────────────────
 
 export async function upsertDiscordServer(data: any): Promise<void> {

@@ -16,6 +16,8 @@
  *   - setThreadSessionData → replace data entry in cache; group IDs list unaffected
  */
 import {
+  deleteThread as _deleteThread,
+  deleteDiscordServer as _deleteDiscordServer,
   upsertThread as _upsertThread,
   threadExists as _threadExists,
   threadSessionExists as _threadSessionExists,
@@ -409,4 +411,84 @@ export async function getThreadSessionUpdatedAt(
   );
   lruCache.set(key, result);
   return result;
+}
+
+// ── Deletion (bot removed from chat/guild) ─────────────────────────────────
+
+/**
+ * Deletes a Discord server record (and this session's link to it) for a guild the
+ * bot has left. Evicts every server-scoped cache entry so subsequent reads see the
+ * record as gone instead of serving stale in-memory data.
+ */
+export async function deleteDiscordServer(
+  userId: string,
+  sessionId: string,
+  serverId: string,
+): Promise<void> {
+  await _deleteDiscordServer(userId, sessionId, serverId);
+  lruCache.del(threadExistsKey(serverId));
+  lruCache.del(threadNameKey(serverId));
+  lruCache.del(threadAdminsSetKey(serverId));
+  lruCache.del(
+    threadSessionExistsKey(userId, Platforms.Discord, sessionId, serverId),
+  );
+  lruCache.del(
+    threadSessionDataKey(userId, Platforms.Discord, sessionId, serverId),
+  );
+  lruCache.del(
+    threadSessionUpdatedAtKey(
+      userId,
+      Platforms.Discord,
+      sessionId,
+      serverId,
+    ),
+  );
+  lruCache.del(threadGroupsKey(userId, Platforms.Discord, sessionId));
+  dbChangeEmitter.publish({
+    key: `${userId}:${Platforms.Discord}:${sessionId}`,
+    type: 'group',
+    action: 'delete',
+    id: serverId,
+  });
+}
+
+/**
+ * Deletes this bot's database record for a chat/guild it has been removed from.
+ *
+ * On Discord the incoming threadID may be either a channel ID or the guild
+ * (server) ID — both are normalised to the server ID before deletion. On other
+ * platforms the thread ID is used directly. All session-scoped cache entries for
+ * the removed chat are evicted so the active-chats count and existence checks
+ * reflect the deletion immediately.
+ */
+export async function deleteThread(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  threadId: string,
+): Promise<void> {
+  if (platform === Platforms.Discord) {
+    const serverId = (await getDiscordServerIdByChannel(threadId)) ?? threadId;
+    if (await _discordServerExists(serverId)) {
+      await deleteDiscordServer(userId, sessionId, serverId);
+      lruCache.del(`discord:channel:${threadId}`);
+      return;
+    }
+  }
+
+  await _deleteThread(userId, platform, sessionId, threadId);
+  lruCache.del(threadExistsKey(threadId));
+  lruCache.del(threadNameKey(threadId));
+  lruCache.del(threadAdminsSetKey(threadId));
+  lruCache.del(threadSessionExistsKey(userId, platform, sessionId, threadId));
+  lruCache.del(threadSessionDataKey(userId, platform, sessionId, threadId));
+  lruCache.del(threadSessionUpdatedAtKey(userId, platform, sessionId, threadId));
+  lruCache.del(threadGroupsKey(userId, platform, sessionId));
+  lruCache.del(`discord:channel:${threadId}`);
+  dbChangeEmitter.publish({
+    key: `${userId}:${platform}:${sessionId}`,
+    type: 'group',
+    action: 'delete',
+    id: threadId,
+  });
 }

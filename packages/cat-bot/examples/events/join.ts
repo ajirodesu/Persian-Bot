@@ -4,7 +4,7 @@ import type { EventMeta } from '@/engine/types/module-config.types.js';
 
 export const meta: EventMeta = {
   name: 'join',
-  eventType: ['log:subscribe'],
+  type: ['log:subscribe'],
   version: '1.0.0',
   author: 'John Lester',
   description: 'Sends a welcome message when members join the group',

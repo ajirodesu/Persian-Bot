@@ -31,6 +31,7 @@ import {
 import {
   getThreadName,
   getAllGroupThreadIds,
+  deleteThread,
 } from '@/engine/repos/threads.repo.js';
 import {
   createCollectionManager,
@@ -124,6 +125,14 @@ export function buildBaseCtx(
             native.userId ?? '',
             native.platform,
             native.sessionId ?? '',
+          ),
+        // Pre-scoped to session coords — removes the chat/guild record when the bot leaves
+        remove: (threadId: string) =>
+          deleteThread(
+            native.userId ?? '',
+            native.platform,
+            native.sessionId ?? '',
+            threadId,
           ),
       },
     },

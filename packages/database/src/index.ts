@@ -74,6 +74,10 @@ export const setBotSessionData = m.setBotSessionData;
 
 // --- THREADS ---
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteThread = m.deleteThread;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteDiscordServer = m.deleteDiscordServer;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const upsertThread = m.upsertThread;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const threadExists = m.threadExists;

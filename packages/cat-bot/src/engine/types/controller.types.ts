@@ -104,6 +104,8 @@ export interface BaseCtx {
       collection: (botThreadId: string) => CollectionManager;
       /** Returns all group thread IDs for the current bot session (isGroup=true only). */
       getGroupIds: () => Promise<string[]>;
+      /** Deletes this bot's database record for a chat/guild the bot has left (Telegram thread or Discord server). */
+      remove: (threadId: string) => Promise<void>;
     };
   };
 }

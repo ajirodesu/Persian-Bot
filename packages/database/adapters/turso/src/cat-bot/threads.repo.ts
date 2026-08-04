@@ -265,6 +265,135 @@ export async function getAllGroupThreadIds(
   );
 }
 
+// ── Deletion (bot removed from chat/guild) ───────────────────────────────────
+
+/**
+ * Removes this bot instance's thread records for a chat the bot has left.
+ *
+ * Deletes the (userId, platform, sessionId) scoped bot_threads_session row and
+ * the matching bot_threads_session_banned row, then garbage-collects the global
+ * bot_threads row — and its cascaded participant/admin junctions — but ONLY when
+ * no other session still references the thread. bot_threads_session.bot_thread_id
+ * has no ON DELETE CASCADE, so deleting the thread row while another session row
+ * points at it would throw an FK violation; the orphan-count guard avoids that.
+ *
+ * The session-scoped deletes run in their own transaction and commit FIRST, so a
+ * best-effort GC failure (FK violation when another session still references the
+ * thread) can never roll back the primary cleanup. GC runs outside the
+ * transaction and swallows FK errors — the shared bot_threads row simply stays
+ * because another live session needs it, which is the correct outcome.
+ */
+export async function deleteThread(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  threadId: string,
+): Promise<void> {
+  const platformId = toPlatformNumericId(platform);
+  const tx = await tursoClient.transaction('write');
+  try {
+    await tx.execute({
+      sql: `DELETE FROM bot_threads_session
+            WHERE user_id = :userId AND platform_id = :platformId AND session_id = :sessionId AND bot_thread_id = :threadId`,
+      args: { userId, platformId, sessionId, threadId },
+    });
+    await tx.execute({
+      sql: `DELETE FROM bot_threads_session_banned
+            WHERE user_id = :userId AND platform_id = :platformId AND session_id = :sessionId AND bot_thread_id = :threadId`,
+      args: { userId, platformId, sessionId, threadId },
+    });
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  // Orphan cleanup — best-effort, outside the critical transaction.
+  // If the FK guard races (another session links the thread between the count
+  // and the delete), the constraint error is swallowed and the shared row is
+  // kept — the session-scoped deletes above already committed.
+  try {
+    const res = await tursoClient.execute({
+      sql: `SELECT COUNT(*) AS cnt FROM bot_threads_session WHERE bot_thread_id = :threadId`,
+      args: { threadId },
+    });
+    const remaining = Number(
+      (res.rows[0] as { cnt: number | bigint | string } | undefined)?.cnt ?? 0,
+    );
+    if (remaining === 0) {
+      // Cascades bot_thread_participants / bot_thread_admins via FK ON DELETE CASCADE.
+      await tursoClient.execute({
+        sql: `DELETE FROM bot_threads WHERE id = :threadId`,
+        args: { threadId },
+      });
+    }
+  } catch (err) {
+    // FK violation — another session still references the thread, so the shared
+    // bot_threads row must be kept. Any other error is a genuine failure and
+    // must not be swallowed.
+    const code = (err as { code?: string } | undefined)?.code ?? '';
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!code.includes('SQLITE_CONSTRAINT') && !msg.includes('FOREIGN KEY')) {
+      throw err;
+    }
+  }
+}
+
+/**
+ * Removes this bot instance's Discord server records when the bot leaves a guild.
+ *
+ * Deletes the (userId, sessionId) scoped bot_discord_server_session row in its
+ * own committed transaction, then garbage-collects the global bot_discord_server
+ * row — cascading channels, participants, and admins — but ONLY when no other
+ * session still references the server. bot_discord_server_session.bot_server_id
+ * cascades on server delete, so the orphan-count guard prevents nuking another
+ * session's association. GC is best-effort after the primary commit, so a GC
+ * failure can never leave the session link behind.
+ */
+export async function deleteDiscordServer(
+  userId: string,
+  sessionId: string,
+  serverId: string,
+): Promise<void> {
+  const tx = await tursoClient.transaction('write');
+  try {
+    await tx.execute({
+      sql: `DELETE FROM bot_discord_server_session
+            WHERE user_id = :userId AND session_id = :sessionId AND bot_server_id = :serverId`,
+      args: { userId, sessionId, serverId },
+    });
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+
+  // Orphan cleanup — best-effort, after the session link is committed.
+  try {
+    const res = await tursoClient.execute({
+      sql: `SELECT COUNT(*) AS cnt FROM bot_discord_server_session WHERE bot_server_id = :serverId`,
+      args: { serverId },
+    });
+    const remaining = Number(
+      (res.rows[0] as { cnt: number | bigint | string } | undefined)?.cnt ?? 0,
+    );
+    if (remaining === 0) {
+      // Cascades bot_discord_channel / bot_discord_server_participants /
+      // bot_discord_server_admins / remaining sessions via FK ON DELETE CASCADE.
+      await tursoClient.execute({
+        sql: `DELETE FROM bot_discord_server WHERE id = :serverId`,
+        args: { serverId },
+      });
+    }
+  } catch (err) {
+    const code = (err as { code?: string } | undefined)?.code ?? '';
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!code.includes('SQLITE_CONSTRAINT') && !msg.includes('FOREIGN KEY')) {
+      throw err;
+    }
+  }
+}
+
 // ── Discord Server Support ──────────────────────────────────────────────────
 
 export async function upsertDiscordServer(data: any): Promise<void> {

@@ -34,6 +34,31 @@ export interface SessionLoggerMeta {
   sessionId: string;
 }
 
+/**
+ * JSON.stringify replacer that keeps Error payloads intact.
+ *
+ * The default stringifier drops an Error to `{}` because `message`, `name`, and
+ * `stack` are non-enumerable — which made every logged exception appear as a
+ * useless empty object. This replacer materialises those fields so structured
+ * log lines (and the dashboard) actually show why something failed.
+ */
+function errorSafeReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+      cause: value.cause,
+    };
+  }
+  return value;
+}
+
+/** Serialises log metadata without losing Error contents. */
+function serializeMeta(meta: Record<string, unknown>): string {
+  return JSON.stringify(meta, errorSafeReplacer);
+}
+
 type LogLevel = 'error' | 'warn' | 'info' | 'verbose' | 'debug';
 
 // ── Colour palette ─────────────────────────────────────────────────────────────
@@ -82,7 +107,7 @@ export class SessionLogger {
     const metaObj: Record<string, unknown> =
       extra !== undefined ? { ...extra } : {};
     const metaStr =
-      Object.keys(metaObj).length > 0 ? ` ${JSON.stringify(metaObj)}` : '';
+      Object.keys(metaObj).length > 0 ? ` ${serializeMeta(metaObj)}` : '';
     const colorFn = LEVEL_COLORS[level] ?? ((t: string) => t);
 
     // colorize({ all: true }) colorises the full line — timestamp, level, message, and meta.

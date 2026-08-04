@@ -248,6 +248,129 @@ export async function getAllGroupThreadIds(
   return res.rows.map((r) => r.bot_thread_id);
 }
 
+// ── Deletion (bot removed from chat/guild) ───────────────────────────────────
+
+/**
+ * Removes this bot instance's thread records for a chat the bot has left.
+ *
+ * Deletes the (userId, platform, sessionId) scoped bot_threads_session row and
+ * the matching bot_threads_session_banned row, then garbage-collects the global
+ * bot_threads row — and its cascaded participant/admin junctions — but ONLY when
+ * no other session still references the thread. bot_threads_session.bot_thread_id
+ * has no ON DELETE CASCADE, so deleting the thread row while another session row
+ * points at it would throw an FK violation; the orphan-count guard avoids that.
+ *
+ * The session-scoped deletes commit in their own transaction FIRST, so a
+ * best-effort GC failure can never roll back the primary cleanup. GC runs after
+ * commit and swallows FK violations — the shared bot_threads row simply stays
+ * because another live session needs it, which is the correct outcome.
+ */
+export async function deleteThread(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  threadId: string,
+): Promise<void> {
+  const platformId = toPlatformNumericId(platform);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `DELETE FROM bot_threads_session
+       WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
+      [userId, platformId, sessionId, threadId],
+    );
+    await client.query(
+      `DELETE FROM bot_threads_session_banned
+       WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
+      [userId, platformId, sessionId, threadId],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  // Orphan cleanup — best-effort, after the critical transaction committed.
+  // A concurrent session linking the thread between the count and the delete
+  // trips the FK constraint; that error is swallowed and the shared row kept.
+  try {
+    const res = await pool.query<{ cnt: string }>(
+      `SELECT COUNT(*) AS cnt FROM bot_threads_session WHERE bot_thread_id = $1`,
+      [threadId],
+    );
+    if (Number(res.rows[0]?.cnt ?? 0) === 0) {
+      // Cascades bot_thread_participants / bot_thread_admins via FK ON DELETE CASCADE.
+      await pool.query(`DELETE FROM bot_threads WHERE id = $1`, [threadId]);
+    }
+  } catch (err) {
+    const code = (err as { code?: string } | undefined)?.code ?? '';
+    const msg = err instanceof Error ? err.message : String(err);
+    if (code !== '23503' && !msg.includes('FOREIGN KEY')) {
+      throw err;
+    }
+  }
+}
+
+/**
+ * Removes this bot instance's Discord server records when the bot leaves a guild.
+ *
+ * Deletes the (userId, sessionId) scoped bot_discord_server_session row in its
+ * own committed transaction, then garbage-collects the global bot_discord_server
+ * row — cascading channels, participants, and admins — but ONLY when no other
+ * session still references the server. bot_discord_server_session.bot_server_id
+ * cascades on server delete, so the orphan-count guard prevents nuking another
+ * session's association. GC is best-effort after the primary commit, so a GC
+ * failure can never leave the session link behind.
+ */
+export async function deleteDiscordServer(
+  userId: string,
+  sessionId: string,
+  serverId: string,
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `DELETE FROM bot_discord_server_session WHERE user_id = $1 AND session_id = $2 AND bot_server_id = $3`,
+      [userId, sessionId, serverId],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  // Orphan cleanup — best-effort, after the session link is committed.
+  try {
+    const res = await pool.query<{ cnt: string }>(
+      `SELECT COUNT(*) AS cnt FROM bot_discord_server_session WHERE bot_server_id = $1`,
+      [serverId],
+    );
+    if (Number(res.rows[0]?.cnt ?? 0) === 0) {
+      // Cascades bot_discord_channel / bot_discord_server_participants /
+      // bot_discord_server_admins / remaining sessions via FK ON DELETE CASCADE.
+      await pool.query(`DELETE FROM bot_discord_server WHERE id = $1`, [
+        serverId,
+      ]);
+    }
+  } catch (err) {
+    const code = (err as { code?: string } | undefined)?.code ?? '';
+    const msg = err instanceof Error ? err.message : String(err);
+    if (code !== '23503' && !msg.includes('FOREIGN KEY')) {
+      throw err;
+    }
+  }
+}
+
 // ── Discord Server Support ──────────────────────────────────────────────────
 
 export async function upsertDiscordServer(data: any): Promise<void> {

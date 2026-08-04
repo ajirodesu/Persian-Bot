@@ -51,6 +51,8 @@ export {
 
 // --- THREADS ---
 export {
+  deleteThread,
+  deleteDiscordServer,
   upsertThread,
   threadExists,
   threadSessionExists,

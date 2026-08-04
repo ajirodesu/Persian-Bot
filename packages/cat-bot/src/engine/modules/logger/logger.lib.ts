@@ -20,7 +20,15 @@ const devFormat = winston.format.combine(
   winston.format.errors({ stack: true }),
   winston.format.printf((info: LogInfo) => {
     const { timestamp, level, message, correlationId, ...meta } = info;
-    const metaStr = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
+    // Preserve Error payloads — JSON.stringify alone turns any Error into {}.
+    const metaStr =
+      Object.keys(meta).length > 0
+        ? ` ${JSON.stringify(meta, (_k, v) =>
+            v instanceof Error
+              ? { name: v.name, message: v.message, stack: v.stack, cause: v.cause }
+              : v,
+          )}`
+        : '';
     const correlationStr = correlationId ? ` [${correlationId}]` : '';
     return `${timestamp}${correlationStr} ${level}: ${message}${metaStr}`;
   }),
