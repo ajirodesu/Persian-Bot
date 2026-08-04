@@ -280,6 +280,10 @@ export async function getThreadName(threadId: string): Promise<string> {
   const serverId = await getDiscordServerIdByChannel(threadId);
   if (serverId) {
     result = await _getDiscordServerName(serverId);
+  } else if (await _discordServerExists(threadId)) {
+    // threadId is itself a Discord server ID (e.g. from getAllDiscordServerIds) —
+    // resolve its server name directly so group lists show the guild name.
+    result = await _getDiscordServerName(threadId);
   } else {
     result = await _getThreadName(threadId);
   }

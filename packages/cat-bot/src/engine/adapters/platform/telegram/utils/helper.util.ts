@@ -89,7 +89,13 @@ export function normalizeTelegramEvent(
     | (Message & { reply_to_message?: Message })
     | undefined;
   const chatType = ctx.chat?.type;
-  const isGroup = chatType === 'group' || chatType === 'supergroup';
+  // Channels are container chats too (bot posts broadcast there) — they belong in
+  // the group database, so tag them isGroup just like groups/supergroups. This
+  // keeps the middleware's DM/PM guard (isGroup === false) from skipping them.
+  const isGroup =
+    chatType === 'group' ||
+    chatType === 'supergroup' ||
+    chatType === 'channel';
 
   let messageReply: Record<string, unknown> | null = null;
 

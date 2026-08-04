@@ -26,6 +26,7 @@ import type {
   MiddlewareFn,
   OnChatCtx,
 } from '@/engine/types/middleware.types.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { syncThreadAndParticipants } from '@/engine/services/threads.service.js';
 import { syncUser } from '@/engine/services/users.service.js';
 import {
@@ -68,6 +69,17 @@ export const chatPassthrough: MiddlewareFn<OnChatCtx> = async function (
     '') as string;
   const threadID = (ctx.event['threadID'] ?? '') as string;
 
+  // DM/PM detection: normalizers tag Discord DMs and Telegram private chats with
+  // isGroup:false. Such chats are NOT recorded in the group database (threads.service
+  // skips them too), so skip the thread-sync block entirely — no stale-check, no log,
+  // no session write — while still syncing the sender below. Scoped to Discord/Telegram:
+  // the webchat room also reports isGroup:false but is a legitimate container that must
+  // keep syncing its thread session. Events without the flag (reactions, system events)
+  // keep the default path; threads.service is the authoritative guard.
+  const eventIsKnownDm =
+    (platform === Platforms.Discord || platform === Platforms.Telegram) &&
+    (ctx.event['isGroup'] as boolean | undefined) === false;
+
   // All four fields required — partial context can't produce a valid composite session key.
   // Platform listeners that do not yet set userId/sessionId in native context skip sync entirely.
   if (platform && threadID && sessionUserId && sessionId) {
@@ -81,7 +93,9 @@ export const chatPassthrough: MiddlewareFn<OnChatCtx> = async function (
       // placeholder so Promise.all sees a uniform element type; the if (senderID) block below
       // ensures we never act on the placeholder value.
       const [threadUpdatedAt, senderUpdatedAt] = await Promise.all([
-        getThreadSessionUpdatedAt(sessionUserId, platform, sessionId, threadID),
+        eventIsKnownDm
+          ? Promise.resolve(null as Date | null)
+          : getThreadSessionUpdatedAt(sessionUserId, platform, sessionId, threadID),
         senderID
           ? getUserSessionUpdatedAt(
               sessionUserId,
@@ -96,7 +110,7 @@ export const chatPassthrough: MiddlewareFn<OnChatCtx> = async function (
       const threadStale =
         threadUpdatedAt === null ||
         now - threadUpdatedAt.getTime() > SYNC_INTERVAL_MS;
-      if (threadStale) {
+      if (threadStale && !eventIsKnownDm) {
         // Log new vs update before the optimistic stamp so the event is always
         // recorded even if the subsequent upsertThreadSession call is skipped.
         if (threadUpdatedAt === null) {

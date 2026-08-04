@@ -47,6 +47,14 @@ export async function syncThreadAndParticipants(
     // when the session row is absent or older than 1 hour. No guard needed here.
     const info = await ctx.thread.getInfo(threadId);
 
+    // Only container chats (Telegram group/supergroup/channel, Discord server/guild,
+    // webchat chat room, or any other platform container) belong in the group database.
+    // DM/PM 1:1 conversations must NOT be recorded as groups — the sender is still
+    // persisted to bot_users by on-chat.middleware so the user record is never lost.
+    if (info.isGroup === false && ctx.native.platform !== Platforms.Webchat) {
+      return;
+    }
+
     // Sync users FIRST to guarantee downstream writes find matching foreign keys in bot_users
     const allUsersToSync = Array.from(
       new Set([...info.participantIDs, ...info.adminIDs]),
