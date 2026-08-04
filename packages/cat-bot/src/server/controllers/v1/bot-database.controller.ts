@@ -241,10 +241,10 @@ export class BotDatabaseController {
                 AND bdsb.session_id   = bdss.session_id
                 AND bdsb.bot_server_id = bdss.bot_server_id
                WHERE bdss.user_id     = $1
-                 AND bdss.session_id  = $3
-                 AND (bds.name ILIKE $4 OR bds.id ILIKE $4)${whereExtra}
+                 AND bdss.session_id  = $2
+                 AND (bds.name ILIKE $3 OR bds.id ILIKE $3)${whereExtra}
                ORDER BY ${sortColumn} ${sortDir} NULLS LAST, bdss.last_updated_at DESC NULLS LAST
-               LIMIT $5 OFFSET $6`,
+               LIMIT $4 OFFSET $5`,
               [ctx.userId, ctx.sessionId, searchParam, limit, offset],
             )
           : dbQuery(
@@ -282,8 +282,8 @@ export class BotDatabaseController {
                 AND bdsb.session_id   = bdss.session_id
                 AND bdsb.bot_server_id = bdss.bot_server_id
                WHERE bdss.user_id     = $1
-                 AND bdss.session_id  = $3
-                 AND (bds.name ILIKE $4 OR bds.id ILIKE $4)${whereExtra}`,
+                 AND bdss.session_id  = $2
+                 AND (bds.name ILIKE $3 OR bds.id ILIKE $3)${whereExtra}`,
               [ctx.userId, ctx.sessionId, searchParam],
             )
           : dbQuery(
@@ -432,7 +432,7 @@ export class BotDatabaseController {
       if (ctx.platform === Platforms.Discord) {
         await dbQuery(
           `DELETE FROM bot_discord_server_session
-           WHERE user_id = $1 AND session_id = $3 AND bot_server_id = $4`,
+           WHERE user_id = $1 AND session_id = $2 AND bot_server_id = $3`,
           [ctx.userId, ctx.sessionId, botThreadId],
         );
       } else {
