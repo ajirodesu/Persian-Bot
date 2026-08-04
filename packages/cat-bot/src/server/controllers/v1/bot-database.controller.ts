@@ -29,6 +29,8 @@ import {
   unbanThread,
 } from '@/engine/repos/banned.repo.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
+import { invalidateUserSessionCache } from '@/engine/repos/users.repo.js';
+import { invalidateThreadSessionCache } from '@/engine/repos/threads.repo.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -283,6 +285,17 @@ export class BotDatabaseController {
          WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_user_id = $4`,
         [ctx.userId, ctx.platformId, ctx.sessionId, botUserId],
       );
+      // The delete bypassed the repo layer, so the engine's LRU cache still holds
+      // the stale sessionExists/updatedAt entries. Without eviction the next DM
+      // from this user would be treated as "recently synced" and syncUser would
+      // never re-run — the session row would never be recreated and the user
+      // would stay invisible in the dashboard until the 15-min cache TTL expires.
+      invalidateUserSessionCache(
+        ctx.userId,
+        ctx.platform,
+        ctx.sessionId,
+        botUserId,
+      );
       dbChangeEmitter.publish({
         key: sessionKey(ctx),
         type: 'user',
@@ -364,6 +377,16 @@ export class BotDatabaseController {
         `DELETE FROM bot_threads_session
          WHERE user_id = $1 AND platform_id = $2 AND session_id = $3 AND bot_thread_id = $4`,
         [ctx.userId, ctx.platformId, ctx.sessionId, botThreadId],
+      );
+      // Same rationale as deleteUser: the raw delete bypassed the repo layer, so
+      // evict the engine LRU cache to force a fresh DB read on the next message —
+      // otherwise the group's stale cached timestamp suppresses the re-sync and
+      // the session row is never recreated.
+      invalidateThreadSessionCache(
+        ctx.userId,
+        ctx.platform,
+        ctx.sessionId,
+        botThreadId,
       );
       dbChangeEmitter.publish({
         key: sessionKey(ctx),

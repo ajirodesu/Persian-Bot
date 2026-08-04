@@ -246,3 +246,24 @@ export async function getUserSessionUpdatedAt(
   lruCache.set(key, result);
   return result;
 }
+
+/**
+ * Evicts every session-scoped LRU entry for a user after the dashboard deletes
+ * their bot_users_session row. The dashboard deletes that row directly via raw
+ * SQL (bypassing this repo layer), so without explicit eviction the bot would
+ * keep serving the stale cached timestamp — the middleware would treat the user
+ * as "recently synced", never re-run syncUser, and the session row would never
+ * be recreated, leaving the user invisible in the dashboard until the cache TTL
+ * expires. Mirrors the eviction deleteThread/deleteDiscordServer perform.
+ */
+export function invalidateUserSessionCache(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botUserId: string,
+): void {
+  lruCache.del(userSessionExistsKey(userId, platform, sessionId, botUserId));
+  lruCache.del(userSessionUpdatedAtKey(userId, platform, sessionId, botUserId));
+  lruCache.del(userSessionDataKey(userId, platform, sessionId, botUserId));
+  lruCache.del(userSessionAllKey(userId, platform, sessionId));
+}

@@ -417,6 +417,27 @@ export async function getThreadSessionUpdatedAt(
   return result;
 }
 
+/**
+ * Evicts the session-scoped LRU entries for a group after the dashboard deletes
+ * its bot_threads_session row. The dashboard deletes that row via raw SQL
+ * (bypassing this repo layer), so without explicit eviction the bot would keep
+ * serving the stale cached timestamp — the middleware would treat the group as
+ * "recently synced", never re-run the thread sync, and the session row would
+ * never be recreated, leaving the group invisible in the dashboard until the
+ * cache TTL expires. Mirrors deleteThread/deleteDiscordServer's eviction.
+ */
+export function invalidateThreadSessionCache(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  threadId: string,
+): void {
+  lruCache.del(threadSessionExistsKey(userId, platform, sessionId, threadId));
+  lruCache.del(threadSessionUpdatedAtKey(userId, platform, sessionId, threadId));
+  lruCache.del(threadSessionDataKey(userId, platform, sessionId, threadId));
+  lruCache.del(threadGroupsKey(userId, platform, sessionId));
+}
+
 // ── Deletion (bot removed from chat/guild) ─────────────────────────────────
 
 /**
