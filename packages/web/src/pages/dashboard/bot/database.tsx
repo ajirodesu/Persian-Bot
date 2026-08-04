@@ -18,7 +18,7 @@
  *   • Snackbar toasts for success / warning feedback on actions
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Users,
   MessageSquare,
@@ -50,7 +50,6 @@ import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
   BotDatabaseGroup,
-  BotDatabaseChannel,
   BotDatabaseStatusFilter,
   BotDatabaseSortBy,
 } from '@/features/users/services/bot.service'
@@ -1161,7 +1160,6 @@ function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessio
     channels,
     total: channelTotal,
     page,
-    totalPages,
     isLoading: channelsLoading,
     error: channelsError,
     search,
@@ -1180,6 +1178,7 @@ function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessio
   // Default to the first server once the list loads.
   useEffect(() => {
     if (selectedServerId === null && servers.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- select the first server once the list arrives
       setSelectedServerId(servers[0].id)
     }
   }, [servers, selectedServerId])
@@ -1272,7 +1271,6 @@ function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessio
             placeholder={
               servers.length > 0 ? 'Select a server…' : 'No servers found'
             }
-            leftIcon={<MessageSquare className="h-4 w-4 text-on-surface-variant" />}
             pill
           />
         </div>

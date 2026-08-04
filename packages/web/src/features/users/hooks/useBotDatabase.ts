@@ -639,8 +639,10 @@ export function useBotDatabaseChannels(
     fetch()
   }, [fetch])
 
-  // Reset to page 1 + refetch whenever the selected server changes.
+  // Reset to page 1 whenever the selected server changes so pagination never
+  // persists across server boundaries (e.g. page 3 of server A → page 3 of B).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset pagination when the selected server changes
     setPage(1)
   }, [serverId])
 
