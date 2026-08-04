@@ -112,8 +112,14 @@ CREATE TABLE IF NOT EXISTS bot_discord_server (
 
 CREATE TABLE IF NOT EXISTS bot_discord_channel (
   thread_id TEXT PRIMARY KEY,
-  server_id TEXT NOT NULL REFERENCES bot_discord_server(id) ON DELETE CASCADE
+  server_id TEXT NOT NULL REFERENCES bot_discord_server(id) ON DELETE CASCADE,
+  name      TEXT,
+  type      TEXT
 );
+
+-- Idempotent column migration for pre-existing databases.
+ALTER TABLE bot_discord_channel ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE bot_discord_channel ADD COLUMN IF NOT EXISTS type TEXT;
 
 CREATE TABLE IF NOT EXISTS bot_discord_server_participants (
   server_id TEXT NOT NULL REFERENCES bot_discord_server(id) ON DELETE CASCADE,

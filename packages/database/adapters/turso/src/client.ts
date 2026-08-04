@@ -117,6 +117,36 @@ export async function initDb(): Promise<void> {
     );
   `);
 
+  // Discord channel identity (name/type) — same idempotent-outside-the-fast-path
+  // pattern as the tables above so already-initialised databases receive the new
+  // columns without a manual migration. Fresh databases get them from the
+  // CREATE TABLE below; pre-existing tables are upgraded in place with a PRAGMA
+  // introspection + ALTER TABLE ADD COLUMN (SQLite has no ADD COLUMN IF NOT EXISTS).
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS bot_discord_channel (
+      thread_id TEXT PRIMARY KEY,
+      server_id TEXT NOT NULL REFERENCES bot_discord_server(id) ON DELETE CASCADE,
+      name      TEXT,
+      type      TEXT
+    );
+  `);
+  const channelCols = await tursoClient.execute(
+    `PRAGMA table_info(bot_discord_channel)`,
+  );
+  const channelColNames = new Set(
+    (channelCols.rows as Array<{ name: string }>).map((r) => r.name),
+  );
+  if (!channelColNames.has('name')) {
+    await tursoClient.execute({
+      sql: `ALTER TABLE bot_discord_channel ADD COLUMN name TEXT`,
+    });
+  }
+  if (!channelColNames.has('type')) {
+    await tursoClient.execute({
+      sql: `ALTER TABLE bot_discord_channel ADD COLUMN type TEXT`,
+    });
+  }
+
   if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`
@@ -216,7 +246,9 @@ export async function initDb(): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS bot_discord_channel (
       thread_id TEXT PRIMARY KEY,
-      server_id TEXT NOT NULL REFERENCES bot_discord_server(id) ON DELETE CASCADE
+      server_id TEXT NOT NULL REFERENCES bot_discord_server(id) ON DELETE CASCADE,
+      name      TEXT,
+      type      TEXT
     );
 
     CREATE TABLE IF NOT EXISTS bot_discord_server_participants (

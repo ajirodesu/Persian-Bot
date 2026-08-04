@@ -49,6 +49,28 @@ export interface BotDatabaseGroupsResponseDto {
   totalPages: number
 }
 
+export interface BotDatabaseChannel {
+  id: string
+  name: string | null
+  type: string | null
+  server_id: string
+  is_banned: boolean
+  ban_reason: string | null
+}
+
+export interface BotDatabaseServersResponseDto {
+  servers: BotDatabaseGroup[]
+  total: number
+}
+
+export interface BotDatabaseChannelsResponseDto {
+  channels: BotDatabaseChannel[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
 export type BotDatabaseStatusFilter = 'all' | 'active' | 'banned'
 export type BotDatabaseSortBy = 'name' | 'last_seen'
 export type BotDatabaseSortDir = 'asc' | 'desc'
@@ -293,6 +315,36 @@ export class BotService {
 
   async unbanDatabaseGroup(sessionId: string, groupId: string): Promise<void> {
     await apiClient.delete(`/api/v1/bots/${sessionId}/database/groups/${groupId}/ban`)
+  }
+
+  async getDatabaseServers(
+    sessionId: string,
+  ): Promise<BotDatabaseServersResponseDto> {
+    const response = await apiClient.get<BotDatabaseServersResponseDto>(
+      `/api/v1/bots/${sessionId}/database/servers`,
+    )
+    return response.data
+  }
+
+  async getDatabaseChannels(
+    sessionId: string,
+    serverId: string,
+    page = 1,
+    limit = 20,
+    search = '',
+  ): Promise<BotDatabaseChannelsResponseDto> {
+    const response = await apiClient.get<BotDatabaseChannelsResponseDto>(
+      `/api/v1/bots/${sessionId}/database/channels`,
+      {
+        params: {
+          serverId,
+          page,
+          limit,
+          search,
+        },
+      },
+    )
+    return response.data
   }
 }
 

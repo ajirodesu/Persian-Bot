@@ -45,6 +45,10 @@ export interface UnifiedThreadInfo {
   avatarUrl: string | null;
   /** Discord server ID. Null for DMs or non-Discord platforms. */
   serverID?: string | null;
+  /** Discord channel (thread) name. Null for non-Discord platforms or DMs. */
+  channelName?: string | null;
+  /** Discord channel type label (e.g. "text", "voice"). Null when unknown. */
+  channelType?: string | null;
 }
 
 /**
@@ -63,6 +67,8 @@ export const PROTO_UNIFIED_THREAD_INFO: Readonly<UnifiedThreadInfo> =
     adminIDs: [],
     avatarUrl: null,
     serverID: null,
+    channelName: null,
+    channelType: null,
   });
 
 /**
@@ -88,5 +94,7 @@ export function createUnifiedThreadInfo(
     adminIDs: data.adminIDs ?? [],
     avatarUrl: data.avatarUrl ?? null,
     serverID: data.serverID ?? null,
+    channelName: data.channelName ?? null,
+    channelType: data.channelType ?? null,
   };
 }

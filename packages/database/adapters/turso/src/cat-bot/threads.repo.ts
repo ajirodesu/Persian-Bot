@@ -476,11 +476,22 @@ export async function upsertDiscordServer(data: any): Promise<void> {
 export async function linkDiscordChannel(
   serverId: string,
   threadId: string,
+  name?: string | null,
+  type?: string | null,
 ): Promise<void> {
   await tursoClient.execute({
-    sql: `INSERT INTO bot_discord_channel (server_id, thread_id) VALUES (:serverId, :threadId)
-          ON CONFLICT (thread_id) DO UPDATE SET server_id = excluded.server_id`,
-    args: { serverId, threadId },
+    sql: `INSERT INTO bot_discord_channel (server_id, thread_id, name, type)
+          VALUES (:serverId, :threadId, :name, :type)
+          ON CONFLICT (thread_id) DO UPDATE SET
+            server_id = excluded.server_id,
+            name = excluded.name,
+            type = excluded.type`,
+    args: {
+      serverId,
+      threadId,
+      name: name ?? null,
+      type: type ?? null,
+    },
   });
 }
 

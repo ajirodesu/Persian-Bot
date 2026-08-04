@@ -43,10 +43,14 @@ import { useBotContext } from '@/features/users/components/DashboardBotLayout'
 import {
   useBotDatabaseUsers,
   useBotDatabaseGroups,
+  useBotDatabaseServers,
+  useBotDatabaseChannels,
 } from '@/features/users/hooks/useBotDatabase'
+import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
   BotDatabaseGroup,
+  BotDatabaseChannel,
   BotDatabaseStatusFilter,
   BotDatabaseSortBy,
 } from '@/features/users/services/bot.service'
@@ -73,6 +77,22 @@ const statusFilterOptions = [
   { value: 'active', label: 'Active only' },
   { value: 'banned', label: 'Banned only' },
 ]
+
+const channelTypeLabels: Record<string, string> = {
+  text: 'Text',
+  voice: 'Voice',
+  category: 'Category',
+  announcement: 'Announcement',
+  thread: 'Thread',
+  stage: 'Stage',
+  forum: 'Forum',
+  media: 'Media',
+}
+
+function channelTypeLabel(type: string | null): string {
+  if (!type) return '—'
+  return channelTypeLabels[type] ?? type
+}
 
 // ── Detail dialog ─────────────────────────────────────────────────────────────
 
@@ -644,9 +664,9 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
   )
 }
 
-// ── Groups tab ────────────────────────────────────────────────────────────────
+// ── Groups tab (Telegram / webchat) ───────────────────────────────────────────
 
-function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
+function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
   const {
     groups,
     total,
@@ -1119,6 +1139,511 @@ function GroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: 
   )
 }
 
+// ── Discord Groups tab ────────────────────────────────────────────────────────
+//
+// Discord sessions have a server → channel hierarchy. The tab shows a server
+// dropdown fed by GET /database/servers; selecting a server loads ONLY that
+// server's channels (GET /database/channels?serverId=...) below it. Channels can
+// never appear outside their parent server's context because both the dropdown
+// and the channel query are scoped by server id and the owning session.
+// Server-level actions (ban/unban/delete) apply to the selected server.
+
+function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
+  const {
+    servers,
+    total,
+    isLoading,
+    error,
+    refetch,
+  } = useBotDatabaseServers(sessionId, sessionKey)
+  const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
+  const {
+    channels,
+    total: channelTotal,
+    page,
+    totalPages,
+    isLoading: channelsLoading,
+    error: channelsError,
+    search,
+    setSearch,
+    setPage,
+    refetch: refetchChannels,
+  } = useBotDatabaseChannels(sessionId, selectedServerId, sessionKey)
+  const { snackbar, setPosition } = useSnackbar()
+  const { timezone } = useTimezone()
+
+  const notify = (message: string, color: 'success' | 'warning') => {
+    setPosition('bottom-right')
+    snackbar({ message, color, duration: 4000 })
+  }
+
+  // Default to the first server once the list loads.
+  useEffect(() => {
+    if (selectedServerId === null && servers.length > 0) {
+      setSelectedServerId(servers[0].id)
+    }
+  }, [servers, selectedServerId])
+
+  const selectedServer =
+    servers.find((s) => s.id === selectedServerId) ?? null
+
+  // ── Ban dialog state (targets the selected server) ──
+  const [isBanning, setIsBanning] = useState(false)
+  const [banError, setBanError] = useState<string | null>(null)
+  const [banOpen, setBanOpen] = useState(false)
+  const [banReason, setBanReason] = useState('')
+
+  const handleBanServer = async () => {
+    if (!selectedServer) return
+    setIsBanning(true)
+    setBanError(null)
+    try {
+      await botService.banDatabaseGroup(sessionId, selectedServer.id, banReason.trim() || undefined)
+      notify(`"${selectedServer.name}" has been banned.`, 'warning')
+      setBanOpen(false)
+      setBanReason('')
+      refetch()
+      refetchChannels()
+    } catch (err) {
+      setBanError(err instanceof Error ? err.message : 'Failed to ban server')
+    } finally {
+      setIsBanning(false)
+    }
+  }
+
+  // ── Unban dialog state ──
+  const [isUnbanning, setIsUnbanning] = useState(false)
+  const [unbanError, setUnbanError] = useState<string | null>(null)
+  const [unbanOpen, setUnbanOpen] = useState(false)
+
+  const handleUnbanServer = async () => {
+    if (!selectedServer) return
+    setIsUnbanning(true)
+    setUnbanError(null)
+    try {
+      await botService.unbanDatabaseGroup(sessionId, selectedServer.id)
+      notify(`"${selectedServer.name}" has been unbanned.`, 'success')
+      setUnbanOpen(false)
+      refetch()
+      refetchChannels()
+    } catch (err) {
+      setUnbanError(err instanceof Error ? err.message : 'Failed to unban server')
+    } finally {
+      setIsUnbanning(false)
+    }
+  }
+
+  // ── Delete dialog state ──
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const handleDeleteServer = async () => {
+    if (!selectedServer) return
+    setIsDeleting(true)
+    setDeleteError(null)
+    try {
+      await botService.deleteDatabaseGroup(sessionId, selectedServer.id)
+      notify(`"${selectedServer.name}" was removed from this session.`, 'success')
+      setDeleteOpen(false)
+      setSelectedServerId(null)
+      refetch()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete server')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const serverOptions = servers.map((s) => ({
+    value: s.id,
+    label: s.name ?? s.id,
+  }))
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Server selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
+          <Select
+            options={serverOptions}
+            value={selectedServerId ?? ''}
+            onChange={(v) => setSelectedServerId(v as string)}
+            placeholder={
+              servers.length > 0 ? 'Select a server…' : 'No servers found'
+            }
+            leftIcon={<MessageSquare className="h-4 w-4 text-on-surface-variant" />}
+            pill
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="tonal"
+            color="secondary"
+            size="sm"
+            iconOnly
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+            aria-label="Refresh"
+            onClick={() => {
+              refetch()
+              refetchChannels()
+            }}
+            isLoading={isLoading}
+          />
+          <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
+            {total} total
+          </Badge>
+        </div>
+      </div>
+
+      {error !== null && (
+        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
+          {error}
+        </div>
+      )}
+
+      {/* Selected server header + actions */}
+      {selectedServer !== null && (
+        <div className="bg-surface rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-body-lg font-semibold text-on-surface truncate">
+                  {selectedServer.name ?? selectedServer.id}
+                </p>
+                <Badge variant="tonal" color="secondary" size="sm" pill>
+                  Server
+                </Badge>
+                <Badge
+                  variant="tonal"
+                  color={selectedServer.is_banned ? 'error' : 'success'}
+                  size="sm"
+                  pill
+                >
+                  {selectedServer.is_banned ? 'Banned' : 'Active'}
+                </Badge>
+              </div>
+              <p className="mt-1 text-body-sm text-on-surface-variant">
+                {selectedServer.member_count != null
+                  ? `${selectedServer.member_count.toLocaleString()} members`
+                  : 'Member count unknown'}
+                {' · '}
+                {formatDate(selectedServer.last_seen, timezone)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {selectedServer.is_banned ? (
+              <Button
+                variant="tonal"
+                color="success"
+                size="sm"
+                onClick={() => {
+                  setUnbanError(null)
+                  setUnbanOpen(true)
+                }}
+              >
+                Unban
+              </Button>
+            ) : (
+              <Button
+                variant="tonal"
+                color="error"
+                size="sm"
+                onClick={() => {
+                  setBanReason('')
+                  setBanError(null)
+                  setBanOpen(true)
+                }}
+              >
+                Ban
+              </Button>
+            )}
+            <Button
+              variant="tonal"
+              color="error"
+              size="sm"
+              onClick={() => {
+                setDeleteError(null)
+                setDeleteOpen(true)
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Channel search */}
+      {selectedServer !== null && (
+        <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
+          <Input
+            placeholder="Search channels by name or ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            leftIcon={<Search className="h-4 w-4 text-on-surface-variant" />}
+            pill
+          />
+        </div>
+      )}
+
+      {/* Channels table */}
+      {selectedServer !== null && (
+        <Table.ScrollArea className="bg-surface">
+          <Table.Root variant="glass" fullWidth>
+            <Table.Header>
+              <Table.Row>
+                <Table.Head>Name</Table.Head>
+                <Table.Head>Type</Table.Head>
+                <Table.Head>ID</Table.Head>
+                <Table.Head>Status</Table.Head>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {channelsLoading && <Table.Loading colSpan={4} rows={5} />}
+              {!channelsLoading &&
+                channels.map((channel) => (
+                  <Table.Row key={channel.id}>
+                    <Table.Cell className="font-medium">
+                      {channel.name ?? 'Untitled channel'}
+                    </Table.Cell>
+                    <Table.Cell className="text-on-surface-variant">
+                      {channelTypeLabel(channel.type)}
+                    </Table.Cell>
+                    <Table.Cell className="text-on-surface-variant">
+                      <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
+                        {channel.id}
+                      </code>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Badge
+                        variant="tonal"
+                        color={channel.is_banned ? 'error' : 'success'}
+                        size="sm"
+                        pill
+                      >
+                        {channel.is_banned ? 'Banned' : 'Active'}
+                      </Badge>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              {!channelsLoading && channels.length === 0 && (
+                <Table.Empty
+                  colSpan={4}
+                  icon={<MessageSquare className="h-8 w-8" />}
+                  message={
+                    search.trim()
+                      ? `No channels match "${search.trim()}"`
+                      : 'No channels recorded for this server yet.'
+                  }
+                />
+              )}
+            </Table.Body>
+          </Table.Root>
+        </Table.ScrollArea>
+      )}
+
+      {selectedServer !== null && channelTotal > 0 && (
+        <Table.Pagination
+          currentPage={page}
+          totalItems={channelTotal}
+          itemsPerPage={20}
+          onPageChange={setPage}
+        />
+      )}
+
+      {channelsError !== null && (
+        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
+          {channelsError}
+        </div>
+      )}
+
+      {selectedServer === null && !isLoading && servers.length === 0 && (
+        <div className="bg-surface rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
+          <MessageSquare className="h-8 w-8 text-on-surface-variant" />
+          <p className="text-body-md text-on-surface-variant">
+            No Discord servers recorded yet. Send a message in a Discord server
+            where this bot is present, then reload this page.
+          </p>
+        </div>
+      )}
+
+      {/* Ban server dialog */}
+      <Dialog.Root
+        open={banOpen}
+        onOpenChange={(open) => {
+          if (!open && !isBanning) setBanOpen(false)
+        }}
+        closeOnEsc={!isBanning}
+        closeOnOverlayClick={!isBanning}
+      >
+        <Dialog.Positioner position="center">
+          <Dialog.Backdrop />
+          <Dialog.Content size="sm">
+            <Dialog.Header>
+              <Dialog.Title>Ban Server</Dialog.Title>
+              <Dialog.CloseTrigger />
+            </Dialog.Header>
+            <Dialog.Body>
+              <p className="text-body-md text-on-surface-variant mb-4">
+                Banning{' '}
+                <span className="font-semibold text-on-surface">
+                  {selectedServer?.name ?? ''}
+                </span>{' '}
+                will stop the bot from responding in every channel of that
+                server.
+              </p>
+              <Field.Root>
+                <Field.Label>
+                  Reason{' '}
+                  <span className="text-on-surface-variant font-normal">
+                    (optional)
+                  </span>
+                </Field.Label>
+                <Textarea
+                  value={banReason}
+                  onChange={(e) => {
+                    setBanReason(e.target.value)
+                    setBanError(null)
+                  }}
+                  placeholder="Describe why this server is being banned…"
+                  disabled={isBanning}
+                  rows={3}
+                />
+              </Field.Root>
+              {banError !== null && (
+                <div className="mt-3">
+                  <Alert variant="tonal" color="error" title={banError} size="sm" />
+                </div>
+              )}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Dialog.CloseTrigger asChild>
+                <Button variant="text" color="neutral" size="sm" disabled={isBanning}>
+                  Cancel
+                </Button>
+              </Dialog.CloseTrigger>
+              <Button
+                variant="filled"
+                color="error"
+                size="sm"
+                onClick={() => void handleBanServer()}
+                isLoading={isBanning}
+                disabled={isBanning}
+              >
+                Ban Server
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+
+      {/* Unban server dialog */}
+      <Dialog.Root
+        open={unbanOpen}
+        onOpenChange={(open) => {
+          if (!open && !isUnbanning) setUnbanOpen(false)
+        }}
+        closeOnEsc={!isUnbanning}
+        closeOnOverlayClick={!isUnbanning}
+      >
+        <Dialog.Positioner position="center">
+          <Dialog.Backdrop />
+          <Dialog.Content size="sm">
+            <Dialog.Header>
+              <Dialog.Title>Unban Server</Dialog.Title>
+              <Dialog.CloseTrigger />
+            </Dialog.Header>
+            <Dialog.Body>
+              <p className="text-body-md text-on-surface-variant mb-4">
+                Are you sure you want to unban{' '}
+                <span className="font-semibold text-on-surface">
+                  {selectedServer?.name ?? ''}
+                </span>
+                ? The bot will respond in that server again.
+              </p>
+              {unbanError !== null && (
+                <div className="mt-3">
+                  <Alert variant="tonal" color="error" title={unbanError} size="sm" />
+                </div>
+              )}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Dialog.CloseTrigger asChild>
+                <Button variant="text" color="neutral" size="sm" disabled={isUnbanning}>
+                  Cancel
+                </Button>
+              </Dialog.CloseTrigger>
+              <Button
+                variant="filled"
+                color="success"
+                size="sm"
+                onClick={() => void handleUnbanServer()}
+                isLoading={isUnbanning}
+                disabled={isUnbanning}
+              >
+                Unban Server
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+
+      {/* Delete server dialog */}
+      <Dialog.Root
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setDeleteOpen(false)
+        }}
+        closeOnEsc={!isDeleting}
+        closeOnOverlayClick={!isDeleting}
+      >
+        <Dialog.Positioner position="center">
+          <Dialog.Backdrop />
+          <Dialog.Content size="sm">
+            <Dialog.Header>
+              <Dialog.Title>Delete Server Record</Dialog.Title>
+              <Dialog.CloseTrigger />
+            </Dialog.Header>
+            <Dialog.Body>
+              <p className="text-body-md text-on-surface-variant mb-2">
+                This will remove{' '}
+                <span className="font-semibold text-on-surface">
+                  {selectedServer?.name ?? ''}
+                </span>{' '}
+                and its channels from this bot session&apos;s database. This
+                action cannot be undone.
+              </p>
+              {deleteError !== null && (
+                <div className="mt-3">
+                  <Alert variant="tonal" color="error" title={deleteError} size="sm" />
+                </div>
+              )}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Dialog.CloseTrigger asChild>
+                <Button variant="text" color="neutral" size="sm" disabled={isDeleting}>
+                  Cancel
+                </Button>
+              </Dialog.CloseTrigger>
+              <Button
+                variant="filled"
+                color="error"
+                size="sm"
+                onClick={() => void handleDeleteServer()}
+                isLoading={isDeleting}
+                disabled={isDeleting}
+              >
+                Delete Server
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BotDatabasePage() {
@@ -1127,6 +1652,7 @@ export default function BotDatabasePage() {
   // Full session key for the real-time Socket.IO room — matches the server's
   // `${userId}:${platform}:${sessionId}` convention (banned.repo.ts / bot-database.socket.ts).
   const sessionKey = bot ? `${bot.userId}:${bot.platform}:${bot.sessionId}` : undefined
+  const isDiscord = bot?.platform === 'discord'
 
   return (
     <div className="flex flex-col gap-6">
@@ -1161,8 +1687,10 @@ export default function BotDatabasePage() {
 
       {activeTab === 'users' ? (
         <UsersTab sessionId={sessionId} sessionKey={sessionKey} />
+      ) : isDiscord ? (
+        <DiscordGroupsTab sessionId={sessionId} sessionKey={sessionKey} />
       ) : (
-        <GroupsTab sessionId={sessionId} sessionKey={sessionKey} />
+        <PlatformGroupsTab sessionId={sessionId} sessionKey={sessionKey} />
       )}
     </div>
   )

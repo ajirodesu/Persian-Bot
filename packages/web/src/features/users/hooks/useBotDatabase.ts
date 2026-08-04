@@ -12,6 +12,7 @@ import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
   BotDatabaseGroup,
+  BotDatabaseChannel,
   BotDatabaseStatusFilter,
   BotDatabaseSortBy,
   BotDatabaseSortDir,
@@ -507,5 +508,180 @@ export function useBotDatabaseGroups(
     deleteGroup,
     banGroup,
     unbanGroup,
+  }
+}
+
+// ── Discord servers hook ─────────────────────────────────────────────────────
+
+export interface UseBotDatabaseServersReturn {
+  servers: BotDatabaseGroup[]
+  total: number
+  isLoading: boolean
+  error: string | null
+  refetch: () => void
+}
+
+export function useBotDatabaseServers(
+  sessionId: string,
+  sessionKey?: string,
+): UseBotDatabaseServersReturn {
+  const [servers, setServers] = useState<BotDatabaseGroup[]>([])
+  const [total, setTotal] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchRef = useRef(0)
+
+  const fetch = useCallback(() => {
+    if (!sessionId) return
+    const id = ++fetchRef.current
+    setIsLoading(true)
+    setError(null)
+    botService
+      .getDatabaseServers(sessionId)
+      .then((data) => {
+        if (id !== fetchRef.current) return
+        setServers(data.servers)
+        setTotal(data.total)
+      })
+      .catch((err: unknown) => {
+        if (id !== fetchRef.current) return
+        setError(err instanceof Error ? err.message : 'Failed to load servers')
+      })
+      .finally(() => {
+        if (id === fetchRef.current) setIsLoading(false)
+      })
+  }, [sessionId])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching
+    fetch()
+  }, [fetch])
+
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const timer = refetchTimer.current
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
+
+  useDbChangeSubscription(sessionKey, 'group', () => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    refetchTimer.current = setTimeout(() => {
+      refetchTimer.current = null
+      fetch()
+    }, 600)
+  })
+
+  return { servers, total, isLoading, error, refetch: fetch }
+}
+
+// ── Discord channels hook ────────────────────────────────────────────────────
+
+export interface UseBotDatabaseChannelsReturn {
+  channels: BotDatabaseChannel[]
+  total: number
+  page: number
+  totalPages: number
+  isLoading: boolean
+  error: string | null
+  search: string
+  setSearch: (s: string) => void
+  setPage: (p: number) => void
+  refetch: () => void
+}
+
+export function useBotDatabaseChannels(
+  sessionId: string,
+  serverId: string | null,
+  sessionKey?: string,
+): UseBotDatabaseChannelsReturn {
+  const [channels, setChannels] = useState<BotDatabaseChannel[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearchRaw] = useState('')
+
+  const setSearch = useCallback((s: string) => {
+    setSearchRaw(s)
+    setPage(1)
+  }, [])
+
+  const fetchRef = useRef(0)
+
+  const fetch = useCallback(() => {
+    if (!sessionId || !serverId) return
+    const id = ++fetchRef.current
+    setIsLoading(true)
+    setError(null)
+    botService
+      .getDatabaseChannels(sessionId, serverId, page, 20, search)
+      .then((data) => {
+        if (id !== fetchRef.current) return
+        setChannels(data.channels)
+        setTotal(data.total)
+        setTotalPages(data.totalPages)
+      })
+      .catch((err: unknown) => {
+        if (id !== fetchRef.current) return
+        setError(err instanceof Error ? err.message : 'Failed to load channels')
+      })
+      .finally(() => {
+        if (id === fetchRef.current) setIsLoading(false)
+      })
+  }, [sessionId, serverId, page, search])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching
+    fetch()
+  }, [fetch])
+
+  // Reset to page 1 + refetch whenever the selected server changes.
+  useEffect(() => {
+    setPage(1)
+  }, [serverId])
+
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    refetchTimer.current = setTimeout(() => {
+      refetchTimer.current = null
+      fetch()
+    }, 600)
+  }, [fetch])
+
+  useEffect(() => {
+    return () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    }
+  }, [])
+
+  useDbChangeSubscription(sessionKey, 'group', (event) => {
+    if (event.action === 'ban' || event.action === 'unban') {
+      setChannels((prev) =>
+        prev.map((c) => ({
+          ...c,
+          is_banned: Boolean(event.patch?.is_banned),
+          ban_reason: (event.patch?.ban_reason as string | null) ?? null,
+        })),
+      )
+    }
+    scheduleRefetch()
+  })
+
+  return {
+    channels,
+    total,
+    page,
+    totalPages,
+    isLoading,
+    error,
+    search,
+    setSearch,
+    setPage,
+    refetch: fetch,
   }
 }

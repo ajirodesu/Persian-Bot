@@ -10,6 +10,32 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { createUnifiedThreadInfo } from '@/engine/adapters/models/thread.model.js';
 import type { UnifiedThreadInfo } from '@/engine/adapters/models/thread.model.js';
 
+/** Maps discord.js ChannelType numeric values to stable display labels. */
+function channelTypeLabel(type: unknown): string | null {
+  switch (type) {
+    case 0:
+      return 'text';
+    case 2:
+      return 'voice';
+    case 4:
+      return 'category';
+    case 5:
+      return 'announcement';
+    case 10:
+    case 11:
+    case 12:
+      return 'thread';
+    case 13:
+      return 'stage';
+    case 15:
+      return 'forum';
+    case 16:
+      return 'media';
+    default:
+      return type == null ? null : String(type);
+  }
+}
+
 export async function getFullThreadInfo(
   client: Client | null,
   fallbackChannel: TextChannel | null,
@@ -53,6 +79,10 @@ export async function getFullThreadInfo(
     threadID,
     name: g.name,
     serverID: g.id, // Propagate guild ID so the engine can store settings at the Server level
+    channelName: (channel as unknown as { name?: string })?.name ?? null,
+    channelType: channelTypeLabel(
+      (channel as unknown as { type?: unknown })?.type,
+    ),
     isGroup: true,
     memberCount: g.memberCount ?? null,
     participantIDs: cachedMembers.map((m) => m.id),

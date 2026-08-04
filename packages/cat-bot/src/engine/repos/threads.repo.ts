@@ -103,8 +103,10 @@ export async function upsertDiscordServer(data: {
 export async function linkDiscordChannel(
   serverId: string,
   threadId: string,
+  name?: string | null,
+  type?: string | null,
 ): Promise<void> {
-  await _linkDiscordChannel(serverId, threadId);
+  await _linkDiscordChannel(serverId, threadId, name, type);
   lruCache.set(`discord:channel:${threadId}`, serverId);
 }
 

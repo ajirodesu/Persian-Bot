@@ -73,7 +73,12 @@ export async function syncThreadAndParticipants(
         participantIDs: info.participantIDs,
         adminIDs: info.adminIDs,
       });
-      await linkDiscordChannel(info.serverID, threadId);
+      await linkDiscordChannel(
+        info.serverID,
+        threadId,
+        info.channelName,
+        info.channelType,
+      );
       // Call the existing method, threads.repo.ts intercepts Discord internally to write bot_discord_server_session
       await upsertThreadSession(
         sessionUserId,

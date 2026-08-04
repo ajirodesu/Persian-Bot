@@ -440,11 +440,17 @@ export async function upsertDiscordServer(data: any): Promise<void> {
 export async function linkDiscordChannel(
   serverId: string,
   threadId: string,
+  name?: string | null,
+  type?: string | null,
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO bot_discord_channel (server_id, thread_id) VALUES ($1, $2)
-     ON CONFLICT (thread_id) DO UPDATE SET server_id = EXCLUDED.server_id`,
-    [serverId, threadId],
+    `INSERT INTO bot_discord_channel (server_id, thread_id, name, type)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (thread_id) DO UPDATE SET
+       server_id = EXCLUDED.server_id,
+       name = EXCLUDED.name,
+       type = EXCLUDED.type`,
+    [serverId, threadId, name ?? null, type ?? null],
   );
 }
 

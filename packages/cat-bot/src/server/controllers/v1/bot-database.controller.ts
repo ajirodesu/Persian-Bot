@@ -319,6 +319,127 @@ export class BotDatabaseController {
   }
 
   /**
+   * GET /api/v1/bots/:id/database/servers
+   * Returns every Discord server (guild) this bot session has recorded — the
+   * source for the Groups tab's server dropdown. Discord only.
+   */
+  async listServers(req: Request, res: Response): Promise<void> {
+    const ctx = await resolveSession(req, res);
+    if (!ctx) return;
+
+    if (ctx.platform !== Platforms.Discord) {
+      res.status(400).json({ error: 'Only Discord sessions support servers' });
+      return;
+    }
+
+    try {
+      const rowsResult = await dbQuery(
+        `SELECT
+           bds.id,
+           bds.name,
+           CAST(1 AS BOOLEAN) AS is_group,
+           bds.member_count,
+           bds.avatar_url,
+           bdss.last_updated_at AS last_seen,
+           COALESCE(bdsb.is_banned, FALSE) AS is_banned,
+           bdsb.reason AS ban_reason
+         FROM bot_discord_server_session bdss
+         JOIN bot_discord_server bds ON bds.id = bdss.bot_server_id
+         LEFT JOIN bot_discord_server_session_banned bdsb
+           ON bdsb.user_id       = bdss.user_id
+          AND bdsb.session_id    = bdss.session_id
+          AND bdsb.bot_server_id = bdss.bot_server_id
+         WHERE bdss.user_id = $1 AND bdss.session_id = $2
+         ORDER BY bds.name ASC NULLS LAST, bdss.last_updated_at DESC NULLS LAST`,
+        [ctx.userId, ctx.sessionId],
+      );
+
+      res.json({
+        servers: rowsResult.rows,
+        total: rowsResult.rows.length,
+      });
+    } catch (err) {
+      console.error('[BotDatabaseController.listServers]', err);
+      res.status(500).json({ error: 'Failed to fetch servers' });
+    }
+  }
+
+  /**
+   * GET /api/v1/bots/:id/database/channels
+   * Returns the channels belonging to ONE Discord server. The server must be
+   * recorded against this bot session (bot_discord_server_session join), and
+   * channels are filtered by their parent server_id — so a channel can never
+   * appear outside its associated server context. Discord only.
+   */
+  async listChannels(req: Request, res: Response): Promise<void> {
+    const ctx = await resolveSession(req, res);
+    if (!ctx) return;
+
+    if (ctx.platform !== Platforms.Discord) {
+      res.status(400).json({ error: 'Only Discord sessions support channels' });
+      return;
+    }
+
+    const serverId = String(req.query.serverId ?? '');
+    if (!serverId) {
+      res.status(400).json({ error: 'Missing serverId' });
+      return;
+    }
+
+    const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10));
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10)));
+    const search = String(req.query.search ?? '').trim();
+    const offset = (page - 1) * limit;
+    const searchParam = search ? `%${search}%` : '%';
+
+    try {
+      const [rowsResult, countResult] = await Promise.all([
+        dbQuery(
+          `SELECT
+             bdc.thread_id AS id,
+             bdc.name,
+             bdc.type,
+             bdc.server_id,
+             COALESCE(bdsb.is_banned, FALSE) AS is_banned,
+             bdsb.reason AS ban_reason
+           FROM bot_discord_channel bdc
+           JOIN bot_discord_server_session bdss
+             ON bdss.user_id = $1 AND bdss.session_id = $2 AND bdss.bot_server_id = bdc.server_id
+           LEFT JOIN bot_discord_server_session_banned bdsb
+             ON bdsb.user_id = $1 AND bdsb.session_id = $2 AND bdsb.bot_server_id = bdc.server_id
+           WHERE bdc.server_id = $3
+             AND (COALESCE(bdc.name, '') ILIKE $4 OR bdc.thread_id ILIKE $4)
+           ORDER BY bdc.name ASC NULLS LAST
+           LIMIT $5 OFFSET $6`,
+          [ctx.userId, ctx.sessionId, serverId, searchParam, limit, offset],
+        ),
+        dbQuery(
+          `SELECT COUNT(*) AS count
+           FROM bot_discord_channel bdc
+           JOIN bot_discord_server_session bdss
+             ON bdss.user_id = $1 AND bdss.session_id = $2 AND bdss.bot_server_id = bdc.server_id
+           WHERE bdc.server_id = $3
+             AND (COALESCE(bdc.name, '') ILIKE $4 OR bdc.thread_id ILIKE $4)`,
+          [ctx.userId, ctx.sessionId, serverId, searchParam],
+        ),
+      ]);
+
+      const total = parseInt(String(countResult.rows[0]?.count ?? '0'), 10);
+
+      res.json({
+        channels: rowsResult.rows,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      });
+    } catch (err) {
+      console.error('[BotDatabaseController.listChannels]', err);
+      res.status(500).json({ error: 'Failed to fetch channels' });
+    }
+  }
+
+  /**
    * DELETE /api/v1/bots/:id/database/users/:userId
    * Removes a user's session association with this bot.
    */

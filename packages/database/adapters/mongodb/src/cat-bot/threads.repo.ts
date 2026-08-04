@@ -281,13 +281,15 @@ export async function upsertDiscordServer(data: any): Promise<void> {
 export async function linkDiscordChannel(
   serverId: string,
   threadId: string,
+  name?: string | null,
+  type?: string | null,
 ): Promise<void> {
   const db = getMongoDb();
   await db
     .collection('botDiscordChannels')
     .updateOne(
       { threadId },
-      { $set: { serverId, threadId } },
+      { $set: { serverId, threadId, name: name ?? null, type: type ?? null } },
       { upsert: true },
     );
 }
