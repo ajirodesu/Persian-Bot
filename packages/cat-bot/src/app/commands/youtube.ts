@@ -33,7 +33,7 @@
  * ── "Document" mode (-d) ─────────────────────────────────────────────────
  * The original platform distinguished an inline audio/video player from a
  * generic downloadable "document" attachment. Cat-Bot's unified send layer
- * has no such distinction — every reply is just a named `attachment_url`
+ * has no such distinction — every reply is just a named `attachment`
  * entry, and each platform renders it inline or not based on its own
  * extension/MIME handling. `-d` is preserved as a caption toggle instead:
  * off, youtubeaudio sends bare audio with no caption (matching the
@@ -41,9 +41,21 @@
  * source-URL caption either way (matching the original, which captioned its
  * non-document video reply too). `-d` just adds the caption for audio.
  *
+ * Note: media is always downloaded locally (browser UA, retried) and sent as
+ * a real stream attachment — the CDN links returned by the API reject both
+ * axios defaults and Telegram's server-side fetcher, so relying on
+ * `attachment_url` fails with "failed to get HTTP URL content".
+ *
  * ── API providers (apis.lib.ts) ──────────────────────────────────────────
- *   youtubeaudio: delirius     /download/ytmp3            → data.download
- *   youtubevideo: alwayscodex  /api/downloader/youtube2    → result.downloadUrl
+ *   youtubeaudio: ytdlp      /api/v2/q    → media.mp3
+ *   youtubevideo: ytdlp      /api/v2/q    → media.mp4
+ *
+ * The yt-dlp-stream service accepts a bare YouTube URL (or search title) as
+ * an unnamed query param (`/api/v2/q?=<url>`) and returns both an mp4 and an
+ * mp3 download link in `media`. The original `-r` resolution flag offered
+ * quality selection via the previous provider, but this API returns a single
+ * mp4 — so `-r` is no longer advertised. The flag parser still strips it to
+ * keep old invocations from breaking the URL.
  *
  * Note: the original modules gated each command behind `permissions: { coin: 10 }`.
  * That balance requirement has been intentionally dropped, matching the same
@@ -63,6 +75,62 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { withRetry, isNetworkError } from '@/engine/lib/retry.lib.js';
+
+// ── Media download ─────────────────────────────────────────────────────────────
+
+/**
+ * Browser-style headers used when fetching the media binary. The CDN links
+ * returned by the yt-dlp-stream API reject requests with an axios/Node default
+ * user-agent — and Telegram's own server-side fetcher gets blocked the same
+ * way, surfacing as "failed to get HTTP URL content" from sendAudio. Downloading
+ * the bytes ourselves with a normal browser UA and forwarding them as a real
+ * attachment sidesteps that unreliable remote-fetch path entirely (same fix
+ * already applied to download.ts and spotify.ts).
+ */
+const MEDIA_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: '*/*',
+};
+
+/** Generous timeout for downloading the actual media binary (videos can be large). */
+const MEDIA_DOWNLOAD_TIMEOUT_MS = 120_000;
+
+/** Hard cap on a single downloaded file — protects memory/bandwidth against runaway responses. */
+const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
+
+/**
+ * Downloads a media URL into a Buffer with browser headers and retry on
+ * transient network errors.
+ *
+ * @param url - Direct media URL from the API response.
+ * @returns The downloaded bytes.
+ * @throws When the download ultimately fails or returns empty content.
+ */
+async function downloadMedia(url: string): Promise<Buffer> {
+  return withRetry(
+    async () => {
+      const res = await axios.get<ArrayBuffer>(url, {
+        timeout: MEDIA_DOWNLOAD_TIMEOUT_MS,
+        headers: MEDIA_HEADERS,
+        responseType: 'arraybuffer',
+        maxContentLength: MAX_DOWNLOAD_BYTES,
+        maxBodyLength: MAX_DOWNLOAD_BYTES,
+        validateStatus: (status) => status >= 200 && status < 300,
+      });
+      const buf = Buffer.from(res.data);
+      if (buf.length === 0) throw new Error('Downloaded file is empty.');
+      return buf;
+    },
+    {
+      maxAttempts: 3,
+      initialDelayMs: 1_000,
+      maxDelayMs: 5_000,
+      shouldRetry: (err) => isNetworkError(err),
+    },
+  );
+}
 
 // ── URL resolution (arg or quoted reply) ────────────────────────────────────────
 
@@ -142,6 +210,12 @@ interface FetchedMedia {
   downloadUrl: string;
 }
 
+interface YtDlpResponse {
+  title?: string;
+  media?: { mp3?: string; mp4?: string };
+  error?: string;
+}
+
 interface YtDownloadConfig {
   name: string;
   aliases: string[];
@@ -168,13 +242,16 @@ const YT_CONFIGS: YtDownloadConfig[] = [
     exampleSuffix: '-d',
     flagLines: ['`-d` — Send with a source-URL caption'],
     fetchMedia: async (url): Promise<FetchedMedia> => {
-      const apiUrl = createUrl('delirius', '/download/ytmp3', { url });
-      const res = await axios.get(apiUrl, { timeout: 30_000 });
-      const data = res.data?.data as { title?: string; download?: string } | undefined;
-      if (!data?.download) {
-        throw new Error('No downloadable audio was returned for this YouTube link.');
+      const apiUrl = createUrl('ytdlp', '/api/v2/server=1/q', { '': url });
+      const res = await axios.get(apiUrl, { timeout: 90_000 });
+      const data = res.data as YtDlpResponse | undefined;
+      const download = data?.media?.mp3;
+      if (!download) {
+        throw new Error(
+          data?.error ?? 'No downloadable audio was returned for this YouTube link.',
+        );
       }
-      return { title: data.title ?? 'audio', downloadUrl: data.download };
+      return { title: data.title ?? 'audio', downloadUrl: download };
     },
   },
   {
@@ -185,27 +262,19 @@ const YT_CONFIGS: YtDownloadConfig[] = [
     fileExtension: 'mp4',
     hasResolutionFlag: true,
     captionOnStream: true,
-    exampleSuffix: '-d -r 720',
-    flagLines: [
-      '`-d` — Send with a source-URL caption',
-      '`-r <number>` — Video resolution (available: 144, 240, 360, 480, 720, 1080, 1440, 2160 | default: 360)',
-    ],
-    fetchMedia: async (url, resolution): Promise<FetchedMedia> => {
-      // Whitelist copied verbatim from the original module. Note '144' and
-      // '240' are advertised in the flag help text above (matching the
-      // original's own help text) but were never actually accepted here —
-      // that mismatch existed in the source module and is preserved as-is
-      // rather than silently "fixed" during conversion.
-      const VALID_RESOLUTIONS = ['360', '480', '720', '1080', '1440', '2160'];
-      const quality = VALID_RESOLUTIONS.includes(resolution) ? `${resolution}p` : '720p';
-
-      const apiUrl = createUrl('alwayscodex', '/api/downloader/youtube2', { url, quality });
-      const res = await axios.get(apiUrl, { timeout: 60_000 });
-      const result = res.data?.result as { title?: string; downloadUrl?: string } | undefined;
-      if (!result?.downloadUrl) {
-        throw new Error('No downloadable video was returned for this YouTube link.');
+    exampleSuffix: '-d',
+    flagLines: ['`-d` — Send with a source-URL caption'],
+    fetchMedia: async (url): Promise<FetchedMedia> => {
+      const apiUrl = createUrl('ytdlp', '/api/v2/server=1/q', { '': url });
+      const res = await axios.get(apiUrl, { timeout: 90_000 });
+      const data = res.data as YtDlpResponse | undefined;
+      const download = data?.media?.mp4;
+      if (!download) {
+        throw new Error(
+          data?.error ?? 'No downloadable video was returned for this YouTube link.',
+        );
       }
-      return { title: result.title ?? 'video', downloadUrl: result.downloadUrl };
+      return { title: data.title ?? 'video', downloadUrl: download };
     },
   },
 ];
@@ -284,10 +353,12 @@ async function runYtCommand(ctx: AppCtx, config: YtDownloadConfig): Promise<void
     const fileName = `${media.title}.${config.fileExtension}`;
     const showCaption = parsed.document || config.captionOnStream;
 
+    const buffer = await downloadMedia(media.downloadUrl);
+
     await finish({
       style: MessageStyle.MARKDOWN,
       message: showCaption ? `❖ **URL**: ${url}` : '',
-      attachment_url: [{ name: fileName, url: media.downloadUrl }],
+      attachment: [{ name: fileName, stream: buffer }],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -323,7 +394,7 @@ export const commands: CommandEntry[] = YT_CONFIGS.map((config) => ({
       {
         type: OptionType.string,
         name: 'url',
-        description: `YouTube link${config.hasResolutionFlag ? ', plus optional -d and -r <resolution> flags' : ', plus optional -d flag'}`,
+        description: `YouTube link${config.hasResolutionFlag ? ', plus optional -d flag' : ', plus optional -d flag'}`,
         required: true,
       },
     ],

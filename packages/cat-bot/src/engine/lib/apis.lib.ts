@@ -62,6 +62,9 @@ export const APIs = {
   siputzx: {
     baseURL: 'https://api.siputzx.my.id',
   },
+  ytdlp: {
+    baseURL: 'https://yt-dlp-stream.onrender.com',
+  },
 } as const satisfies Record<string, ApiDefinition>;
 
 /** Union of every registered provider key, e.g. 'siputzx' | 'delirius' | ... */

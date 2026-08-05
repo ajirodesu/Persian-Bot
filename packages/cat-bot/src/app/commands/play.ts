@@ -1,5 +1,5 @@
 /**
- * /play — YouTube Audio Search and Streamer
+ * /music and /video — YouTube Media Downloader (multi-command family)
  *
  * Accepts either a YouTube URL or a plain search query. When a URL is given,
  * it is passed directly to the API for extraction. When a search query is
@@ -19,19 +19,27 @@
  *     ms:       number   — server-side processing time in milliseconds
  *   }
  *
- * Aliases: /song, /music
+ * ── Commands ──────────────────────────────────────────────────────────────
+ *   /music  <url|query>  — downloads the MP3 audio  (aliases: play, song)
+ *   /video  <url|query>  — downloads the MP4 video  (aliases: vid, mp4)
+ *
  * Access:  ANYONE
  * Cooldown: 15s
  */
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
+import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import { createUrl } from '@/engine/lib/apis.lib.js';
 
 // ── API constants ──────────────────────────────────────────────────────────────
 
-const API_BASE = 'https://yt-dlp-stream.onrender.com/api/v2/q';
+/** Fastest server index for the `ytdlp` provider — /api/v2/server=1/q. */
+const API_ENDPOINT = '/api/v2/server=1/q';
 
 /**
  * Maximum wait for the metadata + resolve step (ms).
@@ -40,9 +48,9 @@ const API_BASE = 'https://yt-dlp-stream.onrender.com/api/v2/q';
 const SEARCH_TIMEOUT_MS = 60_000;
 
 /**
- * Maximum wait for the audio binary download step (ms).
+ * Maximum wait for the media binary download step (ms).
  * URL-based requests take longer (~17s observed) than search queries (~1ms).
- * Must be generous enough for large audio files over cold connections.
+ * Must be generous enough for large audio/video files over cold connections.
  */
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
@@ -77,6 +85,19 @@ interface YtDlpApiResponse {
   ms: number;       // Server-side processing time in milliseconds
 }
 
+// ── Command config types ───────────────────────────────────────────────────────
+
+interface MediaCommandConfig {
+  name: string;
+  aliases: string[];
+  description: string;
+  format: 'mp3' | 'mp4';
+  /** Which media key to read from the API response. */
+  mediaKey: 'mp3' | 'mp4';
+  /** Emoji used in the result caption. */
+  emoji: string;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -91,13 +112,13 @@ function extractYouTubeId(input: string): string | null {
  * Strips characters unsafe in filenames across all major OSes.
  * Truncates to 80 characters to avoid path-length limits.
  */
-function safeFilename(label: string): string {
+function safeFilename(label: string, extension: 'mp3' | 'mp4'): string {
   return (
     label
       .replace(/[/\\?%*:|"<>]/g, '-')
       .replace(/\s+/g, '_')
       .trim()
-      .substring(0, 80) + '.mp3'
+      .substring(0, 80) + `.${extension}`
   );
 }
 
@@ -153,29 +174,14 @@ async function fetchWithRetry(
   throw lastError ?? new Error('Fetch failed after retries');
 }
 
-// ── Command configuration ──────────────────────────────────────────────────────
+// ── Shared handler ─────────────────────────────────────────────────────────────
 
-export const meta: CommandMeta = {
-  name: 'play',
-  aliases: ['song', 'music'] as string[],
-  version: '3.1.0',
-  role: Role.ANYONE,
-  author: 'AjiroDesu',
-  description:
-    'Play audio from a YouTube URL or search query. Sends the top result as a playable MP3.',
-  category: 'Media',
-  usage: '<YouTube URL | search query>',
-  cooldown: 15,
-  hasPrefix: true,
-};
+async function runMediaCommand(
+  ctx: AppCtx,
+  config: MediaCommandConfig,
+): Promise<void> {
+  const { chat, args, usage } = ctx;
 
-// ── Command handler ────────────────────────────────────────────────────────────
-
-export const onCommand = async ({
-  chat,
-  args,
-  usage,
-}: AppCtx): Promise<void> => {
   // ── Input validation ───────────────────────────────────────────────────────
 
   if (args.length === 0) {
@@ -203,8 +209,9 @@ export const onCommand = async ({
     // ── Step 1: Resolve media URLs ─────────────────────────────────────────
     // The API uses a valueless query key: /api/v2/q?=<input>
     // Both plain search strings and full YouTube URLs are accepted as-is.
+    // createUrl's empty param key produces the required `?=<value>` form.
 
-    const apiUrl = `${API_BASE}?=${encodeURIComponent(input)}`;
+    const apiUrl = createUrl('ytdlp', API_ENDPOINT, { '': input });
 
     const searchRes = await fetchWithRetry(apiUrl, SEARCH_TIMEOUT_MS);
 
@@ -228,41 +235,43 @@ export const onCommand = async ({
     const { mp3: mp3Url, mp4: mp4Url } = apiData.media;
     const serverMs = apiData.ms ?? 0;
 
-    // ── Step 2: Download audio binary ─────────────────────────────────────
+    // ── Step 2: Download media binary ─────────────────────────────────────
 
-    const audioRes = await fetchWithRetry(mp3Url, DOWNLOAD_TIMEOUT_MS);
+    const mediaUrl = config.mediaKey === 'mp3' ? mp3Url : mp4Url;
 
-    if (!audioRes.ok) {
+    const mediaRes = await fetchWithRetry(mediaUrl, DOWNLOAD_TIMEOUT_MS);
+
+    if (!mediaRes.ok) {
       throw new Error(
-        `Audio download failed with HTTP ${audioRes.status}. The link may have expired — try again.`,
+        `${config.format.toUpperCase()} download failed with HTTP ${mediaRes.status}. The link may have expired — try again.`,
       );
     }
 
-    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+    const mediaBuffer = Buffer.from(await mediaRes.arrayBuffer());
 
-    if (audioBuffer.length === 0) {
+    if (mediaBuffer.length === 0) {
       throw new Error(
-        'The downloaded audio file is empty. The source may no longer be available.',
+        `The downloaded ${config.format.toUpperCase()} file is empty. The source may no longer be available.`,
       );
     }
 
     // ── Step 3: Send result ────────────────────────────────────────────────
 
     const caption = [
-      `🎵  **${displayLabel}**`,
+      `${config.emoji}  **${displayLabel}**`,
       '',
-      `📦  **File Size**     ${formatBytes(audioBuffer.length)}`,
+      `📦  **File Size**     ${formatBytes(mediaBuffer.length)}`,
       `⚡  **API Response**  ${formatMs(serverMs)}`,
       `🎬  **Video**         ${mp4Url}`,
     ].join('\n');
 
-    const resultPayload = {
+    const resultPayload: ReplyOptions = {
       style: MessageStyle.MARKDOWN,
       message: caption,
       attachment: [
         {
-          name: safeFilename(displayLabel),
-          stream: audioBuffer,
+          name: safeFilename(displayLabel, config.format),
+          stream: mediaBuffer,
         },
       ],
     };
@@ -271,14 +280,70 @@ export const onCommand = async ({
   } catch (err) {
     const error = err as { message?: string };
 
-    const errPayload = {
+    const errPayload: ReplyOptions = {
       style: MessageStyle.MARKDOWN,
       message: [
-        `❌  **Could not retrieve audio for** \`${displayLabel}\``,
+        `❌  **Could not retrieve ${config.format.toUpperCase()} for** \`${displayLabel}\``,
         `\`${error.message ?? 'An unexpected error occurred.'}\``,
       ].join('\n'),
     };
 
     await chat.replyMessage(errPayload);
   }
-};
+}
+
+// ── Command configurations ─────────────────────────────────────────────────────
+
+const MEDIA_CONFIGS: MediaCommandConfig[] = [
+  {
+    name: 'music',
+    aliases: ['play', 'song'],
+    description:
+      'Download audio from a YouTube URL or search query. Sends the top result as a playable MP3.',
+    format: 'mp3',
+    mediaKey: 'mp3',
+    emoji: '🎵',
+  },
+  {
+    name: 'video',
+    aliases: ['vid', 'mp4'],
+    description:
+      'Download video from a YouTube URL or search query. Sends the top result as an MP4 file.',
+    format: 'mp4',
+    mediaKey: 'mp4',
+    emoji: '🎬',
+  },
+];
+
+// ── Command entry generation ───────────────────────────────────────────────────
+
+interface CommandEntry {
+  meta: CommandMeta;
+  onCommand: (ctx: AppCtx) => Promise<void>;
+}
+
+export const commands: CommandEntry[] = MEDIA_CONFIGS.map((config) => ({
+  meta: {
+    name: config.name,
+    aliases: config.aliases,
+    version: '3.1.0',
+    role: Role.ANYONE,
+    author: 'AjiroDesu',
+    description: config.description,
+    category: 'Media',
+    usage: '<YouTube URL | search query>',
+    guide: ['<YouTube URL | search query> — top result as the requested format'],
+    cooldown: 15,
+    hasPrefix: true,
+    platform: [Platforms.Discord, Platforms.Telegram],
+    options: [
+      {
+        type: OptionType.string,
+        name: 'query',
+        description: 'YouTube URL or search query',
+        required: true,
+      },
+    ],
+  },
+  onCommand: async (ctx: AppCtx) => runMediaCommand(ctx, config),
+}));
