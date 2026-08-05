@@ -51,6 +51,7 @@ import type {
   BotDatabaseUser,
   BotDatabaseGroup,
   BotDatabaseStatusFilter,
+  BotDatabaseTypeFilter,
   BotDatabaseSortBy,
 } from '@/features/users/services/bot.service'
 import { formatDateTime } from '@/utils/datetime.util'
@@ -92,6 +93,46 @@ function channelTypeLabel(type: string | null): string {
   if (!type) return '—'
   return channelTypeLabels[type] ?? type
 }
+
+// Telegram exposes every entity where a bot can be a member via its Chat.type
+// enum: private (1:1, never stored as a group), group, supergroup, and channel.
+// These labels keep the panel's Type column human-readable for all of them.
+const telegramTypeLabels: Record<string, string> = {
+  group: 'Group',
+  supergroup: 'Supergroup',
+  channel: 'Channel',
+  private: 'Private',
+}
+
+function telegramTypeLabel(type: string | null): string {
+  if (!type) return '—'
+  return telegramTypeLabels[type] ?? type
+}
+
+/** Best-effort Type column value: the persisted chat type, else fall back to the is_group flag. */
+function groupTypeLabel(group: { type: string | null; is_group: boolean }): string {
+  if (group.type) return telegramTypeLabels[group.type] ?? group.type
+  return group.is_group ? 'Group' : '—'
+}
+
+function groupTypeColor(type: string | null): 'secondary' | 'tertiary' | 'info' {
+  switch (type) {
+    case 'supergroup':
+      return 'tertiary'
+    case 'channel':
+      return 'info'
+    case 'group':
+    default:
+      return 'secondary'
+  }
+}
+
+const typeFilterOptions = [
+  { value: 'all', label: 'All types' },
+  { value: 'group', label: 'Groups' },
+  { value: 'supergroup', label: 'Supergroups' },
+  { value: 'channel', label: 'Channels' },
+]
 
 // ── Detail dialog ─────────────────────────────────────────────────────────────
 
@@ -152,6 +193,8 @@ function DatabaseToolbar({
   searchPlaceholder,
   status,
   onStatusChange,
+  type,
+  onTypeChange,
   total,
   matchedLabel,
   isLoading,
@@ -162,6 +205,8 @@ function DatabaseToolbar({
   searchPlaceholder: string
   status: BotDatabaseStatusFilter
   onStatusChange: (v: BotDatabaseStatusFilter) => void
+  type?: BotDatabaseTypeFilter
+  onTypeChange?: (v: BotDatabaseTypeFilter) => void
   total: number
   matchedLabel: string
   isLoading: boolean
@@ -179,6 +224,15 @@ function DatabaseToolbar({
         />
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {onTypeChange && type && (
+          <Select
+            options={typeFilterOptions}
+            value={type}
+            onChange={(v) => onTypeChange(v as BotDatabaseTypeFilter)}
+            size="sm"
+            className="min-w-[8.5rem]"
+          />
+        )}
         <Select
           options={statusFilterOptions}
           value={status}
@@ -198,7 +252,9 @@ function DatabaseToolbar({
         />
         {!isLoading && (
           <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
-            {search.trim() || status !== 'all' ? `${total} matched` : matchedLabel}
+            {search.trim() || status !== 'all' || (type && type !== 'all')
+              ? `${total} matched`
+              : matchedLabel}
           </Badge>
         )}
       </div>
@@ -676,6 +732,8 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
     setSearch,
     status,
     setStatus,
+    type,
+    setType,
     sortBy,
     sortDir,
     toggleSort,
@@ -793,9 +851,11 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
       <DatabaseToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search groups by name or ID…"
+        searchPlaceholder="Search groups, supergroups, or channels by name or ID…"
         status={status}
         onStatusChange={setStatus}
+        type={type}
+        onTypeChange={setType}
         total={total}
         matchedLabel={`${total} total`}
         isLoading={isLoading}
@@ -819,6 +879,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
               >
                 Name
               </Table.Head>
+              <Table.Head>Type</Table.Head>
               <Table.Head>ID</Table.Head>
               <Table.Head>Members</Table.Head>
               <Table.Head>Status</Table.Head>
@@ -833,19 +894,22 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {isLoading && <Table.Loading colSpan={6} rows={5} />}
+            {isLoading && <Table.Loading colSpan={7} rows={5} />}
             {!isLoading &&
               groups.map((group) => (
                 <Table.Row key={group.id}>
                   <Table.Cell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>{group.name}</span>
-                      {group.is_group && (
-                        <Badge variant="tonal" color="secondary" size="sm" pill>
-                          Group
-                        </Badge>
-                      )}
-                    </div>
+                    <span>{group.name}</span>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Badge
+                      variant="tonal"
+                      color={groupTypeColor(group.type)}
+                      size="sm"
+                      pill
+                    >
+                      {groupTypeLabel(group)}
+                    </Badge>
                   </Table.Cell>
                   <Table.Cell className="text-on-surface-variant">
                     <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
@@ -915,14 +979,16 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
               ))}
             {!isLoading && groups.length === 0 && (
               <Table.Empty
-                colSpan={6}
+                colSpan={7}
                 icon={<MessageSquare className="h-8 w-8" />}
                 message={
                   search.trim()
                     ? `No groups match "${search.trim()}"`
                     : status !== 'all'
                       ? `No ${status} groups found`
-                      : 'No groups found.'
+                      : type !== 'all'
+                        ? `No ${telegramTypeLabel(type).toLowerCase()}s found`
+                        : 'No groups, supergroups, or channels found yet.'
                 }
               />
             )}
@@ -1120,7 +1186,14 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
           detailGroup
             ? [
                 { label: 'Group ID', value: <code className="text-xs">{detailGroup.id}</code> },
-                { label: 'Type', value: detailGroup.is_group ? 'Group' : 'Direct / channel' },
+                {
+                  label: 'Type',
+                  value: detailGroup.type
+                    ? telegramTypeLabel(detailGroup.type)
+                    : detailGroup.is_group
+                      ? 'Group'
+                      : 'Direct / channel',
+                },
                 {
                   label: 'Members',
                   value:

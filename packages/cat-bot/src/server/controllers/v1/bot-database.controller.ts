@@ -71,6 +71,15 @@ function parseStatusFilter(raw: unknown): StatusFilter {
   return raw === 'active' || raw === 'banned' ? raw : 'all';
 }
 
+/** Platform chat types that can carry a bot — used by the Telegram type filter. */
+const CHAT_TYPES = ['group', 'supergroup', 'channel'] as const;
+
+/** Resolves a client-facing chat-type filter to a stored bot_threads.type value, or null for "any". */
+function parseTypeFilter(raw: unknown): string | null {
+  const value = String(raw ?? '');
+  return (CHAT_TYPES as readonly string[]).includes(value) ? value : null;
+}
+
 /** SQL fragment (no leading AND) for a ban-state column, given the requested filter. */
 function statusClause(banExpr: string, status: StatusFilter): string {
   if (status === 'active') return `${banExpr} = FALSE`;
@@ -190,6 +199,10 @@ export class BotDatabaseController {
    * Discord guilds are recorded in bot_discord_server_session (keyed by server id),
    * not bot_threads_session — so the query branches per platform. All other platforms
    * (Telegram, webchat) keep using the thread-session tables.
+   *
+   * Non-Discord sessions accept an optional `type` query param that filters by the
+   * persisted platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel')
+   * so the dashboard can show every entity type the bot lives in side by side.
    */
   async listGroups(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -212,6 +225,13 @@ export class BotDatabaseController {
     const extraClause = statusClause(banExpr, status);
     const whereExtra = extraClause ? ` AND ${extraClause}` : '';
 
+    // Non-Discord platforms persist a platform chat type (Telegram group/supergroup/
+    // channel) on bot_threads.type — filter on it when requested. The param is always
+    // bound (null = no filter) so LIMIT/OFFSET keep fixed placeholder indices instead
+    // of colliding with $5 when a type is supplied.
+    const typeFilter = isDiscord ? null : parseTypeFilter(req.query.type);
+    const typeSql = isDiscord ? '' : ' AND ($5 IS NULL OR bt.type = $5)';
+
     const sortColumn = resolveSortColumn(
       req.query.sortBy,
       isDiscord
@@ -229,6 +249,7 @@ export class BotDatabaseController {
                  bds.id,
                  bds.name,
                  CAST(1 AS BOOLEAN) AS is_group,
+                 NULL AS type,
                  bds.member_count,
                  bds.avatar_url,
                  bdss.last_updated_at AS last_seen,
@@ -252,6 +273,7 @@ export class BotDatabaseController {
                  bt.id,
                  bt.name,
                  bt.is_group,
+                 bt.type,
                  bt.member_count,
                  bt.avatar_url,
                  bts.last_updated_at AS last_seen,
@@ -267,10 +289,10 @@ export class BotDatabaseController {
                WHERE bts.user_id     = $1
                  AND bts.platform_id = $2
                  AND bts.session_id  = $3
-                 AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}
+                 AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}${typeSql}
                ORDER BY ${sortColumn} ${sortDir} NULLS LAST, bts.last_updated_at DESC NULLS LAST
-               LIMIT $5 OFFSET $6`,
-              [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, limit, offset],
+               LIMIT $6 OFFSET $7`,
+              [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, typeFilter, limit, offset],
             ),
         isDiscord
           ? dbQuery(
@@ -298,8 +320,8 @@ export class BotDatabaseController {
                WHERE bts.user_id     = $1
                  AND bts.platform_id = $2
                  AND bts.session_id  = $3
-                 AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}`,
-              [ctx.userId, ctx.platformId, ctx.sessionId, searchParam],
+                 AND (bt.name ILIKE $4 OR bt.id ILIKE $4)${whereExtra}${typeSql}`,
+              [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, typeFilter],
             ),
       ]);
 
@@ -338,6 +360,7 @@ export class BotDatabaseController {
            bds.id,
            bds.name,
            CAST(1 AS BOOLEAN) AS is_group,
+           NULL AS type,
            bds.member_count,
            bds.avatar_url,
            bdss.last_updated_at AS last_seen,

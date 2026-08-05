@@ -49,6 +49,13 @@ export interface UnifiedThreadInfo {
   channelName?: string | null;
   /** Discord channel type label (e.g. "text", "voice"). Null when unknown. */
   channelType?: string | null;
+  /**
+   * Platform-native chat/entity type label, used to distinguish every container
+   * a bot can live in. For Telegram this is the Bot API Chat.type enum
+   * ('private' | 'group' | 'supergroup' | 'channel'). Null when the platform
+   * does not expose a typed concept (e.g. webchat chat rooms).
+   */
+  type?: string | null;
 }
 
 /**
@@ -69,6 +76,7 @@ export const PROTO_UNIFIED_THREAD_INFO: Readonly<UnifiedThreadInfo> =
     serverID: null,
     channelName: null,
     channelType: null,
+    type: null,
   });
 
 /**
@@ -96,5 +104,6 @@ export function createUnifiedThreadInfo(
     serverID: data.serverID ?? null,
     channelName: data.channelName ?? null,
     channelType: data.channelType ?? null,
+    type: data.type ?? null,
   };
 }

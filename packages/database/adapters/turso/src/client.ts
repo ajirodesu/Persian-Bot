@@ -147,6 +147,22 @@ export async function initDb(): Promise<void> {
     });
   }
 
+  // bot_threads.type — idempotent column upgrade for pre-existing databases that
+  // predate per-platform chat-type detection. Same PRAGMA introspection + ALTER
+  // TABLE ADD COLUMN pattern as bot_discord_channel above (SQLite has no
+  // ADD COLUMN IF NOT EXISTS).
+  const threadCols = await tursoClient.execute(
+    `PRAGMA table_info(bot_threads)`,
+  );
+  const threadColNames = new Set(
+    (threadCols.rows as Array<{ name: string }>).map((r) => r.name),
+  );
+  if (!threadColNames.has('type')) {
+    await tursoClient.execute({
+      sql: `ALTER TABLE bot_threads ADD COLUMN type TEXT`,
+    });
+  }
+
   if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`
@@ -217,6 +233,9 @@ export async function initDb(): Promise<void> {
       id TEXT PRIMARY KEY,
       name TEXT,
       is_group INTEGER NOT NULL DEFAULT 0,
+      -- Platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel') —
+      -- lets the database panel identify every entity the bot lives in.
+      type TEXT,
       member_count INTEGER,
       avatar_url TEXT,
       created_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),

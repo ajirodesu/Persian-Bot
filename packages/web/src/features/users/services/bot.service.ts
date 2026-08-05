@@ -26,6 +26,8 @@ export interface BotDatabaseGroup {
   id: string
   name: string
   is_group: boolean
+  /** Platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel'). Null when unknown or Discord. */
+  type: string | null
   member_count: number | null
   avatar_url: string | null
   last_seen: string | null
@@ -72,11 +74,13 @@ export interface BotDatabaseChannelsResponseDto {
 }
 
 export type BotDatabaseStatusFilter = 'all' | 'active' | 'banned'
+export type BotDatabaseTypeFilter = 'all' | 'group' | 'supergroup' | 'channel'
 export type BotDatabaseSortBy = 'name' | 'last_seen'
 export type BotDatabaseSortDir = 'asc' | 'desc'
 
 export interface BotDatabaseQueryOptions {
   status?: BotDatabaseStatusFilter
+  type?: BotDatabaseTypeFilter
   sortBy?: BotDatabaseSortBy
   sortDir?: BotDatabaseSortDir
 }
@@ -285,6 +289,7 @@ export class BotService {
           limit,
           search,
           status: options.status ?? 'all',
+          type: options.type ?? 'all',
           sortBy: options.sortBy ?? 'last_seen',
           sortDir: options.sortDir ?? 'desc',
         },

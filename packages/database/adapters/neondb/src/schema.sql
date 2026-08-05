@@ -80,11 +80,17 @@ CREATE TABLE IF NOT EXISTS bot_threads (
   id           TEXT PRIMARY KEY,
   name         TEXT,
   is_group     BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel') so the
+  -- database panel can distinguish every entity the bot lives in.
+  type         TEXT,
   member_count INTEGER,
   avatar_url   TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Idempotent column migration for pre-existing databases.
+ALTER TABLE bot_threads ADD COLUMN IF NOT EXISTS type TEXT;
 
 -- M:M junction tables, defined explicitly
 CREATE TABLE IF NOT EXISTS bot_thread_participants (

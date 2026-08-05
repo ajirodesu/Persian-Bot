@@ -37,11 +37,12 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
 
     // Upsert the thread itself
     await tx.execute({
-      sql: `INSERT INTO bot_threads (platform_id, id, name, is_group, member_count, avatar_url, updated_at)
-            VALUES (:platformId, :id, :name, :isGroup, :memberCount, :avatarUrl, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      sql: `INSERT INTO bot_threads (platform_id, id, name, is_group, type, member_count, avatar_url, updated_at)
+            VALUES (:platformId, :id, :name, :isGroup, :type, :memberCount, :avatarUrl, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
             ON CONFLICT (id) DO UPDATE SET
               name = excluded.name,
               is_group = excluded.is_group,
+              type = excluded.type,
               member_count = excluded.member_count,
               avatar_url = excluded.avatar_url,
               updated_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')`,
@@ -50,6 +51,7 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
         id: data.id,
         name: data.name,
         isGroup: data.isGroup ? 1 : 0,
+        type: data.type,
         memberCount: data.memberCount,
         avatarUrl: data.avatarUrl,
       },

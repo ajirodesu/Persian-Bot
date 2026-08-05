@@ -14,6 +14,7 @@ import type {
   BotDatabaseGroup,
   BotDatabaseChannel,
   BotDatabaseStatusFilter,
+  BotDatabaseTypeFilter,
   BotDatabaseSortBy,
   BotDatabaseSortDir,
 } from '@/features/users/services/bot.service'
@@ -306,6 +307,8 @@ export interface UseBotDatabaseGroupsReturn {
   setSearch: (s: string) => void
   status: BotDatabaseStatusFilter
   setStatus: (s: BotDatabaseStatusFilter) => void
+  type: BotDatabaseTypeFilter
+  setType: (t: BotDatabaseTypeFilter) => void
   sortBy: BotDatabaseSortBy
   sortDir: BotDatabaseSortDir
   toggleSort: (column: BotDatabaseSortBy) => void
@@ -329,6 +332,7 @@ export function useBotDatabaseGroups(
   const [error, setError] = useState<string | null>(null)
   const [search, setSearchRaw] = useState('')
   const [status, setStatusRaw] = useState<BotDatabaseStatusFilter>('all')
+  const [type, setTypeRaw] = useState<BotDatabaseTypeFilter>('all')
   const [sortBy, setSortBy] = useState<BotDatabaseSortBy>('last_seen')
   const [sortDir, setSortDir] = useState<BotDatabaseSortDir>('desc')
   const [pending, setPending] = useState<Set<string>>(new Set())
@@ -340,6 +344,11 @@ export function useBotDatabaseGroups(
 
   const setStatus = useCallback((s: BotDatabaseStatusFilter) => {
     setStatusRaw(s)
+    setPage(1)
+  }, [])
+
+  const setType = useCallback((t: BotDatabaseTypeFilter) => {
+    setTypeRaw(t)
     setPage(1)
   }, [])
 
@@ -361,7 +370,7 @@ export function useBotDatabaseGroups(
     setIsLoading(true)
     setError(null)
     botService
-      .getDatabaseGroups(sessionId, page, 20, search, { status, sortBy, sortDir })
+      .getDatabaseGroups(sessionId, page, 20, search, { status, type, sortBy, sortDir })
       .then((data) => {
         if (id !== fetchRef.current) return
         setGroups(data.groups)
@@ -375,7 +384,7 @@ export function useBotDatabaseGroups(
       .finally(() => {
         if (id === fetchRef.current) setIsLoading(false)
       })
-  }, [sessionId, page, search, status, sortBy, sortDir])
+  }, [sessionId, page, search, status, type, sortBy, sortDir])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to .then/.catch microtasks
@@ -499,6 +508,8 @@ export function useBotDatabaseGroups(
     setSearch,
     status,
     setStatus,
+    type,
+    setType,
     sortBy,
     sortDir,
     toggleSort,

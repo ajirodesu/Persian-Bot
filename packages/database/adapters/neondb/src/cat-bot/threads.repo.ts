@@ -40,11 +40,12 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
 
     // Upsert the thread itself
     await client.query(
-      `INSERT INTO bot_threads (platform_id, id, name, is_group, member_count, avatar_url, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO bot_threads (platform_id, id, name, is_group, type, member_count, avatar_url, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          is_group = EXCLUDED.is_group,
+         type = EXCLUDED.type,
          member_count = EXCLUDED.member_count,
          avatar_url = EXCLUDED.avatar_url,
          updated_at = NOW()`,
@@ -53,6 +54,7 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
         data.id,
         data.name,
         data.isGroup,
+        data.type,
         data.memberCount,
         data.avatarUrl,
       ],

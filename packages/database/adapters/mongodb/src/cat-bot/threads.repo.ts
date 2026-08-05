@@ -14,6 +14,7 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
         id: data.id,
         name: data.name,
         isGroup: data.isGroup,
+        type: data.type,
         memberCount: data.memberCount,
         avatarUrl: data.avatarUrl,
         participantIDs: data.participantIDs,

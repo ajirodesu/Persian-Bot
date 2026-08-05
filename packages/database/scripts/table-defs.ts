@@ -142,6 +142,7 @@ export const tablesDef = [
       id: 'id',
       name: 'name',
       isGroup: 'is_group',
+      type: 'type',
       memberCount: 'member_count',
       avatarUrl: 'avatar_url',
       createdAt: 'created_at',

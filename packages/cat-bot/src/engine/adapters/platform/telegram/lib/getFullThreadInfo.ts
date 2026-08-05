@@ -78,5 +78,9 @@ export async function getFullThreadInfo(
     participantIDs: [],
     adminIDs,
     avatarUrl: null,
+    // Persist the native Bot API Chat.type so the database panel can distinguish
+    // every Telegram entity where a bot is a member: 'group', 'supergroup',
+    // 'channel' (and 'private' for DMs, which are never recorded as groups).
+    type: chat.type,
   });
 }

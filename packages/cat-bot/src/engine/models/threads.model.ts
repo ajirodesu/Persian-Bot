@@ -32,6 +32,8 @@ export interface BotThreadData {
   adminIDs: string[];
   /** Group icon URL; null when not set or inaccessible. */
   avatarUrl: string | null;
+  /** Platform-native chat type label (e.g. Telegram 'group' | 'supergroup' | 'channel'). */
+  type: string | null;
 }
 
 // ── Mapper ────────────────────────────────────────────────────────────────────
@@ -53,5 +55,6 @@ export function toBotThreadData(info: UnifiedThreadInfo): BotThreadData {
     participantIDs: info.participantIDs,
     adminIDs: info.adminIDs,
     avatarUrl: info.avatarUrl ?? null,
+    type: info.type ?? null,
   };
 }
