@@ -223,14 +223,14 @@ function DatabaseToolbar({
           pill
         />
       </div>
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
         {onTypeChange && type && (
           <Select
             options={typeFilterOptions}
             value={type}
             onChange={(v) => onTypeChange(v as BotDatabaseTypeFilter)}
             size="sm"
-            className="min-w-[8.5rem]"
+            className="min-w-0 sm:min-w-[8.5rem]"
           />
         )}
         <Select
@@ -238,7 +238,7 @@ function DatabaseToolbar({
           value={status}
           onChange={(v) => onStatusChange(v as BotDatabaseStatusFilter)}
           size="sm"
-          className="min-w-[9.5rem]"
+          className="min-w-0 sm:min-w-[9.5rem]"
         />
         <Button
           variant="tonal"
