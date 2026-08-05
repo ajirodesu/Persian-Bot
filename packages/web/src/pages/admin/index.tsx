@@ -8,6 +8,7 @@ import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
+import useEmailServiceEnabled from '@/hooks/useEmailServiceEnabled'
 
 interface LoginForm {
   email: string
@@ -27,6 +28,8 @@ export default function AdminLoginPage() {
   const [errors, setErrors] = useState<LoginErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  const { isEmailEnabled } = useEmailServiceEnabled()
 
   const validate = (): LoginErrors => {
     const e: LoginErrors = {}
@@ -134,12 +137,14 @@ export default function AdminLoginPage() {
             <Field.Root invalid={!!errors.password} required>
               <div className="flex items-center justify-between mb-1.5">
                 <Field.Label className="mb-0">Password</Field.Label>
-                <Link
-                  to={ROUTES.ADMIN.FORGOT_PASSWORD}
-                  className="text-label-sm text-primary hover:opacity-80 transition-opacity duration-fast"
-                >
-                  Forgot password?
-                </Link>
+                {isEmailEnabled && (
+                  <Link
+                    to={ROUTES.ADMIN.FORGOT_PASSWORD}
+                    className="text-label-sm text-primary hover:opacity-80 transition-opacity duration-fast"
+                  >
+                    Forgot password?
+                  </Link>
+                )}
               </div>
               <PasswordInput
                 placeholder="Password"

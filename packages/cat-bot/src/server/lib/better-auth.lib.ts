@@ -33,7 +33,13 @@ import {
 const isMongo = env.DATABASE_TYPE === 'mongodb';
 const isTurso = env.DATABASE_TYPE === 'turso';
 
-const isEmailServicesEnabled = env.VITE_EMAIL_SERVICES_ENABLE === 'true';
+// Email services are only enabled when BOTH the feature toggle is 'true' AND the
+// Gmail SMTP credentials are configured. Without credentials, verification is
+// neither required nor available, and forgot-password flows stay hidden.
+const isEmailServicesEnabled =
+  env.VITE_EMAIL_SERVICES_ENABLE === 'true' &&
+  Boolean(env.GMAIL_USER) &&
+  Boolean(env.GOOGLE_APP_PASSWORD);
 
 // Computed once and reused by both betterAuth instances below (`auth` and `adminAuth`) —
 // they share the same underlying DB adapter/connection, just different basePath/cookies.

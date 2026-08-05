@@ -125,8 +125,8 @@ export async function validateEmailForPasswordReset(req: Request, res: Response)
  */
 export function getEmailServiceStatus(_req: Request, res: Response): void {
   const hasCredentials = Boolean(env.GMAIL_USER && env.GOOGLE_APP_PASSWORD);
-  const explicitlyDisabled = env.VITE_EMAIL_SERVICES_ENABLE === 'false';
-  res.status(200).json({ enabled: hasCredentials && !explicitlyDisabled });
+  const explicitlyEnabled = env.VITE_EMAIL_SERVICES_ENABLE === 'true';
+  res.status(200).json({ enabled: hasCredentials && explicitlyEnabled });
 }
 
 // ── Email Status Check ────────────────────────────────────────────────────────
