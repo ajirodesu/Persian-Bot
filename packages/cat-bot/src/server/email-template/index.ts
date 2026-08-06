@@ -1,36 +1,45 @@
 /**
  * Vanilla HTML Email Templates
  *
- * Mapped directly from packages/web/src/styles/theme/light.css
- * and dark.css tokens. Uses semantic div containers and inline CSS
- * for a clean layout, with a <style> block for dark mode overrides.
+ * Mapped directly from packages/web/src/styles/theme/aqua.css — the current
+ * default Cat-Bot dashboard theme (dark teal, "Aqua"). The design mirrors the
+ * auth pages' glass treatment: a dark ambient surface, a frosted rounded card
+ * with a subtle top-edge specular catch, and an aqua glow-ring brand badge.
+ *
+ * Email clients are fickle about advanced CSS, so the layout leans on inline
+ * styles (solid colors + inline-block) and only uses a <style> block for the
+ * body glows and dark-mode overrides; the ambient radial gradients degrade
+ * gracefully to solid backgrounds in clients that strip them.
  */
 
 export const COLORS = {
-  primary: '#4472d2', // var(--light-color-primary)
-  onPrimary: '#ffffff', // var(--light-color-on-primary)
-  surface: '#ffffff', // var(--light-color-surface)
-  onSurface: '#000000', // var(--light-color-on-surface)
-  onSurfaceVariant: '#324157', // var(--light-color-on-surface-variant)
-  surfaceContainerLow: '#f8fafc', // var(--light-color-surface-container-low)
-  outlineVariant: '#90a1b9', // var(--light-color-outline-variant)
+  primary: '#34e0be', // var(--aqua-color-primary)    rgb(52 224 190)
+  onPrimary: '#051617', // var(--aqua-color-on-primary)  rgb(5 22 23)
+  surface: '#070e11', // var(--aqua-color-surface)     rgb(7 14 17)
+  onSurface: '#f0f7f5', // var(--aqua-color-on-surface)  rgb(240 247 245)
+  onSurfaceVariant: '#98a8a4', // var(--aqua-color-on-surface-variant) rgb(152 168 164)
+  surfaceContainerLow: '#0a1114', // var(--aqua-color-surface-container-low) rgb(10 17 20)
+  outlineVariant: '#2a3634', // var(--aqua-color-outline-variant)       rgb(42 54 52)
 };
 
+// The Aqua theme is dark by default, so the forced dark-mode overrides simply
+// restate the same swatches to keep transactional mail consistent with the app
+// regardless of the reader's preferred color scheme.
 export const DARK_COLORS = {
-  primary: '#c4d8fd', // var(--dark-color-primary)
-  onPrimary: '#0e1e3e', // var(--dark-color-on-primary)
-  surface: '#1f2b3d', // var(--dark-color-surface)
-  onSurface: '#ffffff', // var(--dark-color-on-surface)
-  onSurfaceVariant: '#cad5e2', // var(--dark-color-on-surface-variant)
-  surfaceContainerLow: '#172031', // var(--dark-color-surface-container-low)
-  outlineVariant: '#45556c', // var(--dark-color-outline-variant)
+  primary: '#34e0be',
+  onPrimary: '#051617',
+  surface: '#070e11',
+  onSurface: '#f0f7f5',
+  onSurfaceVariant: '#98a8a4',
+  surfaceContainerLow: '#0a1114',
+  outlineVariant: '#2a3634',
 };
 
-// Light-mode "primary container" tint used behind the logo badge — mirrors the
+// "Primary container" tint used behind the logo badge — mirrors the
 // bg-primary-container/80 pill the web app uses behind Logo/icons in its own
-// headers (ForgotPassword, AccountVerification, etc).
-const PRIMARY_CONTAINER = '#dbe4ff'; // var(--light-color-primary-container)
-const DARK_PRIMARY_CONTAINER = '#28407a'; // var(--dark-color-primary-container)
+// auth headers (ForgotPassword, AccountVerification, ResetPassword, Login).
+const PRIMARY_CONTAINER = '#0d241f'; // primary-container at ~80% strength
+const ON_PRIMARY_CONTAINER = '#bdf3e9'; // --aqua-color-on-primary-container rgb(199 250 232)
 
 /**
  * Cat-Bot brand mark, inlined as raw SVG (not an <img>) so it renders with no
@@ -52,14 +61,16 @@ function buildLogoMarkSvg(sizePx: number): string {
 }
 
 /**
- * Circular "profile picture" style badge — a rounded avatar bubble holding the
- * brand mark, matching the h-12 w-12 rounded-2xl bg-primary-container/80
- * badge the web app itself uses above headings like "Account Recovery" and
- * "Verify your email". Sits at the top of every transactional email in place
- * of a plain text wordmark.
+ * Rounded "glow ring" avatar badge holding the brand mark, mirroring the
+ * h-12 w-12 rounded-2xl bg-primary-container/80 border-primary/20 `glow-ring`
+ * pill the auth pages join to their heading (e.g. "Verify your email"). Sits
+ * at the top of every transactional email in place of a plain text wordmark.
+ * `glow-ring` in the web app is a faint primary halo, emulated here via a soft
+ * box-shadow. The mark renders at h-6 w-6 (24px) in on-primary-container, the
+ * same size/color the auth pages use for `<Logo className="h-6 w-6 text-on-primary-container" />`.
  */
 function buildLogoBadge(): string {
-  return `<div class="logo-badge text-primary" style="box-sizing: border-box; width: 48px; height: 48px; padding: 12px; border-radius: 16px; background-color: ${PRIMARY_CONTAINER}; border: 1px solid ${COLORS.primary}33; color: ${COLORS.primary}; line-height: 0;">
+  return `<div class="logo-badge" style="box-sizing: border-box; width: 48px; height: 48px; padding: 12px; border-radius: 16px; background-color: ${PRIMARY_CONTAINER}; border: 1px solid rgba(49, 224, 190, 0.22); color: ${ON_PRIMARY_CONTAINER}; line-height: 0; box-shadow: 0 12px 28px -10px rgba(49, 224, 190, 0.45);">
     ${buildLogoMarkSvg(24)}
   </div>`;
 }
@@ -83,50 +94,64 @@ export function buildEmailLayout(
       color-scheme: light dark;
       supported-color-schemes: light dark;
     }
-    
+
+    /* Ambient glow — blurred primary/tertiary halos behind the card, the same
+       treatment the auth pages paint (bg-primary/[0.06] + bg-tertiary/[0.05]).
+       Clients that ignore background-image fall back to the solid surface. */
+    .body-bg {
+      background-color: ${COLORS.surfaceContainerLow};
+      background-image:
+        radial-gradient(52% 38% at 12% 0%, rgba(49, 224, 190, 0.1), transparent 100%),
+        radial-gradient(48% 42% at 94% 100%, rgba(129, 140, 248, 0.09), transparent 100%);
+    }
+
+    /* Frosted glass card — solid aqua surface with a hairline border plus a
+       faint top-edge specular catch (surface-specular in the web app). */
+    .card-glass {
+      background-color: ${COLORS.surface};
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 42px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      box-shadow: 0 28px 56px -18px rgba(0, 0, 0, 0.6);
+    }
+    .card-glass > .card-specular {
+      height: 1px;
+      background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 30%, rgba(49, 224, 190, 0.35) 50%, rgba(255, 255, 255, 0.1) 70%, transparent);
+    }
+
     /* Dark mode overrides using !important to bypass inline styles */
     @media (prefers-color-scheme: dark) {
       .body-bg { background-color: ${DARK_COLORS.surfaceContainerLow} !important; color: ${DARK_COLORS.onSurface} !important; }
-      .card-bg { background-color: ${DARK_COLORS.surface} !important; border-color: ${DARK_COLORS.outlineVariant} !important; }
-      .header-bg { background-color: ${DARK_COLORS.surface} !important; border-bottom-color: ${DARK_COLORS.outlineVariant} !important; }
-      .footer-bg { background-color: ${DARK_COLORS.surfaceContainerLow} !important; border-top-color: ${DARK_COLORS.outlineVariant} !important; }
-      .text-primary { color: ${DARK_COLORS.primary} !important; }
+      .card-glass { background-color: ${DARK_COLORS.surface} !important; border-color: rgba(255, 255, 255, 0.08) !important; }
       .text-on-surface-variant { color: ${DARK_COLORS.onSurfaceVariant} !important; }
       .text-outline-variant { color: ${DARK_COLORS.outlineVariant} !important; }
-      .btn-primary { background-color: ${DARK_COLORS.primary} !important; color: ${DARK_COLORS.onPrimary} !important; border-color: ${DARK_COLORS.primary} !important; }
-      .logo-badge { background-color: ${DARK_PRIMARY_CONTAINER} !important; border-color: ${DARK_COLORS.primary}33 !important; }
+      .btn-primary { background-color: ${DARK_COLORS.primary} !important; color: ${DARK_COLORS.onPrimary} !important; border-color: ${DARK_COLORS.primary} !important; box-shadow: 0 10px 22px -8px rgba(49, 224, 190, 0.45) !important; }
+      .logo-badge { background-color: ${PRIMARY_CONTAINER} !important; border-color: rgba(49, 224, 190, 0.22) !important; color: ${ON_PRIMARY_CONTAINER} !important; }
     }
   </style>
 </head>
 <body class="body-bg" style="margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: ${COLORS.surfaceContainerLow}; color: ${COLORS.onSurface}; -webkit-font-smoothing: antialiased;">
   ${previewText ? `<div style="display: none; max-height: 0px; overflow: hidden;">${previewText}</div>` : ''}
-  
-  <div class="card-bg" style="max-width: 600px; margin: 0 auto; background-color: ${COLORS.surface}; border-radius: 12px; border: 1px solid ${COLORS.outlineVariant}; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
-    
+
+  <div class="card-glass" style="max-width: 600px; margin: 32px auto; background-color: ${COLORS.surface}; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; box-shadow: 0 28px 56px -18px rgba(0, 0, 0, 0.6);">
+    <div class="card-specular"></div>
+
     <!-- Header -->
-    <div class="header-bg" style="padding: 24px 32px; border-bottom: 1px solid ${COLORS.outlineVariant}; background-color: ${COLORS.surface};">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
-        <tr>
-          <td style="vertical-align: middle;">
-            ${buildLogoBadge()}
-          </td>
-          <td style="vertical-align: middle; padding-left: 12px;">
-            <h1 class="text-primary" style="font-size: 22px; font-weight: 600; color: ${COLORS.primary}; letter-spacing: -0.02em; margin: 0;">
-              Cat-Bot
-            </h1>
-          </td>
-        </tr>
-      </table>
+    <div style="padding: 36px 32px 8px; text-align: center;">
+      <div style="display: inline-block; margin-bottom: 14px;">
+        ${buildLogoBadge()}
+      </div>
+      <div style="font-size: 20px; font-weight: 650; letter-spacing: -0.02em; color: ${COLORS.onSurface}; margin: 0;">Cat-Bot</div>
     </div>
 
     <!-- Content -->
-    <div class="text-on-surface-variant" style="padding: 32px; font-size: 16px; line-height: 1.5; color: ${COLORS.onSurfaceVariant};">
+    <div class="text-on-surface-variant" style="padding: 16px 32px 8px; font-size: 16px; line-height: 1.55; color: ${COLORS.onSurfaceVariant};">
       ${content}
     </div>
 
     <!-- Footer -->
-    <div class="footer-bg" style="padding: 24px 32px; background-color: ${COLORS.surfaceContainerLow}; text-align: center; border-top: 1px solid ${COLORS.outlineVariant};">
-      <p class="text-outline-variant" style="margin: 0; font-size: 14px; color: ${COLORS.outlineVariant};">
+    <div style="padding: 24px 32px 32px; text-align: center;">
+      <p class="text-outline-variant" style="margin: 0; font-size: 13px; line-height: 1.6; color: ${COLORS.outlineVariant};">
         This is an automated message from Cat-Bot. Please do not reply.
       </p>
     </div>
@@ -136,10 +161,11 @@ export function buildEmailLayout(
 </html>`;
 }
 
-// Builds a reliable cross-client HTML button using divs.
+// Builds a reliable cross-client HTML button using divs — filled primary, the
+// same primary/on-primary recipe as the web app's Button variant="filled".
 export function buildButton(href: string, label: string): string {
-  return `<div style="margin: 16px 0;">
-    <a href="${href}" target="_blank" class="btn-primary" style="display: inline-block; padding: 12px 24px; font-size: 16px; font-weight: 500; color: ${COLORS.onPrimary}; background-color: ${COLORS.primary}; text-decoration: none; border-radius: 8px; border: 1px solid ${COLORS.primary};">
+  return `<div style="margin: 20px 0;">
+    <a href="${href}" target="_blank" class="btn-primary" style="display: inline-block; padding: 13px 26px; font-size: 15px; font-weight: 600; letter-spacing: 0.01em; color: ${COLORS.onPrimary}; background-color: ${COLORS.primary}; text-decoration: none; border-radius: 10px; border: 1px solid ${COLORS.primary}; box-shadow: 0 10px 22px -8px rgba(49, 224, 190, 0.45);">
       ${label}
     </a>
   </div>`;
