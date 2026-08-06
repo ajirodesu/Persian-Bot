@@ -54,12 +54,7 @@ export const meta: CommandMeta = {
   description:
     'Downloads media from a Facebook, Instagram, Pinterest, X, or TikTok link — platform is auto-detected from the URL.',
   category: 'Downloader',
-  guide: [
-    '<url> — Download from a Facebook, Instagram, Pinterest, X, or TikTok link',
-    'on — Enable auto-detect for links posted in this chat',
-    'off — Disable auto-detect for links posted in this chat',
-    'status — Show whether auto-detect is currently enabled here',
-  ],
+  usage: '<url | on | off | status>',
   cooldown: 8,
   hasPrefix: true,
   platform: [Platforms.Discord, Platforms.Telegram],

@@ -66,12 +66,6 @@ export const meta: CommandMeta = {
     'Manage session threads: ban, unban, list all group threads, or search by name/ID',
   category: 'Bot Admin',
   usage: '<ban|unban|list|search> [tid|page|query]',
-  guide: [
-    'ban <tid> [reason] — Ban a thread from this session',
-    'unban <tid> — Lift an existing thread ban',
-    'list [page] — Paginated list of all group threads (default page 1)',
-    'search <query|id> — Search a thread by name or exact ID',
-  ],
   cooldown: 5,
   hasPrefix: true,
   platform: [

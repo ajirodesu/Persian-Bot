@@ -215,13 +215,6 @@ export const commands: CommandEntry[] = LIST_CONFIGS.map((config) => ({
     description: config.description,
     category: 'Bot Admin',
     usage: '<add|list|remove> [uid]',
-    guide: [
-      'add <uid> — Add a user by ID',
-      '  reply to the target user\'s message instead of typing an ID',
-      'delete|remove <uid> — Remove a user by ID',
-      '  reply to the target user\'s message instead of typing an ID',
-      'list — Show the current list',
-    ],
     cooldown: 5,
     hasPrefix: true,
     platform: [Platforms.Discord, Platforms.Telegram],

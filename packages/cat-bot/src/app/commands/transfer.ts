@@ -34,11 +34,6 @@ export const meta: CommandMeta = {
     'Transfer dollars to another user via reply, @mention, or user ID.',
   category: 'Economy',
   usage: '[@mention | uid] <amount>',
-  guide: [
-    '<reply to message> <amount>  — transfer to the quoted user',
-    '<@mention> <amount>          — transfer to the mentioned user',
-    '<uid> <amount>               — transfer to a user by ID',
-  ],
   cooldown: 5,
   hasPrefix: true,
   options: [

@@ -35,7 +35,7 @@ import { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 // Shared usage guide factory — injected into AppCtx so button onClick handlers
 // have the same ctx.usage() API available as onCommand handlers.
-import { createUsage } from '@/engine/utils/usage.util.js';
+import { createUsage } from '@/engine/middleware/on-command.middleware.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 

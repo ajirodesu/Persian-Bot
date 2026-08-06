@@ -64,14 +64,6 @@ export const meta: CommandMeta = {
     'Manage session users: ban, unban, list all, or search by name/ID',
   category: 'Bot Admin',
   usage: '<ban|unban|list|search> [uid|page|query]',
-  guide: [
-    'ban <uid|@mention|reply> [reason]   — Ban a user from this session',
-    '  @mention supported on Discord & Messenger only',
-    'unban <uid|@mention|reply>          — Lift an existing user ban',
-    '  @mention supported on Discord & Messenger only',
-    'list [page]                         — Paginated list of all users (default page 1)',
-    'search <query|id>                   — Search a user by name or exact ID',
-  ],
   cooldown: 5,
   hasPrefix: true,
   platform: [

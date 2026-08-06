@@ -23,9 +23,9 @@ import {
 import type { OnCommandCtx } from '@/engine/types/middleware.types.js';
 // Platform filter — enforces config.platform[] declared by each command module
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
-// Shared usage guide factory — injected into AppCtx so onCommand handlers can
+// Shared usage guide factory — injected into AppContext so onCommand handlers can
 // call ctx.usage() to display a formatted guide when arguments are invalid/missing.
-import { createUsage } from '@/engine/utils/usage.util.js';
+import { createUsage } from '@/engine/middleware/on-command.middleware.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 // Keeps a native typing indicator alive for the full, actual duration of command
 // execution — refreshed dynamically rather than fired once with a guessed timeout.

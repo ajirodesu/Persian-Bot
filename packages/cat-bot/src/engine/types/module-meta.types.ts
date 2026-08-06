@@ -117,9 +117,7 @@ export interface CommandMeta {
    * Usage pattern string or array of pattern strings.
    * Shown in the auto-generated usage reply when ctx.usage() is called.
    * A single string (e.g. '<add|list|delete> [uid]') renders as one usage line.
-   * An array renders each item as its own prefixed bullet line — useful for
-   * commands with 2–3 distinct signatures that do not warrant a full guide[].
-   * Commands that use meta.guide[] instead may supply an empty string here.
+   * An array renders each item as its own prefixed bullet line.
    */
   usage?: string | string[];
 
@@ -161,13 +159,6 @@ export interface CommandMeta {
    * Drives Discord's '/' slash menu option fields.
    */
   options?: CommandOption[];
-
-  /**
-   * Structured usage guide: each string is an arg pattern line displayed
-   * in the usage reply (e.g. ['<add> <uid>', '<list>', '<delete> <uid>']).
-   * Takes precedence over the legacy `usage` string when present.
-   */
-  guide?: string[];
 
   /**
    * Cost (in dollars) to invoke this command, charged from the caller's

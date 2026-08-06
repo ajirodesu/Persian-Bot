@@ -35,6 +35,7 @@ import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
 import { getPayment } from '@/engine/types/module-meta.types.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import type { createChatContext } from '@/engine/adapters/models/context.model.js';
 
 // ── Cooldown ──────────────────────────────────────────────────────────────────
 
@@ -406,3 +407,47 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
 
   await next();
 };
+
+// ── Usage Guide Factory ───────────────────────────────────────────────────────
+
+/**
+ * Creates a bound `usage()` function for a command module.
+ *
+ * Reads the command's meta (name, usage, description) and sends a formatted
+ * usage guide via the provided chat context.
+ *
+ * @param command  - The loaded command module (exports object).
+ * @param chat     - The command-scoped chat context (from createChatContext).
+ * @param prefix   - The active prefix string for this session.
+ * @returns        An async function that sends the usage guide as a reply.
+ *
+ * @example
+ * // Inside onCommand — show usage when required arg is missing
+ * export const onCommand = async ({ args, usage }: AppCtx) => {
+ *   if (!args[0]) return usage();
+ *   // ...
+ * };
+ */
+export function createUsage(
+  command: Record<string, unknown>,
+  chat: ReturnType<typeof createChatContext>,
+  prefix: string,
+): () => Promise<void> {
+  return async function usage(): Promise<void> {
+    const cfg = (command['meta'] as Record<string, unknown>) ?? {};
+
+    const rawUsage = cfg['usage'];
+    const usages: string[] = Array.isArray(rawUsage)
+      ? (rawUsage as string[])
+      : [typeof rawUsage === 'string' ? rawUsage : ''];
+
+    let text = '▫️ **Usage Guide:**\n\n';
+    for (const u of usages)
+      text += u
+        ? `\`${prefix}${cfg['name']} ${u}\`\n`
+        : `\`${prefix}${cfg['name']}\`\n`;
+    text += `\n📄 ${(cfg['description'] as string) || 'No description provided.'}`;
+
+    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: text });
+  };
+}

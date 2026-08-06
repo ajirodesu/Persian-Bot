@@ -383,10 +383,7 @@ export const commands: CommandEntry[] = YT_CONFIGS.map((config) => ({
     author: 'AjiroDesu',
     description: config.description,
     category: 'Downloader',
-    guide: [
-      `<url> — ${config.description}`,
-      ...config.flagLines.map((line) => `<url> ${line}`),
-    ],
+    usage: '<YouTube URL> [-d]',
     cooldown: 10,
     hasPrefix: true,
     platform: [Platforms.Discord, Platforms.Telegram],

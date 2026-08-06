@@ -137,8 +137,8 @@ export interface AppCtx extends BaseCtx {
   /**
    * Sends a formatted usage guide for the current command as a reply.
    *
-   * Reads `config.guide` (array of arg patterns) or falls back to `config.usage`
-   * (legacy string) and `config.description`, then replies with a formatted block.
+   * Reads `config.usage` (string or array of arg patterns) and `config.description`,
+   * then replies with a formatted block.
    *
    * Call inside `onCommand` when a required argument is missing or the user
    * passes an invalid value:

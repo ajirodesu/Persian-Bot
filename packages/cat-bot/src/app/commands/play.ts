@@ -332,7 +332,6 @@ export const commands: CommandEntry[] = MEDIA_CONFIGS.map((config) => ({
     description: config.description,
     category: 'Media',
     usage: '<YouTube URL | search query>',
-    guide: ['<YouTube URL | search query> — top result as the requested format'],
     cooldown: 15,
     hasPrefix: true,
     platform: [Platforms.Discord, Platforms.Telegram],
