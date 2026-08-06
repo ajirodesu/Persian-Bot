@@ -9,11 +9,12 @@ import apiClient from '@/lib/api-client.lib'
  *
  * WHY THIS REPLACES `import.meta.env.VITE_EMAIL_SERVICES_ENABLE`:
  * That variable is baked into the web bundle at `npm run build` time. An
- * admin who sets GMAIL_USER/GOOGLE_APP_PASSWORD on the bot and restarts it
+ * admin who sets BREVO_SENDER_EMAIL/BREVO_API_KEY (Brevo sender + API key) on the
+ * bot and restarts it
  * would still see "Feature Unavailable" until the frontend was *also*
  * rebuilt with the flag flipped — a confusing, easy-to-miss extra step.
  *
- * This hook instead asks the backend, which checks the real Gmail
+ * This hook instead asks the backend, which checks the real Brevo
  * credentials at request time (GET /api/v1/validate/email-service-status).
  * The result is cached at module scope for the lifetime of the tab so the
  * ~8 pages that need this don't each fire their own request.
@@ -49,7 +50,7 @@ function fetchEmailServiceStatus(): Promise<boolean> {
 }
 
 export interface UseEmailServiceEnabledResult {
-  /** True once the backend has confirmed Gmail SMTP credentials are configured. */
+  /** True once the backend has confirmed Brevo credentials are configured. */
   isEmailEnabled: boolean
   /** True while the initial check is in flight. */
   isLoading: boolean

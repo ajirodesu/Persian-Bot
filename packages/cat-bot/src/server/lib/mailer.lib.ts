@@ -1,52 +1,58 @@
 /**
- * Gmail SMTP Mailer — Nodemailer Singleton Wrapper
+ * Brevo Transactional-Email Mailer — SDK Singleton Wrapper
  *
- * Sends transactional email (primarily account-verification links) via Gmail
- * using a Google App Password. The transport is lazily initialised on first use:
+ * Sends transactional email (primarily account-verification links) via the
+ * Brevo REST API using `@getbrevo/brevo`. The client is lazily initialised on
+ * first use:
  *
- *   - GMAIL_USER and GOOGLE_APP_PASSWORD both present  → real SMTP delivery
- *   - Either absent                                     → warn + no-op (bot still boots)
+ *   - BREVO_SENDER_EMAIL and BREVO_API_KEY both present  → real API delivery
+ *   - Either absent                                      → warn + no-op (bot still boots)
  *
- * This "optional SMTP" design lets developers run Cat-Bot locally without
- * configuring email, while production deployments get full verification flow.
- *
- * Google App Password setup:
- *   1. Enable 2-Step Verification on your Google account.
- *   2. Go to myaccount.google.com → Security → App Passwords.
- *   3. Create an App Password for "Mail".
- *   4. Copy the 16-character key into GOOGLE_APP_PASSWORD in .env.
+ * Brevo setup:
+ *   1. Create an account at app.brevo.com and confirm the sender address.
+ *   2. Go to API Keys (app.brevo.com/settings/keys/api) → create a key.
+ *   3. Paste the key into BREVO_API_KEY and the verified sender address
+ *      into BREVO_SENDER_EMAIL in .env.
  */
 
-import nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
+import { BrevoClient } from '@getbrevo/brevo';
+import type { Brevo } from '@getbrevo/brevo';
 import { env } from '@/engine/config/env.config.js';
 
-// ── Singleton transport ───────────────────────────────────────────────────────
+// ── Singleton client ─────────────────────────────────────────────────────────
 
-let _transporter: Transporter | null = null;
+let _client: BrevoClient | null = null;
 
 /**
- * Returns a lazily-created nodemailer transporter authenticated with a Gmail
- * App Password. Returns null when either required env var is absent so callers
- * can skip the send without crashing.
+ * Returns a lazily-created Brevo API client authenticated with the API key.
+ * Returns null when a required env var is absent so callers can skip the send
+ * without crashing.
  */
-function getTransporter(): Transporter | null {
-  if (!env.GMAIL_USER || !env.GOOGLE_APP_PASSWORD) return null;
-  if (_transporter) return _transporter;
+function getClient(): BrevoClient | null {
+  if (!env.BREVO_SENDER_EMAIL || !env.BREVO_API_KEY) return null;
+  if (_client) return _client;
 
-  // Gmail SMTP via App Password — port 465 (implicit TLS) is the recommended
-  // choice for App Password auth; the 'gmail' service alias configures it correctly.
-  _transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: env.GMAIL_USER,
-      pass: env.GOOGLE_APP_PASSWORD,
-    },
-  });
-  return _transporter;
+  // The Brevo SDK (v6) auths via an api-key header supplier.
+  _client = new BrevoClient({ apiKey: env.BREVO_API_KEY });
+  return _client;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────
+
+/**
+ * Attachment item compatible with both the previous Nodemailer payloads and
+ * Brevo's `attachment` entries. Brevo requires either `content` (base64) or an
+ * absolute `url` (local file paths are not supported).
+ */
+export interface MailAttachment {
+  /** Attachment filename. Required when `content` is provided. */
+  filename?: string;
+  /** Base64-encoded content (or a Buffer that will be base64-encoded) */
+  content?: string | Buffer;
+  /** Absolute URL to the attachment (used instead of `content`). */
+  path?: string;
+  cid?: string;
+}
 
 export interface MailOptions {
   /** Recipient email address */
@@ -56,40 +62,74 @@ export interface MailOptions {
   html: string;
   /** Plain-text fallback for email clients that strip HTML */
   text?: string | undefined;
-  /** Attachments array for Nodemailer (used for CID base64 image embedding) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  attachments?: any[];
+  /** Attachments. Kept optional for caller compatibility. */
+  attachments?: MailAttachment[];
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Sends an email via Gmail SMTP. Silently skips delivery (with a console.warn)
- * when GMAIL_USER or GOOGLE_APP_PASSWORD is unset, so the bot continues to
- * operate in environments where email is not yet configured.
+ * Sends an email via the Brevo API. Silently skips delivery (with a
+ * console.warn) when BREVO_SENDER_EMAIL or BREVO_API_KEY is unset, so the bot
+ * continues to operate in environments where email is not yet configured.
  */
 export async function sendMail(options: MailOptions): Promise<void> {
-  const transporter = getTransporter();
+  const client = getClient();
 
-  if (!transporter) {
-    // Warn rather than throw — a missing SMTP config should never crash the bot
+  if (!client) {
+    // Warn rather than throw — a missing API key should never crash the bot
     console.warn(
-      `[mailer] GMAIL_USER or GOOGLE_APP_PASSWORD is not set. ` +
+      `[mailer] BREVO_SENDER_EMAIL or BREVO_API_KEY is not set. ` +
         `Skipping verification email to ${options.to}. ` +
         `Configure both env vars to enable email delivery.`,
     );
     return;
   }
 
-  // GMAIL_USER is guaranteed non-null here — getTransporter() returns null otherwise
-  const fromAddress = env.GMAIL_USER ?? 'noreply';
+  // BREVO_SENDER_EMAIL is guaranteed non-null here — getClient() returns null otherwise
+  const senderEmail = env.BREVO_SENDER_EMAIL ?? 'noreply';
 
-  await transporter.sendMail({
-    from: `"Cat-Bot" <${fromAddress}>`,
-    to: options.to,
+  const attachments = toBrevoAttachments(options.attachments);
+
+  const request: Brevo.SendTransacEmailRequest = {
+    sender: {
+      email: senderEmail,
+      name: 'Cat-Bot',
+    },
+    to: [
+      {
+        email: options.to,
+      },
+    ],
     subject: options.subject,
-    html: options.html,
-    text: options.text,
-    attachments: options.attachments,
+    htmlContent: options.html,
+    ...(options.text !== undefined ? { textContent: options.text } : {}),
+    ...(attachments ? { attachment: attachments } : {}),
+  };
+
+  await client.transactionalEmails.sendTransacEmail(request);
+}
+
+/**
+ * Maps the generic {@link MailAttachment}s into Brevo's
+ * `SendTransacEmailRequest.Attachment.Item[]` shape, base64-encoding Buffers.
+ */
+function toBrevoAttachments(
+  attachments: MailAttachment[] | undefined,
+): Brevo.SendTransacEmailRequest.Attachment.Item[] | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+
+  return attachments.map((att) => {
+    const { content } = att;
+    if (typeof content === 'string') {
+      return { name: att.filename, content };
+    }
+    if (Buffer.isBuffer(content)) {
+      return { name: att.filename, content: content.toString('base64') };
+    }
+    if (att.path) {
+      return { name: att.filename, url: att.path };
+    }
+    return { name: att.filename };
   });
 }

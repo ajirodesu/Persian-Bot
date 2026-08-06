@@ -46,11 +46,11 @@ interface EnvConfig {
   readonly VITE_URL?: string | undefined;
   readonly VITE_EMAIL_SERVICES_ENABLE?: string | undefined;
 
-  // Gmail SMTP — optional; when absent mailer.lib.ts skips email delivery and logs a warning.
-  // Both vars must be set together: GMAIL_USER is the sender address, GOOGLE_APP_PASSWORD
-  // is the 16-character App Password generated at myaccount.google.com → Security → App Passwords.
-  readonly GMAIL_USER?: string | undefined;
-  readonly GOOGLE_APP_PASSWORD?: string | undefined;
+  // Brevo transactional email — optional; when absent mailer.lib.ts skips email delivery and logs a warning.
+  // Both vars must be set together: BREVO_SENDER_EMAIL is the verified Brevo sender address,
+  // BREVO_API_KEY is the API key generated at app.brevo.com → API Keys.
+  readonly BREVO_SENDER_EMAIL?: string | undefined;
+  readonly BREVO_API_KEY?: string | undefined;
 
   // Security
   readonly ENCRYPTION_KEY: string;
@@ -219,9 +219,9 @@ export const env: EnvConfig = {
   VITE_URL: getOptionalEnv('VITE_URL'),
   VITE_EMAIL_SERVICES_ENABLE: getOptionalEnv('VITE_EMAIL_SERVICES_ENABLE'),
 
-  // Gmail SMTP — read at startup; absent vars produce undefined without throwing
-  GMAIL_USER: getOptionalEnv('GMAIL_USER'),
-  GOOGLE_APP_PASSWORD: getOptionalEnv('GOOGLE_APP_PASSWORD'),
+  // Brevo transactional email — read at startup; absent vars produce undefined without throwing
+  BREVO_SENDER_EMAIL: getOptionalEnv('BREVO_SENDER_EMAIL'),
+  BREVO_API_KEY: getOptionalEnv('BREVO_API_KEY'),
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),

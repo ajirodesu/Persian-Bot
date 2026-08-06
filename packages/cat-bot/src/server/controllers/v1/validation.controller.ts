@@ -118,13 +118,14 @@ export async function validateEmailForPasswordReset(req: Request, res: Response)
 
 /**
  * GET /api/v1/validate/email-service-status
- * Returns whether transactional email is deliverable: GMAIL_USER + GOOGLE_APP_PASSWORD
- * must both be present. VITE_EMAIL_SERVICES_ENABLE='false' acts as an explicit kill switch.
+ * Returns whether transactional email is deliverable: BREVO_SENDER_EMAIL + BREVO_API_KEY
+ * (Brevo sender + API key) must both be present. VITE_EMAIL_SERVICES_ENABLE='false'
+ * acts as an explicit kill switch.
  * Checked at request time so credential changes take effect on process restart — no
  * frontend rebuild required.
  */
 export function getEmailServiceStatus(_req: Request, res: Response): void {
-  const hasCredentials = Boolean(env.GMAIL_USER && env.GOOGLE_APP_PASSWORD);
+  const hasCredentials = Boolean(env.BREVO_SENDER_EMAIL && env.BREVO_API_KEY);
   const explicitlyEnabled = env.VITE_EMAIL_SERVICES_ENABLE === 'true';
   res.status(200).json({ enabled: hasCredentials && explicitlyEnabled });
 }
