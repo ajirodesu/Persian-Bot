@@ -53,6 +53,9 @@ export const APIs = {
   betadash: {
     baseURL: 'https://betadash-api-swordslush-production.up.railway.app',
   },
+  faaa: {
+    baseURL: 'https://api-faa.my.id',
+  },
   nexray: {
     baseURL: 'https://api.nexray.eu.cc',
   },
