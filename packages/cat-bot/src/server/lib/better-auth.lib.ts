@@ -141,15 +141,15 @@ export const auth = betterAuth({
       void sendMail({
         to: user.email,
         subject: 'Verify your Cat-Bot email address',
-        html: buildEmailLayout(
-          `
+          html: buildEmailLayout(
+            `
           <p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${String(user.name ?? user.email)},</p>
           <p style="margin: 0 0 24px 0;">Click the button below to verify your email and activate your Cat-Bot account:</p>
           ${buildButton(url, 'Verify Email')}
           <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This link expires in 1 hour. If you did not sign up for Cat-Bot, you can safely ignore this email.</p>
         `,
-          'Verify your email address',
-        ),
+            'Verify your email address',
+          ),
         text: `Verify your Cat-Bot email address by visiting: ${url}`,
       });
     },

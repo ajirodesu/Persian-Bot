@@ -66,12 +66,39 @@ export interface MailOptions {
   attachments?: MailAttachment[];
 }
 
+// ── Duplicate-send guard ──────────────────────────────────────────────────────
+
+// Collapses true duplicates fired within the window (e.g. a callback invoked twice
+// for one action), while letting deliberate re-sends through — those mint a fresh
+// token, producing a different link/HTML that no longer matches the prior hash.
+const recentSends = new Map<number, number>();
+const DEDUP_WINDOW_MS = 10_000;
+
+/** Builds a fuzzy (non-cryptographic FNV-1a) hash so identical messages collapse. */
+function isRecentlySent(to: string, subject: string, html: string): boolean {
+  const input = `${to}\u0000${subject}\u0000${html}`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  hash >>>= 0;
+  const now = Date.now();
+  if (recentSends.has(hash) && now - (recentSends.get(hash) ?? 0) < DEDUP_WINDOW_MS) {
+    return true;
+  }
+  recentSends.set(hash, now);
+  return false;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Sends an email via the Brevo API. Silently skips delivery (with a
+ * Sends an email via the Brevo API. Silently skips listeners (with a
  * console.warn) when BREVO_SENDER_EMAIL or BREVO_API_KEY is unset, so the bot
  * continues to operate in environments where email is not yet configured.
+ * Identical messages sent twice within {@link DEDUP_WINDOW_MS} are collapsed to
+ * a single delivery to prevent accidental double-sends.
  */
 export async function sendMail(options: MailOptions): Promise<void> {
   const client = getClient();
@@ -106,6 +133,10 @@ export async function sendMail(options: MailOptions): Promise<void> {
     ...(options.text !== undefined ? { textContent: options.text } : {}),
     ...(attachments ? { attachment: attachments } : {}),
   };
+
+  if (isRecentlySent(options.to, options.subject, options.html)) {
+    return;
+  }
 
   await client.transactionalEmails.sendTransacEmail(request);
 }
