@@ -14,7 +14,7 @@
  *   // Replace '/api/whatever' with the actual path documented by that
  *   // provider — this module only owns the base URL / API-key wiring,
  *   // not any specific provider's endpoint paths.
- *   const url = createUrl('siputzx', '/api/whatever', { query: 'cats' }, 'apikey');
+ *   const url = createUrl('popcat', '/api/whatever', { query: 'cats' }, 'apikey');
  *
  *   // Arbitrary absolute URL — falls back to using its own origin as the base.
  *   const url2 = createUrl('https://example.com', '/api/whatever', { q: '1' });
@@ -59,15 +59,12 @@ export const APIs = {
   popcat: {
     baseURL: 'https://api.popcat.xyz',
   },
-  siputzx: {
-    baseURL: 'https://api.siputzx.my.id',
-  },
   ytdlp: {
     baseURL: 'https://yt-dlp-stream.onrender.com',
   },
 } as const satisfies Record<string, ApiDefinition>;
 
-/** Union of every registered provider key, e.g. 'siputzx' | 'popcat' | ... */
+/** Union of every registered provider key, e.g. 'popcat' | 'betadash' | ... */
 export type ApiName = keyof typeof APIs;
 
 // ── URL Builder ───────────────────────────────────────────────────────────────
@@ -76,7 +73,7 @@ export type ApiName = keyof typeof APIs;
  * Builds a full request URL for a registered provider (by name) or an
  * arbitrary absolute URL string.
  *
- * @param apiNameOrURL   A key from the `APIs` registry (e.g. "siputzx"), or
+ * @param apiNameOrURL   A key from the `APIs` registry (e.g. "popcat"), or
  *                       any absolute URL string (its origin is used as the base).
  * @param endpoint       Path to resolve against the resolved base URL, e.g. "/api/anime".
  * @param params         Query parameters to attach to the request.
