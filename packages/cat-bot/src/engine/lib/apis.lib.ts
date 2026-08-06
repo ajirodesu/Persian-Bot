@@ -67,7 +67,7 @@ export const APIs = {
   },
 } as const satisfies Record<string, ApiDefinition>;
 
-/** Union of every registered provider key, e.g. 'siputzx' | 'delirius' | ... */
+/** Union of every registered provider key, e.g. 'siputzx' | 'popcat' | ... */
 export type ApiName = keyof typeof APIs;
 
 // ── URL Builder ───────────────────────────────────────────────────────────────

@@ -11,12 +11,9 @@
  *
  *   1. SIMPLE_PHOTO_CONFIGS — single source, single "repeat" button.
  *        /coffee — random coffee image  (aliases: coffeepic, coffeeimage, brew)
- *        /picsum — random Picsum photo  (aliases: randomphoto)
- *        /waifu  — random anime waifu   (aliases: randomwaifu)
  *        /ba     — random Blue Archive image (aliases: bluearchive)
  *
  *   2. TAGGED_PHOTO_CONFIGS — tag/topic-driven, shared 2×3 button grid.
- *        /loremflickr — tagged random photo (aliases: flickr)
  *        /wallpaper   — tagged random wallpaper, optional WxH (aliases: wp, wall, background)
  *
  * NOTE: /cat, /fox, /duck (animal-photos.ts) and /meme, /animeme (memes.ts)
@@ -36,7 +33,6 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
-import { createUrl } from '@/engine/lib/apis.lib.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // 1) SIMPLE PHOTO FAMILY — /coffee, /picsum, /waifu
@@ -89,80 +85,6 @@ const SIMPLE_PHOTO_CONFIGS: SimplePhotoConfig[] = [
         ok: true,
         caption: '☕ **Random Coffee Image**',
         attachment: { kind: 'url', name: `coffee.${extFromUrl(imageUrl)}`, url: imageUrl },
-      };
-    },
-  },
-  {
-    name: 'picsum',
-    aliases: ['randomphoto'],
-    version: '1.1.0',
-    category: 'random',
-    description: 'Sends a random photo from Picsum.',
-    cooldown: 5,
-    label: 'photo',
-    buttonLabel: '🔄 Refresh',
-    fetch: async () => {
-      const url = createUrl('delirius', '/random/picsum');
-      const response = await fetch(url);
-      if (!response.ok)
-        throw new Error(`Picsum API responded with status ${response.status}`);
-      const arrayBuffer = await response.arrayBuffer();
-      if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
-      return {
-        ok: true,
-        caption: '🖼️ **Random Picsum Photo**',
-        attachment: { kind: 'buffer', name: 'picsum.jpg', buffer: Buffer.from(arrayBuffer) },
-      };
-    },
-  },
-  {
-    name: 'waifu',
-    aliases: ['randomwaifu'],
-    version: '1.1.0',
-    category: 'Anime',
-    description: 'Sends a random anime waifu image.',
-    cooldown: 5,
-    label: 'waifu image',
-    buttonLabel: '🔄 Refresh',
-    fetch: async () => {
-      const url = createUrl('delirius', '/anime/waifu');
-      const response = await fetch(url);
-      if (!response.ok)
-        throw new Error(`Waifu API responded with status ${response.status}`);
-
-      const data = (await response.json()) as {
-        status: boolean;
-        data?: {
-          id: number;
-          title: string;
-          likes: number;
-          image: string;
-          size: string;
-          upload: string;
-          ext: string;
-          nsfw: boolean;
-          source: string;
-        };
-      };
-      if (!data.status || !data.data) throw new Error('Invalid response from Waifu API');
-      const waifu = data.data;
-
-      // Skip attaching flagged content — reply with a plain notice instead of the image.
-      if (waifu.nsfw) {
-        return { ok: false, notice: '⚠️ Got an NSFW-flagged result — try again for a different one.' };
-      }
-
-      const caption =
-        `🌸 **${waifu.title}**\n` +
-        ` • ❤️ **Likes:** ${waifu.likes}\n` +
-        ` • 📦 **Size:** ${waifu.size}\n` +
-        ` • 📅 **Uploaded:** ${waifu.upload}\n` +
-        ` • 🔗 **Source:** ${waifu.source}`;
-
-      return {
-        ok: true,
-        caption,
-        attachment: { kind: 'url', name: `waifu_${waifu.id}${waifu.ext}`, url: waifu.image },
       };
     },
   },
@@ -260,10 +182,10 @@ async function renderSimplePhoto(ctx: AppCtx, config: SimplePhotoConfig): Promis
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 2) TAGGED PHOTO FAMILY — /loremflickr, /wallpaper
+// 2) TAGGED PHOTO FAMILY — /wallpaper
 // ════════════════════════════════════════════════════════════════════════════
 //
-// Both commands share the exact same 2 × 3 button grid layout:
+// The command uses a shared 2 × 3 button grid layout:
 //   Row 1: [🎲 Random] [🌿 Nature] [🌌 Space]
 //   Row 2: [🏙️ City]  [🌅 Sunset] [✨ Anime]
 //
@@ -306,61 +228,6 @@ function buildTagButtonGrid(btn: AppCtx['button']): string[][] {
       btn.generateID({ id: TAG_BUTTON_ID.anime, public: true }),
     ],
   ];
-}
-
-const RANDOM_POOL = ['nature', 'space', 'city', 'sunset', 'anime'] as const;
-function pickRandomTag(): string {
-  return RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)]!;
-}
-
-// ── /loremflickr ──────────────────────────────────────────────────────────────
-
-async function fetchLoremFlickr(tag: string): Promise<Buffer> {
-  const url = createUrl('delirius', '/random/loremflickr', { flags: tag });
-  const response = await fetch(url);
-  if (!response.ok)
-    throw new Error(`LoremFlickr API responded with status ${response.status}`);
-  const arrayBuffer = await response.arrayBuffer();
-  if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
-  return Buffer.from(arrayBuffer);
-}
-
-async function renderLoremFlickr(ctx: AppCtx, tag: string): Promise<void> {
-  const { chat, event, native, button: btn } = ctx;
-  const isButtonAction = event['type'] === 'button_action';
-  const buttonGrid = hasNativeButtons(native.platform) ? buildTagButtonGrid(btn) : [];
-
-  try {
-    const resolvedTag = tag || pickRandomTag();
-    const image = await fetchLoremFlickr(resolvedTag);
-    const caption = `🖼️ **LoremFlickr**\n🏷️ **Tag:** ${resolvedTag}`;
-
-    const payload = {
-      style: MessageStyle.MARKDOWN,
-      message: caption,
-      attachment: [{ name: `loremflickr_${resolvedTag}.jpg`, stream: image }],
-      ...(buttonGrid.length > 0 ? { button: buttonGrid } : {}),
-    };
-
-    if (isButtonAction) {
-      await chat.editMessage({ ...payload, message_id_to_edit: event['messageID'] as string });
-    } else {
-      await chat.replyMessage(payload);
-    }
-  } catch (err) {
-    const error = err as { message?: string };
-    const errorPayload = {
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ **Fetch Failed**\n\`${error.message ?? 'Unknown error'}\``,
-      ...(buttonGrid.length > 0 ? { button: buttonGrid } : {}),
-    };
-
-    if (isButtonAction) {
-      await chat.editMessage({ ...errorPayload, message_id_to_edit: event['messageID'] as string });
-    } else {
-      await chat.replyMessage(errorPayload);
-    }
-  }
 }
 
 // ── /wallpaper ────────────────────────────────────────────────────────────────
@@ -536,25 +403,6 @@ const simpleCommands: CommandEntry[] = SIMPLE_PHOTO_CONFIGS.map((config) => ({
 }));
 
 const taggedCommands: CommandEntry[] = [
-  {
-    meta: {
-      name: 'loremflickr',
-      aliases: ['flickr'],
-      version: '1.2.0',
-      role: Role.ANYONE,
-      author: 'AjiroDesu',
-      description: 'Get a random photo from a fixed set of tags.',
-      category: 'random',
-      usage: '',
-      cooldown: 5,
-      hasPrefix: true,
-    },
-    onCommand: async (ctx: AppCtx) => {
-      const tag = ctx.args.join(' ').trim();
-      await renderLoremFlickr(ctx, tag);
-    },
-    button: buildTagButtons(renderLoremFlickr),
-  },
   {
     meta: {
       name: 'wallpaper',
