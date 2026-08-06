@@ -28,7 +28,7 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { invalidateThreadAdminBox } from '@/engine/lib/admin-only-state.lib.js';

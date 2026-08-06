@@ -39,7 +39,7 @@ import type {
 } from '@/engine/types/controller.types.js';
 import type { UserContext } from '@/engine/adapters/models/interfaces/index.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { EventMeta } from '@/engine/types/module-config.types.js';
+import type { EventMeta } from '@/engine/types/module-meta.types.js';
 import { LogMessageType } from '@/engine/adapters/models/enums/index.js';
 import { listBotAdmins } from '@/engine/repos/credentials.repo.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';

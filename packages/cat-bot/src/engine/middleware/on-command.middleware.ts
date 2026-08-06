@@ -32,7 +32,7 @@ import {
   formatGroupBanMessage,
 } from '@/engine/lib/ban-message.lib.js';
 import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
-import { getPayment } from '@/engine/types/module-config.types.js';
+import { getPayment } from '@/engine/types/module-meta.types.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 

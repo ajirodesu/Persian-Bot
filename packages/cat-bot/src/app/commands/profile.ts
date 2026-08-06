@@ -15,7 +15,7 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { isUserBanned } from '@/engine/repos/banned.repo.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { formatCoins } from '@/engine/lib/currencies.lib.js';
 
 // ── Level formula ─────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { INFINITY_SENTINEL, formatCoins } from '@/engine/lib/currencies.lib.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────

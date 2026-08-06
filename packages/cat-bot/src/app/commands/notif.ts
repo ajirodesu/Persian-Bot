@@ -2,7 +2,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 
 type NotificationResponse = {

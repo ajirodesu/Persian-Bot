@@ -39,7 +39,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import {
   recordMessageAndCheckSpam,
   resetSpamTracking,

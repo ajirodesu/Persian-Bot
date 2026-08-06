@@ -24,7 +24,7 @@
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { EventMeta } from '@/engine/types/module-config.types.js';
+import type { EventMeta } from '@/engine/types/module-meta.types.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 
 // Update this if your bot's warn command is named differently

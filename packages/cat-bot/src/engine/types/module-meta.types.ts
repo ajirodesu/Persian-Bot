@@ -9,7 +9,7 @@
  *
  * Usage in a command module:
  *
- *   import type { CommandMeta } from '@/engine/types/module-config.types.js';
+ *   import type { CommandMeta } from '@/engine/types/module-meta.types.js';
  *
  *   export const meta: CommandMeta = {
  *     name: 'ping',
@@ -23,7 +23,7 @@
  *
  *  Usage in an event module:
  *
- *  import type { EventMeta } from '@/engine/types/module-config.types.js';
+ *  import type { EventMeta } from '@/engine/types/module-meta.types.js';
  *
  *  export const meta: EventMeta = {
  *    name: 'join',

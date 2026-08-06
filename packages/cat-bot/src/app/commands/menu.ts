@@ -37,7 +37,7 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 

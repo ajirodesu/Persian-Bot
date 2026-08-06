@@ -20,7 +20,7 @@ import { getBotNickname } from '@/engine/repos/session.repo.js';
 import { listBotAdmins } from '@/engine/repos/credentials.repo.js';
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import type { UnifiedUserInfo } from '@/engine/adapters/models/user.model.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 

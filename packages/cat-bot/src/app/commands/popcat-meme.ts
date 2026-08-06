@@ -30,7 +30,7 @@ import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { CommandMeta, CommandOption } from '@/engine/types/module-config.types.js';
+import type { CommandMeta, CommandOption } from '@/engine/types/module-meta.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { createUrl, type UrlParams } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';

@@ -26,7 +26,7 @@
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { EventMeta } from '@/engine/types/module-config.types.js';
+import type { EventMeta } from '@/engine/types/module-meta.types.js';
 import { LogMessageType } from '@/engine/adapters/models/enums/index.js';
 import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';

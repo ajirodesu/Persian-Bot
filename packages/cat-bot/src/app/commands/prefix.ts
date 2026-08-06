@@ -35,7 +35,7 @@ import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { triggerSlashSync } from '@/engine/modules/prefix/slash-sync.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import {
   getCachedSessionAdminOnly,
   setCachedSessionAdminOnly,

@@ -4,7 +4,7 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { runAgent } from '@/engine/agent/agent.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
@@ -12,7 +12,7 @@ import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
 import { reactOnSuccess } from '@/engine/lib/react-on-success.lib.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
-import { getPayment } from '@/engine/types/module-config.types.js';
+import { getPayment } from '@/engine/types/module-meta.types.js';
 import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {

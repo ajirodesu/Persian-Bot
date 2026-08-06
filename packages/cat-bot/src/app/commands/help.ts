@@ -49,7 +49,7 @@ import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 
 export const meta: CommandMeta = {
   name: 'help',

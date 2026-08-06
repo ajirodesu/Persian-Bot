@@ -1,6 +1,6 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import type { EventMeta } from '@/engine/types/module-config.types.js';
+import type { EventMeta } from '@/engine/types/module-meta.types.js';
 
 export const meta: EventMeta = {
   name: 'leave',
