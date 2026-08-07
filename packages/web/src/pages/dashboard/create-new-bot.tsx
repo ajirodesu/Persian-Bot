@@ -219,10 +219,7 @@ export default function NewBotPage() {
       </Helmet>
 
       <div className="mb-8">
-        <h1 className="text-[1.5rem] font-bold tracking-tight text-on-surface leading-tight">
-          Create New Bot
-        </h1>
-        <p className="mt-2 text-sm text-on-surface-variant leading-relaxed max-w-sm">
+        <p className="text-headline-sm font-bold text-on-surface tracking-tight leading-relaxed max-w-sm">
           Set up your bot in three steps. Each field is verified before you proceed.
         </p>
       </div>

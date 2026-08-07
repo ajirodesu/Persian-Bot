@@ -232,11 +232,8 @@ export default function SettingsPage() {
 
       {/* Page header */}
       <div>
-        <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-          Settings
-        </h1>
-        <p className="mt-1 text-body-sm text-on-surface-variant">
-          Manage your profile and account security.
+        <p className="text-headline-sm font-bold text-on-surface tracking-tight">
+            Manage your profile and account security.
         </p>
       </div>
 

@@ -13,11 +13,13 @@
  *   - The Cat API   → `[{ url }]`            (array)
  *   - RandomFox     → `{ image }`
  *   - random-d.uk   → `{ url }`
+ *   - Dog CEO       → `{ message }`
  *
  * Commands:
  *   /cat   — random cat image  (aliases: catpic, catimage, meow)
  *   /fox   — random fox image  (aliases: foxpic, foximage, floof)
  *   /duck  — random duck image (aliases: duckpic, duckimage, quack)
+ *   /dog   — random dog image  (aliases: dogpic, dogimage, woof)
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
  * exporting `commands: Array<{ meta, onCommand, button? }>` and registers
@@ -76,6 +78,15 @@ const ANIMAL_CONFIGS: AnimalConfig[] = [
     buttonLabel: '🔁 Another Duck',
     apiUrl: 'https://random-d.uk/api/random',
     extractUrl: (data) => (data as { url?: string } | undefined)?.url || null,
+  },
+  {
+    name: 'dog',
+    aliases: ['dogpic', 'dogimage', 'woof'],
+    label: 'Random Dog Image',
+    emoji: '🐶',
+    buttonLabel: '🔁 Another Dog',
+    apiUrl: 'https://dog.ceo/api/breeds/image/random',
+    extractUrl: (data) => (data as { message?: string } | undefined)?.message || null,
   },
 ];
 

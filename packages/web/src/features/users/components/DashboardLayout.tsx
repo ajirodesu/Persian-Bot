@@ -10,6 +10,7 @@ import {
   Bot,
   MessageSquare,
   Settings as SettingsIcon,
+  Plus,
 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import ScrollToTop from '@/components/ScrollToTop'
@@ -49,6 +50,14 @@ const NAV_ITEMS = [
 ] as const
 
 /**
+ * Routes that only claim the sidebar (and their content header label) while
+ * they are actually open — never statically listed in NAV_ITEMS. Mirrors how
+ * the "currently open bot" entry behaves: it appears for exactly as long as
+ * its route is active and disappears the instant you navigate away.
+ */
+const DYNAMIC_NAV_PATHS: readonly string[] = [ROUTES.DASHBOARD.CREATE_NEW_BOT]
+
+/**
  * Active-route resolution shared by the sidebar nav.
  *
  * Bot Manager sits at the dashboard root ("/dashboard"), so a naive prefix
@@ -70,8 +79,13 @@ function isNavItemActive(itemPath: string, pathname: string): boolean {
   const claimedByAnotherNavItem = NAV_ITEMS.some(
     (item) => item.path !== itemPath && matches(item.path),
   )
+  // A dynamically-shown route (e.g. Create New Bot) also claims its path, so
+  // Bot Manager must not light up while one of those pages is open.
+  const claimedByDynamicRoute = DYNAMIC_NAV_PATHS.some(
+    (path) => path !== itemPath && matches(path),
+  )
 
-  return matches(itemPath) && !claimedByAnotherNavItem
+  return matches(itemPath) && !claimedByAnotherNavItem && !claimedByDynamicRoute
 }
 
 // ============================================================================
@@ -91,6 +105,7 @@ const SidebarNav = memo(function SidebarNav({
 }) {
   const isBotRoute =
     activePath === ROUTES.DASHBOARD.BOT || activePath.startsWith(`${ROUTES.DASHBOARD.BOT}/`)
+  const isCreateNewBotRoute = activePath === ROUTES.DASHBOARD.CREATE_NEW_BOT
 
   return (
     <div className="flex flex-col h-full">
@@ -175,6 +190,25 @@ const SidebarNav = memo(function SidebarNav({
             </div>
           )
         })}
+
+        {/* Create New Bot — a dynamic entry like the open bot's own page:
+            it appears in the sidebar only while the wizard route is open,
+            and vanishes the moment you navigate away. */}
+        {isCreateNewBotRoute && (
+          <Link
+            to={ROUTES.DASHBOARD.CREATE_NEW_BOT}
+            onClick={onNavClick}
+            aria-current="page"
+            className={cn(
+              H_SIDEBAR_NAV,
+              'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
+              'bg-primary/10 text-primary',
+            )}
+          >
+            <Plus className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
+            Create New Bot
+          </Link>
+        )}
       </nav>
     </div>
   )
@@ -411,6 +445,7 @@ export default function DashboardLayout() {
   // the moment the bot is "closed" — there's nothing to opt back out of.
   const isBotRoute =
     activePath === ROUTES.DASHBOARD.BOT || activePath.startsWith(`${ROUTES.DASHBOARD.BOT}/`)
+  const isCreateNewBotRoute = activePath === ROUTES.DASHBOARD.CREATE_NEW_BOT
   const openBotId = isBotRoute ? new URLSearchParams(location.search).get('id') : null
 
   const [openBot, setOpenBot] = useState<{
@@ -453,7 +488,9 @@ export default function DashboardLayout() {
   const currentLabel =
     openBot && isBotRoute
       ? openBot.nickname
-      : (NAV_ITEMS.find((i) => isNavItemActive(i.path, activePath))?.label ?? 'Dashboard')
+      : isCreateNewBotRoute
+        ? 'Create New Bot'
+        : (NAV_ITEMS.find((i) => isNavItemActive(i.path, activePath))?.label ?? 'Dashboard')
 
   return (
     <DashboardSidebarProvider open={mobileOpen} onOpenChange={setMobileOpen}>

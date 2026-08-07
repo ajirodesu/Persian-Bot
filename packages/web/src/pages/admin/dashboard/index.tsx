@@ -66,10 +66,7 @@ export default function AdminDashboardPage() {
         <title>Admin Overview · Cat-Bot</title>
       </Helmet>
       <div>
-        <h1 className="text-headline-md font-semibold text-on-surface">
-          Overview
-        </h1>
-        <p className="mt-1 text-body-md text-on-surface-variant">
+        <p className="text-headline-md font-semibold text-on-surface">
           Platform health and activity at a glance.
         </p>
       </div>

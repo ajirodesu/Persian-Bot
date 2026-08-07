@@ -82,10 +82,7 @@ export default function AdminBotsPage() {
       </Helmet>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-headline-md font-semibold text-on-surface">
-            Bot Sessions
-          </h1>
-          <p className="mt-1 text-body-md text-on-surface-variant">
+          <p className="text-headline-md font-semibold text-on-surface">
             All registered sessions across platforms.
           </p>
         </div>
