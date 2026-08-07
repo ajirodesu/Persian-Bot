@@ -184,6 +184,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
     await client.query(`DELETE FROM bot_threads`);
     await client.query(`DELETE FROM bot_users`);
     await client.query(`DELETE FROM system_admin`);
+    await client.query(`DELETE FROM system_settings`);
     await client.query(`DELETE FROM verification`);
 
     await client.query('COMMIT');

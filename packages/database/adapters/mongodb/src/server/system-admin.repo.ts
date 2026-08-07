@@ -161,6 +161,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
   await db.collection('botDiscordChannels').deleteMany({});
   await db.collection('botUsers').deleteMany({});
   await db.collection('systemAdmin').deleteMany({});
+  await db.collection('systemSettings').deleteMany({});
   await db.collection('verification').deleteMany({});
 }
 

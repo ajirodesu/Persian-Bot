@@ -8,9 +8,9 @@
  * so a multilingual group stays readable to everyone.
  *
  * Usage:
- *   /autotrans on   — turn auto-translate ON
- *   /autotrans off  — turn auto-translate OFF
- *   /autotrans      — toggle the current state
+ *   /autotrans        — show the current status
+ *   /autotrans on     — turn auto-translate ON
+ *   /autotrans off    — turn auto-translate OFF
  *
  * Uses the free Google Translate endpoint (`client=gtx` translate_a/single),
  * which supports the full range of GTX languages (en, vi, ja, zh, ko, ru,
@@ -33,7 +33,7 @@ export const meta: CommandMeta = {
   author: 'AjiroDesu',
   description: 'Auto-translate any language into English for this chat.',
   category: 'Utility',
-  usage: '<on | off>',
+  usage: '[on | off]',
   cooldown: 5,
   hasPrefix: true,
 };
@@ -130,20 +130,14 @@ export const onCommand = async ({
     return;
   }
 
-  // No (or unknown) argument → toggle the current state.
-  if (enabledThreads.has(key)) {
-    enabledThreads.delete(key);
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: '⛔ **Auto-translate is now OFF** for this chat.',
-    });
-    return;
-  }
-
-  enabledThreads.add(key);
+  // No query → report the current status instead of toggling, so users can
+  // check whether auto-translate is live for this chat.
+  const isEnabled = enabledThreads.has(key);
   await chat.replyMessage({
     style: MessageStyle.MARKDOWN,
-    message: '✅ **Auto-translate is now ON** — non-English messages will be translated to English.',
+    message: isEnabled
+      ? '🟢 **Auto-translate is currently ON** — non-English messages will be translated to English.'
+      : '⚪ **Auto-translate is currently OFF** for this chat.',
   });
 };
 

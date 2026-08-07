@@ -42,6 +42,16 @@ adminRouter.delete('/system-admins/:adminId', (req, res) => {
   void adminController.removeSystemAdmin(req, res);
 });
 
+// GET /api/v1/admin/maintenance-mode — global Maintenance Mode switch state
+adminRouter.get('/maintenance-mode', (req, res) => {
+  void adminController.getMaintenanceMode(req, res);
+});
+
+// PUT /api/v1/admin/maintenance-mode — toggle global Maintenance Mode (restrict bots to System Admins)
+adminRouter.put('/maintenance-mode', (req, res) => {
+  void adminController.updateMaintenanceMode(req, res);
+});
+
 // POST /api/v1/admin/users/:userId/ban-sessions — halt all bot transports for a banned user
 adminRouter.post('/users/:userId/ban-sessions', (req, res) => {
   void adminController.stopUserSessions(req, res);

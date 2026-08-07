@@ -245,3 +245,11 @@ export const getUserTimezone = m.getUserTimezone;
 export const upsertUserTimezone = m.upsertUserTimezone;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const deleteUserTimezone = m.deleteUserTimezone;
+
+// --- MAINTENANCE MODE ---
+// Global "Maintenance Mode" switch — when enabled, bot usage is restricted to
+// System Admins only. Adapter-agnostic interface.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getMaintenanceModeEnabled = m.getMaintenanceModeEnabled;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const setMaintenanceModeEnabled = m.setMaintenanceModeEnabled;

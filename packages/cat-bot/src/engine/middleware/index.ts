@@ -35,6 +35,7 @@ import {
   enforcePermission,
   enforceNotBanned,
   enforceAdminOnly,
+  enforceMaintenanceMode,
   enforcePayment,
 } from './on-command.middleware.js';
 import { chatPassthrough, chatLogThread } from './on-chat.middleware.js';
@@ -52,6 +53,11 @@ use.onCommand([
   // Permission check runs first — an unauthorised user is rejected before their
   // cooldown window is consumed or option parsing wastes CPU on a denied request.
   enforcePermission,
+  // Global Maintenance Mode gate — when enabled, only System Admins may use any
+  // command on any bot. Runs after permission (so role-gated command checks stay
+  // the cheaper path for SYSTEM_ADMIN-only commands) and before cooldown so a
+  // blocked attempt does not consume the user's cooldown window.
+  enforceMaintenanceMode,
   // Enforces session-wide (adminonly) and per-thread (onlyadminbox) restriction
   // modes; honours the matching ignoreonlyad / ignoreonlyadbox exemption lists.
   // Runs after permission so commands already gated to BOT_ADMIN/SYSTEM_ADMIN do

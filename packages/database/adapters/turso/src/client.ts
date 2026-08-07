@@ -117,6 +117,18 @@ export async function initDb(): Promise<void> {
     );
   `);
 
+  // Global maintenance-mode switch — single key/value row (see maintenance-mode.repo.ts).
+  // Same idempotent-outside-the-fast-path pattern, so already-initialised
+  // databases pick it up without a manual migration.
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      setting_key     TEXT PRIMARY KEY,
+      settings_value  TEXT NOT NULL,
+      created_at      TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at      TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+
   // Discord channel identity (name/type) — same idempotent-outside-the-fast-path
   // pattern as the tables above so already-initialised databases receive the new
   // columns without a manual migration. Fresh databases get them from the
@@ -134,7 +146,7 @@ export async function initDb(): Promise<void> {
     `PRAGMA table_info(bot_discord_channel)`,
   );
   const channelColNames = new Set(
-    (channelCols.rows as Array<{ name: string }>).map((r) => r.name),
+    (channelCols.rows as unknown as Array<{ name: string }>).map((r) => r.name),
   );
   if (!channelColNames.has('name')) {
     await tursoClient.execute({
@@ -155,7 +167,7 @@ export async function initDb(): Promise<void> {
     `PRAGMA table_info(bot_threads)`,
   );
   const threadColNames = new Set(
-    (threadCols.rows as Array<{ name: string }>).map((r) => r.name),
+    (threadCols.rows as unknown as Array<{ name: string }>).map((r) => r.name),
   );
   if (!threadColNames.has('type')) {
     await tursoClient.execute({

@@ -141,3 +141,9 @@ export {
   upsertUserTimezone,
   deleteUserTimezone,
 } from '../adapters/neondb/src/server/timezone.repo.js';
+
+// --- MAINTENANCE MODE ---
+export {
+  getMaintenanceModeEnabled,
+  setMaintenanceModeEnabled,
+} from '../adapters/neondb/src/server/maintenance-mode.repo.js';

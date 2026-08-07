@@ -87,3 +87,12 @@ export interface ResetAllDatabaseResponseDto {
   status: 'reset';
   preservedAdminId: string;
 }
+
+// Maintenance Mode — global switch restricting bot usage to System Admins only
+export interface GetMaintenanceModeResponseDto {
+  enabled: boolean;
+}
+
+export interface UpdateMaintenanceModeRequestDto {
+  enabled: boolean;
+}

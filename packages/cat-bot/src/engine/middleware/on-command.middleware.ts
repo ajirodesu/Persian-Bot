@@ -22,6 +22,7 @@ import {
   getCachedThreadAdminBox,
   setCachedThreadAdminBox,
 } from '@/engine/lib/admin-only-state.lib.js';
+import { getMaintenanceModeEnabled } from '@/engine/repos/maintenance-mode.repo.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import {
   getUserBanReason,
@@ -344,6 +345,47 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
   }
 
   await next();
+};
+
+// ── Maintenance Mode Enforcement ─────────────────────────────────────────────────
+
+/**
+ * Enforces the global "Maintenance Mode" switch: when enabled, every bot is
+ * restricted to System Admins only — non-system-admins are blocked from all
+ * commands on every session, on every platform. Mirrors "Bot Admin Only" but
+ * at the system level (global setting, not per-session).
+ *
+ * System admins bypass the restriction. Fail-open on any DB error so a storage
+ * hiccup never locks everyone out.
+ */
+export const enforceMaintenanceMode: MiddlewareFn<OnCommandCtx> = async function (
+  ctx,
+  next,
+): Promise<void> {
+  const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
+
+  try {
+    const enabled = await getMaintenanceModeEnabled();
+    if (!enabled) { await next(); return; }
+
+    if (senderID && (await cachedIsSystemAdmin(ctx, senderID))) { await next(); return; }
+
+    const key = `maintenance_noti:${senderID || 'unknown'}`;
+    if (cooldownStore.check(key, Date.now()) === null) {
+      await ctx.chat.replyMessage({
+        message: '🚫 The bot is under maintenance — only System Admins may use commands right now.',
+        attachment_url: [
+          {
+            name: 'maintenance-mode.png',
+            url: 'https://i.postimg.cc/rF1Y5ky9/maintenance-mode.png',
+          },
+        ],
+      });
+      cooldownStore.record(key, Date.now(), 15000);
+    }
+  } catch {
+    await next();
+  }
 };
 
 // ── Ban Enforcement ───────────────────────────────────────────────────────────

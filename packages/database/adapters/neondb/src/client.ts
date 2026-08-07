@@ -420,6 +420,14 @@ export async function initDb(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Global maintenance-mode switch: single key/value row (see maintenance-mode.repo.ts).
+    CREATE TABLE IF NOT EXISTS system_settings (
+      setting_key     TEXT PRIMARY KEY,
+      settings_value  TEXT NOT NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 

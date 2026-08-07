@@ -145,3 +145,9 @@ export {
   upsertUserTimezone,
   deleteUserTimezone,
 } from '../adapters/turso/src/server/timezone.repo.js';
+
+// --- MAINTENANCE MODE ---
+export {
+  getMaintenanceModeEnabled,
+  setMaintenanceModeEnabled,
+} from '../adapters/turso/src/server/maintenance-mode.repo.js';

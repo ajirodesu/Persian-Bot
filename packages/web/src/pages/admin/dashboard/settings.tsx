@@ -11,10 +11,11 @@ import Skeleton from '@/components/ui/feedback/Skeleton'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
 import ThemeToggle from '@/components/ui/ThemeToggle'
+import Switch from '@/components/ui/forms/Switch'
 import TimezoneSelect from '@/components/ui/forms/TimezoneSelect'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { authAdminClient } from '@/lib/better-auth-admin-client.lib'
-import { Plus, Trash2, TriangleAlert } from 'lucide-react'
+import { Plus, Trash2, Terminal, TriangleAlert } from 'lucide-react'
 import Dialog from '@/components/ui/overlay/Dialog'
 import { adminService } from '@/features/admin/services/admin.service'
 import type { SystemAdminDto } from '@/features/admin/services/admin.service'
@@ -156,6 +157,52 @@ export default function AdminSettingsPage() {
     targetIds.length !== currentIds.length ||
     targetIds.some((id) => !currentIds.includes(id)) ||
     currentIds.some((id) => !targetIds.includes(id))
+
+  // ── Maintenance Mode — global "restrict bots to System Admins" ──────────────
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState(false)
+  const [maintenanceLoading, setMaintenanceLoading] = useState(true)
+  const [maintenanceSaving, setMaintenanceSaving] = useState(false)
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { enabled } = await adminService.getMaintenanceMode()
+        setMaintenanceEnabled(enabled)
+      } catch (err) {
+        setMaintenanceError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to load Maintenance Mode state',
+        )
+      } finally {
+        setMaintenanceLoading(false)
+      }
+    }
+    void load()
+  }, [])
+
+  // Optimistic toggle that reverts on failure — mirrors the Bot Admin Only switch.
+  const handleToggleMaintenance = async (enabled: boolean): Promise<void> => {
+    setMaintenanceSaving(true)
+    setMaintenanceError(null)
+    const previous = maintenanceEnabled
+    setMaintenanceEnabled(enabled)
+    try {
+      const { enabled: confirmed } =
+        await adminService.updateMaintenanceMode(enabled)
+      setMaintenanceEnabled(confirmed)
+    } catch (err) {
+      setMaintenanceEnabled(previous)
+      setMaintenanceError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update Maintenance Mode state',
+      )
+    } finally {
+      setMaintenanceSaving(false)
+    }
+  }
 
   // ── Reset All Database — destructive, admin-only ─────────────────────────────
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -437,6 +484,86 @@ export default function AdminSettingsPage() {
             />
           )}
         </div>
+      </Card.Root>
+
+      {/* ── Maintenance Mode — restrict bots to System Admins ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className={[
+          'transition-colors duration-normal',
+          maintenanceEnabled
+            ? 'border border-primary/30 bg-primary/5'
+            : 'border border-outline-variant/60',
+        ].join(' ')}
+      >
+        <div className="flex items-start gap-4">
+          <div
+            className={[
+              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-normal',
+              maintenanceEnabled
+                ? 'bg-primary/15 text-primary'
+                : 'bg-on-surface/8 text-on-surface-variant',
+            ].join(' ')}
+          >
+            <Terminal className="h-5 w-5" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <p className="text-label-lg font-semibold text-on-surface">
+                Maintenance Mode
+              </p>
+              {!maintenanceLoading && (
+                <Badge color={maintenanceEnabled ? 'primary' : 'secondary'} size="sm" variant="tonal" pill>
+                  {maintenanceEnabled ? 'Active' : 'Inactive'}
+                </Badge>
+              )}
+            </div>
+            <p className="text-body-sm text-on-surface-variant leading-relaxed">
+              {maintenanceEnabled
+                ? 'All bots are currently under maintenance — only System Admins can use commands.'
+                : 'All users can use the bots as normal. Enable to restrict every bot to System Admins only.'}
+            </p>
+          </div>
+
+          <div className="shrink-0 pt-0.5">
+            {maintenanceLoading || maintenanceSaving ? (
+              <Skeleton
+                variant="rounded"
+                width="44px"
+                height="24px"
+                className="rounded-full"
+              />
+            ) : (
+              <Switch
+                checked={maintenanceEnabled}
+                onChange={() => void handleToggleMaintenance(!maintenanceEnabled)}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-outline-variant/40">
+          <p className="text-body-sm text-on-surface-variant leading-relaxed">
+            System-level switch that takes effect immediately across every bot
+            and platform. Only registered System Administrators bypass this
+            restriction.
+          </p>
+        </div>
+
+        {maintenanceError !== null && (
+          <div className="mt-3">
+            <Alert
+              variant="tonal"
+              color="error"
+              title="Error"
+              message={maintenanceError}
+              size="sm"
+            />
+          </div>
+        )}
       </Card.Root>
 
       {/* ── Unified save bar — Timezone + Profile + System Administrators ── */}

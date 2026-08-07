@@ -193,6 +193,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
     await tx.execute('DELETE FROM bot_threads');
     await tx.execute('DELETE FROM bot_users');
     await tx.execute('DELETE FROM system_admin');
+    await tx.execute('DELETE FROM system_settings');
     await tx.execute('DELETE FROM verification');
 
     await tx.commit();

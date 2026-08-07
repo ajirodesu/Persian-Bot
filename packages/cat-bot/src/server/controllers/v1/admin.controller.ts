@@ -22,8 +22,16 @@ import type {
   AddSystemAdminRequestDto,
   ResetAllDatabaseRequestDto,
   ResetAllDatabaseResponseDto,
+  UpdateMaintenanceModeRequestDto,
 } from '@/server/dtos/admin.dto.js';
 import { RESET_ALL_DATABASE_CONFIRMATION_PHRASE } from '@/server/dtos/admin.dto.js';
+// Maintenance Mode state goes through the cached engine repo (not the bare
+// 'database' getMaintenanceModeEnabled) so a toggle reflects immediately on the
+// very next command via the shared in-memory flag.
+import {
+  getMaintenanceModeEnabled,
+  setMaintenanceModeEnabled,
+} from '@/engine/repos/maintenance-mode.repo.js';
 
 /** Max length for a system admin ID — generous enough for any platform's native ID format (Discord/Telegram snowflakes, UUIDs, etc). */
 const SYSTEM_ADMIN_ID_MAX_LENGTH = 128;
@@ -163,6 +171,36 @@ export class AdminController {
     } catch (error) {
       console.error('[AdminController.removeSystemAdmin]', error);
       res.status(500).json({ error: 'Failed to remove system admin' });
+    }
+  }
+
+  // GET /api/v1/admin/maintenance-mode — reads the global Maintenance Mode switch state.
+  async getMaintenanceMode(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    try {
+      const enabled = await getMaintenanceModeEnabled();
+      res.status(200).json({ enabled });
+    } catch (error) {
+      console.error('[AdminController.getMaintenanceMode]', error);
+      res.status(500).json({ error: 'Failed to fetch Maintenance Mode state' });
+    }
+  }
+
+  // PUT /api/v1/admin/maintenance-mode — toggles the global Maintenance Mode switch.
+  // Goes through the cached engine repo so the change takes effect immediately.
+  async updateMaintenanceMode(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    const { enabled } = req.body as UpdateMaintenanceModeRequestDto;
+    if (typeof enabled !== 'boolean') {
+      res.status(400).json({ error: 'enabled must be a boolean' });
+      return;
+    }
+    try {
+      await setMaintenanceModeEnabled(enabled);
+      res.status(200).json({ enabled });
+    } catch (error) {
+      console.error('[AdminController.updateMaintenanceMode]', error);
+      res.status(500).json({ error: 'Failed to update Maintenance Mode state' });
     }
   }
 

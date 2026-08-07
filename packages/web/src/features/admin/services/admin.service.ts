@@ -72,6 +72,10 @@ export interface ResetAllDatabaseResponseDto {
   preservedAdminId: string
 }
 
+export interface GetMaintenanceModeResponseDto {
+  enabled: boolean
+}
+
 // ── Service class ──────────────────────────────────────────────────────────────
 
 export class AdminService {
@@ -123,6 +127,23 @@ export class AdminService {
     await apiClient.delete(
       `/api/v1/admin/system-admins/${encodeURIComponent(adminId)}`,
     )
+  }
+
+  // GET /api/v1/admin/maintenance-mode — global Maintenance Mode switch state
+  async getMaintenanceMode(): Promise<GetMaintenanceModeResponseDto> {
+    const response = await apiClient.get<GetMaintenanceModeResponseDto>(
+      '/api/v1/admin/maintenance-mode',
+    )
+    return response.data
+  }
+
+  // PUT /api/v1/admin/maintenance-mode — toggle global Maintenance Mode (restrict bots to System Admins)
+  async updateMaintenanceMode(enabled: boolean): Promise<GetMaintenanceModeResponseDto> {
+    const response = await apiClient.put<GetMaintenanceModeResponseDto>(
+      '/api/v1/admin/maintenance-mode',
+      { enabled },
+    )
+    return response.data
   }
 
   /** Stops all bot sessions for a banned user — call fire-and-forget after better-auth banUser succeeds. */
