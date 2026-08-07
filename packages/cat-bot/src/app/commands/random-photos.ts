@@ -103,13 +103,13 @@ const SIMPLE_PHOTO_CONFIGS: SimplePhotoConfig[] = [
       );
       const imageUrl = data[Math.floor(data.length * Math.random())];
       if (!imageUrl) return { ok: false };
-      const response = await axios.get<ArrayBuffer>(imageUrl, {
-        responseType: 'arraybuffer',
-      });
+      // Directly pass the source URL through — no local download. The platform's
+      // own fetcher grabs the bytes, so both the initial send and the refresh
+      // button skip a download-then-reupload round trip (faster, cheaper).
       return {
         ok: true,
         caption: '🎓 **Random Blue Archive Image**',
-        attachment: { kind: 'buffer', name: 'bluearchive.png', buffer: Buffer.from(response.data) },
+        attachment: { kind: 'url', name: 'bluearchive.jpg', url: imageUrl },
       };
     },
   },
@@ -232,7 +232,6 @@ function buildTagButtonGrid(btn: AppCtx['button']): string[][] {
 
 // ── /wallpaper ────────────────────────────────────────────────────────────────
 
-const WALLPAPER_TIMEOUT = 20000;
 const WALLPAPER_DEFAULT_WIDTH = 1920;
 const WALLPAPER_DEFAULT_HEIGHT = 1080;
 
@@ -276,22 +275,20 @@ async function renderWallpaper(
       sourceName = 'Picsum';
     }
 
-    const { data } = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: WALLPAPER_TIMEOUT,
-      maxRedirects: 5,
-    });
-
     const caption =
       `🖼️ **Wallpaper Generated**\n` +
       `📐 **Size:** ${width}×${height}\n` +
       `🔎 **Topic:** ${query || 'Random'}\n` +
       `📷 **Source:** ${sourceName}`;
 
+    // Pass the source URL straight through instead of buffering the bytes here
+    // (these hosts are stable direct image endpoints). The platform's own fetcher
+    // downloads the image, so send/edit complete after a single metadata request —
+    // notably faster on refresh buttons and on Discord.
     const wallpaperPayload = {
       style: MessageStyle.MARKDOWN,
       message: caption,
-      attachment: [{ name: `wallpaper_${width}x${height}.jpg`, stream: Buffer.from(data) }],
+      attachment_url: [{ name: `wallpaper_${width}x${height}.jpg`, url }],
       ...(buttonGrid.length > 0 ? { button: buttonGrid } : {}),
     };
 
