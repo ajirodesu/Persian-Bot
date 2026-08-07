@@ -287,7 +287,10 @@ export default function AdminUsersPage() {
       </Helmet>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-headline-md font-semibold text-on-surface">
+          <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
+            Users
+          </h1>
+          <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
             All registered accounts — real data from the auth database.
           </p>
         </div>

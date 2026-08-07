@@ -252,7 +252,10 @@ export default function AdminSettingsPage() {
       </Helmet>
 
       <div>
-        <p className="text-headline-md font-semibold text-on-surface">
+        <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
+          Settings
+        </h1>
+        <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
           Manage your admin profile and interface preferences.
         </p>
       </div>

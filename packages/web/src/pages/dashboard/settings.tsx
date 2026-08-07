@@ -231,9 +231,12 @@ export default function SettingsPage() {
       </Helmet>
 
       {/* Page header */}
-      <div>
-        <p className="text-headline-sm font-bold text-on-surface tracking-tight">
-            Manage your profile and account security.
+<div>
+        <h1 className="text-headline-sm font-bold text-on-surface tracking-tight md:hidden">
+          Settings
+        </h1>
+        <p className="mt-1 text-body-sm text-on-surface-variant md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
+          Manage your profile and account security.
         </p>
       </div>
 

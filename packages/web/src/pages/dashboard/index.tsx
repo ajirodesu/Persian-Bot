@@ -140,7 +140,10 @@ export default function BotManagerPage() {
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-headline-sm font-bold text-on-surface tracking-tight">
+          <h1 className="text-headline-sm font-bold text-on-surface tracking-tight md:hidden">
+            Bot Manager
+          </h1>
+          <p className="mt-1 text-body-sm text-on-surface-variant md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
             Configure and monitor your deployed bots.
             {!isLoading && bots.length > 0 && (
               <span className="ml-1.5 text-success font-medium">

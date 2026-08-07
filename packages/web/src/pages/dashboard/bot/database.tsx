@@ -1728,7 +1728,10 @@ export default function BotDatabasePage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-headline-md font-semibold text-on-surface">
+        <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
+          Database
+        </h1>
+        <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
           Manage users and groups this bot session has interacted with.
         </p>
       </div>
