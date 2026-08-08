@@ -3,6 +3,7 @@ import React from 'react'
 import { Users, Bot, ShieldBan, AlertCircle } from 'lucide-react'
 import { PLATFORM_LABELS } from '@/constants/platform.constants'
 import Badge from '@/components/ui/data-display/Badge'
+import Skeleton from '@/components/ui/feedback/Skeleton'
 import { useAdminBots } from '@/features/admin/hooks/useAdminBots'
 import { useAdminUsers } from '@/features/admin/hooks/useAdminUsers'
 
@@ -29,6 +30,18 @@ function StatCard({
       <div>
         <p className="text-headline-sm font-bold text-on-surface">{value}</p>
         <p className="text-body-sm text-on-surface-variant">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+function StatCardSkeleton() {
+  return (
+    <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 flex flex-col gap-3 shadow-elevation-1">
+      <Skeleton variant="input" width={40} height={40} />
+      <div className="flex flex-col gap-1.5">
+        <Skeleton variant="text" textSize="headline-sm" width="56%" />
+        <Skeleton variant="text" textSize="body-sm" width="72%" />
       </div>
     </div>
   )
@@ -76,30 +89,46 @@ export default function AdminDashboardPage() {
 
       {/* ── Stat grid ── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          label="Registered Users"
-          value={isUsersLoading ? '…' : String(totalUsers)}
-          icon={Users}
-          colorClass="bg-primary-container text-on-primary-container"
-        />
-        <StatCard
-          label="Active Bots"
-          value={isBotsLoading ? '…' : `${activeBots} / ${totalBots}`}
-          icon={Bot}
-          colorClass="bg-tertiary-container text-on-tertiary-container"
-        />
-        <StatCard
-          label="Admin Accounts"
-          value={isUsersLoading ? '…' : String(adminCount)}
-          icon={ShieldBan}
-          colorClass="bg-secondary-container text-on-secondary-container"
-        />
-        <StatCard
-          label="Banned Accounts"
-          value={isUsersLoading ? '…' : String(bannedCount)}
-          icon={AlertCircle}
-          colorClass="bg-error-container text-on-error-container"
-        />
+        {isUsersLoading ? (
+          <StatCardSkeleton />
+        ) : (
+          <StatCard
+            label="Registered Users"
+            value={String(totalUsers)}
+            icon={Users}
+            colorClass="bg-primary-container text-on-primary-container"
+          />
+        )}
+        {isBotsLoading ? (
+          <StatCardSkeleton />
+        ) : (
+          <StatCard
+            label="Active Bots"
+            value={`${activeBots} / ${totalBots}`}
+            icon={Bot}
+            colorClass="bg-tertiary-container text-on-tertiary-container"
+          />
+        )}
+        {isUsersLoading ? (
+          <StatCardSkeleton />
+        ) : (
+          <StatCard
+            label="Admin Accounts"
+            value={String(adminCount)}
+            icon={ShieldBan}
+            colorClass="bg-secondary-container text-on-secondary-container"
+          />
+        )}
+        {isUsersLoading ? (
+          <StatCardSkeleton />
+        ) : (
+          <StatCard
+            label="Banned Accounts"
+            value={String(bannedCount)}
+            icon={AlertCircle}
+            colorClass="bg-error-container text-on-error-container"
+          />
+        )}
       </div>
 
       {/* ── Detail cards ── */}
@@ -110,12 +139,18 @@ export default function AdminDashboardPage() {
             Bot Platform Distribution
           </h2>
           {isBotsLoading ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col">
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="h-10 rounded-[var(--radius-input)] bg-surface-container animate-pulse"
-                />
+                  className="flex items-center justify-between py-3 border-b border-outline-variant/50 last:border-0"
+                >
+                  <Skeleton variant="text" textSize="body-sm" width="45%" />
+                  <div className="flex flex-col items-end gap-1">
+                    <Skeleton variant="text" textSize="body-sm" width="72px" />
+                    <Skeleton variant="text" textSize="label-sm" width="52px" />
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -157,12 +192,18 @@ export default function AdminDashboardPage() {
             Recent Registrations
           </h2>
           {isUsersLoading ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col">
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="h-10 rounded-[var(--radius-input)] bg-surface-container animate-pulse"
-                />
+                  className="flex items-center justify-between py-2.5 border-b border-outline-variant/50 last:border-0"
+                >
+                  <div className="min-w-0 flex-1 mr-3">
+                    <Skeleton variant="text" textSize="body-sm" width="55%" />
+                    <Skeleton variant="text" textSize="label-sm" width="80%" />
+                  </div>
+                  <Skeleton variant="pill" width={48} height={22} />
+                </div>
               ))}
             </div>
           ) : (

@@ -75,14 +75,13 @@ export default function BotEventsPage() {
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Skeleton variant="rounded" width="16px" height="16px" />
+                  <Skeleton variant="input" width="16px" height="16px" />
                   <Skeleton variant="text" width="60%" height="22px" />
                 </div>
                 <Skeleton
-                  variant="rounded"
+                  variant="pill"
                   width="36px"
                   height="20px"
-                  className="rounded-full"
                 />
               </div>
               <Skeleton variant="text" count={2} />

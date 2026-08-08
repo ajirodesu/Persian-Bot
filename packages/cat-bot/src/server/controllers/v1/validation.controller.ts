@@ -3,12 +3,15 @@
  *
  * POST /api/v1/validate/discord          — verify Discord bot token via /users/@me
  * POST /api/v1/validate/telegram         — verify Telegram token via getMe
+ * POST /api/v1/validate/discord          — verify Discord bot token via /users/@me
+ * POST /api/v1/validate/telegram         — verify Telegram token via getMe
  * POST /api/v1/validate/email-reset      — check email existence (+ adminOnly role)
  * GET  /api/v1/validate/email-service-status — is transactional email configured?
  * POST /api/v1/validate/email-status     — email existence + verification flag
- * POST /api/v1/validate/reset-password/request      — issue HMAC-signed reset token
- * POST /api/v1/validate/reset-password/verify-token — validate token without consuming it
- * POST /api/v1/validate/reset-password/confirm      — apply new password and consume token
+ * POST /api/v1/validate/email-verification/confirm — verify an email via OTP code
+ * POST /api/v1/validate/reset-password/request      — send a 6-digit OTP reset code
+ * POST /api/v1/validate/reset-password/verify-code  — validate OTP without consuming it
+ * POST /api/v1/validate/reset-password/confirm      — consume OTP and apply new password
  *
  * All validation endpoints return HTTP 200 with { valid: false, error } for rejected
  * credentials so the React hook can distinguish network failures (throws) from
@@ -16,7 +19,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { hashPassword } from 'better-auth/crypto';
 import { sendMail } from '@/server/lib/mailer.lib.js';
 import { env } from '@/engine/config/env.config.js';
@@ -25,7 +27,8 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { auth } from '@/server/lib/better-auth.lib.js';
 import axios from 'axios';
 import { isAuthError, withRetry, isNetworkError } from '@/engine/lib/retry.lib.js';
-import { buildEmailLayout, buildButton, COLORS } from '@/server/email-template/index.js';
+import { generateOtp, checkOtp, consumeOtp } from '@/server/lib/otp.lib.js';
+import { buildEmailLayout, buildCodeBlock, COLORS } from '@/server/email-template/index.js';
 
 // ── Discord ───────────────────────────────────────────────────────────────────
 
@@ -151,63 +154,14 @@ export async function checkEmailStatus(req: Request, res: Response): Promise<voi
   }
 }
 
-// ── HMAC-signed Password Reset Token Flow ─────────────────────────────────────
+// ── OTP-code Password Reset Flow ────────────────────────────────────────────
 //
-// Stateless tokens: email/expiry/adminOnly encoded in base64url JSON, signed with HMAC-SHA256.
-// Token format: <base64url(JSON)>.<hex HMAC-SHA256 signature>
-// Single-use: consumed signatures tracked in usedTokenSigs (Set<string>).
+// Codes are generated, stored, and validated by the shared in-memory OTP store
+// (server/lib/otp.lib.ts). The request endpoint emails a 6-digit code, the
+// verify endpoint gates the reset UI without consuming it, and the confirm
+// endpoint consumes the code while applying the new password.
 
-interface TokenPayload { email: string; expiresAt: number; adminOnly: boolean; }
-
-function getSigningKey(): string {
-  const secret = process.env['BETTER_AUTH_SECRET'];
-  if (!secret) {
-    logger.warn('[validate] BETTER_AUTH_SECRET is not set — reset tokens are using an insecure fallback key.');
-    return 'cat-bot-reset-fallback-insecure';
-  }
-  return secret;
-}
-
-function createSignedToken(email: string, adminOnly: boolean): string {
-  const payload = Buffer.from(
-    JSON.stringify({ email: email.toLowerCase().trim(), expiresAt: Date.now() + 3_600_000, adminOnly } satisfies TokenPayload),
-  ).toString('base64url');
-  const sig = createHmac('sha256', getSigningKey()).update(payload).digest('hex');
-  return `${payload}.${sig}`;
-}
-
-function verifySignedToken(
-  token: string,
-  adminOnly: boolean,
-): { valid: true; email: string; sig: string } | { valid: false } {
-  const dotIdx = token.lastIndexOf('.');
-  if (dotIdx === -1) return { valid: false };
-  const payload = token.slice(0, dotIdx);
-  const sig = token.slice(dotIdx + 1);
-
-  const expectedSig = createHmac('sha256', getSigningKey()).update(payload).digest('hex');
-  try {
-    const sigBuf = Buffer.from(sig, 'hex');
-    const expectedBuf = Buffer.from(expectedSig, 'hex');
-    if (sigBuf.length !== expectedBuf.length) return { valid: false };
-    if (!timingSafeEqual(sigBuf, expectedBuf)) return { valid: false };
-  } catch { return { valid: false }; }
-
-  if (usedTokenSigs.has(sig)) return { valid: false };
-
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as TokenPayload;
-    if (Date.now() > data.expiresAt) return { valid: false };
-    if (data.adminOnly !== adminOnly) return { valid: false };
-    return { valid: true, email: data.email, sig };
-  } catch { return { valid: false }; }
-}
-
-const usedTokenSigs = new Set<string>();
-// Hourly sweep: clear if > 10k entries (10k completed resets/hour is unrealistic).
-setInterval(() => { if (usedTokenSigs.size > 10_000) usedTokenSigs.clear(); }, 3_600_000).unref();
-
-/** POST /api/v1/validate/reset-password/request — issues HMAC-signed token and sends email. */
+/** POST /api/v1/validate/reset-password/request — body: { email, adminOnly } — emails a 6-digit OTP code. */
 export async function requestPasswordResetCustom(req: Request, res: Response): Promise<void> {
   const { email, adminOnly } = req.body as { email?: string; adminOnly?: boolean };
   if (!email || typeof email !== 'string') { res.status(400).json({ error: 'Missing email' }); return; }
@@ -222,10 +176,8 @@ export async function requestPasswordResetCustom(req: Request, res: Response): P
     if (!user) { res.status(200).json({ success: true }); return; }
     if (adminOnly && user['role'] !== 'admin') { res.status(200).json({ success: true }); return; }
 
-    const token = createSignedToken(email, !!adminOnly);
-    const baseUrl = (env.VITE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const resetCode = generateOtp(email, 'reset-password');
     const targetEmail = String(user['email'] ?? email);
-    const url = `${baseUrl}${adminOnly ? '/admin' : ''}/reset-password?token=${token}&email=${encodeURIComponent(targetEmail)}`;
     const targetName = String(user['name'] ?? email);
 
     await sendMail({
@@ -233,12 +185,12 @@ export async function requestPasswordResetCustom(req: Request, res: Response): P
       subject: adminOnly ? 'Reset your Cat-Bot Admin password' : 'Reset your Cat-Bot password',
       html: buildEmailLayout(
         `<p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${targetName},</p>
-        <p style="margin: 0 0 24px 0;">Click the button below to securely reset your ${adminOnly ? 'admin ' : ''}password:</p>
-        ${buildButton(url, 'Reset Password')}
-        <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This link expires in 1 hour. If you did not request this, you can safely ignore this email.</p>`,
+        <p style="margin: 0 0 24px 0;">Use the code below to securely reset your ${adminOnly ? 'admin ' : ''}password:</p>
+        ${buildCodeBlock(resetCode)}
+        <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>`,
         'Securely reset your password',
       ),
-      text: `Reset your password by visiting: ${url}`,
+      text: `Your Cat-Bot password reset code is ${resetCode}. It expires in 10 minutes.`,
     });
 
     res.status(200).json({ success: true });
@@ -248,32 +200,38 @@ export async function requestPasswordResetCustom(req: Request, res: Response): P
   }
 }
 
-/** POST /api/v1/validate/reset-password/verify-token — body: { token, adminOnly } */
-export async function verifyResetTokenCustom(req: Request, res: Response): Promise<void> {
-  const body = req.body as { token?: string; adminOnly?: boolean };
-  const token = body.token?.trim();
-  if (!token) { res.status(400).json({ error: 'Missing token' }); return; }
-  const result = verifySignedToken(token, !!body.adminOnly);
+/** POST /api/v1/validate/reset-password/verify-code — body: { email, code, adminOnly } */
+export async function verifyResetCodeCustom(req: Request, res: Response): Promise<void> {
+  const body = req.body as { email?: string; code?: string; adminOnly?: boolean };
+  const email = body.email?.trim();
+  const code = body.code?.trim();
+  if (!email || !code) { res.status(400).json({ error: 'Missing email or code' }); return; }
+
+  const result = checkOtp(email, 'reset-password', code);
   res.status(200).json({ valid: result.valid });
 }
 
-/** POST /api/v1/validate/reset-password/confirm — body: { token, password, adminOnly } */
+/** POST /api/v1/validate/reset-password/confirm — body: { email, code, password, adminOnly } */
 export async function confirmPasswordResetCustom(req: Request, res: Response): Promise<void> {
-  const body = req.body as { token?: string; password?: string; adminOnly?: boolean };
-  const token = body.token?.trim();
+  const body = req.body as { email?: string; code?: string; password?: string; adminOnly?: boolean };
+  const email = body.email?.trim();
+  const code = body.code?.trim();
   const { password, adminOnly } = body;
-  if (!token || !password) { res.status(400).json({ error: 'Missing token or password' }); return; }
-
-  const tokenResult = verifySignedToken(token, !!adminOnly);
-  if (!tokenResult.valid) { res.status(400).json({ error: 'Invalid or expired token' }); return; }
+  if (!email || !code || !password) { res.status(400).json({ error: 'Missing email, code, or password' }); return; }
 
   try {
     const ctx = await auth.$context;
     const user = await ctx.adapter.findOne<Record<string, unknown>>({
       model: 'user',
-      where: [{ field: 'email', value: tokenResult.email }],
+      where: [{ field: 'email', value: email.toLowerCase().trim() }],
     });
     if (!user) { res.status(400).json({ error: 'User no longer exists' }); return; }
+    if (adminOnly && user['role'] !== 'admin') { res.status(400).json({ error: 'Invalid or expired code' }); return; }
+
+    if (!consumeOtp(email, 'reset-password', code)) {
+      res.status(400).json({ error: 'Invalid or expired code' });
+      return;
+    }
 
     const hashed = await hashPassword(password);
     const accounts = await ctx.adapter.findMany<Record<string, unknown>>({
@@ -295,7 +253,7 @@ export async function confirmPasswordResetCustom(req: Request, res: Response): P
         model: 'account',
         data: {
           userId: user['id'] as string,
-          accountId: tokenResult.email,
+          accountId: email.toLowerCase().trim(),
           providerId: 'credential',
           password: hashed,
           createdAt: new Date(),
@@ -304,7 +262,6 @@ export async function confirmPasswordResetCustom(req: Request, res: Response): P
       });
     }
 
-    usedTokenSigs.add(tokenResult.sig);
     await ctx.adapter.deleteMany({
       model: 'session',
       where: [{ field: 'userId', value: user['id'] as string }],
@@ -314,5 +271,46 @@ export async function confirmPasswordResetCustom(req: Request, res: Response): P
   } catch (error) {
     logger.error('[validate] Custom confirm reset failed', { error });
     res.status(500).json({ error: 'Failed to reset password' });
+  }
+}
+
+// ── OTP-code Email Verification Flow ─────────────────────────────────────────
+//
+// The 6-digit code is generated inside better-auth's sendVerificationEmail
+// handler (server/lib/better-auth.lib.ts) when the user signs up or requests a
+// resend. This endpoint consumes that code and marks the user's email as
+// verified so requireEmailVerification stops blocking sign-in.
+
+/** POST /api/v1/validate/email-verification/confirm — body: { email, code } */
+export async function confirmEmailVerificationCustom(req: Request, res: Response): Promise<void> {
+  const body = req.body as { email?: string; code?: string };
+  const email = body.email?.trim();
+  const code = body.code?.trim();
+  if (!email || !code) { res.status(400).json({ error: 'Missing email or code' }); return; }
+
+  try {
+    const ctx = await auth.$context;
+    const user = await ctx.adapter.findOne<Record<string, unknown>>({
+      model: 'user',
+      where: [{ field: 'email', value: email.toLowerCase().trim() }],
+    });
+    if (!user) { res.status(400).json({ error: 'User no longer exists' }); return; }
+    if (user['emailVerified'] === true) { res.status(200).json({ success: true }); return; }
+
+    if (!consumeOtp(email, 'email-verification', code)) {
+      res.status(400).json({ error: 'Invalid or expired code' });
+      return;
+    }
+
+    await ctx.adapter.update({
+      model: 'user',
+      where: [{ field: 'id', value: user['id'] as string }],
+      update: { emailVerified: true },
+    });
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error('[validate] Email verification confirm failed', { error });
+    res.status(500).json({ error: 'Failed to verify email' });
   }
 }

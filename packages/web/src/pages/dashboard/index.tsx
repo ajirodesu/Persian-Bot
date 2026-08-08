@@ -100,17 +100,17 @@ function BotCardSkeleton() {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <Skeleton variant="rounded" width={40} height={40} />
+          <Skeleton variant="input" width={40} height={40} />
           <div className="flex flex-col gap-2 pt-0.5">
             <Skeleton textSize="title-md" width="128px" />
             <Skeleton textSize="body-sm" width="80px" />
           </div>
         </div>
-        <Skeleton variant="rounded" width="64px" height="22px" />
+        <Skeleton variant="pill" width="64px" height="22px" />
       </div>
       <div className="mt-4 flex items-center justify-between">
-        <Skeleton variant="rounded" width="90px" height="26px" />
-        <Skeleton variant="circular" width={16} height={16} />
+        <Skeleton variant="pill" width="90px" height="26px" />
+        <Skeleton variant="pill" width={16} height={16} />
       </div>
     </Card.Root>
   )

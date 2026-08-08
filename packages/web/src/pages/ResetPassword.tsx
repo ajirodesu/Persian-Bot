@@ -1,8 +1,9 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
 import { Field } from '@/components/ui/forms/Field'
+import CodeInput from '@/components/ui/forms/CodeInput'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
@@ -77,8 +78,12 @@ export default function ResetPasswordPage() {
     useEmailServiceEnabled()
 
   const [searchParams] = useSearchParams()
-  const token = searchParams.get('token')?.trim()
-  const emailParam = searchParams.get('email')?.trim()
+  const email = searchParams.get('email')?.trim() ?? ''
+
+  const [code, setCode] = useState('')
+  const [codeVerified, setCodeVerified] = useState(false)
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false)
+  const [codeError, setCodeError] = useState<string | null>(null)
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -88,37 +93,33 @@ export default function ResetPasswordPage() {
   }>({})
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isValidating, setIsValidating] = useState(() => !!token)
-  const [isTokenValid, setIsTokenValid] = useState(false)
 
   const [isResending, setIsResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
   const [resendError, setResendError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!token) {
-      return
-    }
+  const handleVerifyCode = async (submittedCode = code) => {
+    if (!email || submittedCode.length !== 6) return
+    setIsVerifyingCode(true)
+    setCodeError(null)
 
-    let isMounted = true
-    const checkToken = async () => {
-      try {
-        const result = await apiClient.post<{ valid: boolean }>(
-          '/api/v1/validate/reset-password/verify-token',
-          { token, adminOnly: false },
-        )
-        if (isMounted) setIsTokenValid(result.data.valid)
-      } catch {
-        if (isMounted) setIsTokenValid(false)
-      } finally {
-        if (isMounted) setIsValidating(false)
+    try {
+      const result = await apiClient.post<{ valid: boolean }>(
+        '/api/v1/validate/reset-password/verify-code',
+        { email, code: submittedCode, adminOnly: false },
+      )
+      if (result.data.valid) {
+        setCodeVerified(true)
+      } else {
+        setCodeError('Invalid or expired code. Request a new one and try again.')
+        setCode('')
       }
+    } catch {
+      setCodeError('Failed to verify the code. Please try again.')
+    } finally {
+      setIsVerifyingCode(false)
     }
-    void checkToken()
-    return () => {
-      isMounted = false
-    }
-  }, [token])
+  }
 
   const validate = () => {
     const newErrors: typeof errors = {}
@@ -148,7 +149,8 @@ export default function ResetPasswordPage() {
 
     try {
       await apiClient.post('/api/v1/validate/reset-password/confirm', {
-        token,
+        email,
+        code,
         password,
         adminOnly: false,
       })
@@ -164,19 +166,19 @@ export default function ResetPasswordPage() {
   }
 
   const handleResend = async () => {
-    if (!emailParam) return
+    if (!email) return
     setIsResending(true)
     setResendError(null)
 
     try {
       await apiClient.post('/api/v1/validate/reset-password/request', {
-        email: emailParam,
+        email,
         adminOnly: false,
       })
       setResendSuccess(true)
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
-      setResendError(e.response?.data?.error || 'Failed to resend reset link.')
+      setResendError(e.response?.data?.error || 'Failed to resend reset code.')
     } finally {
       setIsResending(false)
     }
@@ -230,47 +232,25 @@ export default function ResetPasswordPage() {
     )
   }
 
-  if (isValidating) {
-    return (
-      <AuthShell>
-        <GlassCard>
-          <div className="glow-ring flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <ShieldCheck className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-2">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Validating your reset link
-            </h1>
-            <p className="text-body-sm text-on-surface-variant animate-pulse">
-              Checking your email link…
-            </p>
-          </div>
-        </GlassCard>
-      </AuthShell>
-    )
-  }
-
-  if (!token || !isTokenValid) {
+  if (!email) {
     return (
       <AuthShell>
         <BrandMark
-          heading={
-            resendSuccess ? 'Reset link sent' : 'Invalid or expired link'
-          }
+          heading={resendSuccess ? 'Reset code sent' : 'Start a password reset'}
           subheading={
             resendSuccess
-              ? 'A new secure reset link has been sent to your email.'
-              : 'This password reset link is missing, invalid, or has expired.'
+              ? 'A new reset code has been sent to your email.'
+              : 'Enter your account email to receive a reset code.'
           }
         />
         <GlassCard>
           <Alert
-            color={resendSuccess ? 'success' : 'error'}
-            title={resendSuccess ? 'New link sent' : 'Link unavailable'}
+            color={resendSuccess ? 'success' : 'info'}
+            title={resendSuccess ? 'Code sent' : 'Email required'}
             message={
               resendSuccess
-                ? 'Check your inbox and follow the instructions in the latest email.'
-                : 'Please request a new one below.'
+                ? 'Check your inbox and continue on the "Enter the code" screen.'
+                : 'Please request a reset code from the forgot-password page.'
             }
           />
           {resendError && (
@@ -282,27 +262,15 @@ export default function ResetPasswordPage() {
               size="sm"
             />
           )}
-          {!resendSuccess && emailParam && (
-            <Button
-              onClick={() => void handleResend()}
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isResending}
-            >
-              Resend reset link
-            </Button>
-          )}
           <Button
             as={Link}
-            to={`${ROUTES.FORGOT_PASSWORD}${emailParam ? `?email=${encodeURIComponent(emailParam)}` : ''}`}
-            variant={!resendSuccess && emailParam ? 'outline' : 'filled'}
+            to={ROUTES.FORGOT_PASSWORD}
+            variant="filled"
             color="primary"
             size="md"
             fullWidth
           >
-            {emailParam ? 'Use a different email' : 'Request new link'}
+            Request reset code
           </Button>
         </GlassCard>
       </AuthShell>
@@ -312,11 +280,19 @@ export default function ResetPasswordPage() {
   return (
     <AuthShell>
       <BrandMark
-        heading={isSubmitted ? 'Password reset' : 'Set new password'}
+        heading={
+          isSubmitted
+            ? 'Password reset'
+            : codeVerified
+              ? 'Set new password'
+              : 'Enter reset code'
+        }
         subheading={
           isSubmitted
             ? 'Your password has been reset successfully.'
-            : 'Create a strong password for your account.'
+            : codeVerified
+              ? `Create a strong password for ${email}.`
+              : `Enter the 6-digit code we sent to ${email}.`
         }
       />
 
@@ -340,6 +316,73 @@ export default function ResetPasswordPage() {
               fullWidth
             >
               Go to log in
+            </Button>
+          </div>
+        ) : !codeVerified ? (
+          <div className="flex flex-col gap-4">
+            {resendSuccess && (
+              <Alert
+                variant="tonal"
+                color="success"
+                title="New code sent"
+                message="Check your inbox for the latest code."
+                size="sm"
+              />
+            )}
+            {resendError && (
+              <Alert
+                variant="tonal"
+                color="error"
+                title="Resend failed"
+                message={resendError}
+                size="sm"
+              />
+            )}
+            {codeError && (
+              <Alert
+                variant="tonal"
+                color="error"
+                title="Verification failed"
+                message={codeError}
+              />
+            )}
+            <Field.Root invalid={!!codeError}>
+              <Field.Label>Verification code</Field.Label>
+              <CodeInput
+                value={code}
+                onChange={(next) => {
+                  setCode(next)
+                  setCodeError(null)
+                  setResendError(null)
+                }}
+                onComplete={handleVerifyCode}
+                placeholder="000000"
+                autoFocus
+              />
+              {codeError && <Field.ErrorText>{codeError}</Field.ErrorText>}
+            </Field.Root>
+
+            <Button
+              onClick={() => void handleVerifyCode()}
+              variant="filled"
+              color="primary"
+              size="md"
+              fullWidth
+              isLoading={isVerifyingCode}
+              disabled={code.length !== 6}
+            >
+              Continue
+            </Button>
+
+            <Button
+              onClick={() => void handleResend()}
+              variant="text"
+              color="primary"
+              size="md"
+              fullWidth
+              isLoading={isResending}
+            >
+              Resend code
             </Button>
           </div>
         ) : (
@@ -391,6 +434,20 @@ export default function ResetPasswordPage() {
           </form>
         )}
       </div>
+
+      {!isSubmitted && (
+        <p className="text-center text-body-sm text-on-surface-variant">
+          <Button
+            as={Link}
+            to={ROUTES.FORGOT_PASSWORD}
+            variant="link"
+            color="primary"
+            size="sm"
+          >
+            Didn't get a code? Request a new one
+          </Button>
+        </p>
+      )}
     </AuthShell>
   )
 }

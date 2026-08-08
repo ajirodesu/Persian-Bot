@@ -9,9 +9,17 @@ import {
  * - text: Single line text placeholder with rounded ends
  * - rectangular: Rectangle with sharp corners
  * - circular: Perfect circle
- * - rounded: Rectangle with rounded corners
+ * - rounded: Rectangle with card corners (--radius-card)
+ * - input: Rectangle with input corners (--radius-input) — for form control placeholders
+ * - pill: Fully rounded pill (--radius-button / 9999px) — for badges, switches, buttons
  */
-export type SkeletonVariant = 'text' | 'rectangular' | 'circular' | 'rounded'
+export type SkeletonVariant =
+  | 'text'
+  | 'rectangular'
+  | 'circular'
+  | 'rounded'
+  | 'input'
+  | 'pill'
 
 /**
  * Skeleton animation types
@@ -127,6 +135,8 @@ const variantClasses: Record<SkeletonVariant, string> = {
   rectangular: 'rounded-none',
   circular: 'rounded-full aspect-square',
   rounded: 'rounded-[var(--radius-card)]',
+  input: 'rounded-[var(--radius-input)]',
+  pill: 'rounded-[var(--radius-button)]',
 }
 
 /**

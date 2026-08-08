@@ -645,12 +645,12 @@ const TableLoading = React.forwardRef<HTMLTableRowElement, TableLoadingProps>(
           <tr
             key={rowIndex}
             ref={rowIndex === 0 ? ref : undefined}
-            className={cn('animate-pulse', className)}
+            className={cn('animate-[skeleton_1.5s_ease-in-out_infinite]', className)}
             {...(rowIndex === 0 ? props : {})}
           >
             {Array.from({ length: colSpan }).map((_, cellIndex) => (
-              <td key={cellIndex} className={config.cell}>
-                <div className="h-4 bg-surface-container-high rounded w-full" />
+              <td key={cellIndex} className={cn(config.cell, 'py-1.5')}>
+                <div className="h-4 bg-surface-variant rounded w-full" />
               </td>
             ))}
           </tr>

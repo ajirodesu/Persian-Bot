@@ -1,5 +1,6 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
@@ -22,6 +23,150 @@ import { ROUTES } from '@/constants/routes.constants'
 // ============================================================================
 // Page
 // ============================================================================
+
+function SettingsPageSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 max-w-2xl pb-12" aria-busy="true">
+      {/* Page header */}
+      <div className="flex flex-col gap-1.5">
+        <Skeleton variant="text" textSize="headline-sm" width="140px" />
+        <Skeleton variant="text" textSize="body-sm" width="280px" />
+      </div>
+
+      {/* ── Appearance ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="120px" />
+            <Skeleton variant="text" textSize="body-sm" width="320px" />
+          </div>
+        </Card.Header>
+        <Skeleton variant="pill" height={48} className="w-full" />
+      </Card.Root>
+
+      {/* ── Timezone ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="96px" />
+            <Skeleton variant="text" textSize="body-sm" width="280px" />
+          </div>
+        </Card.Header>
+        <Skeleton variant="input" height={44} className="w-full max-w-sm" />
+      </Card.Root>
+
+      {/* ── AI Integration ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="120px" />
+            <Skeleton variant="text" textSize="body-sm" width="300px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-outline-variant/50">
+            <div className="flex flex-col gap-1.5">
+              <Skeleton variant="text" textSize="label-lg" width="160px" />
+              <Skeleton variant="text" textSize="body-sm" width="120px" />
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Skeleton variant="rounded" width={88} height={32} />
+              <Skeleton variant="rounded" width={88} height={32} />
+            </div>
+          </div>
+          <Skeleton variant="rounded" height={44} className="w-full" />
+        </div>
+      </Card.Root>
+
+      {/* ── Profile ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="80px" />
+            <Skeleton variant="text" textSize="body-sm" width="260px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between py-2 border-b border-outline-variant/50">
+            <Skeleton variant="text" textSize="label-md" width="48px" />
+            <Skeleton variant="text" textSize="body-sm" width="55%" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="label-md" width="88px" />
+            <Skeleton variant="input" height={44} className="w-full" />
+          </div>
+        </div>
+      </Card.Root>
+
+      {/* ── Unified save bar ── */}
+      <Skeleton variant="pill" height={40} width="140px" className="self-end" />
+
+      {/* ── Security ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="96px" />
+            <Skeleton variant="text" textSize="body-sm" width="280px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col gap-4">
+          <Skeleton variant="input" height={44} className="w-full" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Skeleton variant="input" height={44} className="w-full" />
+            <Skeleton variant="input" height={44} className="w-full" />
+          </div>
+          <div className="flex justify-end pt-1">
+            <Skeleton variant="pill" height={36} width="160px" />
+          </div>
+        </div>
+      </Card.Root>
+
+      {/* ── Danger Zone ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-error/50"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="112px" />
+            <Skeleton variant="text" textSize="body-sm" width="280px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <Skeleton variant="text" textSize="body-sm" width="70%" />
+          <Skeleton variant="pill" height={40} width="132px" />
+        </div>
+      </Card.Root>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const { isEmailEnabled } = useEmailServiceEnabled()
@@ -224,6 +369,13 @@ export default function SettingsPage() {
     }
   }
 
+  const isPageLoading =
+    sessionLoading || timezoneLoading || groqLoading
+
+  if (isPageLoading) {
+    return <SettingsPageSkeleton />
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl pb-12">
       <Helmet>
@@ -231,7 +383,7 @@ export default function SettingsPage() {
       </Helmet>
 
       {/* Page header */}
-<div>
+      <div>
         <h1 className="text-headline-sm font-bold text-on-surface tracking-tight md:hidden">
           Settings
         </h1>
@@ -283,7 +435,7 @@ export default function SettingsPage() {
         </Card.Header>
 
         {timezoneLoading ? (
-          <Skeleton className="h-11 w-full max-w-sm rounded-[var(--radius-input)]" />
+          <Skeleton variant="input" height={44} className="w-full max-w-sm" />
         ) : (
           <div className="flex flex-col gap-4">
             <Field.Root className="max-w-sm">
@@ -504,14 +656,14 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-4">
           {isEmailEnabled && (
             <>
-              {/* Quick reset link shortcut */}
+              {/* Quick reset code shortcut */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
                 <div>
                   <p className="text-label-lg font-semibold text-on-surface">
                     Password Reset
                   </p>
                   <p className="text-body-sm text-on-surface-variant">
-                    Send a secure reset link to your email address.
+                    Send a 6-digit reset code to your email address.
                   </p>
                 </div>
                 <Button
@@ -530,17 +682,29 @@ export default function SettingsPage() {
                   }}
                   disabled={resetSent}
                 >
-                  {resetSent ? 'Link Sent' : 'Send Reset Link'}
+                  {resetSent ? 'Code Sent' : 'Send Reset Code'}
                 </Button>
               </div>
               {resetSent && (
-                <Alert
-                  variant="tonal"
-                  color="success"
-                  title="Check your email"
-                  message="We've sent you a secure link to reset your password."
-                  size="sm"
-                />
+                <div className="flex flex-col gap-3">
+                  <Alert
+                    variant="tonal"
+                    color="success"
+                    title="Check your email"
+                    message="We've sent you a 6-digit code to reset your password."
+                    size="sm"
+                  />
+                  <Button
+                    as={Link}
+                    to={`${ROUTES.RESET_PASSWORD}?email=${encodeURIComponent(session?.user?.email || '')}`}
+                    variant="tonal"
+                    color="primary"
+                    size="sm"
+                    className="self-start"
+                  >
+                    Enter the code
+                  </Button>
+                </div>
               )}
               <Divider spacing="sm" />
             </>

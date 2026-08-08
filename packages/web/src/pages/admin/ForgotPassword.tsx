@@ -58,7 +58,7 @@ export default function AdminForgotPasswordPage() {
       setIsSubmitted(true)
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
-      setError(e.response?.data?.error || 'Failed to send reset link.')
+      setError(e.response?.data?.error || 'Failed to send reset code.')
     } finally {
       setIsLoading(false)
     }
@@ -141,7 +141,7 @@ export default function AdminForgotPasswordPage() {
               Account Recovery
             </h1>
             <p className="text-body-sm text-on-surface-variant">
-              Request a secure reset link for your admin account.
+              Request a secure 6-digit code for your admin account.
             </p>
           </div>
         </div>
@@ -153,14 +153,24 @@ export default function AdminForgotPasswordPage() {
               <Alert
                 variant="tonal"
                 color="success"
-                title="Request processed"
-                message={`Instructions have been sent to ${email} if an admin account exists.`}
+                title="Code sent"
+                message={`A 6-digit reset code has been sent to ${email} if an admin account exists.`}
               />
               <Button
                 as={Link}
-                to={ROUTES.ADMIN.ROOT}
+                to={`${ROUTES.ADMIN.RESET_PASSWORD}?email=${encodeURIComponent(email)}`}
                 variant="filled"
                 color="primary"
+                size="md"
+                fullWidth
+              >
+                Enter the code
+              </Button>
+              <Button
+                as={Link}
+                to={ROUTES.ADMIN.ROOT}
+                variant="text"
+                color="neutral"
                 size="md"
                 fullWidth
               >
@@ -196,7 +206,7 @@ export default function AdminForgotPasswordPage() {
                 fullWidth
                 isLoading={isLoading}
               >
-                Send secure link
+                Send secure code
               </Button>
             </form>
           )}

@@ -588,12 +588,7 @@ export default function BotSettingsPage() {
           {/* Switch — aligned with icon top */}
           <div className="shrink-0 pt-0.5">
             {adminOnlyLoading ? (
-              <Skeleton
-                variant="rounded"
-                width="44px"
-                height="24px"
-                className="rounded-full"
-              />
+              <Skeleton variant="pill" width="44px" height="24px" />
             ) : (
               <Switch
                 checked={adminOnlyEnabled}

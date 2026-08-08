@@ -10,8 +10,9 @@ import {
   validateTelegram,
   validateEmailForPasswordReset,
   requestPasswordResetCustom,
-  verifyResetTokenCustom,
+  verifyResetCodeCustom,
   confirmPasswordResetCustom,
+  confirmEmailVerificationCustom,
   checkEmailStatus,
   getEmailServiceStatus,
 } from '@/server/controllers/v1/validation.controller.js';
@@ -38,6 +39,11 @@ validationRouter.post('/email-status', (req, res) => {
   void checkEmailStatus(req, res);
 });
 
+// POST /api/v1/validate/email-verification/confirm — consume OTP code and verify email
+validationRouter.post('/email-verification/confirm', (req, res) => {
+  void confirmEmailVerificationCustom(req, res);
+});
+
 // GET /api/v1/validate/email-service-status — is email actually deliverable right now?
 // Public/unauthenticated: only exposes a boolean, no PII, needed pre-login on the
 // forgot-password screens as well as post-login on account settings pages.
@@ -45,17 +51,17 @@ validationRouter.get('/email-service-status', (req, res) => {
   getEmailServiceStatus(req, res);
 });
 
-// POST /api/v1/validate/reset-password/request — generate in-memory reset token
+// POST /api/v1/validate/reset-password/request — generate OTP code and email it
 validationRouter.post('/reset-password/request', (req, res) => {
   void requestPasswordResetCustom(req, res);
 });
 
-// POST /api/v1/validate/reset-password/verify-token — check in-memory reset token
-validationRouter.post('/reset-password/verify-token', (req, res) => {
-  void verifyResetTokenCustom(req, res);
+// POST /api/v1/validate/reset-password/verify-code — check OTP code without consuming it
+validationRouter.post('/reset-password/verify-code', (req, res) => {
+  void verifyResetCodeCustom(req, res);
 });
 
-// POST /api/v1/validate/reset-password/confirm — consume token and reset password
+// POST /api/v1/validate/reset-password/confirm — consume OTP code and reset password
 validationRouter.post('/reset-password/confirm', (req, res) => {
   void confirmPasswordResetCustom(req, res);
 });

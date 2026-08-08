@@ -8,8 +8,8 @@ import {
 } from 'react-router-dom'
 import { Bot, ArrowLeft } from 'lucide-react'
 import Tabs from '@/components/ui/navigation/Tabs'
-import Progress from '@/components/ui/feedback/Progress'
 import Button from '@/components/ui/buttons/Button'
+import Skeleton from '@/components/ui/feedback/Skeleton'
 import { ROUTES } from '@/constants/routes.constants'
 
 import { useBotDetail } from '@/features/users/hooks/useBotDetail'
@@ -67,7 +67,52 @@ export default function BotLayout() {
   }
 
   if (isLoading) {
-    return <Progress.Circular fullScreen message="Loading bot details..." />
+    return (
+      <div className="flex flex-col gap-6">
+        {/* Tab bar placeholder — mirrors the 5-tab layout below */}
+        <div className="flex items-center gap-6 border-b border-outline-variant/60 pb-3">
+          {['Console', 'Commands', 'Events', 'Database', 'Settings'].map(
+            (tab) => (
+              <Skeleton
+                key={tab}
+                variant="text"
+                textSize="label-lg"
+                width="72px"
+                animation="pulse"
+              />
+            ),
+          )}
+        </div>
+        {/* Content placeholder — header + stat/sidebar blocks */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <Skeleton variant="text" textSize="headline-sm" width="180px" />
+            <div className="flex items-center gap-2">
+              <Skeleton variant="rounded" width="88px" height="36px" />
+              <Skeleton variant="rounded" width="96px" height="36px" />
+              <Skeleton variant="rounded" width="72px" height="36px" />
+            </div>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
+            <Skeleton
+              variant="rounded"
+              height={416}
+              className="w-full lg:flex-1"
+            />
+            <div className="w-full lg:w-60 shrink-0 flex flex-col gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton
+                  key={i}
+                  variant="rounded"
+                  height={72}
+                  className="w-full"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Missing or unknown bot ID — surface a clear recovery path instead of a blank page

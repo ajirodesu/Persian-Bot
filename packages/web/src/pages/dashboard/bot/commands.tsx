@@ -333,8 +333,11 @@ export default function BotCommandsPage() {
               className="flex flex-col gap-2.5"
             >
               <div className="flex items-center justify-between gap-2">
-                <Skeleton variant="text" width="55%" height="22px" />
-                <Skeleton variant="rounded" width="16px" height="16px" />
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Skeleton variant="input" width="16px" height="16px" />
+                  <Skeleton variant="text" width="55%" height="22px" />
+                </div>
+                <Skeleton variant="input" width="16px" height="16px" />
               </div>
               <Skeleton variant="text" width="70%" />
               <div className="flex gap-1.5 pt-0.5">

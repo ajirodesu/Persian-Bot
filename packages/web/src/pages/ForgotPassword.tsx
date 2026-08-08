@@ -112,7 +112,7 @@ export default function ForgotPasswordPage() {
       setIsSubmitted(true)
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
-      setError(e.response?.data?.error || 'Failed to send reset link.')
+      setError(e.response?.data?.error || 'Failed to send reset code.')
     } finally {
       setIsLoading(false)
     }
@@ -172,8 +172,8 @@ export default function ForgotPasswordPage() {
         heading={isSubmitted ? 'Check your email' : 'Forgot your password?'}
         subheading={
           isSubmitted
-            ? `We sent a reset link to ${email}. Check your inbox and follow the instructions.`
-            : 'Enter your account email and we\'ll send you a link to reset your password.'
+            ? `We sent a 6-digit code to ${email}. Enter it on the next screen to reset your password.`
+            : 'Enter your account email and we\'ll send you a code to reset your password.'
         }
       />
 
@@ -204,14 +204,24 @@ export default function ForgotPasswordPage() {
             <Alert
               variant="tonal"
               color="success"
-              title="Reset link sent"
-              message="Follow the instructions in the email to reset your password."
+              title="Reset code sent"
+              message="Check your inbox for the 6-digit code, then continue below."
             />
             <Button
               as={Link}
-              to={ROUTES.LOGIN}
+              to={`${ROUTES.RESET_PASSWORD}?email=${encodeURIComponent(email)}`}
               variant="filled"
               color="primary"
+              size="md"
+              fullWidth
+            >
+              Enter the code
+            </Button>
+            <Button
+              as={Link}
+              to={ROUTES.LOGIN}
+              variant="text"
+              color="neutral"
               size="md"
               fullWidth
             >
@@ -248,7 +258,7 @@ export default function ForgotPasswordPage() {
               isLoading={isLoading}
               className="mt-1"
             >
-              Send reset link
+              Send reset code
             </Button>
           </form>
         )}

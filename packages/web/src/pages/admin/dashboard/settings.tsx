@@ -1,5 +1,6 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
 import Badge from '@/components/ui/data-display/Badge'
@@ -22,6 +23,7 @@ import type { SystemAdminDto } from '@/features/admin/services/admin.service'
 import { RESET_ALL_DATABASE_CONFIRMATION_PHRASE } from '@/features/admin/services/admin.service'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { ROUTES } from '@/constants/routes.constants'
 
 /**
  * AdminSettingsPage
@@ -33,6 +35,155 @@ import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
  * button — Security (password) and Danger Zone remain separate since they're
  * distinct, higher-stakes actions.
  */
+
+function AdminSettingsPageSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-6 max-w-2xl mx-auto pb-12"
+      aria-busy="true"
+    >
+      {/* Page header */}
+      <div className="flex flex-col gap-1.5">
+        <Skeleton variant="text" textSize="headline-md" width="140px" />
+        <Skeleton variant="text" textSize="body-sm" width="300px" />
+      </div>
+
+      {/* ── Appearance ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="120px" />
+            <Skeleton variant="text" textSize="body-sm" width="320px" />
+          </div>
+        </Card.Header>
+        <Skeleton variant="pill" height={48} className="w-full" />
+      </Card.Root>
+
+      {/* ── Timezone ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="96px" />
+            <Skeleton variant="text" textSize="body-sm" width="240px" />
+          </div>
+        </Card.Header>
+        <Skeleton variant="input" height={44} className="w-full max-w-sm" />
+      </Card.Root>
+
+      {/* ── Profile ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="112px" />
+            <Skeleton variant="text" textSize="body-sm" width="200px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between py-2 border-b border-outline-variant/50">
+            <Skeleton variant="text" textSize="label-md" width="48px" />
+            <Skeleton variant="text" textSize="body-sm" width="55%" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="label-md" width="88px" />
+            <Skeleton variant="input" height={44} className="w-full" />
+          </div>
+        </div>
+      </Card.Root>
+
+      {/* ── System Administrators ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div className="flex items-start justify-between w-full">
+            <div className="flex flex-col gap-1.5">
+              <Skeleton variant="text" textSize="title-md" width="180px" />
+              <Skeleton variant="text" textSize="body-sm" width="300px" />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Skeleton variant="pill" height={22} width={72} />
+              <Skeleton variant="rounded" height={32} width={56} />
+            </div>
+          </div>
+        </Card.Header>
+        <div className="flex flex-col gap-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Skeleton variant="input" height={40} className="flex-1" />
+              <Skeleton variant="input" width={40} height={40} />
+            </div>
+          ))}
+        </div>
+      </Card.Root>
+
+      {/* ── Maintenance Mode ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-outline-variant/60"
+      >
+        <div className="flex items-start gap-4">
+          <Skeleton variant="input" width={40} height={40} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <Skeleton variant="text" textSize="label-lg" width="140px" />
+            </div>
+            <Skeleton variant="text" textSize="body-sm" width="85%" />
+          </div>
+          <Skeleton variant="pill" width="44px" height="24px" />
+        </div>
+        <div className="mt-4 pt-4 border-t border-outline-variant/40">
+          <Skeleton variant="text" textSize="body-sm" width="70%" />
+        </div>
+      </Card.Root>
+
+      {/* ── Unified save bar ── */}
+      <Skeleton variant="pill" height={40} width="140px" className="self-end" />
+
+      {/* ── Security ── */}
+      <Card.Root variant="elevated" shadowElevation={1} padding="md">
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="96px" />
+            <Skeleton variant="text" textSize="body-sm" width="280px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col gap-4">
+          <Skeleton variant="input" height={44} className="w-full" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Skeleton variant="input" height={44} className="w-full" />
+            <Skeleton variant="input" height={44} className="w-full" />
+          </div>
+          <div className="flex justify-end pt-1">
+            <Skeleton variant="pill" height={36} width="160px" />
+          </div>
+        </div>
+      </Card.Root>
+
+      {/* ── Danger Zone ── */}
+      <Card.Root
+        variant="elevated"
+        shadowElevation={1}
+        padding="md"
+        className="border border-error/40"
+      >
+        <Card.Header>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="title-md" width="112px" />
+            <Skeleton variant="text" textSize="body-sm" width="280px" />
+          </div>
+        </Card.Header>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-outline-variant/50">
+          <div className="flex flex-col gap-1.5">
+            <Skeleton variant="text" textSize="label-lg" width="150px" />
+            <Skeleton variant="text" textSize="body-sm" width="85%" />
+          </div>
+          <Skeleton variant="pill" height={32} width="150px" />
+        </div>
+      </Card.Root>
+    </div>
+  )
+}
+
 export default function AdminSettingsPage() {
   const { isEmailEnabled } = useEmailServiceEnabled()
 
@@ -292,6 +443,20 @@ export default function AdminSettingsPage() {
     }
   }
 
+  // Collect every mount-time data fetch the page depends on — session, timezone,
+  // system admins, and maintenance mode — and keep the page-level skeleton up
+  // until they've all settled (better-auth caches the session, so sessionLoading
+  // alone flashes too fast to be useful here).
+  const isPageLoading =
+    sessionLoading ||
+    timezoneLoading ||
+    adminLoading ||
+    maintenanceLoading
+
+  if (isPageLoading) {
+    return <AdminSettingsPageSkeleton />
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto pb-12">
       <Helmet>
@@ -339,7 +504,7 @@ export default function AdminSettingsPage() {
         </Card.Header>
 
         {timezoneLoading ? (
-          <Skeleton className="h-11 w-full max-w-sm rounded-[var(--radius-input)]" />
+          <Skeleton variant="input" height={44} className="w-full max-w-sm" />
         ) : (
           <div className="flex flex-col gap-4">
             <Field.Root className="max-w-sm">
@@ -442,10 +607,14 @@ export default function AdminSettingsPage() {
           {adminLoading ? (
             <div className="flex flex-col gap-2">
               {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-10 rounded-[var(--radius-input)] bg-surface-container animate-pulse"
-                />
+                <div key={i} className="flex items-center gap-2">
+                  <Skeleton
+                    variant="input"
+                    height={40}
+                    className="flex-1"
+                  />
+                  <Skeleton variant="input" width={40} height={40} />
+                </div>
               ))}
             </div>
           ) : (
@@ -530,12 +699,7 @@ export default function AdminSettingsPage() {
 
           <div className="shrink-0 pt-0.5">
             {maintenanceLoading || maintenanceSaving ? (
-              <Skeleton
-                variant="rounded"
-                width="44px"
-                height="24px"
-                className="rounded-full"
-              />
+              <Skeleton variant="pill" width="44px" height="24px" />
             ) : (
               <Switch
                 checked={maintenanceEnabled}
@@ -610,7 +774,7 @@ export default function AdminSettingsPage() {
                     Password Reset
                   </p>
                   <p className="text-body-sm text-on-surface-variant">
-                    Send a secure reset link to your admin email.
+                    Send a 6-digit reset code to your admin email.
                   </p>
                 </div>
                 <Button
@@ -619,7 +783,7 @@ export default function AdminSettingsPage() {
                   size="sm"
                   onClick={async () => {
                     setResetSent(true)
-                    // Target the custom HMAC token flow that powers the Admin Forgot Password page
+                    // Target the custom OTP flow that powers the Admin Forgot Password page
                     // instead of better-auth's native implementation.
                     await apiClient.post(
                       '/api/v1/validate/reset-password/request',
@@ -631,17 +795,29 @@ export default function AdminSettingsPage() {
                   }}
                   disabled={resetSent}
                 >
-                  {resetSent ? 'Link Sent' : 'Send Reset Link'}
+                  {resetSent ? 'Code Sent' : 'Send Reset Code'}
                 </Button>
               </div>
               {resetSent && (
-                <Alert
-                  variant="tonal"
-                  color="success"
-                  title="Check your email"
-                  message="We've sent you a secure link to reset your password."
-                  size="sm"
-                />
+                <div className="flex flex-col gap-3">
+                  <Alert
+                    variant="tonal"
+                    color="success"
+                    title="Check your email"
+                    message="We've sent you a 6-digit code to reset your password."
+                    size="sm"
+                  />
+                  <Button
+                    as={Link}
+                    to={`${ROUTES.ADMIN.RESET_PASSWORD}?email=${encodeURIComponent(session?.user?.email || '')}`}
+                    variant="tonal"
+                    color="primary"
+                    size="sm"
+                    className="self-start"
+                  >
+                    Enter the code
+                  </Button>
+                </div>
               )}
               <Divider spacing="sm" />
             </>

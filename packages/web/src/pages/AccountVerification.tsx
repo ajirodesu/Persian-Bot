@@ -2,6 +2,8 @@ import { Helmet } from '@dr.pogodin/react-helmet'
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
+import { Field } from '@/components/ui/forms/Field'
+import CodeInput from '@/components/ui/forms/CodeInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import { authUserClient } from '@/lib/better-auth-client.lib'
@@ -78,8 +80,13 @@ export default function AccountVerificationPage() {
   const email = searchParams.get('email') || ''
 
   const [isSending, setIsSending] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [codeSent, setCodeSent] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  const [code, setCode] = useState('')
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
+  const [isVerified, setIsVerified] = useState(false)
 
   const [emailStatus, setEmailStatus] = useState<
     'loading' | 'not-found' | 'already-verified' | 'pending'
@@ -117,8 +124,10 @@ export default function AccountVerificationPage() {
   const handleSendVerification = async () => {
     if (!email) return
     setIsSending(true)
-    setError(null)
-    setSuccess(false)
+    setSendError(null)
+    setCodeSent(false)
+    setVerifyError(null)
+    setCode('')
 
     try {
       const { error: sendError } = await authUserClient.sendVerificationEmail({
@@ -132,13 +141,33 @@ export default function AccountVerificationPage() {
         )
       }
 
-      setSuccess(true)
+      setCodeSent(true)
     } catch (err) {
-      setError(
+      setSendError(
         err instanceof Error ? err.message : 'An unexpected error occurred.',
       )
     } finally {
       setIsSending(false)
+    }
+  }
+
+  const handleVerifyCode = async (submittedCode = code) => {
+    if (!email || submittedCode.length !== 6) return
+    setIsVerifying(true)
+    setVerifyError(null)
+
+    try {
+      await apiClient.post('/api/v1/validate/email-verification/confirm', {
+        email,
+        code: submittedCode,
+      })
+      setIsVerified(true)
+    } catch (err) {
+      const e = err as { response?: { data?: { error?: string } } }
+      setVerifyError(e.response?.data?.error || 'Invalid or expired code.')
+      setCode('')
+    } finally {
+      setIsVerifying(false)
     }
   }
 
@@ -275,21 +304,35 @@ export default function AccountVerificationPage() {
   return (
     <AuthShell>
       <BrandMark
-        heading="Verify your email"
-        subheading={`We can send a new verification link to ${
-          email || 'your email'
-        }.`}
+        heading={
+          isVerified
+            ? 'Email verified'
+            : codeSent
+              ? 'Enter your code'
+              : 'Verify your email'
+        }
+        subheading={
+          isVerified
+            ? 'Your email address has been verified successfully.'
+            : codeSent
+              ? `Enter the 6-digit code we sent to ${
+                  email || 'your email'
+                }.`
+              : `Enter the verification code for ${
+                  email || 'your email'
+                }, or send a new one.`
+        }
       />
 
       {/* Card */}
       <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6">
-        {success ? (
+        {isVerified ? (
           <div className="flex flex-col gap-4">
             <Alert
               variant="tonal"
               color="success"
-              title="Verification email sent!"
-              message="Check your inbox and click the link to verify your account."
+              title="Verified"
+              message="Your email is verified. You can now log in with your credentials."
             />
             <Button
               as={Link}
@@ -304,30 +347,77 @@ export default function AccountVerificationPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {error && (
+            {sendError && (
               <Alert
                 variant="tonal"
                 color="error"
                 title="Failed to send"
-                message={error}
+                message={sendError}
               />
             )}
+            {verifyError && (
+              <Alert
+                variant="tonal"
+                color="error"
+                title="Verification failed"
+                message={verifyError}
+              />
+            )}
+            {codeSent && (
+              <Alert
+                variant="tonal"
+                color="success"
+                title="Code sent!"
+                message="Check your inbox and enter the code below to verify your account."
+              />
+            )}
+
+            <Field.Root invalid={!!verifyError}>
+              <Field.Label>Verification code</Field.Label>
+              <CodeInput
+                value={code}
+                onChange={(next) => {
+                  setCode(next)
+                  setVerifyError(null)
+                }}
+                onComplete={handleVerifyCode}
+                disabled={isSending}
+                placeholder="000000"
+                autoFocus={codeSent}
+              />
+              {verifyError && (
+                <Field.ErrorText>{verifyError}</Field.ErrorText>
+              )}
+            </Field.Root>
+
+            <Button
+              onClick={() => void handleVerifyCode()}
+              variant="filled"
+              color="primary"
+              size="md"
+              fullWidth
+              isLoading={isVerifying}
+              disabled={code.length !== 6}
+            >
+              Verify account
+            </Button>
+
             <Button
               onClick={() => void handleSendVerification()}
-              variant="filled"
+              variant="text"
               color="primary"
               size="md"
               fullWidth
               isLoading={isSending}
               disabled={!email}
             >
-              Send verification email
+              {codeSent ? 'Resend code' : 'Send verification code'}
             </Button>
           </div>
         )}
       </div>
 
-      {!success && (
+      {!isVerified && (
         <p className="text-center text-body-sm text-on-surface-variant">
           <Button
             as={Link}
