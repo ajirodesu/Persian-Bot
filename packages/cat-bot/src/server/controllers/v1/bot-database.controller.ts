@@ -229,8 +229,15 @@ export class BotDatabaseController {
     // channel) on bot_threads.type — filter on it when requested. The param is always
     // bound (null = no filter) so LIMIT/OFFSET keep fixed placeholder indices instead
     // of colliding with $5 when a type is supplied.
+    //
+    // is_group is a hard filter, not optional: the Groups tab must NEVER surface
+    // individual users whose DMs happened before threads.service added its guard.
+    // DM/PM rows carry is_group=FALSE but were recorded by earlier versions — filtering
+    // here guarantees they can never appear as "groups" in the dashboard.
     const typeFilter = isDiscord ? null : parseTypeFilter(req.query.type);
-    const typeSql = isDiscord ? '' : ' AND ($5 IS NULL OR bt.type = $5)';
+    const typeSql = isDiscord
+      ? ''
+      : ' AND bt.is_group = TRUE AND ($5 IS NULL OR bt.type = $5)';
 
     const sortColumn = resolveSortColumn(
       req.query.sortBy,
