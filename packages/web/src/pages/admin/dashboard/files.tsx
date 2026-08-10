@@ -29,6 +29,7 @@ import {
   Check,
   Maximize,
   Minimize,
+  Menu,
   Search,
   GitCommitHorizontal,
   MoreVertical,
@@ -135,6 +136,7 @@ interface RowMenuAction {
   label: string
   onClick: () => void
   danger?: boolean
+  disabled?: boolean
 }
 
 /**
@@ -206,6 +208,7 @@ const RowMenu = memo(function RowMenu({
                   key={action.label}
                   type="button"
                   role="menuitem"
+                  disabled={action.disabled}
                   onClick={() => {
                     setOpen(false)
                     action.onClick()
@@ -215,6 +218,7 @@ const RowMenu = memo(function RowMenu({
                     action.danger
                       ? 'text-error hover:bg-error/10'
                       : 'text-on-surface hover:bg-on-surface/8',
+                    action.disabled && 'pointer-events-none opacity-40',
                   )}
                 >
                   <action.icon
@@ -579,13 +583,31 @@ export default function AdminFilesPage() {
     }
   }, [selectedFolder])
 
-  // Copy-to-clipboard feedback for the path + code buttons.
-  const { copied: dirCopied, copy: copyDir } = useCopyToClipboard()
-  const { copied: pathCopied, copy: copyPath } = useCopyToClipboard()
+  // Copy-to-clipboard feedback for the code button + tree rows.
+  const { copy: copyPath } = useCopyToClipboard()
   const { copied: codeCopied, copy: copyCode } = useCopyToClipboard()
 
   // Fullscreen editor overlay.
   const [fullscreen, setFullscreen] = useState(false)
+
+  // Mobile file-explorer drawer.
+  const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
+
+  // Lock page scroll + handle Escape while the mobile file drawer is open.
+  const closeFilesDrawer = useCallback(() => setMobileFilesOpen(false), [])
+  useEffect(() => {
+    if (!mobileFilesOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeFilesDrawer()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [mobileFilesOpen, closeFilesDrawer])
 
   // Dialog state
   const [createDialog, setCreateDialog] = useState<'file' | 'folder' | null>(null)
@@ -620,6 +642,7 @@ export default function AdminFilesPage() {
   const handleOpenFile = useCallback(async (entry: RepoEntryDto) => {
     await openFileRef.current(entry)
     setSelectedFolder(parentOf(entry.path))
+    setMobileFilesOpen(false)
   }, [])
 
   const handleSelectFolder = useCallback(
@@ -744,6 +767,15 @@ export default function AdminFilesPage() {
         {/* Workspace toolbar */}
         <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant/70 bg-surface-container/70 px-3 py-2">
           <div className="flex min-w-0 items-center gap-1.5">
+            <IconButton
+              variant="text"
+              size="sm"
+              className="shrink-0 lg:hidden"
+              icon={<Menu className="h-4 w-4" />}
+              aria-label="Open files"
+              title="Open files"
+              onClick={() => setMobileFilesOpen(true)}
+            />
             <FolderGit2 className="h-4 w-4 shrink-0 text-on-surface-variant" />
             <button
               type="button"
@@ -767,58 +799,76 @@ export default function AdminFilesPage() {
                 {selectedFolder}
               </Badge>
             )}
-            <IconButton
-              variant="text"
-              size="sm"
-              className="shrink-0"
-              icon={dirCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-              aria-label="Copy directory path"
-              title="Copy directory path"
-              onClick={() => {
-                void copyDir(selectedFolder || '/')
-              }}
-            />
-            <IconButton
-              variant="text"
-              size="sm"
-              className="shrink-0"
-              icon={<RefreshCw className="h-4 w-4" />}
-              aria-label="Refresh folder"
-              title="Refresh folder"
-              onClick={() => {
-                void files.refresh(selectedFolder)
-                if (selectedFolder !== '') void files.refresh('')
-              }}
-            />
-          </div>
-          <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <IconButton
-              variant="outline"
-              size="sm"
-              icon={<FolderPlus className="h-4 w-4" />}
-              aria-label="New folder"
-              title="New folder"
-              onClick={() => openCreateDialog('folder')}
-              disabled={!configured}
-            />
-            <IconButton
-              variant="primary"
-              size="sm"
-              icon={<FilePlus2 className="h-4 w-4" />}
-              aria-label="New file"
-              title="New file"
-              onClick={() => openCreateDialog('file')}
-              disabled={!configured}
-            />
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
-          {/* ── Files panel ─────────────────────────────────────────────────── */}
-          <div className="flex w-full min-w-0 shrink-0 flex-col border-b border-outline-variant/70 bg-surface-container/30 lg:w-72 lg:border-b-0 lg:border-r xl:w-80">
+        <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
+          {/* Mobile backdrop for the file drawer */}
+          <div
+            className={cn(
+              'fixed inset-0 z-[var(--z-fixed)] bg-black/40 lg:hidden',
+              'transition-opacity duration-200',
+              mobileFilesOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={() => setMobileFilesOpen(false)}
+          />
+
+          {/* ── Files panel (drawer on mobile, static column on desktop) ────── */}
+          <div
+            className={cn(
+              'flex min-w-0 shrink-0 flex-col bg-surface-container/30',
+              // Mobile drawer behaviour
+              'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-outline-variant/70 shadow-elevation-3',
+              'transition-transform duration-200 ease-out lg:transition-none',
+              mobileFilesOpen ? 'translate-x-0' : '-translate-x-full',
+              // Desktop static column
+              'lg:static lg:z-auto lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none lg:border-r xl:w-80',
+            )}
+          >
             <div className="flex items-center gap-2 px-3 pt-3">
               <Files className="h-4 w-4 text-primary" />
               <span className="text-label-md font-semibold text-on-surface">Files</span>
+              <div className="ml-auto flex items-center">
+                <RowMenu
+                  label="Files panel actions"
+                  actions={[
+                    {
+                      icon: FilePlus2,
+                      label: 'New file',
+                      onClick: () => openCreateDialog('file'),
+                      disabled: !configured,
+                    },
+                    {
+                      icon: FolderPlus,
+                      label: 'New folder',
+                      onClick: () => openCreateDialog('folder'),
+                      disabled: !configured,
+                    },
+                    {
+                      icon: Copy,
+                      label: 'Copy directory path',
+                      onClick: () => void copyPath(selectedFolder || '/'),
+                    },
+                    {
+                      icon: RefreshCw,
+                      label: 'Refresh folder',
+                      onClick: () => {
+                        void files.refresh(selectedFolder)
+                        if (selectedFolder !== '') void files.refresh('')
+                      },
+                    },
+                  ]}
+                />
+                <button
+                  type="button"
+                  aria-label="Close files"
+                  title="Close files"
+                  onClick={() => setMobileFilesOpen(false)}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/70 transition-colors duration-fast hover:bg-on-surface/10 hover:text-on-surface lg:hidden"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             <div className="px-3 pb-2 pt-2">
@@ -844,7 +894,7 @@ export default function AdminFilesPage() {
               />
             </div>
 
-            <div className="max-h-[45vh] min-h-0 flex-1 overflow-y-auto p-2 lg:max-h-none">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {rootEntries === undefined && !files.directoryError ? (
                 <div className="flex flex-col gap-1.5 p-1">
                   <Skeleton variant="text" width="80%" />
@@ -970,15 +1020,6 @@ export default function AdminFilesPage() {
                     variant="text"
                     size="sm"
                     className="shrink-0"
-                    icon={pathCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-                    aria-label="Copy file path"
-                    title="Copy file path"
-                    onClick={() => void copyPath(openEntry.path)}
-                  />
-                  <IconButton
-                    variant="text"
-                    size="sm"
-                    className="shrink-0"
                     icon={<Maximize className="h-4 w-4" />}
                     aria-label="Full screen"
                     title="Full screen"
@@ -989,9 +1030,9 @@ export default function AdminFilesPage() {
             </div>
 
             {/* Editor body */}
-            <div className="flex min-h-0 flex-1 flex-col p-3">
+            <div className="flex min-h-0 flex-1 flex-col">
               {!openEntry ? (
-                <>
+                <div className="p-3">
                   <EmptyState
                     icon={Files}
                     title="No file open"
@@ -1001,10 +1042,10 @@ export default function AdminFilesPage() {
                     New files are created inside{' '}
                     <code className="font-mono">{selectedFolder || 'the repository root'}</code>.
                   </p>
-                </>
+                </div>
               ) : (
                 <>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-outline-variant/50 px-3 py-1.5">
                     <Badge color={languageColor(openEntry.language ?? null)} variant="tonal" size="sm">
                       {openEntry.language ?? 'text'}
                     </Badge>
@@ -1031,7 +1072,7 @@ export default function AdminFilesPage() {
                     )}
                   </div>
 
-                  <div className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5">
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-outline-variant/50 px-3 py-1.5">
                     <Input
                       value={commitMessage}
                       onChange={(e) => setCommitMessage(e.target.value)}
@@ -1039,39 +1080,19 @@ export default function AdminFilesPage() {
                       aria-label="Commit message"
                       className="max-w-xl"
                       rightIcon={
-                        <div className="flex items-center">
-                          <button
-                            type="button"
-                            aria-label="Copy code"
-                            title="Copy code"
-                            className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"
-                            onClick={() => void copyCode(files.content)}
-                          >
-                            {codeCopied ? (
-                              <Check className="h-3.5 w-3.5 text-success" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                          <IconButton
-                            variant="outline"
-                            size="sm"
-                            icon={<Pencil className="h-4 w-4" />}
-                            aria-label="Rename"
-                            title="Rename"
-                            onClick={() => setRenameTarget(openEntry)}
-                            disabled={!configured}
-                          />
-                          <IconButton
-                            variant="outline"
-                            size="sm"
-                            icon={<Trash2 className="h-4 w-4" />}
-                            aria-label="Delete"
-                            title="Delete"
-                            onClick={() => setDeleteTarget(openEntry)}
-                            disabled={!configured}
-                          />
-                        </div>
+                        <button
+                          type="button"
+                          aria-label="Copy code"
+                          title="Copy code"
+                          className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"
+                          onClick={() => void copyCode(files.content)}
+                        >
+                          {codeCopied ? (
+                            <Check className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </button>
                       }
                     />
                     <IconButton
@@ -1087,15 +1108,17 @@ export default function AdminFilesPage() {
                   </div>
 
                   {files.fileError && (
-                    <Alert
-                      variant="tonal"
-                      color="error"
-                      title="Failed to read file"
-                      message={files.fileError}
-                    />
+                    <div className="px-3 pt-2">
+                      <Alert
+                        variant="tonal"
+                        color="error"
+                        title="Failed to read file"
+                        message={files.fileError}
+                      />
+                    </div>
                   )}
 
-                  <div className="mt-2 min-h-0 flex-1">
+                  <div className="min-h-0 flex-1">
                     {files.fileLoading ? (
                       <Skeleton variant="rounded" className="h-full" />
                     ) : (
