@@ -165,7 +165,7 @@ const CodeEditor = memo(function CodeEditor({
         className={cn(
           surfaceClasses,
           'absolute left-0 top-0 bottom-0 z-[1] overflow-hidden select-none pointer-events-none ' +
-            'border-r border-outline-variant/50 bg-surface-container-low text-right ' +
+            'border-r border-outline-variant/50 bg-surface-container-lowest text-right ' +
             'text-on-surface-variant/55 [font-variant-numeric:tabular-nums] whitespace-pre',
         )}
         style={{ width: gutterWidth, paddingRight: GUTTER_PAD_RIGHT, paddingLeft: 0 }}
