@@ -3,19 +3,28 @@
  * Manager panel.
  *
  * Manages a lazily-expanded folder tree (folder path → cached child entries)
- * rooted at the repository root, the currently open file's content (with dirty
- * tracking), and every mutation (create / save / rename / delete). Because the
- * panel is GitHub-native, each mutation returns a commit SHA and refreshes the
- * affected folder caches so the tree reflects the repo's real state.
+ * rooted at the repository root, multiple open editor tabs (each with its own
+ * content + dirty tracking), and every mutation (create / save / rename /
+ * delete). Because the panel is GitHub-native, each mutation returns a commit
+ * SHA and refreshes the affected folder caches so the tree reflects the repo's
+ * real state.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
 import type {
   RepoEntryDto,
   RepoMetaDto,
   RepoMutationResultDto,
 } from '@/features/admin/services/admin-file-manager.service'
+
+export interface OpenTab {
+  entry: RepoEntryDto
+  content: string
+  savedContent: string
+  loading: boolean
+  error: string | null
+}
 
 export interface UseAdminFileManagerReturn {
   // Repository + tree
@@ -29,7 +38,11 @@ export interface UseAdminFileManagerReturn {
   toggleFolder: (path: string) => void
   refresh: (path: string) => Promise<void>
 
-  // Open file / editor
+  // Open files / editor — `openFileEntry`/`content`/… reflect the ACTIVE tab
+  tabs: OpenTab[]
+  activePath: string | null
+  activateTab: (path: string) => void
+  closeTab: (path: string) => void
   openFileEntry: RepoEntryDto | null
   content: string
   savedContent: string
@@ -66,9 +79,8 @@ const STORAGE_KEY = 'admin-file-manager:state:v1'
 
 interface PersistedState {
   expanded: string[]
-  openFileEntry: RepoEntryDto | null
-  content: string
-  savedContent: string
+  tabs: OpenTab[]
+  activePath: string | null
 }
 
 /** Reads a persisted session snapshot; returns null when absent/corrupt. */
@@ -77,14 +89,17 @@ function readPersisted(): PersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<PersistedState>
+    const tabs = Array.isArray(parsed.tabs)
+      ? parsed.tabs.filter((t) => t && typeof t === 'object' && t.entry)
+      : []
     return {
       expanded: Array.isArray(parsed.expanded) ? parsed.expanded : [],
-      openFileEntry:
-        typeof parsed.openFileEntry === 'object' && parsed.openFileEntry !== null
-          ? (parsed.openFileEntry as RepoEntryDto)
-          : null,
-      content: typeof parsed.content === 'string' ? parsed.content : '',
-      savedContent: typeof parsed.savedContent === 'string' ? parsed.savedContent : '',
+      tabs,
+      activePath:
+        typeof parsed.activePath === 'string' &&
+        tabs.some((t) => t.entry.path === parsed.activePath)
+          ? parsed.activePath
+          : (tabs[0]?.entry.path ?? null),
     }
   } catch {
     return null
@@ -93,7 +108,7 @@ function readPersisted(): PersistedState | null {
 
 export function useAdminFileManager(): UseAdminFileManagerReturn {
   // Restore a persisted session on mount so a refreshed tab resumes where it
-  // left off (open file + content + expanded folders). Lazy initializers avoid
+  // left off (open tabs + content + expanded folders). Lazy initializers avoid
   // setState-in-effect entirely.
   const [initialState] = useState<PersistedState | null>(() => readPersisted())
 
@@ -105,14 +120,10 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [directoryError, setDirectoryError] = useState<string | null>(null)
 
-  const [openFileEntry, setOpenFileEntry] = useState<RepoEntryDto | null>(
-    initialState?.openFileEntry ?? null,
+  const [tabs, setTabs] = useState<OpenTab[]>(initialState?.tabs ?? [])
+  const [activePath, setActivePath] = useState<string | null>(
+    initialState?.activePath ?? null,
   )
-  const [content, setContentRaw] = useState(initialState?.content ?? '')
-  const [savedContent, setSavedContent] = useState(initialState?.savedContent ?? '')
-  const [fileLoading, setFileLoading] = useState(false)
-  const [fileError, setFileError] = useState<string | null>(null)
-
   const [pending, setPending] = useState<Set<string>>(new Set())
   const [lastMutation, setLastMutation] = useState<RepoMutationResultDto | null>(null)
 
@@ -124,12 +135,23 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   // discard an older one — parallel refreshes of different folders must never
   // invalidate each other (that previously left the root stuck on the loader).
   const fetchRef = useRef<Record<string, number>>({})
-  // Tracks the path the editor is currently pointed at, so a slow read for an
-  // older file can never overwrite the content of a newer one (same stale
-  // response-discard pattern as useBotDatabase / the old useBotFiles).
-  const openRef = useRef<string | null>(null)
+  // Guards the per-tab content reads so a slow response for an older file can
+  // never overwrite a newer one for the same path.
+  const readRef = useRef<Record<string, number>>({})
 
-  const isDirty = Boolean(openFileEntry) && content !== savedContent
+  // The active tab derives from `activePath`; all public editor state is the
+  // projection of that single tab so the rest of the page can keep reading
+  // `openFileEntry`/`content`/`isDirty` as before.
+  const activeTab = useMemo(
+    () => tabs.find((t) => t.entry.path === activePath) ?? null,
+    [tabs, activePath],
+  )
+  const openFileEntry = activeTab?.entry ?? null
+  const content = activeTab?.content ?? ''
+  const savedContent = activeTab?.savedContent ?? ''
+  const isDirty = openFileEntry ? content !== savedContent : false
+  const fileLoading = activeTab?.loading ?? false
+  const fileError = activeTab?.error ?? null
 
   // Load repository metadata once on mount.
   useEffect(() => {
@@ -197,7 +219,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
 
   // Load the repository root once on mount.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data-fetching; setState is deferred to microtasks in refresh
     void refresh('')
 
     // Re-fetch any folders that were expanded in the persisted session so the
@@ -215,12 +236,8 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
       try {
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({
-            expanded: [...expanded],
-            openFileEntry,
-            content,
-            savedContent,
-          } satisfies PersistedState),
+          JSON.stringify({ expanded: [...expanded], tabs, activePath } satisfies
+            PersistedState),
         )
       } catch {
         // Storage full / private mode — the session just won't persist.
@@ -229,67 +246,130 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     return () => {
       if (persistRef.current !== null) window.clearTimeout(persistRef.current)
     }
-  }, [expanded, openFileEntry, content, savedContent])
+  }, [expanded, tabs, activePath])
 
   // ── Open file / editor ──────────────────────────────────────────────────────
 
-  const loadFile = useCallback(async (entry: RepoEntryDto): Promise<void> => {
-    const path = entry.path
-    openRef.current = path
-    setFileLoading(true)
-    setFileError(null)
-    try {
-      const data = await adminFileManagerService.getFileContent(path)
-      if (openRef.current !== path) return
-      setOpenFileEntry((prev) =>
-        prev && prev.path === path
-          ? { ...prev, size: data.size, language: data.language }
-          : prev,
+  /** Patches the tab for `path` using a functional updater (best-effort). */
+  const updateTab = useCallback(
+    (path: string, patch: (tab: OpenTab) => OpenTab) => {
+      setTabs((prev) =>
+        prev.map((t) => (t.entry.path === path ? patch(t) : t)),
       )
-      setContentRaw(data.content)
-      setSavedContent(data.content)
-    } catch (err) {
-      if (openRef.current !== path) return
-      setFileError(err instanceof Error ? err.message : 'Failed to read file')
-    } finally {
-      if (openRef.current === path) setFileLoading(false)
-    }
-  }, [])
+    },
+    [],
+  )
 
   /**
-   * Opens a file for editing. Returns false (without switching) when another
-   * file has unsaved changes so the caller can confirm before discarding.
+   * Loads a file's content into its tab. Stale-response guarded per path so a
+   * slow response can't clobber a newer read of the same file.
+   */
+  const loadTab = useCallback(
+    async (entry: RepoEntryDto): Promise<void> => {
+      const path = entry.path
+      const id = (readRef.current[path] ?? 0) + 1
+      readRef.current[path] = id
+      updateTab(path, (t) => ({ ...t, loading: true, error: null }))
+      try {
+        const data = await adminFileManagerService.getFileContent(path)
+        if (id !== readRef.current[path]) return
+        updateTab(path, (t) => ({
+          ...t,
+          entry: { ...t.entry, size: data.size, language: data.language },
+          content: data.content,
+          savedContent: data.content,
+          loading: false,
+          error: null,
+        }))
+      } catch (err) {
+        if (id !== readRef.current[path]) return
+        updateTab(path, (t) => ({
+          ...t,
+          loading: false,
+          error: err instanceof Error ? err.message : 'Failed to read file',
+        }))
+      }
+    },
+    [updateTab],
+  )
+
+  /**
+   * Opens a file in a tab (reusing an existing tab when already open) and makes
+   * it active. Unlike a single-file editor, opening another file never discards
+   * unsaved work in the current tab — each tab keeps its own content.
    */
   const openFile = useCallback(
     async (entry: RepoEntryDto): Promise<boolean> => {
-      if (isDirty) return false
-      setOpenFileEntry(entry)
-      void loadFile(entry)
+      const existing = tabs.find((t) => t.entry.path === entry.path)
+      setActivePath(entry.path)
+      if (!existing) {
+        setTabs((prev) => [
+          ...prev,
+          {
+            entry,
+            content: '',
+            savedContent: '',
+            loading: true,
+            error: null,
+          },
+        ])
+        void loadTab(entry)
+      } else if (existing.error) {
+        void loadTab(entry)
+      }
       return true
     },
-    [isDirty, loadFile],
+    [tabs, loadTab],
   )
 
-  /** Opens a file regardless of dirty state (used after a discard confirm). */
+  /** Opens a file regardless of its tab state (used after a discard confirm). */
   const forceOpenFile = useCallback(
     async (entry: RepoEntryDto): Promise<void> => {
-      setOpenFileEntry(entry)
-      await loadFile(entry)
+      await openFile(entry)
     },
-    [loadFile],
+    [openFile],
   )
 
-  const setContent = useCallback((value: string) => {
-    setContentRaw(value)
+  const activateTab = useCallback((path: string) => {
+    setActivePath(path)
   }, [])
 
-  const closeFile = useCallback(() => {
-    openRef.current = null
-    setOpenFileEntry(null)
-    setContentRaw('')
-    setSavedContent('')
-    setFileError(null)
+  // Latest tab set + active path via refs, so the close logic never depends on
+  // a stale closure or nests a setState inside another updater.
+  const tabsRef = useRef(tabs)
+  useEffect(() => {
+    tabsRef.current = tabs
+  }, [tabs])
+  const activePathRef = useRef(activePath)
+  useEffect(() => {
+    activePathRef.current = activePath
+  }, [activePath])
+
+  /** Removes a tab, preferring a neighbour as the new active tab. */
+  const closeTab = useCallback((path: string) => {
+    const list = tabsRef.current
+    const idx = list.findIndex((t) => t.entry.path === path)
+    if (idx === -1) return
+    const sibling = list[idx + 1] ?? list[idx - 1]
+    setTabs((prev) => prev.filter((t) => t.entry.path !== path))
+    if (activePathRef.current === path) {
+      setActivePath(sibling?.entry.path ?? null)
+    }
   }, [])
+
+  const setContent = useCallback(
+    (value: string) => {
+      if (!activePath) return
+      updateTab(activePath, (t) => ({ ...t, content: value, error: null }))
+    },
+    [activePath, updateTab],
+  )
+
+  /** Closes the active tab (the page prompts before dirty tabs). */
+  const closeFile = useCallback(() => {
+    if (!activePath) return
+    closeTab(activePath)
+  }, [activePath, closeTab])
 
   // ── Mutations ───────────────────────────────────────────────────────────────
 
@@ -311,17 +391,18 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
 
   const saveFile = useCallback(
     async (message: string): Promise<RepoMutationResultDto> => {
-      if (!openFileEntry) return { synced: false }
-      const path = openFileEntry.path
+      if (!activePath) return { synced: false }
+      const path = activePath
+      const activeContent = tabs.find((t) => t.entry.path === path)?.content ?? ''
       return withPending(path, async () => {
-        const data = await adminFileManagerService.saveFile(path, content, message)
-        setSavedContent(content)
+        const data = await adminFileManagerService.saveFile(path, activeContent, message)
+        updateTab(path, (t) => ({ ...t, savedContent: activeContent }))
         setLastMutation(data)
         void refresh(parentOf(path))
         return data
       })
     },
-    [openFileEntry, content, withPending, refresh],
+    [activePath, tabs, withPending, updateTab, refresh],
   )
 
   const createEntry = useCallback(
@@ -374,11 +455,15 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         })
         void refresh(parentOf(from))
         if (parentOf(to) !== parentOf(from)) void refresh(parentOf(to))
-        // Keep the editor pointed at the renamed file.
-        setOpenFileEntry((prev) => {
-          if (!prev || prev.path !== from) return prev
-          return { ...prev, path: to, name: to.split('/').pop() ?? to }
-        })
+        // Keep any open tabs pointed at the renamed file.
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.entry.path === from
+              ? { ...t, entry: { ...t.entry, path: to, name: to.split('/').pop() ?? to } }
+              : t,
+          ),
+        )
+        setActivePath((prev) => (prev === from ? to : prev))
         return data
       })
     },
@@ -398,11 +483,11 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
           return next
         })
         void refresh(parent)
-        if (openFileEntry?.path === path) closeFile()
+        closeTab(path)
         return data
       })
     },
-    [withPending, refresh, openFileEntry?.path, closeFile],
+    [withPending, refresh, closeTab],
   )
 
   return {
@@ -415,6 +500,10 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     isExpanded,
     toggleFolder,
     refresh,
+    tabs,
+    activePath,
+    activateTab,
+    closeTab,
     openFileEntry,
     content,
     savedContent,

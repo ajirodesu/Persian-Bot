@@ -1,18 +1,23 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentType, SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import {
-  ChevronRight,
-  ChevronDown,
   Folder,
   FolderPlus,
   FilePlus2,
   FileText,
+  FileCode2,
+  FileJson,
+  FileTerminal,
+  FileArchive,
+  FileImage,
+  FileType2,
+  Palette,
+  Hash,
   Pencil,
   Trash2,
   Save,
-  Cloud,
-  CloudOff,
   Loader2,
   X,
   CircleDot,
@@ -24,8 +29,13 @@ import {
   Check,
   Maximize,
   Minimize,
+  Search,
+  GitCommitHorizontal,
+  MoreVertical,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
+import { cn } from '@/utils/cn.util'
+import type { CodeEditorCursor } from '@/components/editor/CodeEditor'
 import IconButton from '@/components/ui/buttons/IconButton'
 import Badge from '@/components/ui/data-display/Badge'
 import EmptyState from '@/components/ui/data-display/EmptyState'
@@ -62,6 +72,168 @@ const LANGUAGE_COLOR: Record<string, BadgeColor> = {
 function languageColor(language: string | null): BadgeColor {
   return language ? (LANGUAGE_COLOR[language.toLowerCase()] ?? 'secondary') : 'secondary'
 }
+
+/** Extension → icon + tint used for Replit-style typed file rows. */
+const FILE_TYPE_MAP: Record<string, { icon: ComponentType<SVGProps<SVGSVGElement>>; className: string }> = {
+  ts: { icon: FileCode2, className: 'text-primary' },
+  tsx: { icon: FileCode2, className: 'text-primary' },
+  js: { icon: FileCode2, className: 'text-warning' },
+  jsx: { icon: FileCode2, className: 'text-warning' },
+  json: { icon: FileJson, className: 'text-warning' },
+  md: { icon: FileText, className: 'text-info' },
+  mdx: { icon: FileText, className: 'text-info' },
+  css: { icon: Palette, className: 'text-info' },
+  scss: { icon: Palette, className: 'text-info' },
+  sass: { icon: Palette, className: 'text-info' },
+  html: { icon: FileCode2, className: 'text-tertiary' },
+  yml: { icon: Hash, className: 'text-tertiary' },
+  yaml: { icon: Hash, className: 'text-tertiary' },
+  toml: { icon: Hash, className: 'text-tertiary' },
+  sh: { icon: FileTerminal, className: 'text-success' },
+  bash: { icon: FileTerminal, className: 'text-success' },
+  zsh: { icon: FileTerminal, className: 'text-success' },
+  py: { icon: FileTerminal, className: 'text-success' },
+  python: { icon: FileTerminal, className: 'text-success' },
+  tsconfig: { icon: FileJson, className: 'text-warning' },
+  env: { icon: FileType2, className: 'text-secondary' },
+  lock: { icon: FileArchive, className: 'text-secondary' },
+  go: { icon: FileCode2, className: 'text-info' },
+  rs: { icon: FileCode2, className: 'text-tertiary' },
+  java: { icon: FileCode2, className: 'text-tertiary' },
+  php: { icon: FileCode2, className: 'text-primary' },
+  rb: { icon: FileCode2, className: 'text-error' },
+  c: { icon: FileCode2, className: 'text-info' },
+  h: { icon: FileCode2, className: 'text-info' },
+  cpp: { icon: FileCode2, className: 'text-info' },
+  svg: { icon: FileImage, className: 'text-warning' },
+  png: { icon: FileImage, className: 'text-warning' },
+  jpg: { icon: FileImage, className: 'text-warning' },
+  jpeg: { icon: FileImage, className: 'text-warning' },
+  gif: { icon: FileImage, className: 'text-warning' },
+  ico: { icon: FileImage, className: 'text-warning' },
+  webp: { icon: FileImage, className: 'text-warning' },
+}
+
+/** Returns the typed icon+tint for a file (defaults to a neutral document). */
+function fileTypeStyle(name: string) {
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : ''
+  const fallback: (typeof FILE_TYPE_MAP)[string] = {
+    icon: FileText,
+    className: 'text-on-surface-variant/70',
+  }
+  return ext ? (FILE_TYPE_MAP[ext] ?? fallback) : fallback
+}
+
+/** Renders the Replit-style typed icon for a filename with its tint applied. */
+function FileTypeIcon({ name, className }: { name: string; className?: string }) {
+  const { icon: Icon, className: tint } = fileTypeStyle(name)
+  return <Icon className={cn(tint, className)} />
+}
+
+interface RowMenuAction {
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+  label: string
+  onClick: () => void
+  danger?: boolean
+}
+
+/**
+ * Replit-style "⋮" row menu. Renders a small popover (portal-anchored to the
+ * trigger) so it never clips inside the scrolling tree, and closes on Escape
+ * or any outside tap.
+ */
+const RowMenu = memo(function RowMenu({
+  label,
+  actions,
+  compact = false,
+}: {
+  label: string
+  actions: RowMenuAction[]
+  compact?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
+
+  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({
+        top: rect.bottom + 4,
+        left: Math.max(8, Math.min(window.innerWidth - 224, rect.right - 216)),
+      })
+    }
+    setOpen((o) => !o)
+  }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={toggle}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/70 hover:bg-on-surface/10 hover:text-on-surface"
+      >
+        <MoreVertical className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+      </button>
+
+      {open && pos && createPortal(
+        <div
+          className="fixed inset-0 z-[var(--z-popover)]"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            role="menu"
+            className="absolute w-56 overflow-hidden rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container-high shadow-elevation-3"
+            style={{ top: pos.top, left: pos.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="py-1.5">
+              {actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false)
+                    action.onClick()
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 px-3 py-2 text-left text-label-md transition-colors duration-fast',
+                    action.danger
+                      ? 'text-error hover:bg-error/10'
+                      : 'text-on-surface hover:bg-on-surface/8',
+                  )}
+                >
+                  <action.icon
+                    className={cn(
+                      'h-4 w-4 shrink-0',
+                      action.danger ? 'text-error' : 'text-on-surface-variant',
+                    )}
+                  />
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+})
 
 function formatSize(bytes: number | null): string {
   if (bytes === null) return ''
@@ -105,12 +277,39 @@ function defaultMessage(action: string, path: string): string {
   return `chore(file-manager): ${action} ${path}`
 }
 
+/**
+ * Returns the set of entry paths that match `query` (case-insensitive substring
+ * on the file/folder name), including ancestor folders of any match so the
+ * matching rows stay visible in the tree.
+ */
+function filterTreePaths(
+  children: Record<string, RepoEntryDto[]>,
+  entries: RepoEntryDto[],
+  query: string,
+): Set<string> {
+  const q = query.trim().toLowerCase()
+  if (!q) return new Set()
+  const matched = new Set<string>()
+
+  const visit = (list: RepoEntryDto[]) => {
+    for (const entry of list) {
+      const nameMatch = entry.name.toLowerCase().includes(q)
+      const kids = children[entry.path]
+      if (kids) visit(kids)
+      const hasMatchingDescendant = kids
+        ? kids.some((child) => matched.has(child.path))
+        : false
+      if (nameMatch || hasMatchingDescendant) matched.add(entry.path)
+    }
+  }
+
+  visit(entries)
+  return matched
+}
+
 // ── Discard-confirm request ───────────────────────────────────────────────────
 
-type DiscardRequest =
-  | { kind: 'switch'; entry: RepoEntryDto }
-  | { kind: 'close' }
-  | null
+type DiscardRequest = { kind: 'close'; path?: string } | null
 
 // ── File tree (recursive, lazy, GitHub-style) ─────────────────────────────────
 
@@ -118,8 +317,15 @@ interface FileTreeProps {
   folder: string
   depth: number
   selectedFolder: string
+  activePath: string | null
+  matched: Set<string>
   onSelectFolder: (path: string) => void
   onOpenFile: (entry: RepoEntryDto) => void
+  onCreateFile: (folder: string) => void
+  onCreateFolder: (folder: string) => void
+  onRename: (entry: RepoEntryDto) => void
+  onDelete: (entry: RepoEntryDto) => void
+  onCopyPath: (path: string) => void
   // From the hook
   children: Record<string, RepoEntryDto[]>
   expanded: Set<string>
@@ -134,8 +340,15 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
     folder,
     depth,
     selectedFolder,
+    activePath,
+    matched,
     onSelectFolder,
     onOpenFile,
+    onCreateFile,
+    onCreateFolder,
+    onRename,
+    onDelete,
+    onCopyPath,
     children,
     expanded,
     loadingPaths,
@@ -146,53 +359,82 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
 
   const name = folder.split('/').pop() ?? folder
   const entryChildren = children[folder]
+  const isSearching = matched.size > 0
   const isLoading = loadingPaths.has(folder)
   const isPending = pending.has(folder)
-  const isOpen = isExpanded(folder)
+  const isOpen = isExpanded(folder) || isSearching
+  const shownChildren = isSearching
+    ? (entryChildren ?? []).filter((entry) => matched.has(entry.path))
+    : entryChildren
+  const folderEntry: RepoEntryDto = {
+    name,
+    path: folder,
+    type: 'folder',
+    size: null,
+    sha: '',
+    lastCommit: null,
+  }
 
   return (
     <div>
       <div
         role="button"
         tabIndex={0}
-        onClick={() => onSelectFolder(folder)}
-        onKeyDown={(e) => e.key === 'Enter' && onSelectFolder(folder)}
+        onClick={() => {
+          onSelectFolder(folder)
+          toggleFolder(folder)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onSelectFolder(folder)
+            toggleFolder(folder)
+          }
+        }}
         className={[
-          'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-2 text-left ' +
+          'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
             'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          selectedFolder === folder
+          selectedFolder === folder || isOpen
             ? 'bg-primary/10 text-primary'
             : 'text-on-surface hover:bg-on-surface/5',
         ].join(' ')}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            toggleFolder(folder)
-          }}
-          aria-label={isOpen ? `Collapse ${name}` : `Expand ${name}`}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-on-surface-variant hover:text-on-surface"
-        >
-          {isLoading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : isOpen ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </button>
-        <Folder
-          className={`h-4 w-4 shrink-0 ${
-            selectedFolder === folder ? 'text-primary' : 'text-on-surface-variant'
-          }`}
-        />
+        {isLoading && !entryChildren ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-on-surface-variant" />
+        ) : (
+          <Folder
+            className={cn(
+              'h-4 w-4 shrink-0',
+              isOpen ? 'fill-[rgb(var(--color-primary)/0.15)]' : 'text-on-surface-variant',
+            )}
+          />
+        )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-label-md font-medium">{name}</span>
-          {isPending && (
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-on-surface-variant" />
-          )}
+        </span>
+        {isPending && (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-on-surface-variant" />
+        )}
+        <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-fast group-hover:opacity-100 group-focus-within:opacity-100">
+          <RowMenu
+            label={`Actions for ${name}`}
+            compact
+            actions={[
+              {
+                icon: FilePlus2,
+                label: 'New file',
+                onClick: () => onCreateFile(folder),
+              },
+              {
+                icon: FolderPlus,
+                label: 'New folder',
+                onClick: () => onCreateFolder(folder),
+              },
+              { icon: Copy, label: 'Copy path', onClick: () => onCopyPath(folder) },
+              { icon: Pencil, label: 'Rename', onClick: () => onRename(folderEntry) },
+              { icon: Trash2, label: 'Delete', danger: true, onClick: () => onDelete(folderEntry) },
+            ]}
+          />
         </span>
       </div>
 
@@ -208,15 +450,22 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
               <Skeleton variant="text" width="80%" />
             </div>
           ) : (
-            entryChildren?.map((entry) =>
+            shownChildren?.map((entry) =>
               entry.type === 'folder' ? (
                 <TreeFolderRow
                   key={entry.path}
                   folder={entry.path}
                   depth={depth + 1}
                   selectedFolder={selectedFolder}
+                  activePath={activePath}
+                  matched={matched}
                   onSelectFolder={onSelectFolder}
                   onOpenFile={onOpenFile}
+                  onCreateFile={onCreateFile}
+                  onCreateFolder={onCreateFolder}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  onCopyPath={onCopyPath}
                   children={children}
                   expanded={expanded}
                   loadingPaths={loadingPaths}
@@ -229,7 +478,11 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
                   key={entry.path}
                   entry={entry}
                   depth={depth + 1}
+                  activePath={activePath}
                   onOpenFile={onOpenFile}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  onCopyPath={onCopyPath}
                 />
               ),
             )
@@ -243,34 +496,58 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
 const TreeFileRow = memo(function TreeFileRow({
   entry,
   depth,
+  activePath,
   onOpenFile,
+  onRename,
+  onDelete,
+  onCopyPath,
 }: {
   entry: RepoEntryDto
   depth: number
+  activePath: string | null
   onOpenFile: (entry: RepoEntryDto) => void
+  onRename: (entry: RepoEntryDto) => void
+  onDelete: (entry: RepoEntryDto) => void
+  onCopyPath: (path: string) => void
 }) {
+  const { icon: FileIcon, className: iconClass } = fileTypeStyle(entry.name)
+  const active = activePath === entry.path
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpenFile(entry)}
-      className="flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-2 text-left transition-colors duration-fast hover:bg-on-surface/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      onKeyDown={(e) => e.key === 'Enter' && onOpenFile(entry)}
+      className={cn(
+        'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
+          'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+        active ? 'bg-primary/10' : 'hover:bg-on-surface/5',
+      )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       title={entry.path}
     >
-      <FileText className="h-4 w-4 shrink-0 text-on-surface-variant/70" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-label-md text-on-surface-variant">
-          {entry.name}
-        </span>
-        {entry.lastCommit && (
-          <span className="mt-0.5 block truncate text-label-xs text-on-surface-variant/60">
-            {entry.lastCommit.author || 'unknown'} ·{' '}
-            {shortMessage(entry.lastCommit.message)} ·{' '}
-            {relativeTime(entry.lastCommit.date)}
-          </span>
+      <FileIcon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : iconClass)} />
+      <span
+        className={cn(
+          'min-w-0 flex-1 truncate text-label-md',
+          active ? 'font-medium text-primary' : 'text-on-surface-variant',
         )}
+      >
+        {entry.name}
       </span>
-    </button>
+      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-fast group-hover:opacity-100 group-focus-within:opacity-100">
+        <RowMenu
+          label={`Actions for ${entry.name}`}
+          compact
+          actions={[
+            { icon: Copy, label: 'Copy path', onClick: () => onCopyPath(entry.path) },
+            { icon: Pencil, label: 'Rename', onClick: () => onRename(entry) },
+            { icon: Trash2, label: 'Delete', danger: true, onClick: () => onDelete(entry) },
+          ]}
+        />
+      </span>
+    </div>
   )
 })
 
@@ -291,6 +568,7 @@ export default function AdminFilesPage() {
   const [saving, setSaving] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [discardRequest, setDiscardRequest] = useState<DiscardRequest>(null)
+  const [treeQuery, setTreeQuery] = useState('')
 
   // Persist the selected folder so a refresh resumes the same directory.
   useEffect(() => {
@@ -313,11 +591,10 @@ export default function AdminFilesPage() {
   const [createDialog, setCreateDialog] = useState<'file' | 'folder' | null>(null)
   const [renameTarget, setRenameTarget] = useState<RepoEntryDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RepoEntryDto | null>(null)
+  const [cursor, setCursor] = useState<CodeEditorCursor | null>(null)
 
   const openEntry = files.openFileEntry
   const configured = files.meta?.configured ?? true
-  const isExpanded = files.isExpanded
-  const toggleFolder = files.toggleFolder
   const isDirty = files.isDirty
   const saveFile = files.saveFile
 
@@ -341,20 +618,15 @@ export default function AdminFilesPage() {
   }, [files.openFile])
 
   const handleOpenFile = useCallback(async (entry: RepoEntryDto) => {
-    const ok = await openFileRef.current(entry)
-    if (!ok) {
-      setDiscardRequest({ kind: 'switch', entry })
-      return
-    }
+    await openFileRef.current(entry)
     setSelectedFolder(parentOf(entry.path))
   }, [])
 
   const handleSelectFolder = useCallback(
     (path: string) => {
       setSelectedFolder(path)
-      if (isExpanded(path)) toggleFolder(path)
     },
-    [isExpanded, toggleFolder],
+    [],
   )
 
   const handleSave = useCallback(async () => {
@@ -418,96 +690,37 @@ export default function AdminFilesPage() {
     }
   }
 
-  const handleCloseFile = () => {
-    if (files.isDirty) {
-      setDiscardRequest({ kind: 'close' })
+  const handleCloseTab = (path: string) => {
+    const tab = files.tabs.find((t) => t.entry.path === path)
+    const dirty = tab ? tab.content !== tab.savedContent : false
+    if (dirty) {
+      setDiscardRequest({ kind: 'close', path })
       return
     }
-    files.closeFile()
+    files.closeTab(path)
   }
 
   const rootEntries = files.rootEntries
+  const treeQueryActive = treeQuery.trim().length > 0
+  const matchedPaths = useMemo(
+    () => filterTreePaths(files.children, files.rootEntries ?? [], treeQuery),
+    [files.children, files.rootEntries, treeQuery],
+  )
+  const visibleRootEntries = treeQueryActive
+    ? (rootEntries ?? []).filter((entry) => matchedPaths.has(entry.path))
+    : rootEntries
+  const activePath = openEntry?.path ?? null
+
+  const openCreateDialog = useCallback((kind: 'file' | 'folder', folder?: string) => {
+    if (folder !== undefined) setSelectedFolder(folder)
+    setCreateDialog(kind)
+  }, [])
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3 md:-mx-6">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <Helmet>
         <title>Files · Admin</title>
       </Helmet>
-
-      <Alert
-        variant="tonal"
-        color="error"
-        title="Unable to load files"
-        message={files.directoryError ?? ''}
-        className={files.directoryError ? '' : 'hidden'}
-      />
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-title-md font-semibold text-on-surface">Files</h3>
-          <p className="text-body-sm text-on-surface-variant mt-0.5">
-            GitHub-native repository file manager — every change is committed
-            straight to the repo.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {files.meta ? (
-            <>
-              <Badge
-                color={configured ? 'success' : 'warning'}
-                variant="tonal"
-                size="sm"
-                leftIcon={
-                  configured ? (
-                    <Cloud className="h-3.5 w-3.5" />
-                  ) : (
-                    <CloudOff className="h-3.5 w-3.5" />
-                  )
-                }
-              >
-                {configured ? 'GitHub connected' : 'GitHub not configured'}
-              </Badge>
-              <Badge
-                color="secondary"
-                variant="tonal"
-                size="sm"
-                leftIcon={<FolderGit2 className="h-3.5 w-3.5" />}
-              >
-                {files.meta.owner}/{files.meta.repo}
-              </Badge>
-              <Badge
-                color="secondary"
-                variant="tonal"
-                size="sm"
-                leftIcon={<GitBranch className="h-3.5 w-3.5" />}
-              >
-                {files.meta.branch}
-              </Badge>
-            </>
-          ) : (
-            <Skeleton variant="text" width={160} />
-          )}
-          <IconButton
-            variant="outline"
-            size="sm"
-            icon={<FolderPlus className="h-4 w-4" />}
-            aria-label="New folder"
-            title="New folder"
-            onClick={() => setCreateDialog('folder')}
-            disabled={!configured}
-          />
-          <IconButton
-            variant="primary"
-            size="sm"
-            icon={<FilePlus2 className="h-4 w-4" />}
-            aria-label="New file"
-            title="New file"
-            onClick={() => setCreateDialog('file')}
-            disabled={!configured}
-          />
-        </div>
-      </div>
 
       {!configured && (
         <Alert
@@ -518,127 +731,241 @@ export default function AdminFilesPage() {
         />
       )}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-        {/* ── Sidebar: file tree ──────────────────────────────────────────── */}
-        <div className="w-full min-w-0 shrink-0 lg:w-72 xl:w-80 flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2 px-1">
+      <Alert
+        variant="tonal"
+        color="error"
+        title="Unable to load files"
+        message={files.directoryError ?? ''}
+        className={files.directoryError ? '' : 'hidden'}
+      />
+
+      {/* ── Workspace ──────────────────────────────────────────────────────── */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Workspace toolbar */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant/70 bg-surface-container/70 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <FolderGit2 className="h-4 w-4 shrink-0 text-on-surface-variant" />
             <button
               type="button"
               onClick={() => {
                 setSelectedFolder('')
                 if (!files.isExpanded('')) files.toggleFolder('')
               }}
-              className="shrink-0 text-label-md font-medium text-on-surface-variant hover:text-on-surface transition-colors duration-fast"
+              className="shrink-0 truncate text-label-md font-semibold text-on-surface hover:text-primary transition-colors duration-fast"
               title="Go to repository root"
             >
               Repository
             </button>
-            <div className="flex min-w-0 items-center gap-1.5">
+            {selectedFolder && (
               <Badge
                 color="secondary"
                 size="sm"
                 variant="tonal"
-                className="max-w-[9rem]"
-                title={selectedFolder || 'root'}
+                className="max-w-[10rem]"
+                title={selectedFolder}
               >
-                {selectedFolder || 'root'}
+                {selectedFolder}
               </Badge>
-              <IconButton
-                variant="text"
-                size="sm"
-                className="shrink-0"
-                icon={dirCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-                aria-label="Copy directory path"
-                title="Copy directory path"
-                onClick={() => {
-                  void copyDir(selectedFolder || '/')
-                }}
+            )}
+            <IconButton
+              variant="text"
+              size="sm"
+              className="shrink-0"
+              icon={dirCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+              aria-label="Copy directory path"
+              title="Copy directory path"
+              onClick={() => {
+                void copyDir(selectedFolder || '/')
+              }}
+            />
+            <IconButton
+              variant="text"
+              size="sm"
+              className="shrink-0"
+              icon={<RefreshCw className="h-4 w-4" />}
+              aria-label="Refresh folder"
+              title="Refresh folder"
+              onClick={() => {
+                void files.refresh(selectedFolder)
+                if (selectedFolder !== '') void files.refresh('')
+              }}
+            />
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <IconButton
+              variant="outline"
+              size="sm"
+              icon={<FolderPlus className="h-4 w-4" />}
+              aria-label="New folder"
+              title="New folder"
+              onClick={() => openCreateDialog('folder')}
+              disabled={!configured}
+            />
+            <IconButton
+              variant="primary"
+              size="sm"
+              icon={<FilePlus2 className="h-4 w-4" />}
+              aria-label="New file"
+              title="New file"
+              onClick={() => openCreateDialog('file')}
+              disabled={!configured}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
+          {/* ── Files panel ─────────────────────────────────────────────────── */}
+          <div className="flex w-full min-w-0 shrink-0 flex-col border-b border-outline-variant/70 bg-surface-container/30 lg:w-72 lg:border-b-0 lg:border-r xl:w-80">
+            <div className="flex items-center gap-2 px-3 pt-3">
+              <Files className="h-4 w-4 text-primary" />
+              <span className="text-label-md font-semibold text-on-surface">Files</span>
+            </div>
+
+            <div className="px-3 pb-2 pt-2">
+              <Input
+                value={treeQuery}
+                onChange={(e) => setTreeQuery(e.target.value)}
+                leftIcon={<Search className="h-4 w-4" />}
+                rightIcon={
+                  treeQuery ? (
+                    <button
+                      type="button"
+                      aria-label="Clear file search"
+                      onClick={() => setTreeQuery('')}
+                      className="flex h-5 w-5 items-center justify-center rounded text-on-surface-variant hover:text-on-surface"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : undefined
+                }
+                placeholder="Search files…"
+                aria-label="Search files"
+                inputSize="sm"
               />
-              <IconButton
-                variant="text"
-                size="sm"
-                className="shrink-0"
-                icon={<RefreshCw className="h-4 w-4" />}
-                aria-label="Refresh folder"
-                title="Refresh folder"
-                onClick={() => {
-                  void files.refresh(selectedFolder)
-                  if (selectedFolder !== '') void files.refresh('')
-                }}
-              />
+            </div>
+
+            <div className="max-h-[45vh] min-h-0 flex-1 overflow-y-auto p-2 lg:max-h-none">
+              {rootEntries === undefined && !files.directoryError ? (
+                <div className="flex flex-col gap-1.5 p-1">
+                  <Skeleton variant="text" width="80%" />
+                  <Skeleton variant="text" width="65%" />
+                  <Skeleton variant="text" width="90%" />
+                  <Skeleton variant="text" width="55%" />
+                </div>
+              ) : rootEntries === undefined ? (
+                <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                  Could not load the repository.
+                </p>
+              ) : visibleRootEntries === undefined || visibleRootEntries.length === 0 ? (
+                <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                  {treeQueryActive ? 'No files match your search.' : 'This folder is empty.'}
+                </p>
+              ) : (
+                visibleRootEntries.map((entry) =>
+                  entry.type === 'folder' ? (
+                    <TreeFolderRow
+                      key={entry.path}
+                      folder={entry.path}
+                      depth={0}
+                      selectedFolder={selectedFolder}
+                      activePath={activePath}
+                      matched={matchedPaths}
+                      onSelectFolder={handleSelectFolder}
+                      onOpenFile={handleOpenFile}
+                      onCreateFile={(folder) => openCreateDialog('file', folder)}
+                      onCreateFolder={(folder) => openCreateDialog('folder', folder)}
+                      onRename={(entry) => setRenameTarget(entry)}
+                      onDelete={(entry) => setDeleteTarget(entry)}
+                      onCopyPath={(path) => void copyPath(path)}
+                      children={files.children}
+                      expanded={files.expanded}
+                      loadingPaths={files.loadingPaths}
+                      pending={files.pending}
+                      isExpanded={files.isExpanded}
+                      toggleFolder={files.toggleFolder}
+                    />
+                  ) : (
+                    <TreeFileRow
+                      key={entry.path}
+                      entry={entry}
+                      depth={0}
+                      activePath={activePath}
+                      onOpenFile={handleOpenFile}
+                      onRename={(entry) => setRenameTarget(entry)}
+                      onDelete={(entry) => setDeleteTarget(entry)}
+                      onCopyPath={(path) => void copyPath(path)}
+                    />
+                  ),
+                )
+              )}
             </div>
           </div>
 
-          <div className="rounded-[var(--radius-card)] border border-outline-variant bg-surface-container/40 p-2">
-            {rootEntries === undefined && !files.directoryError ? (
-              <div className="flex flex-col gap-1.5 p-1">
-                <Skeleton variant="text" width="80%" />
-                <Skeleton variant="text" width="65%" />
-                <Skeleton variant="text" width="90%" />
-                <Skeleton variant="text" width="55%" />
-              </div>
-            ) : rootEntries === undefined ? (
-              <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                Could not load the repository.
-              </p>
-            ) : rootEntries.length === 0 ? (
-              <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                This folder is empty.
-              </p>
-            ) : (
-              rootEntries.map((entry) =>
-                entry.type === 'folder' ? (
-                  <TreeFolderRow
-                    key={entry.path}
-                    folder={entry.path}
-                    depth={0}
-                    selectedFolder={selectedFolder}
-                    onSelectFolder={handleSelectFolder}
-                    onOpenFile={handleOpenFile}
-                    children={files.children}
-                    expanded={files.expanded}
-                    loadingPaths={files.loadingPaths}
-                    pending={files.pending}
-                    isExpanded={files.isExpanded}
-                    toggleFolder={files.toggleFolder}
-                  />
-                ) : (
-                  <TreeFileRow
-                    key={entry.path}
-                    entry={entry}
-                    depth={0}
-                    onOpenFile={handleOpenFile}
-                  />
-                ),
-              )
-            )}
-          </div>
+          {/* ── Editor pane ─────────────────────────────────────────────────── */}
+          <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+            {/* Tab bar */}
+            <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-outline-variant/70 bg-surface-container/70 px-2 py-1 scrollbar-hidden">
+              {files.tabs.length > 0 ? (
+                files.tabs.map((tab) => {
+                  const active = tab.entry.path === openEntry?.path
+                  const tabDirty = tab.content !== tab.savedContent
+                  return (
+                    <button
+                      key={tab.entry.path}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFolder(parentOf(tab.entry.path))
+                        void files.activateTab(tab.entry.path)
+                      }}
+                      title={tab.entry.path}
+                      className={cn(
+                        'group/tab flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                        active
+                          ? 'bg-surface-container-high text-on-surface'
+                          : 'text-on-surface-variant hover:bg-on-surface/5 hover:text-on-surface',
+                      )}
+                    >
+                      <FileTypeIcon name={tab.entry.name} className="h-3.5 w-3.5 shrink-0" />
+                      <span className="max-w-[12rem] truncate font-mono text-label-sm">
+                        {tab.entry.name}
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        aria-label={`Close ${tab.entry.name}`}
+                        title={`Close ${tab.entry.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCloseTab(tab.entry.path)
+                        }}
+                        className={cn(
+                          'flex h-5 w-5 items-center justify-center rounded text-on-surface-variant/60 transition-colors duration-fast',
+                          active
+                            ? 'opacity-80 hover:bg-on-surface/10 hover:text-on-surface hover:opacity-100'
+                            : 'opacity-0 group-hover/tab:opacity-100 hover:bg-on-surface/10 hover:text-on-surface',
+                        )}
+                      >
+                        {tabDirty ? (
+                          <CircleDot className="h-3 w-3 text-warning" />
+                        ) : (
+                          <X className="h-3.5 w-3.5" />
+                        )}
+                      </span>
+                    </button>
+                  )
+                })
+              ) : (
+                <span className="px-1 text-body-sm text-on-surface-variant">
+                  No file open
+                </span>
+              )}
 
-          <p className="px-1 text-body-xs text-on-surface-variant">
-            New files are created inside{' '}
-            <code className="font-mono">{selectedFolder || 'the repository root'}</code>
-          </p>
-        </div>
+              <span className="hidden min-w-0 flex-1 truncate text-body-xs text-on-surface-variant sm:block">
+                {openEntry?.path ?? ''}
+              </span>
 
-        {/* ── Editor pane ─────────────────────────────────────────────────── */}
-        <div className="min-w-0 flex-1 flex flex-col gap-2.5">
-          {!openEntry ? (
-            <EmptyState
-              icon={Files}
-              title="No file open"
-              description="Select a file from the repository tree on the left to start editing."
-            />
-          ) : (
-            <>
-              {/* Editor header */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className="min-w-0 flex-1 truncate font-mono text-label-lg text-on-surface"
-                    title={openEntry.path}
-                  >
-                    {openEntry.path}
-                  </span>
+              {openEntry && (
+                <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-1">
                   <IconButton
                     variant="text"
                     size="sm"
@@ -648,50 +975,104 @@ export default function AdminFilesPage() {
                     title="Copy file path"
                     onClick={() => void copyPath(openEntry.path)}
                   />
-                  {files.isDirty && (
-                    <Badge
-                      color="warning"
-                      variant="tonal"
-                      size="sm"
-                      leftIcon={<CircleDot className="h-3 w-3" />}
-                    >
-                      Unsaved
+                  <IconButton
+                    variant="text"
+                    size="sm"
+                    className="shrink-0"
+                    icon={<Maximize className="h-4 w-4" />}
+                    aria-label="Full screen"
+                    title="Full screen"
+                    onClick={() => setFullscreen(true)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Editor body */}
+            <div className="flex min-h-0 flex-1 flex-col p-3">
+              {!openEntry ? (
+                <>
+                  <EmptyState
+                    icon={Files}
+                    title="No file open"
+                    description="Select a file from the repository tree to start editing."
+                  />
+                  <p className="mt-3 px-1 text-body-xs text-on-surface-variant">
+                    New files are created inside{' '}
+                    <code className="font-mono">{selectedFolder || 'the repository root'}</code>.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <Badge color={languageColor(openEntry.language ?? null)} variant="tonal" size="sm">
+                      {openEntry.language ?? 'text'}
                     </Badge>
-                  )}
-                  <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                    <IconButton
-                      variant="outline"
-                      size="sm"
-                      icon={codeCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-                      aria-label="Copy code"
-                      title="Copy code"
-                      onClick={() => void copyCode(files.content)}
-                    />
-                    <IconButton
-                      variant="outline"
-                      size="sm"
-                      icon={<Maximize className="h-4 w-4" />}
-                      aria-label="Full screen"
-                      title="Full screen"
-                      onClick={() => setFullscreen(true)}
-                    />
-                    <IconButton
-                      variant="outline"
-                      size="sm"
-                      icon={<Pencil className="h-4 w-4" />}
-                      aria-label="Rename"
-                      title="Rename"
-                      onClick={() => setRenameTarget(openEntry)}
-                      disabled={!configured}
-                    />
-                    <IconButton
-                      variant="outline"
-                      size="sm"
-                      icon={<Trash2 className="h-4 w-4" />}
-                      aria-label="Delete"
-                      title="Delete"
-                      onClick={() => setDeleteTarget(openEntry)}
-                      disabled={!configured}
+                    {openEntry.size !== null && (
+                      <Badge color="secondary" variant="tonal" size="sm">
+                        {formatSize(openEntry.size)}
+                      </Badge>
+                    )}
+                    {files.isDirty && (
+                      <Badge
+                        color="warning"
+                        variant="tonal"
+                        size="sm"
+                        leftIcon={<CircleDot className="h-3 w-3" />}
+                      >
+                        Unsaved
+                      </Badge>
+                    )}
+                    {openEntry.lastCommit && (
+                      <span className="text-body-xs text-on-surface-variant truncate">
+                        {shortMessage(openEntry.lastCommit.message)} ·{' '}
+                        {relativeTime(openEntry.lastCommit.date)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5">
+                    <Input
+                      value={commitMessage}
+                      onChange={(e) => setCommitMessage(e.target.value)}
+                      placeholder={defaultMessage('update', openEntry.path)}
+                      aria-label="Commit message"
+                      className="max-w-xl"
+                      rightIcon={
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            aria-label="Copy code"
+                            title="Copy code"
+                            className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"
+                            onClick={() => void copyCode(files.content)}
+                          >
+                            {codeCopied ? (
+                              <Check className="h-3.5 w-3.5 text-success" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          <IconButton
+                            variant="outline"
+                            size="sm"
+                            icon={<Pencil className="h-4 w-4" />}
+                            aria-label="Rename"
+                            title="Rename"
+                            onClick={() => setRenameTarget(openEntry)}
+                            disabled={!configured}
+                          />
+                          <IconButton
+                            variant="outline"
+                            size="sm"
+                            icon={<Trash2 className="h-4 w-4" />}
+                            aria-label="Delete"
+                            title="Delete"
+                            onClick={() => setDeleteTarget(openEntry)}
+                            disabled={!configured}
+                          />
+                        </div>
+                      }
                     />
                     <IconButton
                       variant="primary"
@@ -703,66 +1084,68 @@ export default function AdminFilesPage() {
                       disabled={!files.isDirty || !configured}
                       onClick={handleSave}
                     />
-                    <IconButton
-                      variant="text"
-                      size="sm"
-                      icon={<X className="h-4 w-4" />}
-                      aria-label="Close file"
-                      title="Close file"
-                      onClick={handleCloseFile}
-                    />
                   </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge color={languageColor(openEntry.language ?? null)} variant="tonal" size="sm">
-                    {openEntry.language ?? 'text'}
-                  </Badge>
-                  {openEntry.size !== null && (
-                    <Badge color="secondary" variant="tonal" size="sm">
-                      {formatSize(openEntry.size)}
-                    </Badge>
+                  {files.fileError && (
+                    <Alert
+                      variant="tonal"
+                      color="error"
+                      title="Failed to read file"
+                      message={files.fileError}
+                    />
                   )}
-                  {openEntry.lastCommit && (
-                    <span className="text-body-xs text-on-surface-variant truncate">
-                      {shortMessage(openEntry.lastCommit.message)} ·{' '}
-                      {relativeTime(openEntry.lastCommit.date)}
-                    </span>
-                  )}
-                </div>
 
-                <Input
-                  value={commitMessage}
-                  onChange={(e) => setCommitMessage(e.target.value)}
-                  placeholder={defaultMessage('update', openEntry.path)}
-                  aria-label="Commit message"
-                  className="max-w-2xl"
-                />
-              </div>
-
-              {files.fileError && (
-                <Alert
-                  variant="tonal"
-                  color="error"
-                  title="Failed to read file"
-                  message={files.fileError}
-                />
+                  <div className="mt-2 min-h-0 flex-1">
+                    {files.fileLoading ? (
+                      <Skeleton variant="rounded" className="h-full" />
+                    ) : (
+                      <CodeEditor
+                        value={files.content}
+                        onChange={files.setContent}
+                        language={openEntry.language}
+                        onSave={handleSave}
+                        placeholder={`// Editing ${openEntry.path}`}
+                        fillHeight
+                        onCursor={setCursor}
+                      />
+                    )}
+                  </div>
+                </>
               )}
+            </div>
+          </div>
+        </div>
 
-              {files.fileLoading ? (
-                <Skeleton variant="rounded" height={420} />
-              ) : (
-                <CodeEditor
-                  value={files.content}
-                  onChange={files.setContent}
-                  language={openEntry.language}
-                  onSave={handleSave}
-                  placeholder={`// Editing ${openEntry.path}`}
-                  minHeight={360}
-                />
-              )}
-            </>
+        {/* ── Status bar ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-outline-variant/70 bg-surface-container/70 px-3 py-1.5 text-body-xs text-on-surface-variant">
+          {files.meta && (
+            <span className="flex min-w-0 items-center gap-1">
+              <GitBranch className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{files.meta.branch}</span>
+            </span>
           )}
+          <span className="flex min-w-0 items-center gap-1">
+            <GitCommitHorizontal className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              {openEntry ? openEntry.path : selectedFolder ? selectedFolder : '/'}
+            </span>
+          </span>
+          {openEntry && <span>{files.content.split('\n').length} lines</span>}
+          {openEntry && openEntry.size !== null && (
+            <span className="hidden sm:inline">{formatSize(openEntry.size)}</span>
+          )}
+          {openEntry && cursor && (
+            <span className="font-mono">Ln {cursor.line}, Col {cursor.column}</span>
+          )}
+          <span className="ml-auto flex items-center gap-1.5">
+            <span
+              className={cn('h-2 w-2 rounded-full', configured ? 'bg-success' : 'bg-warning')}
+              title={configured ? 'GitHub connected' : 'GitHub not configured'}
+            />
+            <span className={cn(configured ? 'text-on-surface-variant' : 'text-warning')}>
+              {configured ? 'Ready' : 'No GitHub token'}
+            </span>
+          </span>
         </div>
       </div>
 
@@ -792,9 +1175,8 @@ export default function AdminFilesPage() {
       <DiscardDialog
         request={discardRequest}
         onConfirm={() => {
-          if (discardRequest?.kind === 'switch') {
-            void files.forceOpenFile(discardRequest.entry)
-            setSelectedFolder(parentOf(discardRequest.entry.path))
+          if (discardRequest?.path) {
+            files.closeTab(discardRequest.path)
           } else {
             files.closeFile()
           }
@@ -1197,7 +1579,6 @@ function DiscardDialog({
   onCancel: () => void
 }) {
   const open = request !== null
-  const isSwitch = request?.kind === 'switch'
 
   return (
     <Dialog.Root
@@ -1215,8 +1596,8 @@ function DiscardDialog({
           </Dialog.Header>
           <Dialog.Body>
             <p className="text-body-md text-on-surface">
-              {isSwitch
-                ? 'The open file has unsaved changes. Switching files will discard them.'
+              {request?.path
+                ? 'This file has unsaved changes. Closing the tab will discard them.'
                 : 'The open file has unsaved changes. Closing will discard them.'}
             </p>
           </Dialog.Body>

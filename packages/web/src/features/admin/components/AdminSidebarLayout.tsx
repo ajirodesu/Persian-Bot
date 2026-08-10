@@ -338,6 +338,11 @@ export default function AdminSidebarLayout() {
     })
   }, [])
   const activePath = location.pathname
+  // The Files page is a full-viewport IDE workspace: it owns its own height
+  // (no page-level scrolling) so the file tree and editor panes scroll
+  // independently, exactly like Replit. Apply the same h-dvh treatment the
+  // Chat Room uses on the user dashboard.
+  const isFilesWorkspace = activePath === ROUTES.ADMIN.FILES
   // Mobile only: false while the page is pinned to the top, so the content
   // header renders "invisible" (just the hamburger + avatar floating over
   // the page) until the user scrolls, at which point the surface, border,
@@ -426,7 +431,12 @@ export default function AdminSidebarLayout() {
       </aside>
 
       {/* Main content column */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className={cn(
+          'flex-1 flex flex-col min-w-0',
+          isFilesWorkspace && 'h-dvh sticky top-0 overflow-hidden',
+        )}
+      >
         {/* Content header */}
         <div
           className={cn(
@@ -487,7 +497,14 @@ export default function AdminSidebarLayout() {
           </div>
         </div>
 
-        <main className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto">
+        <main
+          className={cn(
+            'flex-1',
+            isFilesWorkspace
+              ? 'min-h-0 overflow-hidden'
+              : 'p-4 md:p-6 max-w-7xl w-full mx-auto',
+          )}
+        >
           <Outlet />
         </main>
       </div>

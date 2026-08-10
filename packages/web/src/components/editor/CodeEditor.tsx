@@ -17,9 +17,14 @@
  *   • Token palette (.tok-*) scoped under .code-editor, matching the chat room
  */
 
-import { memo, useCallback, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { highlightToHtml } from '@/lib/syntax-highlight.lib'
 import { cn } from '@/utils/cn.util'
+
+export interface CodeEditorCursor {
+  line: number
+  column: number
+}
 
 export interface CodeEditorProps {
   value: string
@@ -36,6 +41,10 @@ export interface CodeEditorProps {
   fillHeight?: boolean
   /** Focus the textarea on mount (fullscreen mode). */
   autoFocus?: boolean
+  /** Reports the caret's 1-based line/column whenever it moves. */
+  onCursor?: (pos: CodeEditorCursor) => void
+  /** Renders a lightweight minimap on the right edge (Replit-style). */
+  showMinimap?: boolean
 }
 
 /** Shared metrics — MUST be identical on both layers for alignment. */
@@ -50,6 +59,9 @@ const V_PADDING = 32
 /** Horizontal gap between the rightmost digit and the code (GitHub-like). */
 const GUTTER_PAD_RIGHT = 16
 
+/** Width reserved for the right-edge minimap when enabled. */
+const MINIMAP_WIDTH = 44
+
 const CodeEditor = memo(function CodeEditor({
   value,
   onChange,
@@ -61,10 +73,17 @@ const CodeEditor = memo(function CodeEditor({
   minHeight = 320,
   fillHeight = false,
   autoFocus = false,
+  onCursor,
+  showMinimap = true,
 }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const preRef = useRef<HTMLPreElement>(null)
   const gutterRef = useRef<HTMLDivElement>(null)
+
+  const [scrollTop, setScrollTop] = useState(0)
+  const [caretLine, setCaretLine] = useState(1)
+  const [caretColumn, setCaretColumn] = useState(1)
+  const [showMinimapState, setShowMinimapState] = useState(true)
 
   const lineCount = useMemo(() => value.split('\n').length, [value])
   const contentHeight = useMemo(
@@ -80,14 +99,34 @@ const CodeEditor = memo(function CodeEditor({
     [lineCount],
   )
 
+  // Report the caret position whenever it moves (drives the status bar Ln/Col).
+  useEffect(() => {
+    onCursor?.({ line: caretLine, column: caretColumn })
+  }, [caretLine, caretColumn, onCursor])
+
+  // Parse (selectionStart → 1-based line/column) after each interaction so the
+  // active-line highlight + status bar stay in sync with the caret.
+  const syncCaret = useCallback(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    const pos = ta.selectionStart
+    let line = 1
+    let idx = 0
+    while (idx < pos) {
+      if (value.charCodeAt(idx) === 10) line++
+      idx++
+    }
+    const lineStart = value.lastIndexOf('\n', pos - 1) + 1
+    setCaretLine(line)
+    setCaretColumn(pos - lineStart + 1)
+  }, [value])
+
   // Keep the highlight layer and the gutter in lockstep with the caret.
-  // Vertically both follow the textarea's scrollTop. Horizontally the gutter
-  // is translated by -scrollLeft (GitHub-style), so the line numbers scroll
-  // away with the code instead of staying pinned to the left edge.
   const handleScroll = useCallback(() => {
     const ta = textareaRef.current
     const pre = preRef.current
     const gutter = gutterRef.current
+    if (ta) setScrollTop(ta.scrollTop)
     if (ta && pre) {
       pre.scrollTop = ta.scrollTop
       pre.scrollLeft = ta.scrollLeft
@@ -111,9 +150,10 @@ const CodeEditor = memo(function CodeEditor({
         ta.focus()
         const pos = start + insert.length
         ta.setSelectionRange(pos, pos)
+        syncCaret()
       })
     },
-    [onChange, value],
+    [onChange, value, syncCaret],
   )
 
   const handleKeyDown = useCallback(
@@ -121,6 +161,12 @@ const CodeEditor = memo(function CodeEditor({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
         onSave?.()
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        // Ctrl/Cmd+K toggles the minimap (Replit-adjacent convenience).
+        e.preventDefault()
+        setShowMinimapState((p) => !p)
         return
       }
       if (e.key === 'Tab' && !readOnly) {
@@ -143,6 +189,20 @@ const CodeEditor = memo(function CodeEditor({
     [value, language],
   )
 
+  // Minimap: one strip per line whose width mirrors the line's character
+  // count (capped) so the map roughly reflects the file's shape. Follows the
+  // textarea scroll via the shared scrollTop state.
+  const minimapLines = useMemo(() => {
+    const lines = value.split('\n')
+    return lines.map((line) => ({
+      width: Math.min(1, line.replace(/\s/g, '').length / 60),
+      hasContent: line.trim().length > 0,
+    }))
+  }, [value])
+
+  const activeLineIndicatorTop =
+    V_PADDING / 2 + (caretLine - 1) * LINE_HEIGHT - scrollTop
+
   return (
     <div
       className={cn(
@@ -154,6 +214,13 @@ const CodeEditor = memo(function CodeEditor({
       )}
       style={fillHeight ? undefined : { minHeight, height: contentHeight }}
     >
+      {/* Active-line highlight — tracks the caret, Replit/VS Code style */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 z-[0] h-6 bg-primary/[0.06]"
+        style={{ top: activeLineIndicatorTop }}
+      />
+
       {/* Line-number gutter — shares font metrics so numbers stay aligned.
           Like GitHub, it scrolls horizontally together with the code (translated
           by -scrollLeft in handleScroll) and stays locked to the left of each
@@ -183,7 +250,10 @@ const CodeEditor = memo(function CodeEditor({
           surfaceClasses,
           'absolute inset-0 m-0 overflow-hidden text-on-surface pointer-events-none',
         )}
-        style={{ paddingLeft: gutterWidth }}
+        style={{
+          paddingLeft: gutterWidth,
+          paddingRight: showMinimap && showMinimapState ? MINIMAP_WIDTH : 0,
+        }}
         dangerouslySetInnerHTML={{ __html: highlighted }}
       />
 
@@ -191,9 +261,17 @@ const CodeEditor = memo(function CodeEditor({
       <textarea
         ref={textareaRef}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value)
+          // Recompute the caret for the new value (fires before the next
+          // paint so the active-line highlight tracks typing).
+          requestAnimationFrame(syncCaret)
+        }}
         onScroll={handleScroll}
         onKeyDown={handleKeyDown}
+        onSelect={syncCaret}
+        onMouseUp={syncCaret}
+        onKeyUp={syncCaret}
         readOnly={readOnly}
         spellCheck={false}
         autoCapitalize="off"
@@ -212,8 +290,42 @@ const CodeEditor = memo(function CodeEditor({
             'text-transparent caret-[rgb(var(--color-primary))] selection:bg-primary/30 ' +
             'placeholder:text-on-surface-variant/60',
         )}
-        style={{ paddingLeft: gutterWidth }}
+        style={{
+          paddingLeft: gutterWidth,
+          paddingRight: showMinimap && showMinimapState ? MINIMAP_WIDTH : 0,
+        }}
       />
+
+      {/* Minimap — Replit-style right-edge file overview */}
+      {showMinimap && showMinimapState && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 z-[1] w-11 overflow-hidden border-l border-outline-variant/20 bg-surface-container-highest/70 pointer-events-none select-none"
+        >
+          <div className="relative h-full w-full">
+            {minimapLines.map((line, ln) => (
+              <div
+                key={ln}
+                className="absolute left-0.5 right-0.5"
+                style={{ top: ln * 3 - scrollTop * (3 / LINE_HEIGHT), height: 2 }}
+              >
+                <div
+                  className={cn(
+                    'h-full rounded-[1px]',
+                    line.hasContent ? 'bg-on-surface/25' : 'bg-on-surface/10',
+                  )}
+                  style={{ width: `${line.width * 100}%` }}
+                />
+              </div>
+            ))}
+            {/* Viewport indicator */}
+            <div
+              className="absolute inset-x-0 border-y border-primary/40 bg-primary/10"
+              style={{ top: scrollTop * (3 / LINE_HEIGHT), height: 72 }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Scoped token palette — matches the chat room's VS Code "Dark+" colors */}
       <style>{`
