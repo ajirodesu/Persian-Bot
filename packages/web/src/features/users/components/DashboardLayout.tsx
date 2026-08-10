@@ -287,20 +287,22 @@ const SidebarNav = memo(function SidebarNav({
             Dashboard
           </p>
         )}
-        <IconButton
-          variant="text"
-          size="sm"
-          icon={
-            collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )
-          }
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          onClick={onToggleCollapsed}
-        />
+        {onToggleCollapsed && (
+          <IconButton
+            variant="text"
+            size="sm"
+            icon={
+              collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )
+            }
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={onToggleCollapsed}
+          />
+        )}
       </div>
     </div>
   )
