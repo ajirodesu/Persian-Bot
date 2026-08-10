@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import {
@@ -129,7 +129,7 @@ interface FileTreeProps {
   toggleFolder: (path: string) => void
 }
 
-function TreeFolderRow(props: FileTreeProps) {
+const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
   const {
     folder,
     depth,
@@ -238,9 +238,9 @@ function TreeFolderRow(props: FileTreeProps) {
       )}
     </div>
   )
-}
+})
 
-function TreeFileRow({
+const TreeFileRow = memo(function TreeFileRow({
   entry,
   depth,
   onOpenFile,
@@ -272,7 +272,7 @@ function TreeFileRow({
       </span>
     </button>
   )
-}
+})
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -316,29 +316,52 @@ export default function AdminFilesPage() {
 
   const openEntry = files.openFileEntry
   const configured = files.meta?.configured ?? true
+  const isExpanded = files.isExpanded
+  const toggleFolder = files.toggleFolder
+  const isDirty = files.isDirty
+  const saveFile = files.saveFile
 
-  const notifyMutation = (label: string, result: { synced: boolean; commitSha?: string }) => {
-    if (result.commitSha) {
-      success(`${label} — commit ${result.commitSha.slice(0, 7)}`)
-    } else {
-      success(label)
-    }
-  }
+  const notifyMutation = useCallback(
+    (label: string, result: { synced: boolean; commitSha?: string }) => {
+      if (result.commitSha) {
+        success(`${label} — commit ${result.commitSha.slice(0, 7)}`)
+      } else {
+        success(label)
+      }
+    },
+    [success],
+  )
 
-  const handleOpenFile = async (entry: RepoEntryDto) => {
-    const ok = await files.openFile(entry)
+  // files.openFile identity changes when the dirty state flips, so hold the
+  // latest reference in a ref to keep handleOpenFile stable for the memoized
+  // tree rows (otherwise every keystroke re-renders the whole tree).
+  const openFileRef = useRef(files.openFile)
+  useEffect(() => {
+    openFileRef.current = files.openFile
+  }, [files.openFile])
+
+  const handleOpenFile = useCallback(async (entry: RepoEntryDto) => {
+    const ok = await openFileRef.current(entry)
     if (!ok) {
       setDiscardRequest({ kind: 'switch', entry })
       return
     }
     setSelectedFolder(parentOf(entry.path))
-  }
+  }, [])
 
-  const handleSave = async () => {
-    if (!files.isDirty || saving) return
+  const handleSelectFolder = useCallback(
+    (path: string) => {
+      setSelectedFolder(path)
+      if (isExpanded(path)) toggleFolder(path)
+    },
+    [isExpanded, toggleFolder],
+  )
+
+  const handleSave = useCallback(async () => {
+    if (!isDirty || saving) return
     setSaving(true)
     try {
-      const result = await files.saveFile(commitMessage.trim())
+      const result = await saveFile(commitMessage.trim())
       notifyMutation('Saved', result)
       setCommitMessage('')
     } catch (err) {
@@ -346,7 +369,7 @@ export default function AdminFilesPage() {
     } finally {
       setSaving(false)
     }
-  }
+  }, [isDirty, saveFile, saving, commitMessage, notifyMutation, error])
 
   const handleCreate = async (name: string, message: string) => {
     if (!createDialog) return
@@ -570,10 +593,7 @@ export default function AdminFilesPage() {
                     folder={entry.path}
                     depth={0}
                     selectedFolder={selectedFolder}
-                    onSelectFolder={(path) => {
-                      setSelectedFolder(path)
-                      if (!files.isExpanded(path)) files.toggleFolder(path)
-                    }}
+                    onSelectFolder={handleSelectFolder}
                     onOpenFile={handleOpenFile}
                     children={files.children}
                     expanded={files.expanded}

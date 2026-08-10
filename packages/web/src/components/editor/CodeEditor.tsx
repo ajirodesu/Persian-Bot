@@ -17,7 +17,7 @@
  *   • Token palette (.tok-*) scoped under .code-editor, matching the chat room
  */
 
-import { useCallback, useMemo, useRef } from 'react'
+import { memo, useCallback, useMemo, useRef } from 'react'
 import { highlightToHtml } from '@/lib/syntax-highlight.lib'
 import { cn } from '@/utils/cn.util'
 
@@ -47,7 +47,7 @@ const surfaceClasses =
 const LINE_HEIGHT = 24
 const V_PADDING = 32
 
-export default function CodeEditor({
+const CodeEditor = memo(function CodeEditor({
   value,
   onChange,
   language,
@@ -129,7 +129,10 @@ export default function CodeEditor({
 
   // The trailing "\n" keeps the highlight layer one line tall when the
   // textarea's final line is empty — otherwise they drift out of sync.
-  const highlighted = highlightToHtml(value, language ?? null) + '\n'
+  const highlighted = useMemo(
+    () => highlightToHtml(value, language ?? null) + '\n',
+    [value, language],
+  )
 
   return (
     <div
@@ -214,4 +217,6 @@ export default function CodeEditor({
       `}</style>
     </div>
   )
-}
+})
+
+export default CodeEditor
