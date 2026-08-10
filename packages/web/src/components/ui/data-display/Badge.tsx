@@ -263,7 +263,7 @@ const Badge = forwardRefWithAs<'span', BadgeOwnProps>((props, ref) => {
       )}
 
       {/* Content */}
-      {children && <span className="truncate">{children}</span>}
+      {children && <span className="min-w-0 truncate">{children}</span>}
 
       {/* Right icon */}
       {!dot && rightIcon && !dismissible && (

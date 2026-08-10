@@ -52,6 +52,15 @@ interface EnvConfig {
   readonly BREVO_SENDER_EMAIL?: string | undefined;
   readonly BREVO_API_KEY?: string | undefined;
 
+  // GitHub — optional; powers the Admin dashboard's File Manager (a GitHub-native
+  // repository browser/editor). When GITHUB_TOKEN is absent the file manager is
+  // disabled and the panel shows a "GitHub not configured" setup hint.
+  readonly GITHUB_TOKEN?: string | undefined;
+  readonly GITHUB_REPO_OWNER?: string | undefined;
+  readonly GITHUB_REPO_NAME?: string | undefined;
+  // Sub-path inside the repo where packages/cat-bot source lives (defaults to packages/cat-bot).
+  readonly GITHUB_REPO_BASE_PATH?: string | undefined;
+
   // Security
   readonly ENCRYPTION_KEY: string;
   // Derived boolean helpers
@@ -222,6 +231,12 @@ export const env: EnvConfig = {
   // Brevo transactional email — read at startup; absent vars produce undefined without throwing
   BREVO_SENDER_EMAIL: getOptionalEnv('BREVO_SENDER_EMAIL'),
   BREVO_API_KEY: getOptionalEnv('BREVO_API_KEY'),
+
+  // GitHub — read at startup; absent vars disable the Admin File Manager
+  GITHUB_TOKEN: getOptionalEnv('GITHUB_TOKEN'),
+  GITHUB_REPO_OWNER: getOptionalEnv('GITHUB_REPO_OWNER'),
+  GITHUB_REPO_NAME: getOptionalEnv('GITHUB_REPO_NAME'),
+  GITHUB_REPO_BASE_PATH: getOptionalEnv('GITHUB_REPO_BASE_PATH'),
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),

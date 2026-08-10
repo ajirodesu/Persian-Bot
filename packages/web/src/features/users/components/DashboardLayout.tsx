@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
@@ -11,6 +11,8 @@ import {
   MessageSquare,
   Settings as SettingsIcon,
   Plus,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import ScrollToTop from '@/components/ScrollToTop'
@@ -48,6 +50,12 @@ const NAV_ITEMS = [
   { path: ROUTES.DASHBOARD.CHAT_ROOM, label: 'Chat Room', icon: MessageSquare },
   { path: ROUTES.DASHBOARD.SETTINGS, label: 'Settings', icon: SettingsIcon },
 ] as const
+
+/** Width of the desktop sidebar when collapsed to an icon-only rail. */
+const COLLAPSED_SIDEBAR_W = 'w-[4.75rem]' as const
+
+/** localStorage key remembering the desktop sidebar collapse state. */
+const COLLAPSED_STORAGE_KEY = 'dashboard-sidebar:collapsed:v1'
 
 /**
  * Routes that only claim the sidebar (and their content header label) while
@@ -96,12 +104,17 @@ const SidebarNav = memo(function SidebarNav({
   activePath,
   onNavClick,
   openBot,
+  collapsed,
+  onToggleCollapsed,
 }: {
   activePath: string
   onNavClick?: () => void
   /** The bot currently open under /dashboard/bot — null/undefined when no
    *  bot is open. Drives the extra "own page" nav entry below. */
   openBot?: { id: string; nickname: string; platform: string } | null
+  /** Desktop only: when true the nav collapses to an icon-only rail. */
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
 }) {
   const isBotRoute =
     activePath === ROUTES.DASHBOARD.BOT || activePath.startsWith(`${ROUTES.DASHBOARD.BOT}/`)
@@ -112,27 +125,34 @@ const SidebarNav = memo(function SidebarNav({
       {/* Sidebar header — aligns with content header */}
       <div
         className={cn(
-          'flex items-center border-b border-outline-variant/70 shrink-0',
+          'flex items-center border-b border-outline-variant/70 shrink-0 transition-colors duration-normal',
           H_HEIGHT,
-          H_PX,
+          collapsed ? 'justify-center px-0' : H_PX,
         )}
       >
         <Link
           to={ROUTES.DASHBOARD.ROOT}
-          onClick={onNavClick}
+          onClick={() => {
+            onNavClick?.()
+            if (collapsed) onToggleCollapsed?.()
+          }}
+          title={collapsed ? 'Cat-Bot' : undefined}
           className={cn(
             'flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
             H_BRAND_TEXT,
           )}
         >
           <Logo className={H_LOGO_ICON} />
-          Cat-Bot
+          {!collapsed && 'Cat-Bot'}
         </Link>
       </div>
 
       {/* Primary nav */}
       <nav
-        className="flex-1 px-2.5 py-3 flex flex-col gap-0.5 overflow-y-auto"
+        className={cn(
+          'flex-1 flex flex-col gap-0.5 overflow-y-auto',
+          collapsed ? 'items-center px-0 py-3' : 'px-2.5 py-3',
+        )}
         aria-label="Dashboard navigation"
       >
         {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
@@ -145,18 +165,36 @@ const SidebarNav = memo(function SidebarNav({
             <Link
               key={path}
               to={path}
-              onClick={onNavClick}
+              onClick={(e) => {
+                if (isActive) {
+                  // Desktop: tapping the current page collapses the sidebar
+                  // to an icon rail. Mobile drawer: close instead.
+                  if (onToggleCollapsed) {
+                    e.preventDefault()
+                    onToggleCollapsed()
+                  } else {
+                    onNavClick?.()
+                  }
+                  return
+                }
+                // Desktop: tapping another icon switches pages and keeps the
+                // rail collapsed (VSCode/YouTube behaviour). Mobile: closes
+                // the drawer.
+                onNavClick?.()
+              }}
               aria-current={isActive ? 'page' : undefined}
+              title={collapsed ? label : undefined}
               className={cn(
                 H_SIDEBAR_NAV,
                 'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
+                collapsed && 'justify-center gap-0 px-0',
                 isActive
                   ? 'bg-primary/10 text-primary'
                   : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
               )}
             >
               <Icon className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
-              {label}
+              {!collapsed && label}
             </Link>
           )
 
@@ -174,18 +212,31 @@ const SidebarNav = memo(function SidebarNav({
               {navLink}
               <Link
                 to={`${ROUTES.DASHBOARD.BOT}?id=${openBot.id}`}
-                onClick={onNavClick}
+                onClick={(e) => {
+                  if (isBotRoute) {
+                    if (onToggleCollapsed) {
+                      e.preventDefault()
+                      onToggleCollapsed()
+                    } else {
+                      onNavClick?.()
+                    }
+                    return
+                  }
+                  onNavClick?.()
+                }}
                 aria-current={isBotRoute ? 'page' : undefined}
+                title={collapsed ? openBot.nickname : undefined}
                 className={cn(
                   H_SIDEBAR_NAV,
                   'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
+                  collapsed && 'justify-center gap-0 px-0',
                   isBotRoute
                     ? 'bg-primary/10 text-primary'
                     : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
                 )}
               >
                 <PlatformIcon className="h-3.5 w-3.5 3xl:h-4 3xl:w-4 shrink-0" />
-                <span className="truncate">{openBot.nickname}</span>
+                {!collapsed && <span className="truncate">{openBot.nickname}</span>}
               </Link>
             </div>
           )
@@ -197,19 +248,60 @@ const SidebarNav = memo(function SidebarNav({
         {isCreateNewBotRoute && (
           <Link
             to={ROUTES.DASHBOARD.CREATE_NEW_BOT}
-            onClick={onNavClick}
+            onClick={(e) => {
+              if (isCreateNewBotRoute) {
+                if (onToggleCollapsed) {
+                  e.preventDefault()
+                  onToggleCollapsed()
+                } else {
+                  onNavClick?.()
+                }
+                return
+              }
+              onNavClick?.()
+            }}
             aria-current="page"
+            title={collapsed ? 'Create New Bot' : undefined}
             className={cn(
               H_SIDEBAR_NAV,
               'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
+              collapsed && 'justify-center gap-0 px-0',
               'bg-primary/10 text-primary',
             )}
           >
             <Plus className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
-            Create New Bot
+            {!collapsed && 'Create New Bot'}
           </Link>
         )}
       </nav>
+
+      {/* Sidebar footer — collapse toggle */}
+      <div
+        className={cn(
+          'border-t border-outline-variant/50 transition-colors duration-normal',
+          collapsed ? 'flex justify-center px-0 py-2' : 'flex items-center justify-between px-4 py-3',
+        )}
+      >
+        {!collapsed && (
+          <p className="text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
+            Dashboard
+          </p>
+        )}
+        <IconButton
+          variant="text"
+          size="sm"
+          icon={
+            collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )
+          }
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={onToggleCollapsed}
+        />
+      </div>
     </div>
   )
 })
@@ -357,6 +449,26 @@ export default function DashboardLayout() {
   const location = useLocation()
   const isDisconnectedRef = useRef(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Desktop only: collapse the sidebar to an icon rail (VSCode/YouTube style)
+  // when the user taps the currently-active nav item. Persisted across refreshes.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, next ? '1' : '0')
+      } catch {
+        // Ignore storage failures (private mode / quota).
+      }
+      return next
+    })
+  }, [])
   const [prevPath, setPrevPath] = useState(location.pathname)
   const activePath = location.pathname
   // Mobile only: false while the page is pinned to the top, so the content
@@ -495,14 +607,20 @@ export default function DashboardLayout() {
   return (
     <DashboardSidebarProvider open={mobileOpen} onOpenChange={setMobileOpen}>
       <div className="min-h-screen flex bg-surface-container-high">
-        {/* Desktop sidebar — permanent, collapses to icon-free hidden state below md */}
+        {/* Desktop sidebar — permanent, collapses to icon rail on desktop,
+            hidden entirely below md (mobile uses the off-canvas drawer) */}
         <aside
           className={cn(
-            'glass-surface hidden md:flex shrink-0 flex-col border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden',
-            H_SIDEBAR_WIDTH,
+            'glass-surface hidden md:flex shrink-0 flex-col border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden transition-[width] duration-normal',
+            collapsed ? COLLAPSED_SIDEBAR_W : H_SIDEBAR_WIDTH,
           )}
         >
-          <SidebarNav activePath={activePath} openBot={openBot} />
+          <SidebarNav
+            activePath={activePath}
+            openBot={openBot}
+            collapsed={collapsed}
+            onToggleCollapsed={toggleCollapsed}
+          />
         </aside>
 
         {/* Mobile scrim */}

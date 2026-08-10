@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -9,6 +9,9 @@ import {
   Settings,
   ChevronDown,
   X,
+  Files,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
@@ -39,8 +42,15 @@ const NAV_ITEMS = [
   { path: ROUTES.ADMIN.DASHBOARD, label: 'Overview',      icon: LayoutDashboard },
   { path: ROUTES.ADMIN.USERS,     label: 'Users',         icon: Users },
   { path: ROUTES.ADMIN.BOTS,      label: 'Bot Sessions',  icon: Bot },
+  { path: ROUTES.ADMIN.FILES,     label: 'Files',         icon: Files },
   { path: ROUTES.ADMIN.SETTINGS,  label: 'Settings',      icon: Settings },
 ] as const
+
+/** Width of the desktop sidebar when collapsed to an icon-only rail. */
+const COLLAPSED_SIDEBAR_W = 'w-[4.75rem]' as const
+
+/** localStorage key remembering the desktop sidebar collapse state. */
+const COLLAPSED_STORAGE_KEY = 'admin-sidebar:collapsed:v1'
 
 // ============================================================================
 // SidebarNav
@@ -49,36 +59,48 @@ const NAV_ITEMS = [
 function SidebarNav({
   activePath,
   onNavClick,
+  collapsed,
+  onToggleCollapsed,
 }: {
   activePath: string
   onNavClick?: () => void
+  /** Desktop only: when true the nav collapses to an icon-only rail. */
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
 }) {
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Sidebar header — aligns with content header */}
       <div
         className={cn(
-          'flex items-center border-b border-outline-variant/70 shrink-0',
+          'flex items-center border-b border-outline-variant/70 shrink-0 transition-colors duration-normal',
           H_HEIGHT,
-          H_PX,
+          collapsed ? 'justify-center px-0' : H_PX,
         )}
       >
         <Link
           to={ROUTES.ADMIN.DASHBOARD}
-          onClick={onNavClick}
+          onClick={() => {
+            onNavClick?.()
+            if (collapsed) onToggleCollapsed?.()
+          }}
+          title={collapsed ? 'Cat-Bot Admin' : undefined}
           className={cn(
             'flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
             H_BRAND_TEXT,
           )}
         >
           <Logo className={H_LOGO_ICON} />
-          Cat-Bot Admin
+          {!collapsed && 'Cat-Bot Admin'}
         </Link>
       </div>
 
       {/* Primary nav */}
       <nav
-        className="flex-1 px-2.5 py-3 flex flex-col gap-0.5 overflow-y-auto"
+        className={cn(
+          'flex-1 flex flex-col gap-0.5 overflow-y-auto',
+          collapsed ? 'items-center px-0 py-3' : 'px-2.5 py-3',
+        )}
         aria-label="Admin navigation"
       >
         {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
@@ -87,28 +109,67 @@ function SidebarNav({
             <Link
               key={path}
               to={path}
-              onClick={onNavClick}
+              onClick={(e) => {
+                if (isActive) {
+                  // Desktop: tapping the current page collapses the sidebar
+                  // to an icon rail. Mobile drawer: close instead.
+                  if (onToggleCollapsed) {
+                    e.preventDefault()
+                    onToggleCollapsed()
+                  } else {
+                    onNavClick?.()
+                  }
+                  return
+                }
+                // Desktop: tapping another icon switches pages and keeps the
+                // rail collapsed (VSCode/YouTube behaviour). Mobile: closes
+                // the drawer.
+                onNavClick?.()
+              }}
               aria-current={isActive ? 'page' : undefined}
+              title={collapsed ? label : undefined}
               className={cn(
                 H_SIDEBAR_NAV,
                 'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
+                collapsed && 'justify-center gap-0 px-0',
                 isActive
                   ? 'bg-primary/10 text-primary'
                   : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
               )}
             >
               <Icon className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
-              {label}
+              {!collapsed && label}
             </Link>
           )
         })}
       </nav>
 
-      {/* Sidebar footer — version hint */}
-      <div className="px-4 py-3 border-t border-outline-variant/50">
-        <p className="text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
-          Admin Panel
-        </p>
+      {/* Sidebar footer — collapse toggle + version hint */}
+      <div
+        className={cn(
+          'border-t border-outline-variant/50 transition-colors duration-normal',
+          collapsed ? 'flex justify-center px-0 py-2' : 'flex items-center justify-between px-4 py-3',
+        )}
+      >
+        {!collapsed && (
+          <p className="text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
+            Admin Panel
+          </p>
+        )}
+        <IconButton
+          variant="text"
+          size="sm"
+          icon={
+            collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )
+          }
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={onToggleCollapsed}
+        />
       </div>
     </div>
   )
@@ -254,6 +315,26 @@ export default function AdminSidebarLayout() {
   const navigate = useNavigate()
   const { user, logout } = useAdminAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Desktop only: collapse the sidebar to an icon rail (VSCode/YouTube style)
+  // when the user taps the currently-active nav item. Persisted across refreshes.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, next ? '1' : '0')
+      } catch {
+        // Ignore storage failures (private mode / quota).
+      }
+      return next
+    })
+  }, [])
   const activePath = location.pathname
   // Mobile only: false while the page is pinned to the top, so the content
   // header renders "invisible" (just the hamburger + avatar floating over
@@ -306,11 +387,15 @@ export default function AdminSidebarLayout() {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'glass-surface hidden md:flex shrink-0 flex-col border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden',
-          H_SIDEBAR_WIDTH,
+          'glass-surface hidden md:flex shrink-0 flex-col border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden transition-[width] duration-normal',
+          collapsed ? COLLAPSED_SIDEBAR_W : H_SIDEBAR_WIDTH,
         )}
       >
-        <SidebarNav activePath={activePath} />
+        <SidebarNav
+          activePath={activePath}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+        />
       </aside>
 
       {/* Mobile scrim */}

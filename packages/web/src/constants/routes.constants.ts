@@ -35,6 +35,7 @@ export const ROUTES = {
     RESET_PASSWORD: '/admin/reset-password',
     USERS: '/admin/dashboard/users',
     BOTS: '/admin/dashboard/bots',
+    FILES: '/admin/dashboard/files',
     SETTINGS: '/admin/dashboard/settings',
   },
 } as const
@@ -66,5 +67,6 @@ export const ROUTE_SEGMENTS = {
   ADMIN_DASHBOARD: 'dashboard',
   ADMIN_USERS: 'users',
   ADMIN_BOTS: 'bots',
+  ADMIN_FILES: 'files',
   ADMIN_SETTINGS: 'settings',
 } as const
