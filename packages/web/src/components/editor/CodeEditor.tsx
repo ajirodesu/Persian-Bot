@@ -47,6 +47,9 @@ const surfaceClasses =
 const LINE_HEIGHT = 24
 const V_PADDING = 32
 
+/** Horizontal gap between the rightmost digit and the code (GitHub-like). */
+const GUTTER_PAD_RIGHT = 16
+
 const CodeEditor = memo(function CodeEditor({
   value,
   onChange,
@@ -73,11 +76,14 @@ const CodeEditor = memo(function CodeEditor({
     [lineCount],
   )
   const gutterWidth = useMemo(
-    () => Math.max(48, String(lineCount).length * 12 + 16),
+    () => Math.max(48, String(lineCount).length * 12 + GUTTER_PAD_RIGHT),
     [lineCount],
   )
 
-  // Keep the highlight layer and the gutter scrolled in lockstep with the caret.
+  // Keep the highlight layer and the gutter in lockstep with the caret.
+  // Vertically both follow the textarea's scrollTop. Horizontally the gutter
+  // is translated by -scrollLeft (GitHub-style), so the line numbers scroll
+  // away with the code instead of staying pinned to the left edge.
   const handleScroll = useCallback(() => {
     const ta = textareaRef.current
     const pre = preRef.current
@@ -86,7 +92,10 @@ const CodeEditor = memo(function CodeEditor({
       pre.scrollTop = ta.scrollTop
       pre.scrollLeft = ta.scrollLeft
     }
-    if (ta && gutter) gutter.scrollTop = ta.scrollTop
+    if (ta && gutter) {
+      gutter.scrollTop = ta.scrollTop
+      gutter.style.transform = `translate3d(${-ta.scrollLeft}px, 0, 0)`
+    }
   }, [])
 
   const applyInsertion = useCallback(
@@ -146,9 +155,10 @@ const CodeEditor = memo(function CodeEditor({
       style={fillHeight ? undefined : { minHeight, height: contentHeight }}
     >
       {/* Line-number gutter — shares font metrics so numbers stay aligned.
-          Opaque background pins it over the code: when the textarea scrolls
-          horizontally the gutter stays fixed at the left while the code
-          slides underneath it. */}
+          Like GitHub, it scrolls horizontally together with the code (translated
+          by -scrollLeft in handleScroll) and stays locked to the left of each
+          line as both slide out of view. Opaque background keeps the numbers
+          readable while the code scrolls beneath. */}
       <div
         ref={gutterRef}
         aria-hidden="true"
@@ -158,7 +168,7 @@ const CodeEditor = memo(function CodeEditor({
             'border-r border-outline-variant/50 bg-surface-container-low text-right ' +
             'text-on-surface-variant/55 [font-variant-numeric:tabular-nums] whitespace-pre',
         )}
-        style={{ width: gutterWidth, paddingRight: 10, paddingLeft: 0 }}
+        style={{ width: gutterWidth, paddingRight: GUTTER_PAD_RIGHT, paddingLeft: 0 }}
       >
         <span style={{ height: contentHeight }} className="block">
           {lineNumbers}
