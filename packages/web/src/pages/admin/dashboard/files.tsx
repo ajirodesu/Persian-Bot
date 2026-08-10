@@ -429,7 +429,7 @@ export default function AdminFilesPage() {
   const rootEntries = files.rootEntries
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3 -mx-4 md:-mx-6">
+    <div className="flex w-full min-w-0 flex-col gap-3 md:-mx-6">
       <Helmet>
         <title>Files · Admin</title>
       </Helmet>

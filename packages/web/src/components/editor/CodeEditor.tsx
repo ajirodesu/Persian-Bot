@@ -145,14 +145,17 @@ const CodeEditor = memo(function CodeEditor({
       )}
       style={fillHeight ? undefined : { minHeight, height: contentHeight }}
     >
-      {/* Line-number gutter — shares font metrics so numbers stay aligned */}
+      {/* Line-number gutter — shares font metrics so numbers stay aligned.
+          Opaque background pins it over the code: when the textarea scrolls
+          horizontally the gutter stays fixed at the left while the code
+          slides underneath it. */}
       <div
         ref={gutterRef}
         aria-hidden="true"
         className={cn(
           surfaceClasses,
           'absolute left-0 top-0 bottom-0 z-[1] overflow-hidden select-none pointer-events-none ' +
-            'border-r border-outline-variant/50 bg-surface-container/60 text-right ' +
+            'border-r border-outline-variant/50 bg-surface-container-low text-right ' +
             'text-on-surface-variant/55 [font-variant-numeric:tabular-nums] whitespace-pre',
         )}
         style={{ width: gutterWidth, paddingRight: 10, paddingLeft: 0 }}
