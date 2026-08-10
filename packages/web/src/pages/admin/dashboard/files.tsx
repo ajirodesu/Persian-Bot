@@ -25,10 +25,8 @@ import {
   FolderGit2,
   RefreshCw,
   Copy,
-  Check,
   Maximize,
   Minimize,
-  Menu,
   Search,
   MoreVertical,
 } from 'lucide-react'
@@ -580,9 +578,8 @@ export default function AdminFilesPage() {
     }
   }, [selectedFolder])
 
-  // Copy-to-clipboard feedback for the code button + tree rows.
+  // Copy-to-clipboard feedback for tree rows + the folder path actions.
   const { copy: copyPath } = useCopyToClipboard()
-  const { copied: codeCopied, copy: copyCode } = useCopyToClipboard()
 
   // Fullscreen editor overlay.
   const [fullscreen, setFullscreen] = useState(false)
@@ -767,7 +764,7 @@ export default function AdminFilesPage() {
               variant="text"
               size="sm"
               className="shrink-0 lg:hidden"
-              icon={<Menu className="h-4 w-4" />}
+              icon={<Files className="h-4 w-4" />}
               aria-label="Open files"
               title="Open files"
               onClick={() => setMobileFilesOpen(true)}
@@ -1162,15 +1159,9 @@ export default function AdminFilesPage() {
         open={fullscreen}
         entry={openEntry}
         content={files.content}
-        isDirty={files.isDirty}
-        saving={saving}
-        commitMessage={commitMessage}
-        onCommitMessageChange={setCommitMessage}
         onChange={files.setContent}
         onSave={handleSave}
         onClose={() => setFullscreen(false)}
-        copied={codeCopied}
-        onCopy={() => void copyCode(files.content)}
       />
     </div>
   )
@@ -1182,28 +1173,16 @@ function FullscreenEditor({
   open,
   entry,
   content,
-  isDirty,
-  saving,
-  commitMessage,
-  onCommitMessageChange,
   onChange,
   onSave,
   onClose,
-  copied,
-  onCopy,
 }: {
   open: boolean
   entry: RepoEntryDto | null
   content: string
-  isDirty: boolean
-  saving: boolean
-  commitMessage: string
-  onCommitMessageChange: (value: string) => void
   onChange: (value: string) => void
   onSave: () => void
   onClose: () => void
-  copied: boolean
-  onCopy: () => void
 }) {
   // Lock page scroll + handle Escape while the overlay is open.
   useEffect(() => {
@@ -1227,90 +1206,29 @@ function FullscreenEditor({
       role="dialog"
       aria-modal="true"
       aria-label={`Editing ${entry.path}`}
-      className="fixed inset-0 z-overlay flex flex-col bg-surface-container-high [height:100dvh]"
+      className="fixed inset-0 z-overlay overflow-hidden bg-surface-container-lowest [height:100dvh]"
     >
-      {/* Overlay header */}
-      <div className="shrink-0 border-b border-outline-variant/70 bg-surface-container/80 px-4 py-3 [padding-top:max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[var(--surface-blur-sm)]">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className="min-w-0 flex-1 truncate font-mono text-label-lg text-on-surface"
-            title={entry.path}
-          >
-            {entry.path}
-          </span>
-          {isDirty && (
-            <Badge
-              color="warning"
-              variant="tonal"
-              size="sm"
-              leftIcon={<CircleDot className="h-3 w-3" />}
-            >
-              Unsaved
-            </Badge>
-          )}
-          <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            <IconButton
-              variant="outline"
-              size="sm"
-              icon={copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-              aria-label="Copy code"
-              title="Copy code"
-              onClick={onCopy}
-            />
-            <IconButton
-              variant="primary"
-              size="sm"
-              isLoading={saving}
-              icon={<Save className="h-4 w-4" />}
-              aria-label="Commit"
-              title="Commit"
-              disabled={!isDirty}
-              onClick={onSave}
-            />
-            <IconButton
-              variant="text"
-              size="sm"
-              icon={<Minimize className="h-4 w-4" />}
-              aria-label="Exit fullscreen"
-              title="Exit fullscreen (Esc)"
-              onClick={onClose}
-            />
-          </div>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge color={languageColor(entry.language ?? null)} variant="tonal" size="sm">
-            {entry.language ?? 'text'}
-          </Badge>
-          {entry.size !== null && (
-            <Badge color="secondary" variant="tonal" size="sm">
-              {formatSize(entry.size)}
-            </Badge>
-          )}
-          {entry.lastCommit && (
-            <span className="text-body-xs text-on-surface-variant truncate">
-              {shortMessage(entry.lastCommit.message)} · {relativeTime(entry.lastCommit.date)}
-            </span>
-          )}
-        </div>
-        <Input
-          value={commitMessage}
-          onChange={(e) => onCommitMessageChange(e.target.value)}
-          placeholder={defaultMessage('update', entry.path)}
-          aria-label="Commit message"
-          className="mt-2 max-w-2xl"
-        />
-      </div>
-
-      {/* Editor body */}
-      <div className="min-h-0 flex-1 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))]">
-        <CodeEditor
-          value={content}
-          onChange={onChange}
-          language={entry.language}
-          onSave={onSave}
-          placeholder={`// Editing ${entry.path}`}
-          fillHeight
-          autoFocus
+      {/* Edge-to-edge editor — no chrome, padding, border, or surrounding UI. */}
+      <CodeEditor
+        value={content}
+        onChange={onChange}
+        language={entry.language}
+        onSave={onSave}
+        placeholder={`// Editing ${entry.path}`}
+        fillHeight
+        autoFocus
+        borderless
+      />
+      {/* Floating exit control — the only affordance; keeps mobile usable
+          (no Escape key) without taking any space away from the editor. */}
+      <div className="absolute right-3 z-[2] [top:max(0.75rem,env(safe-area-inset-top))]">
+        <IconButton
+          variant="text"
+          size="sm"
+          icon={<Minimize className="h-4 w-4" />}
+          aria-label="Exit fullscreen"
+          title="Exit fullscreen (Esc)"
+          onClick={onClose}
         />
       </div>
     </div>,

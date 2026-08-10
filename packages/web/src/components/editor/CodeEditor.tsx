@@ -43,8 +43,8 @@ export interface CodeEditorProps {
   autoFocus?: boolean
   /** Reports the caret's 1-based line/column whenever it moves. */
   onCursor?: (pos: CodeEditorCursor) => void
-  /** Renders a lightweight minimap on the right edge (Replit-style). */
-  showMinimap?: boolean
+  /** Removes the container border/focus ring for edge-to-edge full-screen use. */
+  borderless?: boolean
 }
 
 /** Shared metrics — MUST be identical on both layers for alignment. */
@@ -59,9 +59,6 @@ const V_PADDING = 32
 /** Horizontal gap between the rightmost digit and the code (GitHub-like). */
 const GUTTER_PAD_RIGHT = 16
 
-/** Width reserved for the right-edge minimap when enabled. */
-const MINIMAP_WIDTH = 44
-
 const CodeEditor = memo(function CodeEditor({
   value,
   onChange,
@@ -74,7 +71,7 @@ const CodeEditor = memo(function CodeEditor({
   fillHeight = false,
   autoFocus = false,
   onCursor,
-  showMinimap = true,
+  borderless = false,
 }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const preRef = useRef<HTMLPreElement>(null)
@@ -83,7 +80,6 @@ const CodeEditor = memo(function CodeEditor({
   const [scrollTop, setScrollTop] = useState(0)
   const [caretLine, setCaretLine] = useState(1)
   const [caretColumn, setCaretColumn] = useState(1)
-  const [showMinimapState, setShowMinimapState] = useState(true)
 
   const lineCount = useMemo(() => value.split('\n').length, [value])
   const contentHeight = useMemo(
@@ -163,12 +159,6 @@ const CodeEditor = memo(function CodeEditor({
         onSave?.()
         return
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        // Ctrl/Cmd+K toggles the minimap (Replit-adjacent convenience).
-        e.preventDefault()
-        setShowMinimapState((p) => !p)
-        return
-      }
       if (e.key === 'Tab' && !readOnly) {
         e.preventDefault()
         const ta = e.currentTarget
@@ -189,26 +179,15 @@ const CodeEditor = memo(function CodeEditor({
     [value, language],
   )
 
-  // Minimap: one strip per line whose width mirrors the line's character
-  // count (capped) so the map roughly reflects the file's shape. Follows the
-  // textarea scroll via the shared scrollTop state.
-  const minimapLines = useMemo(() => {
-    const lines = value.split('\n')
-    return lines.map((line) => ({
-      width: Math.min(1, line.replace(/\s/g, '').length / 60),
-      hasContent: line.trim().length > 0,
-    }))
-  }, [value])
-
   const activeLineIndicatorTop =
     V_PADDING / 2 + (caretLine - 1) * LINE_HEIGHT - scrollTop
 
   return (
     <div
       className={cn(
-        'code-editor relative w-full overflow-hidden ' +
-          'border border-outline-variant bg-surface-container-lowest ' +
-          'focus-within:border-primary focus-within:shadow-[var(--shadow-focus-ring,none)]',
+        'code-editor relative w-full overflow-hidden bg-surface-container-lowest',
+        !borderless &&
+          'border border-outline-variant focus-within:border-primary focus-within:shadow-[var(--shadow-focus-ring,none)]',
         fillHeight && 'h-full',
         className,
       )}
@@ -252,7 +231,6 @@ const CodeEditor = memo(function CodeEditor({
         )}
         style={{
           paddingLeft: gutterWidth,
-          paddingRight: showMinimap && showMinimapState ? MINIMAP_WIDTH : 0,
         }}
         dangerouslySetInnerHTML={{ __html: highlighted }}
       />
@@ -292,40 +270,8 @@ const CodeEditor = memo(function CodeEditor({
         )}
         style={{
           paddingLeft: gutterWidth,
-          paddingRight: showMinimap && showMinimapState ? MINIMAP_WIDTH : 0,
         }}
       />
-
-      {/* Minimap — Replit-style right-edge file overview */}
-      {showMinimap && showMinimapState && (
-        <div
-          aria-hidden="true"
-          className="absolute inset-y-0 right-0 z-[1] w-11 overflow-hidden border-l border-outline-variant/20 bg-surface-container-highest/70 pointer-events-none select-none"
-        >
-          <div className="relative h-full w-full">
-            {minimapLines.map((line, ln) => (
-              <div
-                key={ln}
-                className="absolute left-0.5 right-0.5"
-                style={{ top: ln * 3 - scrollTop * (3 / LINE_HEIGHT), height: 2 }}
-              >
-                <div
-                  className={cn(
-                    'h-full rounded-[1px]',
-                    line.hasContent ? 'bg-on-surface/25' : 'bg-on-surface/10',
-                  )}
-                  style={{ width: `${line.width * 100}%` }}
-                />
-              </div>
-            ))}
-            {/* Viewport indicator */}
-            <div
-              className="absolute inset-x-0 border-y border-primary/40 bg-primary/10"
-              style={{ top: scrollTop * (3 / LINE_HEIGHT), height: 72 }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Scoped token palette — matches the chat room's VS Code "Dark+" colors */}
       <style>{`
