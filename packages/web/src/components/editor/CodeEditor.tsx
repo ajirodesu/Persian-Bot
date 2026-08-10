@@ -206,7 +206,7 @@ const CodeEditor = memo(function CodeEditor({
   return (
     <div
       className={cn(
-        'code-editor relative w-full overflow-hidden rounded-[var(--radius-card)] ' +
+        'code-editor relative w-full overflow-hidden ' +
           'border border-outline-variant bg-surface-container-lowest ' +
           'focus-within:border-primary focus-within:shadow-[var(--shadow-focus-ring,none)]',
         fillHeight && 'h-full',

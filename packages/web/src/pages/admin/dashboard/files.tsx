@@ -23,7 +23,6 @@ import {
   CircleDot,
   Files,
   FolderGit2,
-  GitBranch,
   RefreshCw,
   Copy,
   Check,
@@ -31,12 +30,10 @@ import {
   Minimize,
   Menu,
   Search,
-  GitCommitHorizontal,
   MoreVertical,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
-import type { CodeEditorCursor } from '@/components/editor/CodeEditor'
 import IconButton from '@/components/ui/buttons/IconButton'
 import Badge from '@/components/ui/data-display/Badge'
 import EmptyState from '@/components/ui/data-display/EmptyState'
@@ -613,7 +610,6 @@ export default function AdminFilesPage() {
   const [createDialog, setCreateDialog] = useState<'file' | 'folder' | null>(null)
   const [renameTarget, setRenameTarget] = useState<RepoEntryDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RepoEntryDto | null>(null)
-  const [cursor, setCursor] = useState<CodeEditorCursor | null>(null)
 
   const openEntry = files.openFileEntry
   const configured = files.meta?.configured ?? true
@@ -816,7 +812,7 @@ export default function AdminFilesPage() {
           {/* ── Files panel (drawer on mobile, static column on desktop) ────── */}
           <div
             className={cn(
-              'flex min-w-0 shrink-0 flex-col bg-surface-container/30',
+              'flex min-w-0 shrink-0 flex-col bg-surface-container',
               // Mobile drawer behaviour
               'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-outline-variant/70 shadow-elevation-3',
               'transition-transform duration-200 ease-out lg:transition-none',
@@ -1010,7 +1006,7 @@ export default function AdminFilesPage() {
                 </span>
               )}
 
-              <span className="hidden min-w-0 flex-1 truncate text-body-xs text-on-surface-variant sm:block">
+              <span className="hidden min-w-0 flex-1 truncate text-body-xs text-on-surface-variant lg:block">
                 {openEntry?.path ?? ''}
               </span>
 
@@ -1079,21 +1075,6 @@ export default function AdminFilesPage() {
                       placeholder={defaultMessage('update', openEntry.path)}
                       aria-label="Commit message"
                       className="max-w-xl"
-                      rightIcon={
-                        <button
-                          type="button"
-                          aria-label="Copy code"
-                          title="Copy code"
-                          className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface"
-                          onClick={() => void copyCode(files.content)}
-                        >
-                          {codeCopied ? (
-                            <Check className="h-3.5 w-3.5 text-success" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      }
                     />
                     <IconButton
                       variant="primary"
@@ -1120,7 +1101,7 @@ export default function AdminFilesPage() {
 
                   <div className="min-h-0 flex-1">
                     {files.fileLoading ? (
-                      <Skeleton variant="rounded" className="h-full" />
+                      <Skeleton variant="rectangular" className="h-full" />
                     ) : (
                       <CodeEditor
                         value={files.content}
@@ -1129,7 +1110,6 @@ export default function AdminFilesPage() {
                         onSave={handleSave}
                         placeholder={`// Editing ${openEntry.path}`}
                         fillHeight
-                        onCursor={setCursor}
                       />
                     )}
                   </div>
@@ -1139,37 +1119,6 @@ export default function AdminFilesPage() {
           </div>
         </div>
 
-        {/* ── Status bar ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-outline-variant/70 bg-surface-container/70 px-3 py-1.5 text-body-xs text-on-surface-variant">
-          {files.meta && (
-            <span className="flex min-w-0 items-center gap-1">
-              <GitBranch className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{files.meta.branch}</span>
-            </span>
-          )}
-          <span className="flex min-w-0 items-center gap-1">
-            <GitCommitHorizontal className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">
-              {openEntry ? openEntry.path : selectedFolder ? selectedFolder : '/'}
-            </span>
-          </span>
-          {openEntry && <span>{files.content.split('\n').length} lines</span>}
-          {openEntry && openEntry.size !== null && (
-            <span className="hidden sm:inline">{formatSize(openEntry.size)}</span>
-          )}
-          {openEntry && cursor && (
-            <span className="font-mono">Ln {cursor.line}, Col {cursor.column}</span>
-          )}
-          <span className="ml-auto flex items-center gap-1.5">
-            <span
-              className={cn('h-2 w-2 rounded-full', configured ? 'bg-success' : 'bg-warning')}
-              title={configured ? 'GitHub connected' : 'GitHub not configured'}
-            />
-            <span className={cn(configured ? 'text-on-surface-variant' : 'text-warning')}>
-              {configured ? 'Ready' : 'No GitHub token'}
-            </span>
-          </span>
-        </div>
       </div>
 
       {/* ── Create file/folder dialog ─────────────────────────────────────── */}
