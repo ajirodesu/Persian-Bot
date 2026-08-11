@@ -16,6 +16,7 @@ import type { Readable } from 'stream';
 import type { Socket } from 'socket.io';
 import { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import type {
+  TypingAction,
   SendPayload,
   ReplyMessageOptions,
   EditMessageOptions,
@@ -159,6 +160,22 @@ export class WebChatApi extends UnifiedApi {
     return map[ext] ?? 'application/octet-stream';
   }
 
+  /**
+   * Derives the "sending X" action from the attachments about to be delivered,
+   * so the web chat's notice is accurate (a video → "sending a video", a
+   * document → "sending a document"). Returns null for text-only messages,
+   * where the plain "typing…" notice stays correct.
+   */
+  private static actionFromAttachments(
+    attachments: ChatAttachment[],
+  ): TypingAction | null {
+    if (attachments.length === 0) return null;
+    if (attachments.some((a) => a.type === 'video')) return 'video';
+    if (attachments.some((a) => a.type === 'audio')) return 'audio';
+    if (attachments.some((a) => a.type === 'image')) return 'photo';
+    return 'document';
+  }
+
   /** Drains a Readable into a Buffer. */
   private static async streamToBuffer(stream: Readable): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
@@ -269,6 +286,19 @@ export class WebChatApi extends UnifiedApi {
     this.socket.emit('chatroom:bot_message', msg);
   }
 
+  /**
+   * Pushes the bot's live "sending" status to the web chat client so it can
+   * render an accurate notice ("Wataru is typing…", "Wataru is sending a
+   * video") while the bot is working. The refresh loop re-emits on an
+   * interval; the client clears the notice when the reply lands.
+   */
+  override async sendTypingIndicator(
+    threadID: string,
+    action: TypingAction = 'typing',
+  ): Promise<void> {
+    this.socket.emit('chatroom:typing', { threadID, action });
+  }
+
   override async sendMessage(
     msg: string | SendPayload,
     _threadID: string,
@@ -276,6 +306,8 @@ export class WebChatApi extends UnifiedApi {
     const text = this.resolveText(msg);
     const attachments =
       typeof msg !== 'string' ? await this.resolveAttachments(msg) : [];
+    const mediaAction = WebChatApi.actionFromAttachments(attachments);
+    if (mediaAction) await this.sendTypingIndicator(_threadID, mediaAction);
     const built = this.buildMsg(text, { attachments });
     this.storeAndEmit(built);
     return built.id;
@@ -293,6 +325,8 @@ export class WebChatApi extends UnifiedApi {
       options.style === MessageStyle.MARKDOWN ? 'markdown' : undefined;
     const buttons = this.resolveButtons(options.button);
     const attachments = await this.resolveAttachments(options);
+    const mediaAction = WebChatApi.actionFromAttachments(attachments);
+    if (mediaAction) await this.sendTypingIndicator(_threadID, mediaAction);
     const built = this.buildMsg(text, {
       ...(style !== undefined && { style }),
       ...(buttons !== undefined && { buttons }),

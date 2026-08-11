@@ -27,6 +27,18 @@ import type { UnifiedThreadInfo } from './thread.model.js';
 import type { UnifiedUserInfo } from './user.model.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
+/** What the bot is currently sending — drives the native typing indicator's
+ *  content type (Telegram ChatAction) and the web chat's "Wataru is sending a
+ *  video"-style notice. `typing` is the default for text replies/thinking. */
+export type TypingAction =
+  | 'typing'
+  | 'photo'
+  | 'video'
+  | 'audio'
+  | 'document'
+  | 'record_audio'
+  | 'find_location';
+
 export class UnifiedApi {
   platform: string = 'unknown';
 
@@ -81,8 +93,15 @@ export class UnifiedApi {
   }
 
   /** Defaults to silent no-op — not all platforms expose a native typing signal. */
-  async sendTypingIndicator(_threadID: string): Promise<void> {
-    logger.debug('[UnifiedApi] sendTypingIndicator called', { platform: this.platform, threadID: _threadID });
+  async sendTypingIndicator(
+    _threadID: string,
+    _action: TypingAction = 'typing',
+  ): Promise<void> {
+    logger.debug('[UnifiedApi] sendTypingIndicator called', {
+      platform: this.platform,
+      threadID: _threadID,
+      action: _action,
+    });
   }
 
   /**

@@ -381,9 +381,13 @@ class DiscordApi extends UnifiedApi {
    * Skipping it entirely removes that second, uncontrollable indicator and
    * relies solely on deferReply()'s native, instantly-clearing one.
    */
-  override sendTypingIndicator(_threadID: string): Promise<void> {
+  override sendTypingIndicator(
+    _threadID: string,
+    _action: import('@/engine/adapters/models/api.model.js').TypingAction = 'typing',
+  ): Promise<void> {
     logger.debug('[discord] sendTypingIndicator skipped (interaction path)', {
       threadID: _threadID,
+      action: _action,
     });
     return Promise.resolve();
   }
@@ -735,8 +739,11 @@ export function createDiscordChannelApi(
     });
     return reactToMessageLib(channel, mid, emoji, rawMessage);
   };
-  api.sendTypingIndicator = (_tid) => {
-    logger.debug('[discord] sendTypingIndicator called', { threadID: _tid });
+  api.sendTypingIndicator = (_tid, _action = 'typing') => {
+    logger.debug('[discord] sendTypingIndicator called', {
+      threadID: _tid,
+      action: _action,
+    });
     return sendTypingIndicatorLib(channel);
   };
   api.editMessage = (mid, options) => {

@@ -852,6 +852,55 @@ function GitPanel({
   const { success, error } = useSnackbar()
   const [busy, setBusy] = useState<string | null>(null)
 
+  // Mobile soft-keyboard lift. When the on-screen keyboard opens, the visual
+  // viewport shrinks below the layout viewport and — on iOS Safari, which
+  // never resizes the layout viewport for the keyboard — the commit box would
+  // end up hidden behind it. This measures exactly how much of the footer is
+  // covered (VisualViewport, never a hardcoded keyboard height) and translates
+  // the footer up by that amount. The offset is pushed straight into a CSS var
+  // from a rAF-throttled listener, so the open/close animation never triggers
+  // a React render of the Git panel. Android/Chrome with the app's
+  // interactive-widget=resizes-content meta already reflows the layout, so the
+  // value reads ~0 there and the footer never double-moves.
+  const footerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // Coarse-pointer mobile gate: `lg` is this panel's mobile breakpoint, and
+    // the pointer check keeps desktop (including pinch/ctrl-zoom, where the
+    // visual viewport also shrinks) from ever moving the layout.
+    const mq = window.matchMedia('(max-width: 1023px) and (pointer: coarse)')
+    const vv = window.visualViewport
+    let raf = 0
+
+    const update = () => {
+      raf = 0
+      const el = footerRef.current
+      if (!el) return
+      const kb =
+        mq.matches && vv
+          ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop))
+          : 0
+      el.style.setProperty('--git-kb-offset', `${kb}px`)
+    }
+
+    // The keyboard open/close sequence fires a burst of viewport events —
+    // fold them into one layout read per frame.
+    const onEvent = () => {
+      if (raf) return
+      raf = requestAnimationFrame(update)
+    }
+
+    update()
+    vv?.addEventListener('resize', onEvent)
+    vv?.addEventListener('scroll', onEvent)
+    window.addEventListener('resize', onEvent)
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      vv?.removeEventListener('resize', onEvent)
+      vv?.removeEventListener('scroll', onEvent)
+      window.removeEventListener('resize', onEvent)
+    }
+  }, [])
+
   const run = useCallback(
     async (label: string, fn: () => Promise<unknown>): Promise<boolean> => {
       setBusy(label)
@@ -1079,44 +1128,56 @@ function GitPanel({
           )}
         </div>
 
-        {/* Commit + push box */}
-        <CommitBox
-          configured={configured}
-          status={status}
-          busy={busy}
-          changesLength={changes.length}
-          canPush={canPush}
-          onCommit={handleCommit}
-          onPush={handlePush}
-          onPull={handlePull}
-        />
+        {/* Commit + push box + history. The footer lifts together above the
+            mobile keyboard via --git-kb-offset (managed by the effect above);
+            its opaque surface matches the page so nothing shows through while
+            it overlaps the changes list. */}
+        <div
+          ref={footerRef}
+          className="relative z-10 shrink-0 bg-surface-container-high transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none"
+          style={{
+            transform:
+              'translate3d(0, calc(var(--git-kb-offset, 0px) * -1), 0)',
+          }}
+        >
+          <CommitBox
+            configured={configured}
+            status={status}
+            busy={busy}
+            changesLength={changes.length}
+            canPush={canPush}
+            onCommit={handleCommit}
+            onPush={handlePush}
+            onPull={handlePull}
+          />
 
-        {/* History */}
-        <div className="shrink-0 border-t border-outline-variant/70">
-          <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
-            <History className="h-3.5 w-3.5 text-on-surface-variant" />
-            <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
-              History
-            </span>
-            <IconButton
-              variant="text"
-              size="sm"
-              icon={<RefreshCw className="h-3 w-3" />}
-              aria-label="Refresh history"
-              title="Refresh history"
-              onClick={() => void files.loadHistory()}
-            />
-          </div>
-          <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
-            {files.history.length === 0 ? (
-              <p className="px-2 py-1 text-body-xs text-on-surface-variant">
-                No commits yet.
-              </p>
-            ) : (
-              files.history.map((commit) => (
-                <HistoryRow key={commit.sha} commit={commit} />
-              ))
-            )}
+          {/* History */}
+          <div className="shrink-0 border-t border-outline-variant/70">
+            <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
+              <History className="h-3.5 w-3.5 text-on-surface-variant" />
+              <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
+                History
+              </span>
+              <IconButton
+                variant="text"
+                size="sm"
+                icon={<RefreshCw className="h-3 w-3" />}
+                aria-label="Refresh history"
+                title="Refresh history"
+                onClick={() => void files.loadHistory()}
+              />
+            </div>
+            <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
+              {files.history.length === 0 ? (
+                <p className="px-2 py-1 text-body-xs text-on-surface-variant">
+                  No commits yet.
+                </p>
+              ) : (
+                files.history.map((commit) => (
+                  <HistoryRow key={commit.sha} commit={commit} />
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

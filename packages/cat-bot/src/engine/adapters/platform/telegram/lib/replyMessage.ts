@@ -19,6 +19,7 @@
 import type { Context } from 'grammy';
 import { InputFile } from 'grammy';
 import type { MessageEntity } from 'grammy/types';
+import type { ChatAction } from './sendTypingIndicator.js';
 import { streamToBuffer } from '@/engine/utils/streams.util.js';
 // text_mention entities allow tagging users by numeric ID without a public @username — Bot API 7.0+
 import { buildTelegramMentionEntities } from '../utils/helper.util.js';
@@ -97,6 +98,12 @@ export async function replyMessage(
   // triggered the current update.  Falls back to ctx.chat?.id for the standard
   // same-chat reply path.
   const chatId = Number(_threadID) || (ctx.chat?.id as number);
+
+  // Flashes the native "sending X…" bubble matching the media about to be
+  // uploaded (fire-and-forget — a failed action must never break the send).
+  const flashAction = (action: ChatAction): void => {
+    void ctx.api.sendChatAction(chatId, action).catch(() => {});
+  };
   // `let` — sanitizeMarkdownV2 may reassign; avoids scattering a safeText alias through all send paths
   let text =
     typeof msgBody === 'string'
@@ -220,6 +227,17 @@ export async function replyMessage(
   // through their dedicated methods collapses both the attachment and buttons into one message.
   if (allAttachments.length === 1 && replyMarkup) {
     const { input } = allAttachments[0]!;
+    flashAction(
+      photos.length === 1
+        ? 'upload_photo'
+        : videos.length === 1
+          ? 'upload_video'
+          : gifs.length === 1
+            ? 'upload_video'
+          : audios.length === 1
+            ? 'upload_voice'
+            : 'upload_document',
+    );
     const commonExtra = {
       ...(text ? { caption: text } : {}),
       ...captionExtra,
@@ -248,6 +266,7 @@ export async function replyMessage(
 
   // Batch multiple photos into one album — caption on first item only
   if (photos.length > 0) {
+    flashAction('upload_photo');
     await ctx.api.sendMediaGroup(
       chatId,
       photos.map(({ input }, idx) => ({
@@ -268,6 +287,7 @@ export async function replyMessage(
   }
 
   for (const [i, { input }] of videos.entries()) {
+    flashAction('upload_video');
     await ctx.api.sendVideo(
       chatId,
       input,
@@ -278,6 +298,7 @@ export async function replyMessage(
   }
 
   for (const [i, { input }] of gifs.entries()) {
+    flashAction('upload_video');
     await ctx.api.sendAnimation(
       chatId,
       input,
@@ -289,10 +310,12 @@ export async function replyMessage(
 
   for (const { input } of audios) {
     // Use sendAudio instead of sendVoice: Telegram's editMessageMedia cannot mutate Voice messages.
+    flashAction('upload_voice');
     await ctx.api.sendAudio(chatId, input, captionExtra);
   }
 
   for (const { input } of others) {
+    flashAction('upload_document');
     await ctx.api.sendDocument(chatId, input, { caption: text, ...captionExtra });
   }
 

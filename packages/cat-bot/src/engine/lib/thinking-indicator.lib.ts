@@ -13,6 +13,7 @@
  * identical to withTypingIndicator.
  */
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
+import type { TypingAction } from '@/engine/adapters/models/api.model.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { withTypingIndicator, registerTypingStopper } from './typing-indicator.lib.js';
@@ -32,6 +33,9 @@ const FALLBACK_THINKING_PHRASES = [
 export interface ThinkingIndicatorOptions {
   /** Explicitly skip the rich draft for groups. Auto-detected from ctx.event when omitted. */
   isGroup?: boolean;
+  /** What the bot is about to send — forwarded to the native typing indicator
+   *  so the "bot is typing" signal reflects the content type (media vs text). */
+  action?: TypingAction;
 }
 
 /**
@@ -47,9 +51,10 @@ export async function withThinkingIndicator<T>(
   const api: UnifiedApi = ctx.api;
   const isTelegram = ctx.native.platform === Platforms.Telegram;
   const isGroup = options.isGroup ?? Boolean(ctx.event['isGroup']);
+  const action = options.action ?? 'typing';
 
   if (!isTelegram || !threadID || isGroup) {
-    return withTypingIndicator(api, threadID, fn);
+    return withTypingIndicator(api, threadID, fn, action);
   }
 
   const draftId = Math.floor(Math.random() * 2_000_000_000) + 1;
@@ -89,7 +94,7 @@ export async function withThinkingIndicator<T>(
   const interval = setInterval(trigger, THINKING_REFRESH_INTERVAL_MS);
 
   try {
-    return await withTypingIndicator(api, threadID, fn);
+    return await withTypingIndicator(api, threadID, fn, action);
   } finally {
     stopDraft();
     unregisterDraft();

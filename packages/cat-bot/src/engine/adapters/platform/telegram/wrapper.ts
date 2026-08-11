@@ -23,6 +23,7 @@ import {
   type SendPayload,
   type ReplyMessageOptions,
   type UserInfo,
+  type TypingAction,
 } from '@/engine/adapters/models/api.model.js';
 import type { UnifiedThreadInfo } from '@/engine/adapters/models/thread.model.js';
 import type { UnifiedUserInfo } from '@/engine/adapters/models/user.model.js';
@@ -177,9 +178,12 @@ class TelegramApi extends UnifiedApi {
     return reactToMessage(this.#ctx, threadID, messageID, emoji);
   }
 
-  override sendTypingIndicator(threadID: string): Promise<void> {
-    logger.debug('[telegram] sendTypingIndicator called', { threadID });
-    return sendTypingIndicator(this.#ctx, threadID);
+  override sendTypingIndicator(
+    threadID: string,
+    action: TypingAction = 'typing',
+  ): Promise<void> {
+    logger.debug('[telegram] sendTypingIndicator called', { threadID, action });
+    return sendTypingIndicator(this.#ctx, threadID, action);
   }
 
   /**

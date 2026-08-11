@@ -11,7 +11,7 @@
  * the moment a message is delivered, tearing down the interval before a next refresh tick
  * could resurrect it after the user has already seen the reply.
  */
-import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
+import type { UnifiedApi, TypingAction } from '@/engine/adapters/models/api.model.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // Below Telegram's ~5s expiry so the indicator never visibly drops during processing.
@@ -60,6 +60,7 @@ export async function withTypingIndicator<T>(
   api: UnifiedApi,
   threadID: string,
   fn: () => Promise<T>,
+  action: TypingAction = 'typing',
 ): Promise<T> {
   if (!threadID) return fn();
 
@@ -69,11 +70,11 @@ export async function withTypingIndicator<T>(
   const trigger = (): void => {
     if (stopped || inFlight) return;
     inFlight = true;
-    void api.sendTypingIndicator(threadID)
+    void api.sendTypingIndicator(threadID, action)
       .then(() => { inFlight = false; })
       .catch((err: unknown) => {
         inFlight = false;
-        logger.debug('[typing-indicator] sendTypingIndicator failed', { platform: api.platform, threadID, error: err });
+        logger.debug('[typing-indicator] sendTypingIndicator failed', { platform: api.platform, threadID, action, error: err });
       });
   };
 
