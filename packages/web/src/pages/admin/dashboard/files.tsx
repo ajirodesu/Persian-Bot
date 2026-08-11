@@ -52,7 +52,11 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
 import type { UseAdminFileManagerReturn } from '@/features/admin/hooks/useAdminFileManager'
 import { useSnackbar } from '@/contexts/SnackbarContext'
-import type { RepoEntryDto, RepoTreeNodeDto, GitChangeDto } from '@/features/admin/services/admin-file-manager.service'
+import type {
+  RepoEntryDto,
+  RepoTreeNodeDto,
+  GitChangeDto,
+} from '@/features/admin/services/admin-file-manager.service'
 
 /** localStorage key remembering the last selected folder across refreshes. */
 const FOLDER_STORAGE_KEY = 'admin-file-manager:folder:v1'
@@ -60,7 +64,10 @@ const FOLDER_STORAGE_KEY = 'admin-file-manager:folder:v1'
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
 /** Extension → icon + tint used for Replit-style typed file rows. */
-const FILE_TYPE_MAP: Record<string, { icon: ComponentType<SVGProps<SVGSVGElement>>; className: string }> = {
+const FILE_TYPE_MAP: Record<
+  string,
+  { icon: ComponentType<SVGProps<SVGSVGElement>>; className: string }
+> = {
   ts: { icon: FileCode2, className: 'text-primary' },
   tsx: { icon: FileCode2, className: 'text-primary' },
   js: { icon: FileCode2, className: 'text-warning' },
@@ -111,7 +118,13 @@ function fileTypeStyle(name: string) {
 }
 
 /** Renders the Replit-style typed icon for a filename with its tint applied. */
-function FileTypeIcon({ name, className }: { name: string; className?: string }) {
+function FileTypeIcon({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}) {
   const { icon: Icon, className: tint } = fileTypeStyle(name)
   return <Icon className={cn(tint, className)} />
 }
@@ -176,50 +189,54 @@ const RowMenu = memo(function RowMenu({
         <MoreVertical className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
       </button>
 
-      {open && pos && createPortal(
-        <div
-          className="fixed inset-0 z-[var(--z-popover)]"
-          onClick={() => setOpen(false)}
-        >
+      {open &&
+        pos &&
+        createPortal(
           <div
-            role="menu"
-            className="absolute w-56 overflow-hidden rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container-high shadow-elevation-3"
-            style={{ top: pos.top, left: pos.left }}
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[var(--z-popover)]"
+            onClick={() => setOpen(false)}
           >
-            <div className="py-1.5">
-              {actions.map((action) => (
-                <button
-                  key={action.label}
-                  type="button"
-                  role="menuitem"
-                  disabled={action.disabled}
-                  onClick={() => {
-                    setOpen(false)
-                    action.onClick()
-                  }}
-                  className={cn(
-                    'flex w-full items-center gap-2.5 px-3 py-2 text-left text-label-md transition-colors duration-fast',
-                    action.danger
-                      ? 'text-error hover:bg-error/10'
-                      : 'text-on-surface hover:bg-on-surface/8',
-                    action.disabled && 'pointer-events-none opacity-40',
-                  )}
-                >
-                  <action.icon
+            <div
+              role="menu"
+              className="absolute w-56 overflow-hidden rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container-high shadow-elevation-3"
+              style={{ top: pos.top, left: pos.left }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="py-1.5">
+                {actions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    role="menuitem"
+                    disabled={action.disabled}
+                    onClick={() => {
+                      setOpen(false)
+                      action.onClick()
+                    }}
                     className={cn(
-                      'h-4 w-4 shrink-0',
-                      action.danger ? 'text-error' : 'text-on-surface-variant',
+                      'flex w-full items-center gap-2.5 px-3 py-2 text-left text-label-md transition-colors duration-fast',
+                      action.danger
+                        ? 'text-error hover:bg-error/10'
+                        : 'text-on-surface hover:bg-on-surface/8',
+                      action.disabled && 'pointer-events-none opacity-40',
                     )}
-                  />
-                  {action.label}
-                </button>
-              ))}
+                  >
+                    <action.icon
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        action.danger
+                          ? 'text-error'
+                          : 'text-on-surface-variant',
+                      )}
+                    />
+                    {action.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 })
@@ -357,7 +374,9 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
           />
         )}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-label-md font-medium">{name}</span>
+          <span className="block truncate text-label-md font-medium">
+            {name}
+          </span>
         </span>
         {isPending && (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-on-surface-variant" />
@@ -377,9 +396,22 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
                 label: 'New folder',
                 onClick: () => onCreateFolder(folder),
               },
-              { icon: Copy, label: 'Copy path', onClick: () => onCopyPath(folder) },
-              { icon: Pencil, label: 'Rename', onClick: () => onRename(folderEntry) },
-              { icon: Trash2, label: 'Delete', danger: true, onClick: () => onDelete(folderEntry) },
+              {
+                icon: Copy,
+                label: 'Copy path',
+                onClick: () => onCopyPath(folder),
+              },
+              {
+                icon: Pencil,
+                label: 'Rename',
+                onClick: () => onRename(folderEntry),
+              },
+              {
+                icon: Trash2,
+                label: 'Delete',
+                danger: true,
+                onClick: () => onDelete(folderEntry),
+              },
             ]}
           />
         </span>
@@ -467,12 +499,19 @@ const TreeFileRow = memo(function TreeFileRow({
       className={cn(
         'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
           'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-        selected ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-on-surface/5',
+        selected
+          ? 'bg-primary/10 text-primary'
+          : 'text-on-surface-variant hover:bg-on-surface/5',
       )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       title={entry.path}
     >
-      <FileIcon className={cn('h-4 w-4 shrink-0', selected ? 'text-primary' : iconClass)} />
+      <FileIcon
+        className={cn(
+          'h-4 w-4 shrink-0',
+          selected ? 'text-primary' : iconClass,
+        )}
+      />
       <span
         className={cn(
           'min-w-0 flex-1 truncate text-label-md',
@@ -486,9 +525,18 @@ const TreeFileRow = memo(function TreeFileRow({
           label={`Actions for ${entry.name}`}
           compact
           actions={[
-            { icon: Copy, label: 'Copy path', onClick: () => onCopyPath(entry.path) },
+            {
+              icon: Copy,
+              label: 'Copy path',
+              onClick: () => onCopyPath(entry.path),
+            },
             { icon: Pencil, label: 'Rename', onClick: () => onRename(entry) },
-            { icon: Trash2, label: 'Delete', danger: true, onClick: () => onDelete(entry) },
+            {
+              icon: Trash2,
+              label: 'Delete',
+              danger: true,
+              onClick: () => onDelete(entry),
+            },
           ]}
         />
       </span>
@@ -540,7 +588,10 @@ const SearchResultRow = memo(function SearchResultRow({
           )}
         />
       ) : (
-        <FileTypeIcon name={node.name} className={cn('h-4 w-4 shrink-0', selected && 'text-primary')} />
+        <FileTypeIcon
+          name={node.name}
+          className={cn('h-4 w-4 shrink-0', selected && 'text-primary')}
+        />
       )}
       <span
         className={cn(
@@ -561,12 +612,20 @@ const SearchResultRow = memo(function SearchResultRow({
 
 const CHANGE_META: Record<
   GitChangeDto['status'],
-  { label: string; className: string; icon: ComponentType<SVGProps<SVGSVGElement>> }
+  {
+    label: string
+    className: string
+    icon: ComponentType<SVGProps<SVGSVGElement>>
+  }
 > = {
   added: { label: 'Added', className: 'text-success', icon: FilePlus2 },
   modified: { label: 'Modified', className: 'text-warning', icon: Pencil },
   deleted: { label: 'Deleted', className: 'text-error', icon: Trash2 },
-  renamed: { label: 'Renamed', className: 'text-info', icon: GitCommitHorizontal },
+  renamed: {
+    label: 'Renamed',
+    className: 'text-info',
+    icon: GitCommitHorizontal,
+  },
   untracked: { label: 'Untracked', className: 'text-info', icon: CircleDot },
 }
 
@@ -691,7 +750,9 @@ function GitPanel({
             onChange={(e) => {
               const branch = e.target.value
               if (branch && branch !== status?.branch) {
-                void run(`Checked out ${branch}`, () => files.checkoutBranch(branch))
+                void run(`Checked out ${branch}`, () =>
+                  files.checkoutBranch(branch),
+                )
               }
             }}
             disabled={!configured || busy !== null}
@@ -768,7 +829,9 @@ function GitPanel({
                 {staged.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => void run('Unstaged all', () => files.unstagePaths([]))}
+                    onClick={() =>
+                      void run('Unstaged all', () => files.unstagePaths([]))
+                    }
                     disabled={busy !== null}
                     className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
                   >
@@ -784,7 +847,9 @@ function GitPanel({
                     busy={busy}
                     onDiff={() => void files.openDiff(change.path, true)}
                     onUnstage={() =>
-                      void run('Unstaged', () => files.unstagePaths([change.path]))
+                      void run('Unstaged', () =>
+                        files.unstagePaths([change.path]),
+                      )
                     }
                   />
                 ))}
@@ -798,7 +863,9 @@ function GitPanel({
                 {unstaged.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => void run('Staged all changes', () => files.stageAll())}
+                    onClick={() =>
+                      void run('Staged all changes', () => files.stageAll())
+                    }
                     disabled={busy !== null}
                     className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
                   >
@@ -836,66 +903,74 @@ function GitPanel({
             disabled={!configured || busy !== null}
             className="w-full resize-none rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-1.5 font-mono text-label-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             <Button
               variant="filled"
               color="primary"
               size="sm"
+              className="w-full sm:w-auto"
               isLoading={busy === 'Committed'}
               disabled={
-                !configured || busy !== null || changes.length === 0 || !commitMsg.trim()
+                !configured ||
+                busy !== null ||
+                changes.length === 0 ||
+                !commitMsg.trim()
               }
               onClick={handleCommit}
             >
               Commit
             </Button>
-            <Button
-              variant="tonal"
-              color="secondary"
-              size="sm"
-              leftIcon={<Upload className="h-4 w-4" />}
-              isLoading={busy === 'Pushed'}
-              disabled={!configured || busy !== null || !canPush}
-              onClick={() => void run('Pushed', () => files.pushChanges())}
-              title={
-                !status?.upstream
-                  ? 'No upstream set for this branch'
-                  : status.ahead === 0
-                    ? 'Nothing to push'
-                    : 'Push local commits to upstream'
-              }
-            >
-              Push
-              {status?.upstream && status.ahead > 0
-                ? ` (${status.ahead} ahead)`
-                : ''}
-            </Button>
-            <Button
-              variant="tonal"
-              color="secondary"
-              size="sm"
-              leftIcon={<Download className="h-4 w-4" />}
-              isLoading={busy === 'Pulled'}
-              disabled={
-                !configured ||
-                busy !== null ||
-                !status?.upstream ||
-                status.behind === 0
-              }
-              onClick={() => void run('Pulled', () => files.pullChanges())}
-              title={
-                !status?.upstream
-                  ? 'No upstream set for this branch'
-                  : status.behind > 0
-                    ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'}`
-                    : 'Pull latest from upstream'
-              }
-            >
-              Pull
-              {status?.upstream && status.behind > 0
-                ? ` (${status.behind} behind)`
-                : ''}
-            </Button>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Button
+                variant="tonal"
+                color="secondary"
+                size="sm"
+                className="flex-1 sm:flex-none"
+                leftIcon={<Upload className="h-4 w-4" />}
+                isLoading={busy === 'Pushed'}
+                disabled={!configured || busy !== null || !canPush}
+                onClick={() => void run('Pushed', () => files.pushChanges())}
+                title={
+                  !status?.upstream
+                    ? 'No upstream set for this branch'
+                    : status.ahead === 0
+                      ? 'Nothing to push'
+                      : 'Push local commits to upstream'
+                }
+              >
+                Push
+                {status?.upstream && status.ahead > 0
+                  ? ` (${status.ahead} ahead)`
+                  : ''}
+              </Button>
+              <Button
+                variant="tonal"
+                color="secondary"
+                size="sm"
+                className="flex-1 sm:flex-none"
+                leftIcon={<Download className="h-4 w-4" />}
+                isLoading={busy === 'Pulled'}
+                disabled={
+                  !configured ||
+                  busy !== null ||
+                  !status?.upstream ||
+                  status.behind === 0
+                }
+                onClick={() => void run('Pulled', () => files.pullChanges())}
+                title={
+                  !status?.upstream
+                    ? 'No upstream set for this branch'
+                    : status.behind > 0
+                      ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'}`
+                      : 'Pull latest from upstream'
+                }
+              >
+                Pull
+                {status?.upstream && status.behind > 0
+                  ? ` (${status.behind} behind)`
+                  : ''}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -930,7 +1005,10 @@ function GitPanel({
                     {commit.sha}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-label-sm text-on-surface" title={commit.subject}>
+                    <p
+                      className="truncate text-label-sm text-on-surface"
+                      title={commit.subject}
+                    >
                       {commit.subject}
                     </p>
                     <p className="text-body-xs text-on-surface-variant">
@@ -1155,7 +1233,9 @@ export default function AdminFilesPage() {
   }, [mobileFilesOpen, closeFilesDrawer])
 
   // Dialog state
-  const [createDialog, setCreateDialog] = useState<'file' | 'folder' | null>(null)
+  const [createDialog, setCreateDialog] = useState<'file' | 'folder' | null>(
+    null,
+  )
   const [renameTarget, setRenameTarget] = useState<RepoEntryDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RepoEntryDto | null>(null)
 
@@ -1190,13 +1270,10 @@ export default function AdminFilesPage() {
     setMobileFilesOpen(false)
   }, [])
 
-  const handleSelectFolder = useCallback(
-    (path: string) => {
-      setSelectedFolder(path)
-      setSelectedPath(path)
-    },
-    [],
-  )
+  const handleSelectFolder = useCallback((path: string) => {
+    setSelectedFolder(path)
+    setSelectedPath(path)
+  }, [])
 
   const handleSearchResultOpen = useCallback(
     (node: { path: string; type: 'file' | 'folder' }) => {
@@ -1236,7 +1313,10 @@ export default function AdminFilesPage() {
     const path = joinPath(selectedFolder, name)
     try {
       const result = await files.createEntry(path, createDialog, '')
-      notifyMutation(createDialog === 'folder' ? 'Folder created' : 'File created', result)
+      notifyMutation(
+        createDialog === 'folder' ? 'Folder created' : 'File created',
+        result,
+      )
       if (createDialog === 'file') {
         // Open the freshly created file for editing.
         await files.forceOpenFile({
@@ -1296,10 +1376,13 @@ export default function AdminFilesPage() {
     [files.treeIndex, treeQuery],
   )
 
-  const openCreateDialog = useCallback((kind: 'file' | 'folder', folder?: string) => {
-    if (folder !== undefined) setSelectedFolder(folder)
-    setCreateDialog(kind)
-  }, [])
+  const openCreateDialog = useCallback(
+    (kind: 'file' | 'folder', folder?: string) => {
+      if (folder !== undefined) setSelectedFolder(folder)
+      setCreateDialog(kind)
+    },
+    [],
+  )
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
@@ -1355,11 +1438,14 @@ export default function AdminFilesPage() {
             >
               <GitBranch className="h-3.5 w-3.5" />
               Git
-              {files.gitStatus && (files.gitStatus.stagedCount + files.gitStatus.unstagedCount) > 0 && (
-                <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
-                  {files.gitStatus.stagedCount + files.gitStatus.unstagedCount}
-                </span>
-              )}
+              {files.gitStatus &&
+                files.gitStatus.stagedCount + files.gitStatus.unstagedCount >
+                  0 && (
+                  <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
+                    {files.gitStatus.stagedCount +
+                      files.gitStatus.unstagedCount}
+                  </span>
+                )}
             </button>
           </div>
 
@@ -1404,7 +1490,8 @@ export default function AdminFilesPage() {
                   <span className="text-body-xs text-on-surface-variant truncate">
                     {files.gitStatus.upstream}
                     {files.gitStatus.ahead > 0 && ` +${files.gitStatus.ahead}`}
-                    {files.gitStatus.behind > 0 && ` −${files.gitStatus.behind}`}
+                    {files.gitStatus.behind > 0 &&
+                      ` −${files.gitStatus.behind}`}
                   </span>
                 )}
               </>
@@ -1416,336 +1503,344 @@ export default function AdminFilesPage() {
           {gitView ? (
             <GitPanel files={files} configured={configured} />
           ) : (
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
-          {/* Mobile backdrop for the file drawer */}
-          <div
-            className={cn(
-              'fixed inset-0 z-[var(--z-fixed)] bg-black/40 lg:hidden',
-              'transition-opacity duration-200',
-              mobileFilesOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
-            )}
-            onClick={() => setMobileFilesOpen(false)}
-          />
+            <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
+              {/* Mobile backdrop for the file drawer */}
+              <div
+                className={cn(
+                  'fixed inset-0 z-[var(--z-fixed)] bg-black/40 lg:hidden',
+                  'transition-opacity duration-200',
+                  mobileFilesOpen
+                    ? 'opacity-100'
+                    : 'pointer-events-none opacity-0',
+                )}
+                onClick={() => setMobileFilesOpen(false)}
+              />
 
-          {/* ── Files panel (drawer on mobile, static column on desktop) ────── */}
-          <div
-            className={cn(
-              'flex min-w-0 shrink-0 flex-col bg-surface-container',
-              // Mobile drawer behaviour
-              'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-outline-variant/70 shadow-elevation-3',
-              'transition-transform duration-200 ease-out lg:transition-none',
-              mobileFilesOpen ? 'translate-x-0' : '-translate-x-full',
-              // Desktop static column
-              'lg:static lg:z-auto lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none lg:border-r xl:w-80',
-            )}
-          >
-            <div className="flex items-center gap-2 px-3 pt-3">
-              <Files className="h-4 w-4 text-primary" />
-              <span className="text-label-md font-semibold text-on-surface">Files</span>
-              <div className="ml-auto flex items-center">
-                <RowMenu
-                  label="Files panel actions"
-                  actions={[
-                    {
-                      icon: FilePlus2,
-                      label: 'New file',
-                      onClick: () => openCreateDialog('file'),
-                      disabled: !configured,
-                    },
-                    {
-                      icon: FolderPlus,
-                      label: 'New folder',
-                      onClick: () => openCreateDialog('folder'),
-                      disabled: !configured,
-                    },
-                    {
-                      icon: Copy,
-                      label: 'Copy directory path',
-                      onClick: () => void copyPath(selectedFolder || '/'),
-                    },
-                    {
-                      icon: RefreshCw,
-                      label: 'Refresh folder',
-                      onClick: () => {
-                        void files.refresh(selectedFolder)
-                        if (selectedFolder !== '') void files.refresh('')
-                      },
-                    },
-                  ]}
-                />
-                <button
-                  type="button"
-                  aria-label="Close files"
-                  title="Close files"
-                  onClick={() => setMobileFilesOpen(false)}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/70 transition-colors duration-fast hover:bg-on-surface/10 hover:text-on-surface lg:hidden"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="px-3 pb-2 pt-2">
-              <Input
-                value={treeQuery}
-                onChange={(e) => setTreeQuery(e.target.value)}
-                leftIcon={<Search className="h-4 w-4" />}
-                rightIcon={
-                  treeQuery ? (
+              {/* ── Files panel (drawer on mobile, static column on desktop) ────── */}
+              <div
+                className={cn(
+                  'flex min-w-0 shrink-0 flex-col bg-surface-container',
+                  // Mobile drawer behaviour
+                  'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-outline-variant/70 shadow-elevation-3',
+                  'transition-transform duration-200 ease-out lg:transition-none',
+                  mobileFilesOpen ? 'translate-x-0' : '-translate-x-full',
+                  // Desktop static column
+                  'lg:static lg:z-auto lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none lg:border-r xl:w-80',
+                )}
+              >
+                <div className="flex items-center gap-2 px-3 pt-3">
+                  <Files className="h-4 w-4 text-primary" />
+                  <span className="text-label-md font-semibold text-on-surface">
+                    Files
+                  </span>
+                  <div className="ml-auto flex items-center">
+                    <RowMenu
+                      label="Files panel actions"
+                      actions={[
+                        {
+                          icon: FilePlus2,
+                          label: 'New file',
+                          onClick: () => openCreateDialog('file'),
+                          disabled: !configured,
+                        },
+                        {
+                          icon: FolderPlus,
+                          label: 'New folder',
+                          onClick: () => openCreateDialog('folder'),
+                          disabled: !configured,
+                        },
+                        {
+                          icon: Copy,
+                          label: 'Copy directory path',
+                          onClick: () => void copyPath(selectedFolder || '/'),
+                        },
+                        {
+                          icon: RefreshCw,
+                          label: 'Refresh folder',
+                          onClick: () => {
+                            void files.refresh(selectedFolder)
+                            if (selectedFolder !== '') void files.refresh('')
+                          },
+                        },
+                      ]}
+                    />
                     <button
                       type="button"
-                      aria-label="Clear file search"
-                      onClick={() => setTreeQuery('')}
-                      className="flex h-5 w-5 items-center justify-center rounded text-on-surface-variant hover:text-on-surface"
+                      aria-label="Close files"
+                      title="Close files"
+                      onClick={() => setMobileFilesOpen(false)}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/70 transition-colors duration-fast hover:bg-on-surface/10 hover:text-on-surface lg:hidden"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-4 w-4" />
                     </button>
-                  ) : undefined
-                }
-                placeholder="Search files…"
-                aria-label="Search files"
-                inputSize="sm"
-              />
-            </div>
+                  </div>
+                </div>
 
-<div className="min-h-0 flex-1 overflow-y-auto p-2 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))]">
-              {treeQueryActive ? (
-                searchResults === undefined ? (
-                  files.treeError ? (
-                    <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                      {files.treeError}
-                    </p>
-                  ) : (
+                <div className="px-3 pb-2 pt-2">
+                  <Input
+                    value={treeQuery}
+                    onChange={(e) => setTreeQuery(e.target.value)}
+                    leftIcon={<Search className="h-4 w-4" />}
+                    rightIcon={
+                      treeQuery ? (
+                        <button
+                          type="button"
+                          aria-label="Clear file search"
+                          onClick={() => setTreeQuery('')}
+                          className="flex h-5 w-5 items-center justify-center rounded text-on-surface-variant hover:text-on-surface"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      ) : undefined
+                    }
+                    placeholder="Search files…"
+                    aria-label="Search files"
+                    inputSize="sm"
+                  />
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-2 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))]">
+                  {treeQueryActive ? (
+                    searchResults === undefined ? (
+                      files.treeError ? (
+                        <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                          {files.treeError}
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5 p-1">
+                          <Skeleton variant="text" width="80%" />
+                          <Skeleton variant="text" width="65%" />
+                          <Skeleton variant="text" width="90%" />
+                        </div>
+                      )
+                    ) : searchResults.length === 0 ? (
+                      <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                        No files match your search.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col">
+                        {searchResults.map((node) => (
+                          <SearchResultRow
+                            key={node.path}
+                            node={node}
+                            selected={selectedPath === node.path}
+                            onOpen={handleSearchResultOpen}
+                          />
+                        ))}
+                      </div>
+                    )
+                  ) : rootEntries === undefined && !files.directoryError ? (
                     <div className="flex flex-col gap-1.5 p-1">
                       <Skeleton variant="text" width="80%" />
                       <Skeleton variant="text" width="65%" />
                       <Skeleton variant="text" width="90%" />
+                      <Skeleton variant="text" width="55%" />
                     </div>
-                  )
-                ) : searchResults.length === 0 ? (
-                  <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                    No files match your search.
-                  </p>
-                ) : (
-                  <div className="flex flex-col">
-                    {searchResults.map((node) => (
-                      <SearchResultRow
-                        key={node.path}
-                        node={node}
-                        selected={selectedPath === node.path}
-                        onOpen={handleSearchResultOpen}
-                      />
-                    ))}
-                  </div>
-                )
-              ) : rootEntries === undefined && !files.directoryError ? (
-                <div className="flex flex-col gap-1.5 p-1">
-                  <Skeleton variant="text" width="80%" />
-                  <Skeleton variant="text" width="65%" />
-                  <Skeleton variant="text" width="90%" />
-                  <Skeleton variant="text" width="55%" />
-                </div>
-              ) : rootEntries === undefined ? (
-                <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                  Could not load the repository.
-                </p>
-              ) : rootEntries.length === 0 ? (
-                <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                  This folder is empty.
-                </p>
-              ) : (
-                rootEntries.map((entry) =>
-                  entry.type === 'folder' ? (
-                    <TreeFolderRow
-                      key={entry.path}
-                      folder={entry.path}
-                      depth={0}
-                      selectedPath={selectedPath}
-                      onSelectFolder={handleSelectFolder}
-                      onOpenFile={handleOpenFile}
-                      onCreateFile={(folder) => openCreateDialog('file', folder)}
-                      onCreateFolder={(folder) => openCreateDialog('folder', folder)}
-                      onRename={(entry) => setRenameTarget(entry)}
-                      onDelete={(entry) => setDeleteTarget(entry)}
-                      onCopyPath={(path) => void copyPath(path)}
-                      children={files.children}
-                      expanded={files.expanded}
-                      loadingPaths={files.loadingPaths}
-                      pending={files.pending}
-                      isExpanded={files.isExpanded}
-                      toggleFolder={files.toggleFolder}
-                    />
+                  ) : rootEntries === undefined ? (
+                    <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                      Could not load the repository.
+                    </p>
+                  ) : rootEntries.length === 0 ? (
+                    <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                      This folder is empty.
+                    </p>
                   ) : (
-                    <TreeFileRow
-                      key={entry.path}
-                      entry={entry}
-                      depth={0}
-                      selectedPath={selectedPath}
-                      onOpenFile={handleOpenFile}
-                      onRename={(entry) => setRenameTarget(entry)}
-                      onDelete={(entry) => setDeleteTarget(entry)}
-                      onCopyPath={(path) => void copyPath(path)}
-                    />
-                  ),
-                )
-              )}
-            </div>
-          </div>
+                    rootEntries.map((entry) =>
+                      entry.type === 'folder' ? (
+                        <TreeFolderRow
+                          key={entry.path}
+                          folder={entry.path}
+                          depth={0}
+                          selectedPath={selectedPath}
+                          onSelectFolder={handleSelectFolder}
+                          onOpenFile={handleOpenFile}
+                          onCreateFile={(folder) =>
+                            openCreateDialog('file', folder)
+                          }
+                          onCreateFolder={(folder) =>
+                            openCreateDialog('folder', folder)
+                          }
+                          onRename={(entry) => setRenameTarget(entry)}
+                          onDelete={(entry) => setDeleteTarget(entry)}
+                          onCopyPath={(path) => void copyPath(path)}
+                          children={files.children}
+                          expanded={files.expanded}
+                          loadingPaths={files.loadingPaths}
+                          pending={files.pending}
+                          isExpanded={files.isExpanded}
+                          toggleFolder={files.toggleFolder}
+                        />
+                      ) : (
+                        <TreeFileRow
+                          key={entry.path}
+                          entry={entry}
+                          depth={0}
+                          selectedPath={selectedPath}
+                          onOpenFile={handleOpenFile}
+                          onRename={(entry) => setRenameTarget(entry)}
+                          onDelete={(entry) => setDeleteTarget(entry)}
+                          onCopyPath={(path) => void copyPath(path)}
+                        />
+                      ),
+                    )
+                  )}
+                </div>
+              </div>
 
-          {/* ── Editor pane ─────────────────────────────────────────────────── */}
-          <div className="flex min-w-0 min-h-0 flex-1 flex-col">
-            {/* Tab bar */}
-            <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-outline-variant/70 bg-surface-container/70 px-2 py-1 scrollbar-hidden">
-              {/* Mobile-only: open the file explorer drawer */}
-              <IconButton
-                variant="text"
-                size="sm"
-                className="shrink-0 lg:hidden"
-                icon={<FolderGit2 className="h-4 w-4" />}
-                aria-label="Browse files"
-                title="Browse files"
-                onClick={() => setMobileFilesOpen(true)}
-              />
-              {files.tabs.length > 0 ? (
-                files.tabs.map((tab) => {
-                  const active = tab.entry.path === openEntry?.path
-                  const tabDirty = tab.content !== tab.savedContent
-                  return (
-                    <button
-                      key={tab.entry.path}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFolder(parentOf(tab.entry.path))
-                        setSelectedPath(tab.entry.path)
-                        void files.activateTab(tab.entry.path)
-                      }}
-                      title={tab.entry.path}
-                      className={cn(
-                        'group/tab flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                        active
-                          ? 'bg-surface-container-high text-on-surface'
-                          : 'text-on-surface-variant hover:bg-on-surface/5 hover:text-on-surface',
-                      )}
-                    >
-                      <FileTypeIcon name={tab.entry.name} className="h-3.5 w-3.5 shrink-0" />
-                      <span className="max-w-[12rem] truncate font-mono text-label-sm">
-                        {tab.entry.name}
-                      </span>
-                      <span
-                        role="button"
-                        tabIndex={-1}
-                        aria-label={`Close ${tab.entry.name}`}
-                        title={`Close ${tab.entry.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleCloseTab(tab.entry.path)
-                        }}
-                        className={cn(
-                          'flex h-5 w-5 items-center justify-center rounded text-on-surface-variant/60 transition-colors duration-fast',
-                          active
-                            ? 'opacity-80 hover:bg-on-surface/10 hover:text-on-surface hover:opacity-100'
-                            : 'opacity-0 group-hover/tab:opacity-100 hover:bg-on-surface/10 hover:text-on-surface',
-                        )}
-                      >
-                        {tabDirty ? (
-                          <CircleDot className="h-3 w-3 text-warning" />
-                        ) : (
-                          <X className="h-3.5 w-3.5" />
-                        )}
-                      </span>
-                    </button>
-                  )
-                })
-              ) : (
-                <span className="px-1 text-body-sm text-on-surface-variant">
-                  No file open
-                </span>
-              )}
-
-              <span className="hidden min-w-0 flex-1 truncate text-body-xs text-on-surface-variant lg:block">
-                {openEntry?.path ?? ''}
-              </span>
-
-              {openEntry && (
-                <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-1">
+              {/* ── Editor pane ─────────────────────────────────────────────────── */}
+              <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+                {/* Tab bar */}
+                <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-outline-variant/70 bg-surface-container/70 px-2 py-1 scrollbar-hidden">
+                  {/* Mobile-only: open the file explorer drawer */}
                   <IconButton
                     variant="text"
                     size="sm"
-                    className="shrink-0"
-                    icon={<Maximize className="h-4 w-4" />}
-                    aria-label="Full screen"
-                    title="Full screen"
-                    onClick={() => setFullscreen(true)}
+                    className="shrink-0 lg:hidden"
+                    icon={<FolderGit2 className="h-4 w-4" />}
+                    aria-label="Browse files"
+                    title="Browse files"
+                    onClick={() => setMobileFilesOpen(true)}
                   />
-                </div>
-              )}
-            </div>
-
-            {/* Editor body */}
-            <div className="flex min-h-0 flex-1 flex-col">
-              {!openEntry ? (
-                <div className="p-3">
-                  <EmptyState
-                    icon={Files}
-                    title="No file open"
-                    description="Select a file from the repository tree to start editing."
-                  />
-                  <p className="mt-3 px-1 text-body-xs text-on-surface-variant">
-                    New files are created inside{' '}
-                    <code className="font-mono">{selectedFolder || 'the repository root'}</code>.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-outline-variant/50 px-3 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-body-xs text-on-surface-variant">
-                      Saving writes to the working tree — commit it from the Git tab.
+                  {files.tabs.length > 0 ? (
+                    files.tabs.map((tab) => {
+                      const active = tab.entry.path === openEntry?.path
+                      const tabDirty = tab.content !== tab.savedContent
+                      return (
+                        <button
+                          key={tab.entry.path}
+                          type="button"
+                          onClick={() => {
+                            setSelectedFolder(parentOf(tab.entry.path))
+                            setSelectedPath(tab.entry.path)
+                            void files.activateTab(tab.entry.path)
+                          }}
+                          title={tab.entry.path}
+                          className={cn(
+                            'group/tab flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                            active
+                              ? 'bg-surface-container-high text-on-surface'
+                              : 'text-on-surface-variant hover:bg-on-surface/5 hover:text-on-surface',
+                          )}
+                        >
+                          <FileTypeIcon
+                            name={tab.entry.name}
+                            className="h-3.5 w-3.5 shrink-0"
+                          />
+                          <span className="max-w-[12rem] truncate font-mono text-label-sm">
+                            {tab.entry.name}
+                          </span>
+                          <span
+                            role="button"
+                            tabIndex={-1}
+                            aria-label={`Close ${tab.entry.name}`}
+                            title={`Close ${tab.entry.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCloseTab(tab.entry.path)
+                            }}
+                            className={cn(
+                              'flex h-5 w-5 items-center justify-center rounded text-on-surface-variant/60 transition-colors duration-fast',
+                              active
+                                ? 'opacity-80 hover:bg-on-surface/10 hover:text-on-surface hover:opacity-100'
+                                : 'opacity-0 group-hover/tab:opacity-100 hover:bg-on-surface/10 hover:text-on-surface',
+                            )}
+                          >
+                            {tabDirty ? (
+                              <CircleDot className="h-3 w-3 text-warning" />
+                            ) : (
+                              <X className="h-3.5 w-3.5" />
+                            )}
+                          </span>
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <span className="px-1 text-body-sm text-on-surface-variant">
+                      No file open
                     </span>
-                    <IconButton
-                      variant="primary"
-                      size="sm"
-                      isLoading={saving}
-                      icon={<Save className="h-4 w-4" />}
-                      aria-label="Save to working tree"
-                      title="Save to working tree"
-                      disabled={!files.isDirty || !configured}
-                      onClick={handleSave}
-                    />
-                  </div>
+                  )}
 
-                  {files.fileError && (
-                    <div className="px-3 pt-2">
-                      <Alert
-                        variant="tonal"
-                        color="error"
-                        title="Failed to read file"
-                        message={files.fileError}
+                  <span className="hidden min-w-0 flex-1 truncate text-body-xs text-on-surface-variant lg:block">
+                    {openEntry?.path ?? ''}
+                  </span>
+
+                  {openEntry && (
+                    <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-1">
+                      <IconButton
+                        variant="primary"
+                        size="sm"
+                        className="shrink-0"
+                        isLoading={saving}
+                        icon={<Save className="h-4 w-4" />}
+                        aria-label="Save to working tree"
+                        title="Save to working tree"
+                        disabled={!files.isDirty || !configured}
+                        onClick={handleSave}
+                      />
+                      <IconButton
+                        variant="text"
+                        size="sm"
+                        className="shrink-0"
+                        icon={<Maximize className="h-4 w-4" />}
+                        aria-label="Full screen"
+                        title="Full screen"
+                        onClick={() => setFullscreen(true)}
                       />
                     </div>
                   )}
+                </div>
 
-                  <div className="min-h-0 flex-1">
-                    {files.fileLoading ? (
-                      <Skeleton variant="rectangular" className="h-full" />
-                    ) : (
-                      <CodeEditor
-                        value={files.content}
-                        onChange={files.setContent}
-                        language={openEntry.language}
-                        onSave={handleSave}
-                        placeholder={`// Editing ${openEntry.path}`}
-                        fillHeight
+                {/* Editor body */}
+                <div className="flex min-h-0 flex-1 flex-col">
+                  {!openEntry ? (
+                    <div className="p-3">
+                      <EmptyState
+                        icon={Files}
+                        title="No file open"
+                        description="Select a file from the repository tree to start editing."
                       />
-                    )}
-                  </div>
-                </>
-              )}
+                      <p className="mt-3 px-1 text-body-xs text-on-surface-variant">
+                        New files are created inside{' '}
+                        <code className="font-mono">
+                          {selectedFolder || 'the repository root'}
+                        </code>
+                        .
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {files.fileError && (
+                        <div className="px-3 pt-2">
+                          <Alert
+                            variant="tonal"
+                            color="error"
+                            title="Failed to read file"
+                            message={files.fileError}
+                          />
+                        </div>
+                      )}
+
+                      <div className="min-h-0 flex-1">
+                        {files.fileLoading ? (
+                          <Skeleton variant="rectangular" className="h-full" />
+                        ) : (
+                          <CodeEditor
+                            value={files.content}
+                            onChange={files.setContent}
+                            language={openEntry.language}
+                            onSave={handleSave}
+                            placeholder={`// Editing ${openEntry.path}`}
+                            fillHeight
+                          />
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-          </div>
           )}
         </div>
-
       </div>
 
       {/* ── Create file/folder dialog ─────────────────────────────────────── */}
@@ -1979,7 +2074,8 @@ function RenameDialog({
                     defaultValue={target.name}
                     onChange={(e) => setName(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && name.trim()) onConfirm(name.trim())
+                      if (e.key === 'Enter' && name.trim())
+                        onConfirm(name.trim())
                     }}
                     autoFocus
                   />
@@ -2040,9 +2136,9 @@ function DeleteDialog({
           <Dialog.Body>
             <div className="flex flex-col gap-3">
               <p className="text-body-md text-on-surface">
-                Delete <code className="font-mono">{target?.path}</code> from the
-                working tree? It will still show as a deletion until staged and
-                committed from the Git tab.
+                Delete <code className="font-mono">{target?.path}</code> from
+                the working tree? It will still show as a deletion until staged
+                and committed from the Git tab.
               </p>
             </div>
           </Dialog.Body>
