@@ -214,9 +214,11 @@ class ApiClient {
     }
 
     // Create error with response data
-    const errorData = data as { message?: string }
+    const errorData = data as { message?: string; error?: string }
     const error: ApiError = new Error(
-      errorData?.message || `HTTP Error ${status}`,
+      errorData?.message ||
+        errorData?.error ||
+        `HTTP Error ${status}`,
     )
     error.response = {
       status,

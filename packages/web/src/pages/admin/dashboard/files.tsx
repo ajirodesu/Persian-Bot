@@ -708,24 +708,20 @@ function GitPanel({
   )
 
   const status = files.gitStatus
-  const staged = useMemo(
-    () => status?.changes.filter((c) => c.staged) ?? [],
-    [status],
-  )
-  const unstaged = useMemo(
-    () => status?.changes.filter((c) => !c.staged) ?? [],
-    [status],
-  )
+  const changes = useMemo(() => status?.changes ?? [], [status])
+  const staged = useMemo(() => changes.filter((c) => c.staged), [changes])
+  const unstaged = useMemo(() => changes.filter((c) => !c.staged), [changes])
   const canPush = !!status?.upstream && status.ahead > 0
 
   const handleCommit = useCallback(() => {
     const message = commitMsg.trim()
-    if (!message || staged.length === 0 || busy !== null) return
+    if (!message || changes.length === 0 || busy !== null) return
     void run('Committed', async () => {
+      if (staged.length === 0) await files.stageAll()
       await files.commitChanges(message)
       setCommitMsg('')
     })
-  }, [commitMsg, staged, busy, run, files, setCommitMsg])
+  }, [commitMsg, changes, staged, busy, run, files, setCommitMsg])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
@@ -891,7 +887,7 @@ function GitPanel({
               size="sm"
               isLoading={busy === 'Committed'}
               disabled={
-                !configured || busy !== null || staged.length === 0 || !commitMsg.trim()
+                !configured || busy !== null || changes.length === 0 || !commitMsg.trim()
               }
               onClick={handleCommit}
             >
@@ -924,7 +920,12 @@ function GitPanel({
               size="sm"
               leftIcon={<Download className="h-4 w-4" />}
               isLoading={busy === 'Pulled'}
-              disabled={!configured || busy !== null || !status?.upstream}
+              disabled={
+                !configured ||
+                busy !== null ||
+                !status?.upstream ||
+                status.behind === 0
+              }
               onClick={() => void run('Pulled', () => files.pullChanges())}
               title={
                 !status?.upstream
