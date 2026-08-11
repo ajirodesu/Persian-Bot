@@ -56,6 +56,7 @@ import Field from '@/components/ui/forms/Field'
 import Dialog from '@/components/ui/overlay/Dialog'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import CodeEditor from '@/components/editor/CodeEditor'
+import { highlightToHtml } from '@/lib/syntax-highlight.lib'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
 import type { UseAdminFileManagerReturn } from '@/features/admin/hooks/useAdminFileManager'
@@ -1258,7 +1259,7 @@ function GitPanel({
                 onClick={files.closeDiff}
               />
             </div>
-            <div className="min-h-0 flex-1 overflow-auto bg-surface-container-lowest p-3">
+            <div className="min-h-0 flex-1 overflow-auto bg-surface-container-lowest">
               {files.gitDiffLoading ? (
                 <Skeleton variant="rectangular" className="h-full" />
               ) : files.gitDiffError ? (
@@ -1269,9 +1270,7 @@ function GitPanel({
                   message={files.gitDiffError}
                 />
               ) : (
-                <pre className="font-mono text-label-sm leading-relaxed text-on-surface">
-                  {files.gitDiff ?? ''}
-                </pre>
+                <GitDiffView content={files.gitDiff ?? ''} />
               )}
             </div>
           </>
@@ -1286,19 +1285,19 @@ function GitPanel({
         )}
       </div>
 
-      {/* Mobile diff sheet — replaces the side-by-side column below lg */}
-      <div className="lg:hidden">
-        {files.gitDiffPath !== null && (
-          <MobileDiffSheet
-            path={files.gitDiffPath}
-            staged={files.gitDiffStaged}
-            content={files.gitDiff}
-            loading={files.gitDiffLoading}
-            error={files.gitDiffError}
-            onClose={files.closeDiff}
-          />
-        )}
-      </div>
+      {/* Full-screen diff sheet — mobile only. It portals to document.body, so
+          the lg:hidden responsibility lives on the portal root itself (an
+          ancestor wrapper cannot hide it). */}
+      {files.gitDiffPath !== null && (
+        <MobileDiffSheet
+          path={files.gitDiffPath}
+          staged={files.gitDiffStaged}
+          content={files.gitDiff}
+          loading={files.gitDiffLoading}
+          error={files.gitDiffError}
+          onClose={files.closeDiff}
+        />
+      )}
     </div>
   )
 }
@@ -1339,7 +1338,7 @@ function MobileDiffSheet({
       role="dialog"
       aria-modal="true"
       aria-label={`Diff for ${path}`}
-      className="fixed inset-0 z-overlay flex flex-col overflow-hidden bg-surface-container-lowest [height:100dvh]"
+      className="fixed inset-0 z-overlay flex flex-col overflow-hidden bg-surface-container-lowest [height:100dvh] lg:hidden"
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2 [padding-top:max(0.75rem,env(safe-area-inset-top))]">
         <GitCommitHorizontal className="h-4 w-4 shrink-0 text-on-surface-variant" />
@@ -1360,7 +1359,7 @@ function MobileDiffSheet({
           onClick={onClose}
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto bg-surface-container-lowest p-3 [padding-bottom:calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="min-h-0 flex-1 overflow-auto bg-surface-container-lowest [padding-bottom:calc(1rem+env(safe-area-inset-bottom))]">
         {loading ? (
           <Skeleton variant="rectangular" className="h-full" />
         ) : error ? (
@@ -1371,13 +1370,225 @@ function MobileDiffSheet({
             message={error}
           />
         ) : (
-          <pre className="font-mono text-label-sm leading-relaxed text-on-surface">
-            {content ?? ''}
-          </pre>
+          <GitDiffView content={content ?? ''} />
         )}
       </div>
     </div>,
     document.body,
+  )
+}
+
+// ── Git diff viewer (themed, syntax-highlighted, +/− colored) ─────────────────
+
+type DiffLineKind =
+  | 'meta' // diff --git, index, mode, rename, binary headers
+  | 'file' // --- a/… / +++ b/…
+  | 'hunk' // @@ -a,b +c,d @@ heading
+  | 'add'
+  | 'del'
+  | 'context'
+  | 'nonewline' // “\ No newline at end of file”
+
+interface DiffLine {
+  kind: DiffLineKind
+  sign: string
+  code: string
+  heading?: string
+}
+
+const DIFF_META_PREFIXES = [
+  'diff --git ',
+  'index ',
+  'new file mode ',
+  'deleted file mode ',
+  'old mode ',
+  'new mode ',
+  'similarity index ',
+  'dissimilarity index ',
+  'rename from ',
+  'rename to ',
+  'copy from ',
+  'copy to ',
+  'Binary files ',
+  'GIT binary patch',
+]
+
+function parseDiffLines(diff: string): DiffLine[] {
+  return diff.split('\n').map((raw) => {
+    const line = raw.replace(/\r$/, '')
+    const hunk = line.match(/^@@(.*?)@@(.*)$/)
+    if (hunk) {
+      return {
+        kind: 'hunk',
+        sign: '',
+        code: hunk[1].trim(),
+        heading: hunk[2].replace(/^\s+/, ''),
+      }
+    }
+    if (line.startsWith('\\')) return { kind: 'nonewline', sign: '', code: line }
+    if (DIFF_META_PREFIXES.some((p) => line.startsWith(p)))
+      return { kind: 'meta', sign: '', code: line }
+    if (line.startsWith('--- ') || line.startsWith('+++ '))
+      return { kind: 'file', sign: line[0], code: line.slice(4) }
+    if (line.startsWith('+')) return { kind: 'add', sign: '+', code: line.slice(1) }
+    if (line.startsWith('-')) return { kind: 'del', sign: '-', code: line.slice(1) }
+    if (line.startsWith(' '))
+      return { kind: 'context', sign: ' ', code: line.slice(1) }
+    return { kind: 'context', sign: ' ', code: line }
+  })
+}
+
+/** Maps a repo path to a highlightToHtml-compatible language key. */
+function diffLanguageForPath(path: string): string | null {
+  const base = path.split('/').pop() ?? ''
+  const dot = base.lastIndexOf('.')
+  if (dot <= 0) return null
+  switch (base.slice(dot + 1).toLowerCase()) {
+    case 'ts':
+    case 'tsx':
+    case 'mts':
+    case 'cts':
+      return 'typescript'
+    case 'js':
+    case 'jsx':
+    case 'mjs':
+    case 'cjs':
+      return 'javascript'
+    case 'json':
+    case 'jsonc':
+      return 'json'
+    case 'md':
+    case 'markdown':
+      return 'markdown'
+    case 'txt':
+    case 'text':
+      return 'text'
+    case 'yaml':
+    case 'yml':
+      return 'yaml'
+    case 'css':
+    case 'scss':
+    case 'less':
+      return 'css'
+    case 'html':
+    case 'htm':
+    case 'xml':
+    case 'svg':
+    case 'vue':
+      return 'html'
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+    case 'shell':
+      return 'shell'
+    case 'py':
+    case 'python':
+      return 'python'
+    case 'sql':
+      return 'sql'
+    default:
+      return null
+  }
+}
+
+/** Pulls the changed file path out of the diff headers to pick a language. */
+function detectDiffLanguage(diff: string): string | null {
+  let path: string | null = null
+  for (const raw of diff.split('\n')) {
+    const line = raw.replace(/\r$/, '')
+    const add = line.match(/^\+\+\+ b\/(.+)$/)
+    if (add) {
+      path = add[1]
+      break
+    }
+    const del = line.match(/^--- a\/(.+)$/)
+    if (del) {
+      path = del[1]
+      break
+    }
+    const gitLine = line.match(/^diff --git a\/(.+?) b\/(.+)$/)
+    if (gitLine) {
+      path = gitLine[2]
+      break
+    }
+  }
+  return path ? diffLanguageForPath(path) : null
+}
+
+function GitDiffView({ content }: { content: string }) {
+  const language = useMemo(() => detectDiffLanguage(content), [content])
+  const rows = useMemo(() => parseDiffLines(content), [content])
+
+  return (
+    <div className="git-diff-view min-w-max font-mono text-label-sm leading-relaxed text-on-surface">
+      {rows.map((row, i) => (
+        <div
+          key={i}
+          className={cn(
+            'flex w-max min-w-full items-start whitespace-pre px-4',
+            row.kind === 'add' && 'bg-success/10',
+            row.kind === 'del' && 'bg-error/10',
+            (row.kind === 'hunk' ||
+              row.kind === 'meta' ||
+              row.kind === 'file') &&
+              'bg-primary/[0.05]',
+          )}
+        >
+          <span
+            className={cn(
+              'w-6 shrink-0 select-none pr-3 text-right',
+              row.kind === 'add' && 'text-success',
+              row.kind === 'del' && 'text-error',
+              row.kind === 'hunk' && 'text-primary',
+              row.kind === 'context' && 'text-on-surface-variant/60',
+              row.kind === 'nonewline' && 'text-on-surface-variant/50',
+              (row.kind === 'meta' || row.kind === 'file') &&
+                'text-on-surface-variant/50',
+            )}
+          >
+            {row.sign}
+          </span>
+          {row.kind === 'hunk' ? (
+            <span className="whitespace-pre">
+              <span className="text-primary">@@{row.code}@@</span>
+              {row.heading && (
+                <span className="text-on-surface-variant">{row.heading}</span>
+              )}
+            </span>
+          ) : row.kind === 'add' ||
+            row.kind === 'del' ||
+            row.kind === 'context' ? (
+            <span
+              className="whitespace-pre"
+              dangerouslySetInnerHTML={{ __html: highlightToHtml(row.code, language) }}
+            />
+          ) : (
+            <span
+              className={cn(
+                row.kind === 'nonewline' && 'italic',
+                row.kind === 'meta' && 'text-on-surface-variant/70',
+                (row.kind === 'file' || row.kind === 'meta') &&
+                  'font-semibold',
+              )}
+            >
+              {row.code}
+            </span>
+          )}
+        </div>
+      ))}
+      <style>{`
+        .git-diff-view .tok-keyword  { color: rgb(var(--color-primary)); }
+        .git-diff-view .tok-string   { color: rgb(var(--color-warning)); }
+        .git-diff-view .tok-comment  { color: rgb(var(--color-on-surface-variant)); font-style: italic; }
+        .git-diff-view .tok-number   { color: rgb(var(--color-success)); }
+        .git-diff-view .tok-function { color: rgb(var(--color-on-surface)); }
+        .git-diff-view .tok-type     { color: rgb(var(--color-tertiary)); }
+        .git-diff-view .tok-property { color: rgb(var(--color-info)); }
+        .git-diff-view .tok-tag      { color: rgb(var(--color-primary)); }
+        .git-diff-view .tok-attr     { color: rgb(var(--color-info)); }
+        .git-diff-view .tok-punct    { color: rgb(var(--color-outline)); }
+      `}</style>
+    </div>
   )
 }
 
@@ -1542,6 +1753,9 @@ export default function AdminFilesPage() {
           lastCommit: null,
         })
         setSelectedPath(path)
+        // On mobile, dismiss the file drawer so the new file is immediately
+        // visible in the editor (no-op on desktop, where the panel is static).
+        setMobileFilesOpen(false)
       }
       setCreateDialog(null)
     } catch (err) {
