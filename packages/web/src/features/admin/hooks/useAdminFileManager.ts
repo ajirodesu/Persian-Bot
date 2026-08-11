@@ -1,21 +1,23 @@
 /**
- * useAdminFileManager — data fetching + mutations for the Admin GitHub File
- * Manager panel.
+ * useAdminFileManager — data fetching + mutations for the Admin local File
+ * Manager + Git panel.
  *
- * Manages a lazily-expanded folder tree (folder path → cached child entries)
- * rooted at the repository root, multiple open editor tabs (each with its own
- * content + dirty tracking), and every mutation (create / save / rename /
- * delete). Because the panel is GitHub-native, each mutation returns a commit
- * SHA and refreshes the affected folder caches so the tree reflects the repo's
- * real state.
+ * The File Manager edits a REAL git checkout on the server: reads come from
+ * disk, mutations write to the working tree, and nothing is committed until the
+ * operator explicitly stages/commits from the Git tab. This hook manages the
+ * lazily-expanded folder tree, multiple editor tabs, file mutations, and the
+ * git working-tree status/diff/stage/commit/push state.
  */
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
 import type {
+  GitCommitInfoDto,
+  GitStatusDto,
   RepoEntryDto,
   RepoMetaDto,
   RepoMutationResultDto,
+  RepoTreeNodeDto,
 } from '@/features/admin/services/admin-file-manager.service'
 
 export interface OpenTab {
@@ -37,6 +39,10 @@ export interface UseAdminFileManagerReturn {
   isExpanded: (path: string) => boolean
   toggleFolder: (path: string) => void
   refresh: (path: string) => Promise<void>
+  // Full-repository index — powers search across every directory
+  treeIndex: RepoTreeNodeDto[] | undefined
+  treeError: string | null
+  refreshTree: () => Promise<void>
 
   // Open files / editor — `openFileEntry`/`content`/… reflect the ACTIVE tab
   tabs: OpenTab[]
@@ -57,15 +63,37 @@ export interface UseAdminFileManagerReturn {
   // Mutations
   pending: Set<string>
   lastMutation: RepoMutationResultDto | null
-  saveFile: (message: string) => Promise<RepoMutationResultDto>
+  saveFile: () => Promise<RepoMutationResultDto>
   createEntry: (
     path: string,
     type: 'file' | 'folder',
     content: string,
-    message?: string,
   ) => Promise<RepoMutationResultDto>
-  renameEntry: (from: string, to: string, message?: string) => Promise<RepoMutationResultDto>
-  deleteEntry: (path: string, message?: string) => Promise<RepoMutationResultDto>
+  renameEntry: (from: string, to: string) => Promise<RepoMutationResultDto>
+  deleteEntry: (path: string) => Promise<RepoMutationResultDto>
+
+  // Git working-tree panel
+  gitStatus: GitStatusDto | null
+  gitError: string | null
+  gitLoading: boolean
+  refreshGit: () => Promise<void>
+  gitDiff: string | null
+  gitDiffPath: string | null
+  gitDiffStaged: boolean
+  gitDiffLoading: boolean
+  gitDiffError: string | null
+  openDiff: (path: string, staged: boolean) => Promise<void>
+  closeDiff: () => void
+  stagePaths: (paths: string[]) => Promise<void>
+  stageAll: () => Promise<void>
+  unstagePaths: (paths: string[]) => Promise<void>
+  commitChanges: (message: string) => Promise<{ sha?: string } | null>
+  pushChanges: () => Promise<{ message?: string } | null>
+  pullChanges: () => Promise<{ message?: string } | null>
+  history: GitCommitInfoDto[]
+  loadHistory: () => Promise<void>
+  branches: string[]
+  checkoutBranch: (name: string) => Promise<void>
 }
 
 /** Parent folder path for a repo path ('packages/a.ts' → 'packages'). */
@@ -120,12 +148,27 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [directoryError, setDirectoryError] = useState<string | null>(null)
 
+  const [treeIndex, setTreeIndex] = useState<RepoTreeNodeDto[] | undefined>(undefined)
+  const [treeError, setTreeError] = useState<string | null>(null)
+
   const [tabs, setTabs] = useState<OpenTab[]>(initialState?.tabs ?? [])
   const [activePath, setActivePath] = useState<string | null>(
     initialState?.activePath ?? null,
   )
   const [pending, setPending] = useState<Set<string>>(new Set())
   const [lastMutation, setLastMutation] = useState<RepoMutationResultDto | null>(null)
+
+  // Git working-tree panel state
+  const [gitStatus, setGitStatus] = useState<GitStatusDto | null>(null)
+  const [gitError, setGitError] = useState<string | null>(null)
+  const [gitLoading, setGitLoading] = useState(false)
+  const [gitDiff, setGitDiff] = useState<string | null>(null)
+  const [gitDiffPath, setGitDiffPath] = useState<string | null>(null)
+  const [gitDiffStaged, setGitDiffStaged] = useState(false)
+  const [gitDiffLoading, setGitDiffLoading] = useState(false)
+  const [gitDiffError, setGitDiffError] = useState<string | null>(null)
+  const [history, setHistory] = useState<GitCommitInfoDto[]>([])
+  const [branches, setBranches] = useState<string[]>([])
 
   // Stable snapshot of the folders that were expanded in the restored session,
   // used exactly once to re-fetch their children after mount.
@@ -135,6 +178,8 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   // discard an older one — parallel refreshes of different folders must never
   // invalidate each other (that previously left the root stuck on the loader).
   const fetchRef = useRef<Record<string, number>>({})
+  // Guards the full-repo tree index reads (search).
+  const treeFetchRef = useRef(0)
   // Guards the per-tab content reads so a slow response for an older file can
   // never overwrite a newer one for the same path.
   const readRef = useRef<Record<string, number>>({})
@@ -153,7 +198,8 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const fileLoading = activeTab?.loading ?? false
   const fileError = activeTab?.error ?? null
 
-  // Load repository metadata once on mount.
+  // Load repository metadata once on mount. When the checkout is not configured
+  // the meta request 503s — surface a stub so the page can show the setup hint.
   useEffect(() => {
     let cancelled = false
     adminFileManagerService
@@ -162,7 +208,9 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         if (!cancelled) setMeta(data)
       })
       .catch(() => {
-        if (!cancelled) setMeta(null)
+        if (!cancelled) {
+          setMeta({ owner: '', repo: '', branch: null, configured: false, root: null })
+        }
       })
     return () => {
       cancelled = true
@@ -199,6 +247,20 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
 
   const isExpanded = useCallback((path: string) => expanded.has(path), [expanded])
 
+  /** Re-fetches the full-repo index used by search (files + folders, any dir). */
+  const refreshTree = useCallback(async (): Promise<void> => {
+    const id = (treeFetchRef.current += 1)
+    setTreeError(null)
+    try {
+      const data = await adminFileManagerService.getTree()
+      if (id !== treeFetchRef.current) return
+      setTreeIndex(data.entries)
+    } catch (err) {
+      if (id !== treeFetchRef.current) return
+      setTreeError(err instanceof Error ? err.message : 'Failed to load repository tree')
+    }
+  }, [])
+
   const toggleFolder = useCallback(
     (path: string) => {
       setExpanded((prev) => {
@@ -217,16 +279,17 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [children, refresh],
   )
 
-  // Load the repository root once on mount.
+  // Load the repository root + full-repo index once on mount.
   useEffect(() => {
     void refresh('')
+    void refreshTree()
 
     // Re-fetch any folders that were expanded in the persisted session so the
     // restored tree renders with its cached children populated again.
     for (const path of restoredExpandedRef.current) {
       if (path !== '') void refresh(path)
     }
-  }, [refresh])
+  }, [refresh, refreshTree])
 
   // Persist the session so a refresh resumes exactly where the user left off.
   const persistRef = useRef<number | null>(null)
@@ -371,6 +434,134 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     closeTab(activePath)
   }, [activePath, closeTab])
 
+  // ── Git working-tree panel ──────────────────────────────────────────────────
+
+  /** Re-reads git status (branch, upstream, changes) from the server. */
+  const refreshGit = useCallback(async (): Promise<void> => {
+    setGitLoading(true)
+    setGitError(null)
+    try {
+      const status = await adminFileManagerService.getGitStatus()
+      setGitStatus(status)
+    } catch (err) {
+      setGitError(err instanceof Error ? err.message : 'Failed to load git status')
+    } finally {
+      setGitLoading(false)
+    }
+  }, [])
+
+  /** Re-reads the recent commit history (best-effort). */
+  const loadHistory = useCallback(async (): Promise<void> => {
+    try {
+      setHistory(await adminFileManagerService.getGitLog(15))
+    } catch {
+      // History is best-effort — the panel still works without it.
+    }
+  }, [])
+
+  /** Loads the unified diff for a path into the Git panel. */
+  const openDiff = useCallback(
+    async (path: string, staged: boolean): Promise<void> => {
+      setGitDiffPath(path)
+      setGitDiffStaged(staged)
+      setGitDiffLoading(true)
+      setGitDiffError(null)
+      try {
+        const data = await adminFileManagerService.getGitDiff(path, staged)
+        setGitDiff(data.diff)
+      } catch (err) {
+        setGitDiffError(
+          err instanceof Error ? err.message : 'Failed to load diff',
+        )
+        setGitDiff(null)
+      } finally {
+        setGitDiffLoading(false)
+      }
+    },
+    [],
+  )
+
+  const closeDiff = useCallback(() => {
+    setGitDiff(null)
+    setGitDiffPath(null)
+  }, [])
+
+  const stagePaths = useCallback(
+    async (paths: string[]): Promise<void> => {
+      await adminFileManagerService.gitStage(paths)
+      await refreshGit()
+    },
+    [refreshGit],
+  )
+
+  const stageAll = useCallback(async (): Promise<void> => {
+    await adminFileManagerService.gitStage([])
+    await refreshGit()
+  }, [refreshGit])
+
+  const unstagePaths = useCallback(
+    async (paths: string[]): Promise<void> => {
+      await adminFileManagerService.gitUnstage(paths)
+      await refreshGit()
+    },
+    [refreshGit],
+  )
+
+  /** Commits the staged changes, then refreshes status + history. */
+  const commitChanges = useCallback(
+    async (message: string): Promise<{ sha?: string } | null> => {
+      const data = await adminFileManagerService.gitCommit(message)
+      await refreshGit()
+      await loadHistory()
+      closeDiff()
+      return data
+    },
+    [refreshGit, loadHistory, closeDiff],
+  )
+
+  /** Pushes the current branch to its upstream, then refreshes status. */
+  const pushChanges = useCallback(
+    async (): Promise<{ message?: string } | null> => {
+      const data = await adminFileManagerService.gitPush()
+      await refreshGit()
+      return data
+    },
+    [refreshGit],
+  )
+
+  /** Pulls the current branch from its upstream, then refreshes status. */
+  const pullChanges = useCallback(
+    async (): Promise<{ message?: string } | null> => {
+      const data = await adminFileManagerService.gitPull()
+      await refreshGit()
+      await loadHistory()
+      return data
+    },
+    [refreshGit, loadHistory],
+  )
+
+  /** Switches to an existing local branch and refreshes state. */
+  const checkoutBranch = useCallback(
+    async (name: string): Promise<void> => {
+      await adminFileManagerService.gitCheckout(name)
+      setBranches(
+        await adminFileManagerService.getGitBranches().catch(() => []),
+      )
+      await refreshGit()
+    },
+    [refreshGit],
+  )
+
+  // Load git status + history + branches once on mount.
+  useEffect(() => {
+    void refreshGit()
+    void loadHistory()
+    adminFileManagerService
+      .getGitBranches()
+      .then(setBranches)
+      .catch(() => setBranches([]))
+  }, [refreshGit, loadHistory])
+
   // ── Mutations ───────────────────────────────────────────────────────────────
 
   const withPending = useCallback(
@@ -390,19 +581,20 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   )
 
   const saveFile = useCallback(
-    async (message: string): Promise<RepoMutationResultDto> => {
+    async (): Promise<RepoMutationResultDto> => {
       if (!activePath) return { synced: false }
       const path = activePath
       const activeContent = tabs.find((t) => t.entry.path === path)?.content ?? ''
       return withPending(path, async () => {
-        const data = await adminFileManagerService.saveFile(path, activeContent, message)
+        const data = await adminFileManagerService.saveFile(path, activeContent)
         updateTab(path, (t) => ({ ...t, savedContent: activeContent }))
         setLastMutation(data)
         void refresh(parentOf(path))
+        void refreshGit()
         return data
       })
     },
-    [activePath, tabs, withPending, updateTab, refresh],
+    [activePath, tabs, withPending, updateTab, refresh, refreshGit],
   )
 
   const createEntry = useCallback(
@@ -410,28 +602,28 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
       path: string,
       type: 'file' | 'folder',
       content: string,
-      message?: string,
     ): Promise<RepoMutationResultDto> => {
       return withPending(path, async () => {
         const data = await adminFileManagerService.createFileEntry(
           path,
           type,
           content,
-          message,
         )
         setLastMutation(data)
         void refresh(parentOf(path))
         if (type === 'folder') setExpanded((prev) => new Set(prev).add(path))
+        void refreshTree()
+        void refreshGit()
         return data
       })
     },
-    [withPending, refresh],
+    [withPending, refresh, refreshTree, refreshGit],
   )
 
   const renameEntry = useCallback(
-    async (from: string, to: string, message?: string): Promise<RepoMutationResultDto> => {
+    async (from: string, to: string): Promise<RepoMutationResultDto> => {
       return withPending(from, async () => {
-        const data = await adminFileManagerService.renameFileEntry(from, to, message)
+        const data = await adminFileManagerService.renameFileEntry(from, to)
         setLastMutation(data)
         // Update the cached tree in place, then refresh both parents.
         setChildren((prev) => {
@@ -464,16 +656,18 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
           ),
         )
         setActivePath((prev) => (prev === from ? to : prev))
+        void refreshTree()
+        void refreshGit()
         return data
       })
     },
-    [withPending, refresh],
+    [withPending, refresh, refreshTree, refreshGit],
   )
 
   const deleteEntry = useCallback(
-    async (path: string, message?: string): Promise<RepoMutationResultDto> => {
+    async (path: string): Promise<RepoMutationResultDto> => {
       return withPending(path, async () => {
-        const data = await adminFileManagerService.deleteFileEntry(path, message)
+        const data = await adminFileManagerService.deleteFileEntry(path)
         setLastMutation(data)
         const parent = parentOf(path)
         setChildren((prev) => {
@@ -484,10 +678,12 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         })
         void refresh(parent)
         closeTab(path)
+        void refreshTree()
+        void refreshGit()
         return data
       })
     },
-    [withPending, refresh, closeTab],
+    [withPending, refresh, closeTab, refreshTree, refreshGit],
   )
 
   return {
@@ -500,6 +696,9 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     isExpanded,
     toggleFolder,
     refresh,
+    treeIndex,
+    treeError,
+    refreshTree,
     tabs,
     activePath,
     activateTab,
@@ -520,5 +719,26 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     createEntry,
     renameEntry,
     deleteEntry,
+    gitStatus,
+    gitError,
+    gitLoading,
+    refreshGit,
+    gitDiff,
+    gitDiffPath,
+    gitDiffStaged,
+    gitDiffLoading,
+    gitDiffError,
+    openDiff,
+    closeDiff,
+    stagePaths,
+    stageAll,
+    unstagePaths,
+    commitChanges,
+    pushChanges,
+    pullChanges,
+    history,
+    loadHistory,
+    branches,
+    checkoutBranch,
   }
 }

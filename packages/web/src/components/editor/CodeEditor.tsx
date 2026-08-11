@@ -227,7 +227,7 @@ const CodeEditor = memo(function CodeEditor({
         aria-hidden="true"
         className={cn(
           surfaceClasses,
-          'absolute inset-0 m-0 overflow-hidden text-on-surface pointer-events-none',
+          'absolute inset-0 m-0 overflow-hidden rounded-none text-on-surface pointer-events-none',
         )}
         style={{
           paddingLeft: gutterWidth,

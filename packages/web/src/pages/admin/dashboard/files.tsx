@@ -29,6 +29,13 @@ import {
   Minimize,
   Search,
   MoreVertical,
+  GitBranch,
+  Upload,
+  Download,
+  Undo2,
+  History,
+  Check,
+  GitCommitHorizontal,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
@@ -43,8 +50,9 @@ import Skeleton from '@/components/ui/feedback/Skeleton'
 import CodeEditor from '@/components/editor/CodeEditor'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
+import type { UseAdminFileManagerReturn } from '@/features/admin/hooks/useAdminFileManager'
 import { useSnackbar } from '@/contexts/SnackbarContext'
-import type { RepoEntryDto } from '@/features/admin/services/admin-file-manager.service'
+import type { RepoEntryDto, RepoTreeNodeDto, GitChangeDto } from '@/features/admin/services/admin-file-manager.service'
 import type { BadgeColor } from '@/components/ui/data-display/Badge'
 
 /** localStorage key remembering the last selected folder across refreshes. */
@@ -271,39 +279,30 @@ function joinPath(parent: string, name: string): string {
   return parent ? `${parent}/${name}` : name
 }
 
-/** Matches the server's default commit message for an empty message field. */
-function defaultMessage(action: string, path: string): string {
-  return `chore(file-manager): ${action} ${path}`
-}
-
 /**
- * Returns the set of entry paths that match `query` (case-insensitive substring
- * on the file/folder name), including ancestor folders of any match so the
- * matching rows stay visible in the tree.
+ * Full-repository search — matches file AND folder names case-insensitively
+ * anywhere in the repo (backed by the recursive tree index, not just the
+ * folders that have been expanded). Folders sort ahead of files.
  */
-function filterTreePaths(
-  children: Record<string, RepoEntryDto[]>,
-  entries: RepoEntryDto[],
+function searchTreeIndex(
+  treeIndex: RepoTreeNodeDto[] | undefined,
   query: string,
-): Set<string> {
+): Array<RepoTreeNodeDto & { name: string }> | undefined {
   const q = query.trim().toLowerCase()
-  if (!q) return new Set()
-  const matched = new Set<string>()
-
-  const visit = (list: RepoEntryDto[]) => {
-    for (const entry of list) {
-      const nameMatch = entry.name.toLowerCase().includes(q)
-      const kids = children[entry.path]
-      if (kids) visit(kids)
-      const hasMatchingDescendant = kids
-        ? kids.some((child) => matched.has(child.path))
-        : false
-      if (nameMatch || hasMatchingDescendant) matched.add(entry.path)
-    }
-  }
-
-  visit(entries)
-  return matched
+  if (!q) return undefined
+  if (!treeIndex) return undefined
+  const matches = treeIndex
+    .map((node) => ({
+      path: node.path,
+      type: node.type,
+      name: node.path.split('/').pop() ?? node.path,
+    }))
+    .filter((node) => node.name.toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  return matches
 }
 
 // ── Discard-confirm request ───────────────────────────────────────────────────
@@ -315,9 +314,7 @@ type DiscardRequest = { kind: 'close'; path?: string } | null
 interface FileTreeProps {
   folder: string
   depth: number
-  selectedFolder: string
-  activePath: string | null
-  matched: Set<string>
+  selectedPath: string | null
   onSelectFolder: (path: string) => void
   onOpenFile: (entry: RepoEntryDto) => void
   onCreateFile: (folder: string) => void
@@ -338,9 +335,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
   const {
     folder,
     depth,
-    selectedFolder,
-    activePath,
-    matched,
+    selectedPath,
     onSelectFolder,
     onOpenFile,
     onCreateFile,
@@ -358,13 +353,10 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
 
   const name = folder.split('/').pop() ?? folder
   const entryChildren = children[folder]
-  const isSearching = matched.size > 0
   const isLoading = loadingPaths.has(folder)
   const isPending = pending.has(folder)
-  const isOpen = isExpanded(folder) || isSearching
-  const shownChildren = isSearching
-    ? (entryChildren ?? []).filter((entry) => matched.has(entry.path))
-    : entryChildren
+  const isOpen = isExpanded(folder)
+  const isSelected = selectedPath === folder
   const folderEntry: RepoEntryDto = {
     name,
     path: folder,
@@ -392,7 +384,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
         className={[
           'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
             'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          selectedFolder === folder || isOpen
+          isSelected
             ? 'bg-primary/10 text-primary'
             : 'text-on-surface hover:bg-on-surface/5',
         ].join(' ')}
@@ -404,7 +396,9 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
           <Folder
             className={cn(
               'h-4 w-4 shrink-0',
-              isOpen ? 'fill-[rgb(var(--color-primary)/0.15)]' : 'text-on-surface-variant',
+              isSelected || isOpen
+                ? 'fill-[rgb(var(--color-primary)/0.15)] text-primary'
+                : 'text-on-surface-variant',
             )}
           />
         )}
@@ -449,15 +443,13 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
               <Skeleton variant="text" width="80%" />
             </div>
           ) : (
-            shownChildren?.map((entry) =>
+            entryChildren?.map((entry) =>
               entry.type === 'folder' ? (
                 <TreeFolderRow
                   key={entry.path}
                   folder={entry.path}
                   depth={depth + 1}
-                  selectedFolder={selectedFolder}
-                  activePath={activePath}
-                  matched={matched}
+                  selectedPath={selectedPath}
                   onSelectFolder={onSelectFolder}
                   onOpenFile={onOpenFile}
                   onCreateFile={onCreateFile}
@@ -477,7 +469,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
                   key={entry.path}
                   entry={entry}
                   depth={depth + 1}
-                  activePath={activePath}
+                  selectedPath={selectedPath}
                   onOpenFile={onOpenFile}
                   onRename={onRename}
                   onDelete={onDelete}
@@ -495,7 +487,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
 const TreeFileRow = memo(function TreeFileRow({
   entry,
   depth,
-  activePath,
+  selectedPath,
   onOpenFile,
   onRename,
   onDelete,
@@ -503,14 +495,14 @@ const TreeFileRow = memo(function TreeFileRow({
 }: {
   entry: RepoEntryDto
   depth: number
-  activePath: string | null
+  selectedPath: string | null
   onOpenFile: (entry: RepoEntryDto) => void
   onRename: (entry: RepoEntryDto) => void
   onDelete: (entry: RepoEntryDto) => void
   onCopyPath: (path: string) => void
 }) {
   const { icon: FileIcon, className: iconClass } = fileTypeStyle(entry.name)
-  const active = activePath === entry.path
+  const selected = selectedPath === entry.path
 
   return (
     <div
@@ -521,16 +513,16 @@ const TreeFileRow = memo(function TreeFileRow({
       className={cn(
         'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
           'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-        active ? 'bg-primary/10' : 'hover:bg-on-surface/5',
+        selected ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-on-surface/5',
       )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       title={entry.path}
     >
-      <FileIcon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : iconClass)} />
+      <FileIcon className={cn('h-4 w-4 shrink-0', selected ? 'text-primary' : iconClass)} />
       <span
         className={cn(
           'min-w-0 flex-1 truncate text-label-md',
-          active ? 'font-medium text-primary' : 'text-on-surface-variant',
+          selected ? 'font-medium text-primary' : 'text-on-surface-variant',
         )}
       >
         {entry.name}
@@ -550,6 +542,504 @@ const TreeFileRow = memo(function TreeFileRow({
   )
 })
 
+/**
+ * A single hit from the full-repository search. Selecting a result highlights
+ * exactly that one file or folder (single-selection rule) before opening it.
+ */
+const SearchResultRow = memo(function SearchResultRow({
+  node,
+  selected,
+  onOpen,
+}: {
+  node: RepoTreeNodeDto & { name: string }
+  selected: boolean
+  onOpen: (node: { path: string; type: 'file' | 'folder' }) => void
+}) {
+  const isFolder = node.type === 'folder'
+  const parentDir = node.path.includes('/')
+    ? node.path.slice(0, node.path.lastIndexOf('/'))
+    : '/'
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(node)}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen(node)}
+      className={cn(
+        'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 pl-2 ' +
+          'cursor-pointer text-left transition-colors duration-fast focus:outline-none ' +
+          'focus-visible:ring-2 focus-visible:ring-primary',
+        selected
+          ? 'bg-primary/10 text-primary'
+          : 'text-on-surface-variant hover:bg-on-surface/5',
+      )}
+      title={node.path}
+    >
+      {isFolder ? (
+        <Folder
+          className={cn(
+            'h-4 w-4 shrink-0',
+            selected
+              ? 'fill-[rgb(var(--color-primary)/0.15)] text-primary'
+              : 'text-on-surface-variant',
+          )}
+        />
+      ) : (
+        <FileTypeIcon name={node.name} className={cn('h-4 w-4 shrink-0', selected && 'text-primary')} />
+      )}
+      <span
+        className={cn(
+          'min-w-0 flex-1 truncate text-label-md',
+          selected && 'font-medium text-primary',
+        )}
+      >
+        {node.name}
+      </span>
+      <span className="hidden shrink-0 max-w-[40%] truncate pl-1 pr-1 font-mono text-[10px] text-on-surface-variant/60 sm:block">
+        {parentDir}
+      </span>
+    </div>
+  )
+})
+
+// ── Git working-tree panel ────────────────────────────────────────────────────
+
+const CHANGE_META: Record<
+  GitChangeDto['status'],
+  { label: string; className: string; icon: ComponentType<SVGProps<SVGSVGElement>> }
+> = {
+  added: { label: 'Added', className: 'text-success', icon: FilePlus2 },
+  modified: { label: 'Modified', className: 'text-warning', icon: Pencil },
+  deleted: { label: 'Deleted', className: 'text-error', icon: Trash2 },
+  renamed: { label: 'Renamed', className: 'text-info', icon: GitCommitHorizontal },
+  untracked: { label: 'Untracked', className: 'text-info', icon: CircleDot },
+}
+
+function GitChangeRow({
+  change,
+  busy,
+  onDiff,
+  onStage,
+  onUnstage,
+}: {
+  change: GitChangeDto
+  busy: string | null
+  onDiff: () => void
+  onStage?: () => void
+  onUnstage?: () => void
+}) {
+  const meta = CHANGE_META[change.status]
+  const Icon = meta.icon
+  return (
+    <div className="flex w-full items-center gap-2 rounded-[var(--radius-input)] py-1.5 pr-1 pl-1.5 transition-colors duration-fast hover:bg-on-surface/5">
+      <Icon className={cn('h-4 w-4 shrink-0', meta.className)} />
+      <span
+        className="min-w-0 flex-1 truncate font-mono text-label-sm text-on-surface"
+        title={change.path}
+      >
+        {change.path}
+      </span>
+      {change.hasUnstagedMods && (
+        <Badge color="warning" variant="tonal" size="sm">
+          also modified
+        </Badge>
+      )}
+      <button
+        type="button"
+        onClick={onDiff}
+        title={`Show diff for ${change.path}`}
+        className="flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast hover:bg-on-surface/10 hover:text-on-surface"
+      >
+        Diff
+      </button>
+      {onStage && (
+        <IconButton
+          variant="text"
+          size="sm"
+          isLoading={busy === change.path}
+          disabled={busy !== null}
+          icon={<Upload className="h-3.5 w-3.5" />}
+          aria-label={`Stage ${change.path}`}
+          title="Stage"
+          onClick={onStage}
+        />
+      )}
+      {onUnstage && (
+        <IconButton
+          variant="text"
+          size="sm"
+          isLoading={busy === change.path}
+          disabled={busy !== null}
+          icon={<Undo2 className="h-3.5 w-3.5" />}
+          aria-label={`Unstage ${change.path}`}
+          title="Unstage"
+          onClick={onUnstage}
+        />
+      )}
+    </div>
+  )
+}
+
+function GitPanel({
+  files,
+  configured,
+}: {
+  files: UseAdminFileManagerReturn
+  configured: boolean
+}) {
+  const { success, error } = useSnackbar()
+  const [commitMsg, setCommitMsg] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const run = useCallback(
+    async (label: string, fn: () => Promise<unknown>) => {
+      setBusy(label)
+      try {
+        await fn()
+        success(label)
+      } catch (err) {
+        error(err instanceof Error ? err.message : `${label} failed`)
+      } finally {
+        setBusy(null)
+      }
+    },
+    [success, error],
+  )
+
+  const status = files.gitStatus
+  const staged = useMemo(
+    () => status?.changes.filter((c) => c.staged) ?? [],
+    [status],
+  )
+  const unstaged = useMemo(
+    () => status?.changes.filter((c) => !c.staged) ?? [],
+    [status],
+  )
+  const canPush = !!status?.upstream && status.ahead > 0
+
+  const handleCommit = useCallback(() => {
+    const message = commitMsg.trim()
+    if (!message || staged.length === 0 || busy !== null) return
+    void run('Committed', async () => {
+      await files.commitChanges(message)
+      setCommitMsg('')
+    })
+  }, [commitMsg, staged, busy, run, files, setCommitMsg])
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+      {/* Left column — branch, changes, commit box, history */}
+      <div className="flex min-w-0 flex-col border-b border-outline-variant/70 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
+        {/* Branch + sync actions */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
+          <select
+            aria-label="Current branch"
+            value={status?.branch ?? ''}
+            onChange={(e) => {
+              const branch = e.target.value
+              if (branch && branch !== status?.branch) {
+                void run(`Checked out ${branch}`, () => files.checkoutBranch(branch))
+              }
+            }}
+            disabled={!configured || busy !== null}
+            className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-1.5 text-label-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+          >
+            <option value="" disabled>
+              {status?.branch ?? 'no branch'}
+            </option>
+            {files.branches.map((branch) => (
+              <option key={branch} value={branch}>
+                {branch}
+              </option>
+            ))}
+          </select>
+          <IconButton
+            variant="text"
+            size="sm"
+            isLoading={files.gitLoading}
+            icon={<RefreshCw className="h-4 w-4" />}
+            aria-label="Refresh git status"
+            title="Refresh"
+            onClick={() => {
+              void files.refreshGit()
+              void files.loadHistory()
+            }}
+          />
+        </div>
+
+        {/* Changes list */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {files.gitError && (
+            <div className="px-1 pb-2">
+              <Alert
+                variant="tonal"
+                color="error"
+                title="Git error"
+                message={files.gitError}
+              />
+            </div>
+          )}
+
+          {!configured ? (
+            <Alert
+              variant="tonal"
+              color="warning"
+              title="Local git not configured"
+              message="Set ADMIN_REPO_PATH (or run the server from a git checkout) to manage this repository."
+            />
+          ) : !status && files.gitLoading ? (
+            <div className="flex flex-col gap-1.5 p-1">
+              <Skeleton variant="text" width="80%" />
+              <Skeleton variant="text" width="65%" />
+              <Skeleton variant="text" width="90%" />
+            </div>
+          ) : !status ? (
+            <EmptyState
+              icon={GitBranch}
+              title="No status"
+              description="Could not load the working-tree status."
+            />
+          ) : status.clean ? (
+            <EmptyState
+              icon={Check}
+              title="Working tree clean"
+              description="Nothing to commit. Edit files to create changes."
+            />
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {/* Staged */}
+              <div className="flex items-center gap-1.5 px-1">
+                <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
+                  Staged · {staged.length}
+                </span>
+                {staged.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void run('Unstaged all', () => files.unstagePaths([]))}
+                    disabled={busy !== null}
+                    className="ml-auto text-label-xs font-medium text-on-surface-variant transition-colors duration-fast hover:text-on-surface"
+                  >
+                    Unstage all
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col">
+                {staged.map((change) => (
+                  <GitChangeRow
+                    key={change.path}
+                    change={change}
+                    busy={busy}
+                    onDiff={() => void files.openDiff(change.path, true)}
+                    onUnstage={() =>
+                      void run('Unstaged', () => files.unstagePaths([change.path]))
+                    }
+                  />
+                ))}
+              </div>
+
+              {/* Unstaged */}
+              <div className="mt-1 flex items-center gap-1.5 px-1">
+                <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
+                  Changes · {unstaged.length}
+                </span>
+                {unstaged.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void run('Staged all changes', () => files.stageAll())}
+                    disabled={busy !== null}
+                    className="ml-auto text-label-xs font-medium text-on-surface-variant transition-colors duration-fast hover:text-on-surface"
+                  >
+                    Stage all
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col">
+                {unstaged.map((change) => (
+                  <GitChangeRow
+                    key={change.path}
+                    change={change}
+                    busy={busy}
+                    onDiff={() => void files.openDiff(change.path, false)}
+                    onStage={() =>
+                      void run('Staged', () => files.stagePaths([change.path]))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Commit + push box */}
+        <div className="flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 p-3">
+          <textarea
+            value={commitMsg}
+            onChange={(e) => setCommitMsg(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleCommit()
+            }}
+            placeholder="Commit message (Ctrl/⌘+Enter)"
+            rows={2}
+            disabled={!configured || busy !== null}
+            className="w-full resize-none rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-1.5 font-mono text-label-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="filled"
+              color="primary"
+              size="sm"
+              isLoading={busy === 'Committed'}
+              disabled={
+                !configured || busy !== null || staged.length === 0 || !commitMsg.trim()
+              }
+              onClick={handleCommit}
+            >
+              Commit
+            </Button>
+            <Button
+              variant="tonal"
+              color="secondary"
+              size="sm"
+              leftIcon={<Upload className="h-4 w-4" />}
+              isLoading={busy === 'Pushed'}
+              disabled={!configured || busy !== null || !canPush}
+              onClick={() => void run('Pushed', () => files.pushChanges())}
+              title={
+                !status?.upstream
+                  ? 'No upstream set for this branch'
+                  : status.ahead === 0
+                    ? 'Nothing to push'
+                    : 'Push local commits to upstream'
+              }
+            >
+              Push
+              {status?.upstream && status.ahead > 0
+                ? ` (${status.ahead} ahead)`
+                : ''}
+            </Button>
+            <Button
+              variant="tonal"
+              color="secondary"
+              size="sm"
+              leftIcon={<Download className="h-4 w-4" />}
+              isLoading={busy === 'Pulled'}
+              disabled={!configured || busy !== null || !status?.upstream}
+              onClick={() => void run('Pulled', () => files.pullChanges())}
+              title={
+                !status?.upstream
+                  ? 'No upstream set for this branch'
+                  : status.behind > 0
+                    ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'}`
+                    : 'Pull latest from upstream'
+              }
+            >
+              Pull
+              {status?.upstream && status.behind > 0
+                ? ` (${status.behind} behind)`
+                : ''}
+            </Button>
+          </div>
+        </div>
+
+        {/* History */}
+        <div className="shrink-0 border-t border-outline-variant/70">
+          <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
+            <History className="h-3.5 w-3.5 text-on-surface-variant" />
+            <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
+              History
+            </span>
+            <IconButton
+              variant="text"
+              size="sm"
+              icon={<RefreshCw className="h-3 w-3" />}
+              aria-label="Refresh history"
+              title="Refresh history"
+              onClick={() => void files.loadHistory()}
+            />
+          </div>
+          <div className="max-h-40 overflow-y-auto px-1 pb-2">
+            {files.history.length === 0 ? (
+              <p className="px-2 py-1 text-body-xs text-on-surface-variant">
+                No commits yet.
+              </p>
+            ) : (
+              files.history.map((commit) => (
+                <div
+                  key={commit.sha}
+                  className="flex items-start gap-2 px-2 py-1.5"
+                >
+                  <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 font-mono text-[10px] font-semibold text-primary">
+                    {commit.sha}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-label-sm text-on-surface" title={commit.subject}>
+                      {commit.subject}
+                    </p>
+                    <p className="text-body-xs text-on-surface-variant">
+                      {commit.author} · {commit.when}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Right column — diff viewer */}
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+        {files.gitDiffPath ? (
+          <>
+            <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-label-sm text-on-surface">
+                {files.gitDiffPath}
+              </span>
+              {files.gitDiffStaged && (
+                <Badge color="primary" variant="tonal" size="sm">
+                  staged
+                </Badge>
+              )}
+              <IconButton
+                variant="text"
+                size="sm"
+                icon={<X className="h-4 w-4" />}
+                aria-label="Close diff"
+                title="Close diff"
+                onClick={files.closeDiff}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-surface-container-lowest p-3">
+              {files.gitDiffLoading ? (
+                <Skeleton variant="rectangular" className="h-full" />
+              ) : files.gitDiffError ? (
+                <Alert
+                  variant="tonal"
+                  color="error"
+                  title="Failed to load diff"
+                  message={files.gitDiffError}
+                />
+              ) : (
+                <pre className="font-mono text-label-sm leading-relaxed text-on-surface">
+                  {files.gitDiff ?? ''}
+                </pre>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <EmptyState
+              icon={GitCommitHorizontal}
+              title="No diff selected"
+              description="Select a changed file from the list to view its unified diff."
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminFilesPage() {
@@ -564,10 +1054,22 @@ export default function AdminFilesPage() {
       return ''
     }
   })
+  // Single source of truth for the highlighted row — exactly ONE file OR folder
+  // may be selected at a time. Restored open files win over the persisted
+  // folder so a refreshed session never shows two highlights.
+  const [selectedPath, setSelectedPath] = useState<string | null>(() => {
+    if (files.openFileEntry) return files.openFileEntry.path
+    try {
+      return localStorage.getItem(FOLDER_STORAGE_KEY) ?? null
+    } catch {
+      return null
+    }
+  })
   const [saving, setSaving] = useState(false)
-  const [commitMessage, setCommitMessage] = useState('')
   const [discardRequest, setDiscardRequest] = useState<DiscardRequest>(null)
   const [treeQuery, setTreeQuery] = useState('')
+  // Workspace view — the File Manager tree/editor or the Git working-tree panel.
+  const [gitView, setGitView] = useState(false)
 
   // Persist the selected folder so a refresh resumes the same directory.
   useEffect(() => {
@@ -618,7 +1120,7 @@ export default function AdminFilesPage() {
       if (result.commitSha) {
         success(`${label} — commit ${result.commitSha.slice(0, 7)}`)
       } else {
-        success(label)
+        success(`${label} (working tree — not yet committed)`)
       }
     },
     [success],
@@ -635,35 +1137,56 @@ export default function AdminFilesPage() {
   const handleOpenFile = useCallback(async (entry: RepoEntryDto) => {
     await openFileRef.current(entry)
     setSelectedFolder(parentOf(entry.path))
+    setSelectedPath(entry.path)
     setMobileFilesOpen(false)
   }, [])
 
   const handleSelectFolder = useCallback(
     (path: string) => {
       setSelectedFolder(path)
+      setSelectedPath(path)
     },
     [],
+  )
+
+  const handleSearchResultOpen = useCallback(
+    (node: { path: string; type: 'file' | 'folder' }) => {
+      if (node.type === 'folder') {
+        handleSelectFolder(node.path)
+        if (!files.isExpanded(node.path)) files.toggleFolder(node.path)
+        setMobileFilesOpen(false)
+      } else {
+        void handleOpenFile({
+          name: node.path.split('/').pop() ?? node.path,
+          path: node.path,
+          type: 'file',
+          size: null,
+          sha: '',
+          lastCommit: null,
+        })
+      }
+    },
+    [files, handleOpenFile, handleSelectFolder],
   )
 
   const handleSave = useCallback(async () => {
     if (!isDirty || saving) return
     setSaving(true)
     try {
-      const result = await saveFile(commitMessage.trim())
-      notifyMutation('Saved', result)
-      setCommitMessage('')
+      const result = await saveFile()
+      notifyMutation('Saved to working tree', result)
     } catch (err) {
       error(err instanceof Error ? err.message : 'Failed to save file')
     } finally {
       setSaving(false)
     }
-  }, [isDirty, saveFile, saving, commitMessage, notifyMutation, error])
+  }, [isDirty, saveFile, saving, notifyMutation, error])
 
-  const handleCreate = async (name: string, message: string) => {
+  const handleCreate = async (name: string) => {
     if (!createDialog) return
     const path = joinPath(selectedFolder, name)
     try {
-      const result = await files.createEntry(path, createDialog, '', message.trim())
+      const result = await files.createEntry(path, createDialog, '')
       notifyMutation(createDialog === 'folder' ? 'Folder created' : 'File created', result)
       if (createDialog === 'file') {
         // Open the freshly created file for editing.
@@ -675,6 +1198,7 @@ export default function AdminFilesPage() {
           sha: '',
           lastCommit: null,
         })
+        setSelectedPath(path)
       }
       setCreateDialog(null)
     } catch (err) {
@@ -682,12 +1206,12 @@ export default function AdminFilesPage() {
     }
   }
 
-  const handleRename = async (newName: string, message: string) => {
+  const handleRename = async (newName: string) => {
     if (!renameTarget) return
     const from = renameTarget.path
     const to = joinPath(parentOf(from), newName.trim())
     try {
-      const result = await files.renameEntry(from, to, message.trim())
+      const result = await files.renameEntry(from, to)
       notifyMutation('Renamed', result)
       setRenameTarget(null)
     } catch (err) {
@@ -695,10 +1219,10 @@ export default function AdminFilesPage() {
     }
   }
 
-  const handleDelete = async (message: string) => {
+  const handleDelete = async () => {
     if (!deleteTarget) return
     try {
-      const result = await files.deleteEntry(deleteTarget.path, message.trim())
+      const result = await files.deleteEntry(deleteTarget.path)
       notifyMutation('Deleted', result)
       setDeleteTarget(null)
     } catch (err) {
@@ -718,14 +1242,10 @@ export default function AdminFilesPage() {
 
   const rootEntries = files.rootEntries
   const treeQueryActive = treeQuery.trim().length > 0
-  const matchedPaths = useMemo(
-    () => filterTreePaths(files.children, files.rootEntries ?? [], treeQuery),
-    [files.children, files.rootEntries, treeQuery],
+  const searchResults = useMemo(
+    () => searchTreeIndex(files.treeIndex, treeQuery),
+    [files.treeIndex, treeQuery],
   )
-  const visibleRootEntries = treeQueryActive
-    ? (rootEntries ?? []).filter((entry) => matchedPaths.has(entry.path))
-    : rootEntries
-  const activePath = openEntry?.path ?? null
 
   const openCreateDialog = useCallback((kind: 'file' | 'folder', folder?: string) => {
     if (folder !== undefined) setSelectedFolder(folder)
@@ -759,43 +1279,95 @@ export default function AdminFilesPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Workspace toolbar */}
         <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant/70 bg-surface-container/70 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <IconButton
-              variant="text"
-              size="sm"
-              className="shrink-0 lg:hidden"
-              icon={<Files className="h-4 w-4" />}
-              aria-label="Open files"
-              title="Open files"
-              onClick={() => setMobileFilesOpen(true)}
-            />
-            <FolderGit2 className="h-4 w-4 shrink-0 text-on-surface-variant" />
+          {/* Files / Git view toggle */}
+          <div className="flex items-center rounded-[var(--radius-input)] bg-surface-container-high p-0.5">
             <button
               type="button"
-              onClick={() => {
-                setSelectedFolder('')
-                if (!files.isExpanded('')) files.toggleFolder('')
-              }}
-              className="shrink-0 truncate text-label-md font-semibold text-on-surface hover:text-primary transition-colors duration-fast"
-              title="Go to repository root"
+              onClick={() => setGitView(false)}
+              className={cn(
+                'flex h-7 items-center gap-1.5 rounded-[calc(var(--radius-input)-2px)] px-2.5 text-label-sm font-medium transition-colors duration-fast',
+                !gitView
+                  ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface',
+              )}
             >
-              Repository
+              <Files className="h-3.5 w-3.5" />
+              Files
             </button>
-            {selectedFolder && (
-              <Badge
-                color="secondary"
-                size="sm"
-                variant="tonal"
-                className="max-w-[10rem]"
-                title={selectedFolder}
-              >
-                {selectedFolder}
-              </Badge>
+            <button
+              type="button"
+              onClick={() => setGitView(true)}
+              className={cn(
+                'flex h-7 items-center gap-1.5 rounded-[calc(var(--radius-input)-2px)] px-2.5 text-label-sm font-medium transition-colors duration-fast',
+                gitView
+                  ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface',
+              )}
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+              Git
+              {files.gitStatus && (files.gitStatus.stagedCount + files.gitStatus.unstagedCount) > 0 && (
+                <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
+                  {files.gitStatus.stagedCount + files.gitStatus.unstagedCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className="flex min-w-0 items-center gap-1.5">
+            {!gitView && (
+              <>
+                <FolderGit2 className="h-4 w-4 shrink-0 text-on-surface-variant" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFolder('')
+                    setSelectedPath(null)
+                    if (!files.isExpanded('')) files.toggleFolder('')
+                  }}
+                  className="shrink-0 truncate text-label-md font-semibold text-on-surface hover:text-primary transition-colors duration-fast"
+                  title="Go to repository root"
+                >
+                  Repository
+                </button>
+                {selectedFolder && (
+                  <Badge
+                    color="secondary"
+                    size="sm"
+                    variant="tonal"
+                    className="max-w-[10rem]"
+                    title={selectedFolder}
+                  >
+                    {selectedFolder}
+                  </Badge>
+                )}
+              </>
+            )}
+
+            {/* Current branch badge (Git view) */}
+            {gitView && (
+              <>
+                <GitBranch className="h-4 w-4 shrink-0 text-primary" />
+                <span className="truncate text-label-md font-semibold text-on-surface">
+                  {files.gitStatus?.branch ?? 'no branch'}
+                </span>
+                {files.gitStatus?.upstream && (
+                  <span className="text-body-xs text-on-surface-variant truncate">
+                    {files.gitStatus.upstream}
+                    {files.gitStatus.ahead > 0 && ` +${files.gitStatus.ahead}`}
+                    {files.gitStatus.behind > 0 && ` −${files.gitStatus.behind}`}
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {gitView ? (
+            <GitPanel files={files} configured={configured} />
+          ) : (
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
           {/* Mobile backdrop for the file drawer */}
           <div
             className={cn(
@@ -888,7 +1460,36 @@ export default function AdminFilesPage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {rootEntries === undefined && !files.directoryError ? (
+              {treeQueryActive ? (
+                searchResults === undefined ? (
+                  files.treeError ? (
+                    <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                      {files.treeError}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 p-1">
+                      <Skeleton variant="text" width="80%" />
+                      <Skeleton variant="text" width="65%" />
+                      <Skeleton variant="text" width="90%" />
+                    </div>
+                  )
+                ) : searchResults.length === 0 ? (
+                  <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                    No files match your search.
+                  </p>
+                ) : (
+                  <div className="flex flex-col">
+                    {searchResults.map((node) => (
+                      <SearchResultRow
+                        key={node.path}
+                        node={node}
+                        selected={selectedPath === node.path}
+                        onOpen={handleSearchResultOpen}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : rootEntries === undefined && !files.directoryError ? (
                 <div className="flex flex-col gap-1.5 p-1">
                   <Skeleton variant="text" width="80%" />
                   <Skeleton variant="text" width="65%" />
@@ -899,20 +1500,18 @@ export default function AdminFilesPage() {
                 <p className="px-3 py-4 text-body-sm text-on-surface-variant">
                   Could not load the repository.
                 </p>
-              ) : visibleRootEntries === undefined || visibleRootEntries.length === 0 ? (
+              ) : rootEntries.length === 0 ? (
                 <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                  {treeQueryActive ? 'No files match your search.' : 'This folder is empty.'}
+                  This folder is empty.
                 </p>
               ) : (
-                visibleRootEntries.map((entry) =>
+                rootEntries.map((entry) =>
                   entry.type === 'folder' ? (
                     <TreeFolderRow
                       key={entry.path}
                       folder={entry.path}
                       depth={0}
-                      selectedFolder={selectedFolder}
-                      activePath={activePath}
-                      matched={matchedPaths}
+                      selectedPath={selectedPath}
                       onSelectFolder={handleSelectFolder}
                       onOpenFile={handleOpenFile}
                       onCreateFile={(folder) => openCreateDialog('file', folder)}
@@ -932,7 +1531,7 @@ export default function AdminFilesPage() {
                       key={entry.path}
                       entry={entry}
                       depth={0}
-                      activePath={activePath}
+                      selectedPath={selectedPath}
                       onOpenFile={handleOpenFile}
                       onRename={(entry) => setRenameTarget(entry)}
                       onDelete={(entry) => setDeleteTarget(entry)}
@@ -958,6 +1557,7 @@ export default function AdminFilesPage() {
                       type="button"
                       onClick={() => {
                         setSelectedFolder(parentOf(tab.entry.path))
+                        setSelectedPath(tab.entry.path)
                         void files.activateTab(tab.entry.path)
                       }}
                       title={tab.entry.path}
@@ -1066,20 +1666,16 @@ export default function AdminFilesPage() {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-outline-variant/50 px-3 py-1.5">
-                    <Input
-                      value={commitMessage}
-                      onChange={(e) => setCommitMessage(e.target.value)}
-                      placeholder={defaultMessage('update', openEntry.path)}
-                      aria-label="Commit message"
-                      className="max-w-xl"
-                    />
+                    <span className="min-w-0 flex-1 truncate text-body-xs text-on-surface-variant">
+                      Saving writes to the working tree — commit it from the Git tab.
+                    </span>
                     <IconButton
                       variant="primary"
                       size="sm"
                       isLoading={saving}
                       icon={<Save className="h-4 w-4" />}
-                      aria-label="Commit"
-                      title="Commit"
+                      aria-label="Save to working tree"
+                      title="Save to working tree"
                       disabled={!files.isDirty || !configured}
                       onClick={handleSave}
                     />
@@ -1114,6 +1710,8 @@ export default function AdminFilesPage() {
               )}
             </div>
           </div>
+          </div>
+          )}
         </div>
 
       </div>
@@ -1246,11 +1844,10 @@ function CreateEntryDialog({
 }: {
   type: 'file' | 'folder' | null
   folder: string
-  onConfirm: (name: string, message: string) => void
+  onConfirm: (name: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
-  const [message, setMessage] = useState('')
   const open = type !== null
   const title = type === 'folder' ? 'New folder' : 'New file'
   const targetPath = folder ? `${folder}/` : ''
@@ -1278,7 +1875,7 @@ function CreateEntryDialog({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && name.trim()) onConfirm(name.trim(), message)
+                    if (e.key === 'Enter' && name.trim()) onConfirm(name.trim())
                   }}
                   autoFocus
                 />
@@ -1287,16 +1884,9 @@ function CreateEntryDialog({
                   <code className="font-mono">
                     {targetPath}
                     {name.trim() || '…'}
-                  </code>
+                  </code>{' '}
+                  in the working tree — not committed yet.
                 </Field.HelperText>
-              </Field.Root>
-              <Field.Root>
-                <Field.Label>Commit message</Field.Label>
-                <Input
-                  placeholder={defaultMessage(type === 'folder' ? 'create folder' : 'create', `${targetPath}${name.trim() || '…'}`)}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
               </Field.Root>
             </div>
           </Dialog.Body>
@@ -1308,7 +1898,7 @@ function CreateEntryDialog({
               variant="filled"
               color="primary"
               disabled={!name.trim()}
-              onClick={() => onConfirm(name.trim(), message)}
+              onClick={() => onConfirm(name.trim())}
             >
               Create
             </Button>
@@ -1327,11 +1917,10 @@ function RenameDialog({
   onCancel,
 }: {
   target: RepoEntryDto | null
-  onConfirm: (newName: string, message: string) => void
+  onConfirm: (newName: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
-  const [message, setMessage] = useState('')
   const open = target !== null
 
   return (
@@ -1358,21 +1947,14 @@ function RenameDialog({
                     defaultValue={target.name}
                     onChange={(e) => setName(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && name.trim()) onConfirm(name.trim(), message)
+                      if (e.key === 'Enter' && name.trim()) onConfirm(name.trim())
                     }}
                     autoFocus
                   />
                   <Field.HelperText>
                     Current: <code className="font-mono">{target.path}</code>
+                    {' — applied to the working tree only.'}
                   </Field.HelperText>
-                </Field.Root>
-                <Field.Root>
-                  <Field.Label>Commit message</Field.Label>
-                  <Input
-                    placeholder={defaultMessage('rename', target.path)}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                  />
                 </Field.Root>
               </div>
             )}
@@ -1385,7 +1967,7 @@ function RenameDialog({
               variant="filled"
               color="primary"
               disabled={!name.trim()}
-              onClick={() => onConfirm(name.trim(), message)}
+              onClick={() => onConfirm(name.trim())}
             >
               Rename
             </Button>
@@ -1404,10 +1986,9 @@ function DeleteDialog({
   onCancel,
 }: {
   target: RepoEntryDto | null
-  onConfirm: (message: string) => void
+  onConfirm: () => void
   onCancel: () => void
 }) {
-  const [message, setMessage] = useState('')
   const open = target !== null
 
   return (
@@ -1427,27 +2008,17 @@ function DeleteDialog({
           <Dialog.Body>
             <div className="flex flex-col gap-3">
               <p className="text-body-md text-on-surface">
-                Delete <code className="font-mono">{target?.path}</code>? This
-                commits the deletion to the repository and cannot be undone.
+                Delete <code className="font-mono">{target?.path}</code> from the
+                working tree? It will still show as a deletion until staged and
+                committed from the Git tab.
               </p>
-              <Field.Root>
-                <Field.Label>Commit message</Field.Label>
-                <Input
-                  placeholder={defaultMessage('delete', target?.path ?? '…')}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') onConfirm(message)
-                  }}
-                />
-              </Field.Root>
             </div>
           </Dialog.Body>
           <Dialog.Footer>
             <Button variant="text" color="neutral" onClick={onCancel}>
               Cancel
             </Button>
-            <Button variant="filled" color="error" onClick={() => onConfirm(message)}>
+            <Button variant="filled" color="error" onClick={onConfirm}>
               Delete
             </Button>
           </Dialog.Footer>

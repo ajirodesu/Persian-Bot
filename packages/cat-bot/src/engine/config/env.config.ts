@@ -60,6 +60,10 @@ interface EnvConfig {
   readonly GITHUB_REPO_NAME?: string | undefined;
   // Sub-path inside the repo where packages/cat-bot source lives (defaults to packages/cat-bot).
   readonly GITHUB_REPO_BASE_PATH?: string | undefined;
+  // Local repo — the File Manager edits a real checkout and tracks changes with
+  // real git (status/stage/commit/push). Defaults to auto-detecting the git
+  // checkout that contains this process; override to point at another clone.
+  readonly ADMIN_REPO_PATH?: string | undefined;
 
   // Security
   readonly ENCRYPTION_KEY: string;
@@ -237,6 +241,7 @@ export const env: EnvConfig = {
   GITHUB_REPO_OWNER: getOptionalEnv('GITHUB_REPO_OWNER'),
   GITHUB_REPO_NAME: getOptionalEnv('GITHUB_REPO_NAME'),
   GITHUB_REPO_BASE_PATH: getOptionalEnv('GITHUB_REPO_BASE_PATH'),
+  ADMIN_REPO_PATH: getOptionalEnv('ADMIN_REPO_PATH'),
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),
