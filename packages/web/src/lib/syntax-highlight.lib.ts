@@ -23,26 +23,120 @@ interface LangConfig {
 }
 
 const JS_KEYWORDS = new Set([
-  'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case',
-  'default', 'break', 'continue', 'class', 'extends', 'super', 'new', 'this', 'import', 'export', 'from',
-  'as', 'try', 'catch', 'finally', 'throw', 'typeof', 'instanceof', 'in', 'of', 'async', 'await', 'yield',
-  'static', 'get', 'set', 'void', 'delete', 'null', 'undefined', 'true', 'false', 'interface', 'type',
-  'enum', 'implements', 'public', 'private', 'protected', 'readonly', 'namespace', 'declare', 'abstract',
-  'keyof', 'never', 'unknown', 'any', 'satisfies',
+  'const',
+  'let',
+  'var',
+  'function',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'do',
+  'switch',
+  'case',
+  'default',
+  'break',
+  'continue',
+  'class',
+  'extends',
+  'super',
+  'new',
+  'this',
+  'import',
+  'export',
+  'from',
+  'as',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'async',
+  'await',
+  'yield',
+  'static',
+  'get',
+  'set',
+  'void',
+  'delete',
+  'null',
+  'undefined',
+  'true',
+  'false',
+  'interface',
+  'type',
+  'enum',
+  'implements',
+  'public',
+  'private',
+  'protected',
+  'readonly',
+  'namespace',
+  'declare',
+  'abstract',
+  'keyof',
+  'never',
+  'unknown',
+  'any',
+  'satisfies',
 ])
 
 const BASH_KEYWORDS = new Set([
-  'if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done', 'case', 'esac', 'function', 'return',
-  'break', 'continue', 'export', 'local', 'readonly', 'shift', 'echo', 'exit', 'in', 'select', 'until',
-  'time', 'test',
+  'if',
+  'then',
+  'else',
+  'elif',
+  'fi',
+  'for',
+  'while',
+  'do',
+  'done',
+  'case',
+  'esac',
+  'function',
+  'return',
+  'break',
+  'continue',
+  'export',
+  'local',
+  'readonly',
+  'shift',
+  'echo',
+  'exit',
+  'in',
+  'select',
+  'until',
+  'time',
+  'test',
 ])
 
 const GENERIC_KEYWORDS = new Set([...JS_KEYWORDS, ...BASH_KEYWORDS])
 
 function getLangConfig(lang: string): LangConfig {
   const l = (lang || '').toLowerCase()
-  if (['js', 'jsx', 'ts', 'tsx', 'javascript', 'typescript', 'mjs', 'cjs', 'mts', 'cts'].includes(l)) {
-    return { keywords: JS_KEYWORDS, lineComment: '//', blockComment: ['/*', '*/'] }
+  if (
+    [
+      'js',
+      'jsx',
+      'ts',
+      'tsx',
+      'javascript',
+      'typescript',
+      'mjs',
+      'cjs',
+      'mts',
+      'cts',
+    ].includes(l)
+  ) {
+    return {
+      keywords: JS_KEYWORDS,
+      lineComment: '//',
+      blockComment: ['/*', '*/'],
+    }
   }
   if (['sh', 'bash', 'shell', 'zsh'].includes(l)) {
     return { keywords: BASH_KEYWORDS, lineComment: '#' }
@@ -54,7 +148,11 @@ function getLangConfig(lang: string): LangConfig {
     return { keywords: new Set() }
   }
   // Unknown/unspecified language — best-effort union of common keywords.
-  return { keywords: GENERIC_KEYWORDS, lineComment: '//', blockComment: ['/*', '*/'] }
+  return {
+    keywords: GENERIC_KEYWORDS,
+    lineComment: '//',
+    blockComment: ['/*', '*/'],
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -104,8 +202,14 @@ function highlightGeneric(code: string, cfg: LangConfig): string {
       const quote = ch
       let j = i + 1
       while (j < n) {
-        if (code[j] === '\\') { j += 2; continue }
-        if (code[j] === quote) { j++; break }
+        if (code[j] === '\\') {
+          j += 2
+          continue
+        }
+        if (code[j] === quote) {
+          j++
+          break
+        }
         j++
       }
       out += `<span class="tok-string">${code.slice(i, j)}</span>`
@@ -179,7 +283,10 @@ function highlightCSS(code: string): string {
     const ch = code[i]
     if (ch === '"' || ch === "'") {
       let j = i + 1
-      while (j < n && code[j] !== ch) { if (code[j] === '\\') j++; j++ }
+      while (j < n && code[j] !== ch) {
+        if (code[j] === '\\') j++
+        j++
+      }
       j = Math.min(j + 1, n)
       out += `<span class="tok-string">${code.slice(i, j)}</span>`
       i = j
@@ -193,7 +300,10 @@ function highlightCSS(code: string): string {
       continue
     }
     if (/[0-9]/.test(ch)) {
-      const m = /^[0-9]+\.?[0-9]*(px|em|rem|%|vh|vw|vmin|vmax|deg|s|ms|fr|pt|ex|ch)?/.exec(code.slice(i))
+      const m =
+        /^[0-9]+\.?[0-9]*(px|em|rem|%|vh|vw|vmin|vmax|deg|s|ms|fr|pt|ex|ch)?/.exec(
+          code.slice(i),
+        )
       const matched = m ? m[0] : ch
       out += `<span class="tok-number">${matched}</span>`
       i += matched.length
@@ -229,7 +339,15 @@ function highlightCSS(code: string): string {
 function highlightHtmlTag(tag: string): string {
   return tag.replace(
     /(&lt;\/?)([a-zA-Z][a-zA-Z0-9-]*)|([a-zA-Z-]+)(=)("(?:[^"]|&quot;)*"|'[^']*')|(&gt;\/?)/g,
-    (m, open: string, tagName: string, attrName: string, eq: string, attrVal: string, close: string) => {
+    (
+      m,
+      open: string,
+      tagName: string,
+      attrName: string,
+      eq: string,
+      attrVal: string,
+      close: string,
+    ) => {
       if (open && tagName) {
         return `<span class="tok-punct">${open}</span><span class="tok-tag">${tagName}</span>`
       }

@@ -56,6 +56,8 @@ import type {
   RepoEntryDto,
   RepoTreeNodeDto,
   GitChangeDto,
+  GitStatusDto,
+  GitCommitInfoDto,
 } from '@/features/admin/services/admin-file-manager.service'
 
 /** localStorage key remembering the last selected folder across refreshes. */
@@ -629,7 +631,7 @@ const CHANGE_META: Record<
   untracked: { label: 'Untracked', className: 'text-info', icon: CircleDot },
 }
 
-function GitChangeRow({
+const GitChangeRow = memo(function GitChangeRow({
   change,
   busy,
   onDiff,
@@ -638,9 +640,9 @@ function GitChangeRow({
 }: {
   change: GitChangeDto
   busy: string | null
-  onDiff: () => void
-  onStage?: () => void
-  onUnstage?: () => void
+  onDiff: (path: string, staged: boolean) => void
+  onStage?: (path: string) => void
+  onUnstage?: (path: string) => void
 }) {
   const meta = CHANGE_META[change.status]
   const Icon = meta.icon
@@ -649,7 +651,7 @@ function GitChangeRow({
       <Icon className={cn('h-4 w-4 shrink-0', meta.className)} />
       <button
         type="button"
-        onClick={onDiff}
+        onClick={() => onDiff(change.path, change.staged)}
         title={`Show diff for ${change.path}`}
         className="min-w-0 flex-1 truncate text-left font-mono text-label-sm text-on-surface transition-colors duration-fast hover:text-primary"
       >
@@ -662,7 +664,7 @@ function GitChangeRow({
       )}
       <button
         type="button"
-        onClick={onDiff}
+        onClick={() => onDiff(change.path, change.staged)}
         title={`Show diff for ${change.path}`}
         className="flex h-8 shrink-0 items-center gap-1 rounded px-2 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:h-6 lg:px-1.5 hover:bg-on-surface/10 hover:text-on-surface"
       >
@@ -677,7 +679,7 @@ function GitChangeRow({
           icon={<Upload className="h-3.5 w-3.5" />}
           aria-label={`Stage ${change.path}`}
           title="Stage"
-          onClick={onStage}
+          onClick={() => onStage(change.path)}
         />
       )}
       {onUnstage && (
@@ -689,12 +691,156 @@ function GitChangeRow({
           icon={<Undo2 className="h-3.5 w-3.5" />}
           aria-label={`Unstage ${change.path}`}
           title="Unstage"
-          onClick={onUnstage}
+          onClick={() => onUnstage(change.path)}
         />
       )}
     </div>
   )
-}
+})
+
+const HistoryRow = memo(function HistoryRow({
+  commit,
+}: {
+  commit: GitCommitInfoDto
+}) {
+  return (
+    <div className="flex items-start gap-2 px-2 py-1.5">
+      <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 font-mono text-[10px] font-semibold text-primary">
+        {commit.sha}
+      </span>
+      <div className="min-w-0">
+        <p
+          className="truncate text-label-sm text-on-surface"
+          title={commit.subject}
+        >
+          {commit.subject}
+        </p>
+        <p className="text-body-xs text-on-surface-variant">
+          {commit.author} · {commit.when}
+        </p>
+      </div>
+    </div>
+  )
+})
+
+const CommitBox = memo(function CommitBox({
+  configured,
+  status,
+  busy,
+  changesLength,
+  canPush,
+  onCommit,
+  onPush,
+  onPull,
+}: {
+  configured: boolean
+  status: GitStatusDto | null
+  busy: string | null
+  changesLength: number
+  canPush: boolean
+  onCommit: (message: string) => Promise<boolean>
+  onPush: () => void
+  onPull: () => void
+}) {
+  const [commitMsg, setCommitMsg] = useState('')
+
+  // Keeps the whole GitPanel from re-rendering on every keystroke — only this
+  // box re-renders while typing, so scrolling stays smooth on mobile.
+  const handleSubmit = async () => {
+    if (await onCommit(commitMsg)) setCommitMsg('')
+  }
+
+  return (
+    <div className="flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 bg-surface-container p-3">
+      <textarea
+        value={commitMsg}
+        onChange={(e) => setCommitMsg(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            void handleSubmit()
+          }
+        }}
+        placeholder="Commit message (Ctrl/⌘+Enter)"
+        rows={2}
+        disabled={!configured || busy !== null}
+        autoComplete="off"
+        // text-[16px] on mobile — the minimum size iOS Safari renders inputs at
+        // without auto-zooming on focus, so the box stays stable while typing.
+        className="w-full resize-none rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-3 py-2 font-mono text-[16px] leading-6 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:px-2 sm:py-1.5 sm:text-label-sm"
+      />
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+        <Button
+          variant="filled"
+          color="primary"
+          size="sm"
+          className="w-full sm:w-auto"
+          isLoading={busy === 'Committed'}
+          disabled={
+            !configured ||
+            busy !== null ||
+            changesLength === 0 ||
+            !commitMsg.trim()
+          }
+          onClick={() => void handleSubmit()}
+        >
+          Commit
+        </Button>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <Button
+            variant="tonal"
+            color="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
+            leftIcon={<Upload className="h-4 w-4" />}
+            isLoading={busy === 'Pushed'}
+            disabled={!configured || busy !== null || !canPush}
+            onClick={onPush}
+            title={
+              !status?.upstream
+                ? 'No upstream set for this branch'
+                : status.ahead === 0
+                  ? 'Nothing to push'
+                  : 'Push local commits to upstream'
+            }
+          >
+            Push
+            {status?.upstream && status.ahead > 0
+              ? ` (${status.ahead} ahead)`
+              : ''}
+          </Button>
+          <Button
+            variant="tonal"
+            color="secondary"
+            size="sm"
+            className="flex-1 sm:flex-none"
+            leftIcon={<Download className="h-4 w-4" />}
+            isLoading={busy === 'Pulled'}
+            disabled={
+              !configured ||
+              busy !== null ||
+              !status?.upstream ||
+              status.behind === 0
+            }
+            onClick={onPull}
+            title={
+              !status?.upstream
+                ? 'No upstream set for this branch'
+                : status.behind > 0
+                  ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'}`
+                  : 'Pull latest from upstream'
+            }
+          >
+            Pull
+            {status?.upstream && status.behind > 0
+              ? ` (${status.behind} behind)`
+              : ''}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+})
 
 function GitPanel({
   files,
@@ -704,20 +850,21 @@ function GitPanel({
   configured: boolean
 }) {
   const { success, error } = useSnackbar()
-  const [commitMsg, setCommitMsg] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
 
   const run = useCallback(
-    async (label: string, fn: () => Promise<unknown>) => {
+    async (label: string, fn: () => Promise<unknown>): Promise<boolean> => {
       setBusy(label)
       try {
         await fn()
         success(label)
       } catch (err) {
         error(err instanceof Error ? err.message : `${label} failed`)
+        return false
       } finally {
         setBusy(null)
       }
+      return true
     },
     [success, error],
   )
@@ -728,15 +875,74 @@ function GitPanel({
   const unstaged = useMemo(() => changes.filter((c) => !c.staged), [changes])
   const canPush = !!status?.upstream && status.ahead > 0
 
-  const handleCommit = useCallback(() => {
-    const message = commitMsg.trim()
-    if (!message || changes.length === 0 || busy !== null) return
-    void run('Committed', async () => {
-      if (staged.length === 0) await files.stageAll()
-      await files.commitChanges(message)
-      setCommitMsg('')
-    })
-  }, [commitMsg, changes, staged, busy, run, files, setCommitMsg])
+  // Stable per-action handlers so memoized rows skip re-rendering on keystrokes
+  // and while only the busy spinner animates.
+  const handleRefresh = useCallback(() => {
+    void files.refreshGit()
+    void files.loadHistory()
+  }, [files])
+
+  const checkout = useCallback(
+    (branch: string) => {
+      void run(`Checked out ${branch}`, () => files.checkoutBranch(branch))
+    },
+    [run, files],
+  )
+
+  const openDiff = useCallback(
+    (path: string, staged2: boolean) => {
+      void files.openDiff(path, staged2)
+    },
+    [files],
+  )
+
+  const stagePath = useCallback(
+    (path: string) => {
+      void run('Staged', () => files.stagePaths([path]))
+    },
+    [run, files],
+  )
+
+  const unstagePath = useCallback(
+    (path: string) => {
+      void run('Unstaged', () => files.unstagePaths([path]))
+    },
+    [run, files],
+  )
+
+  const stageAll = useCallback(
+    () => void run('Staged all changes', () => files.stageAll()),
+    [run, files],
+  )
+
+  const unstageAll = useCallback(
+    () => void run('Unstaged all', () => files.unstagePaths([])),
+    [run, files],
+  )
+
+  const handleCommit = useCallback(
+    (message: string): Promise<boolean> => {
+      const msg = message.trim()
+      if (!msg || changes.length === 0 || busy !== null) {
+        return Promise.resolve(false)
+      }
+      return run('Committed', async () => {
+        if (staged.length === 0) await files.stageAll()
+        await files.commitChanges(msg)
+      })
+    },
+    [changes.length, staged.length, busy, run, files],
+  )
+
+  const handlePush = useCallback(
+    () => void run('Pushed', () => files.pushChanges()),
+    [run, files],
+  )
+
+  const handlePull = useCallback(
+    () => void run('Pulled', () => files.pullChanges()),
+    [run, files],
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
@@ -749,11 +955,7 @@ function GitPanel({
             value={status?.branch ?? ''}
             onChange={(e) => {
               const branch = e.target.value
-              if (branch && branch !== status?.branch) {
-                void run(`Checked out ${branch}`, () =>
-                  files.checkoutBranch(branch),
-                )
-              }
+              if (branch && branch !== status?.branch) checkout(branch)
             }}
             disabled={!configured || busy !== null}
             className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-1.5 text-label-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
@@ -774,15 +976,12 @@ function GitPanel({
             icon={<RefreshCw className="h-4 w-4" />}
             aria-label="Refresh git status"
             title="Refresh"
-            onClick={() => {
-              void files.refreshGit()
-              void files.loadHistory()
-            }}
+            onClick={handleRefresh}
           />
         </div>
 
         {/* Changes list */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
           {files.gitError && (
             <div className="px-1 pb-2">
               <Alert
@@ -829,9 +1028,7 @@ function GitPanel({
                 {staged.length > 0 && (
                   <button
                     type="button"
-                    onClick={() =>
-                      void run('Unstaged all', () => files.unstagePaths([]))
-                    }
+                    onClick={unstageAll}
                     disabled={busy !== null}
                     className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
                   >
@@ -845,12 +1042,8 @@ function GitPanel({
                     key={change.path}
                     change={change}
                     busy={busy}
-                    onDiff={() => void files.openDiff(change.path, true)}
-                    onUnstage={() =>
-                      void run('Unstaged', () =>
-                        files.unstagePaths([change.path]),
-                      )
-                    }
+                    onDiff={openDiff}
+                    onUnstage={unstagePath}
                   />
                 ))}
               </div>
@@ -863,9 +1056,7 @@ function GitPanel({
                 {unstaged.length > 0 && (
                   <button
                     type="button"
-                    onClick={() =>
-                      void run('Staged all changes', () => files.stageAll())
-                    }
+                    onClick={stageAll}
                     disabled={busy !== null}
                     className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
                   >
@@ -879,10 +1070,8 @@ function GitPanel({
                     key={change.path}
                     change={change}
                     busy={busy}
-                    onDiff={() => void files.openDiff(change.path, false)}
-                    onStage={() =>
-                      void run('Staged', () => files.stagePaths([change.path]))
-                    }
+                    onDiff={openDiff}
+                    onStage={stagePath}
                   />
                 ))}
               </div>
@@ -891,88 +1080,16 @@ function GitPanel({
         </div>
 
         {/* Commit + push box */}
-        <div className="flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 bg-surface-container p-3">
-          <textarea
-            value={commitMsg}
-            onChange={(e) => setCommitMsg(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleCommit()
-            }}
-            placeholder="Commit message (Ctrl/⌘+Enter)"
-            rows={2}
-            disabled={!configured || busy !== null}
-            className="w-full resize-none rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-1.5 font-mono text-label-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
-          />
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-            <Button
-              variant="filled"
-              color="primary"
-              size="sm"
-              className="w-full sm:w-auto"
-              isLoading={busy === 'Committed'}
-              disabled={
-                !configured ||
-                busy !== null ||
-                changes.length === 0 ||
-                !commitMsg.trim()
-              }
-              onClick={handleCommit}
-            >
-              Commit
-            </Button>
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <Button
-                variant="tonal"
-                color="secondary"
-                size="sm"
-                className="flex-1 sm:flex-none"
-                leftIcon={<Upload className="h-4 w-4" />}
-                isLoading={busy === 'Pushed'}
-                disabled={!configured || busy !== null || !canPush}
-                onClick={() => void run('Pushed', () => files.pushChanges())}
-                title={
-                  !status?.upstream
-                    ? 'No upstream set for this branch'
-                    : status.ahead === 0
-                      ? 'Nothing to push'
-                      : 'Push local commits to upstream'
-                }
-              >
-                Push
-                {status?.upstream && status.ahead > 0
-                  ? ` (${status.ahead} ahead)`
-                  : ''}
-              </Button>
-              <Button
-                variant="tonal"
-                color="secondary"
-                size="sm"
-                className="flex-1 sm:flex-none"
-                leftIcon={<Download className="h-4 w-4" />}
-                isLoading={busy === 'Pulled'}
-                disabled={
-                  !configured ||
-                  busy !== null ||
-                  !status?.upstream ||
-                  status.behind === 0
-                }
-                onClick={() => void run('Pulled', () => files.pullChanges())}
-                title={
-                  !status?.upstream
-                    ? 'No upstream set for this branch'
-                    : status.behind > 0
-                      ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'}`
-                      : 'Pull latest from upstream'
-                }
-              >
-                Pull
-                {status?.upstream && status.behind > 0
-                  ? ` (${status.behind} behind)`
-                  : ''}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <CommitBox
+          configured={configured}
+          status={status}
+          busy={busy}
+          changesLength={changes.length}
+          canPush={canPush}
+          onCommit={handleCommit}
+          onPush={handlePush}
+          onPull={handlePull}
+        />
 
         {/* History */}
         <div className="shrink-0 border-t border-outline-variant/70">
@@ -990,32 +1107,14 @@ function GitPanel({
               onClick={() => void files.loadHistory()}
             />
           </div>
-          <div className="max-h-40 overflow-y-auto px-1 pb-2">
+          <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
             {files.history.length === 0 ? (
               <p className="px-2 py-1 text-body-xs text-on-surface-variant">
                 No commits yet.
               </p>
             ) : (
               files.history.map((commit) => (
-                <div
-                  key={commit.sha}
-                  className="flex items-start gap-2 px-2 py-1.5"
-                >
-                  <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 font-mono text-[10px] font-semibold text-primary">
-                    {commit.sha}
-                  </span>
-                  <div className="min-w-0">
-                    <p
-                      className="truncate text-label-sm text-on-surface"
-                      title={commit.subject}
-                    >
-                      {commit.subject}
-                    </p>
-                    <p className="text-body-xs text-on-surface-variant">
-                      {commit.author} · {commit.when}
-                    </p>
-                  </div>
-                </div>
+                <HistoryRow key={commit.sha} commit={commit} />
               ))
             )}
           </div>

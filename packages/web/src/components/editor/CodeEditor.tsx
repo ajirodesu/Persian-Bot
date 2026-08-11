@@ -214,7 +214,11 @@ const CodeEditor = memo(function CodeEditor({
             'border-r border-outline-variant/50 bg-surface-container-highest text-right ' +
             'text-on-surface-variant/55 [font-variant-numeric:tabular-nums] whitespace-pre',
         )}
-        style={{ width: gutterWidth, paddingRight: GUTTER_PAD_RIGHT, paddingLeft: 0 }}
+        style={{
+          width: gutterWidth,
+          paddingRight: GUTTER_PAD_RIGHT,
+          paddingLeft: 0,
+        }}
       >
         <span style={{ height: contentHeight }} className="block">
           {lineNumbers}
