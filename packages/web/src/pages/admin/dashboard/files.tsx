@@ -53,29 +53,11 @@ import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
 import type { UseAdminFileManagerReturn } from '@/features/admin/hooks/useAdminFileManager'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import type { RepoEntryDto, RepoTreeNodeDto, GitChangeDto } from '@/features/admin/services/admin-file-manager.service'
-import type { BadgeColor } from '@/components/ui/data-display/Badge'
 
 /** localStorage key remembering the last selected folder across refreshes. */
 const FOLDER_STORAGE_KEY = 'admin-file-manager:folder:v1'
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
-
-const LANGUAGE_COLOR: Record<string, BadgeColor> = {
-  typescript: 'primary',
-  javascript: 'warning',
-  json: 'info',
-  markdown: 'secondary',
-  yaml: 'tertiary',
-  css: 'info',
-  html: 'tertiary',
-  shell: 'success',
-  python: 'success',
-  text: 'secondary',
-}
-
-function languageColor(language: string | null): BadgeColor {
-  return language ? (LANGUAGE_COLOR[language.toLowerCase()] ?? 'secondary') : 'secondary'
-}
 
 /** Extension → icon + tint used for Replit-style typed file rows. */
 const FILE_TYPE_MAP: Record<string, { icon: ComponentType<SVGProps<SVGSVGElement>>; className: string }> = {
@@ -241,34 +223,6 @@ const RowMenu = memo(function RowMenu({
     </>
   )
 })
-
-function formatSize(bytes: number | null): string {
-  if (bytes === null) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-}
-
-function relativeTime(iso: string): string {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  if (months < 12) return `${months}mo ago`
-  return `${Math.floor(months / 12)}y ago`
-}
-
-/** First line of a commit message, truncated to a sensible row length. */
-function shortMessage(message: string): string {
-  const first = message.split('\n')[0] ?? ''
-  return first.length > 44 ? `${first.slice(0, 41)}…` : first
-}
 
 function parentOf(entryPath: string): string {
   const idx = entryPath.lastIndexOf('/')
@@ -1743,33 +1697,6 @@ export default function AdminFilesPage() {
                 </div>
               ) : (
                 <>
-                  <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-outline-variant/50 px-3 py-1.5">
-                    <Badge color={languageColor(openEntry.language ?? null)} variant="tonal" size="sm">
-                      {openEntry.language ?? 'text'}
-                    </Badge>
-                    {openEntry.size !== null && (
-                      <Badge color="secondary" variant="tonal" size="sm">
-                        {formatSize(openEntry.size)}
-                      </Badge>
-                    )}
-                    {files.isDirty && (
-                      <Badge
-                        color="warning"
-                        variant="tonal"
-                        size="sm"
-                        leftIcon={<CircleDot className="h-3 w-3" />}
-                      >
-                        Unsaved
-                      </Badge>
-                    )}
-                    {openEntry.lastCommit && (
-                      <span className="text-body-xs text-on-surface-variant truncate">
-                        {shortMessage(openEntry.lastCommit.message)} ·{' '}
-                        {relativeTime(openEntry.lastCommit.date)}
-                      </span>
-                    )}
-                  </div>
-
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-outline-variant/50 px-3 py-1.5">
                     <span className="min-w-0 flex-1 truncate text-body-xs text-on-surface-variant">
                       Saving writes to the working tree — commit it from the Git tab.
