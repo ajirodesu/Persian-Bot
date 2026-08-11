@@ -1,5 +1,13 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ComponentType, SVGProps } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { ComponentType, Ref, SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import {
@@ -724,6 +732,7 @@ const HistoryRow = memo(function HistoryRow({
 })
 
 const CommitBox = memo(function CommitBox({
+  ref,
   configured,
   status,
   busy,
@@ -733,6 +742,7 @@ const CommitBox = memo(function CommitBox({
   onPush,
   onPull,
 }: {
+  ref?: Ref<HTMLDivElement>
   configured: boolean
   status: GitStatusDto | null
   busy: string | null
@@ -751,7 +761,22 @@ const CommitBox = memo(function CommitBox({
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 bg-surface-container p-3">
+    <div
+      ref={ref}
+      className={cn(
+        // Mobile: fixed composer pinned to the bottom of the visual viewport
+        // (above the keyboard — the timezone sheet's stability model). It is
+        // anchored once and never re-anchors while typing; the translate lifts
+        // it by exactly the covered height when the keyboard opens.
+        'flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 bg-surface-container p-3',
+        'fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[var(--z-sticky)] shadow-elevation-2 transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none',
+        // Desktop: normal in-flow box inside the left column.
+        'lg:static lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
+      )}
+      style={{
+        transform: 'translate3d(0, calc(var(--git-kb-offset, 0px) * -1), 0)',
+      }}
+    >
       <textarea
         value={commitMsg}
         onChange={(e) => setCommitMsg(e.target.value)}
@@ -852,17 +877,20 @@ function GitPanel({
   const { success, error } = useSnackbar()
   const [busy, setBusy] = useState<string | null>(null)
 
-  // Mobile soft-keyboard lift. When the on-screen keyboard opens, the visual
-  // viewport shrinks below the layout viewport and — on iOS Safari, which
-  // never resizes the layout viewport for the keyboard — the commit box would
-  // end up hidden behind it. This measures exactly how much of the footer is
-  // covered (VisualViewport, never a hardcoded keyboard height) and translates
-  // the footer up by that amount. The offset is pushed straight into a CSS var
-  // from a rAF-throttled listener, so the open/close animation never triggers
-  // a React render of the Git panel. Android/Chrome with the app's
-  // interactive-widget=resizes-content meta already reflows the layout, so the
-  // value reads ~0 there and the footer never double-moves.
-  const footerRef = useRef<HTMLDivElement>(null)
+  // Mobile commit composer. On phones the commit box renders as a fixed bar
+  // pinned to the bottom of the visual viewport — the same stability model as
+  // the timezone search's mobile sheet: the composer is anchored once against
+  // the VisualViewport and never re-anchors while typing, so the input stays
+  // perfectly still and is always above the on-screen keyboard (iOS Safari
+  // never resizes the layout viewport for the keyboard, so the exact covered
+  // height — never a hardcoded keyboard height — is lifted off via a
+  // translate). Android/Chrome with the app's interactive-widget=resizes-content
+  // meta already reflows the layout, so the value reads ~0 there and the
+  // composer never double-moves. All values are pushed straight into CSS vars
+  // from rAF-throttled listeners, so keyboard open/close never triggers a React
+  // render of the Git panel.
+  const panelRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     // Coarse-pointer mobile gate: `lg` is this panel's mobile breakpoint, and
     // the pointer check keeps desktop (including pinch/ctrl-zoom, where the
@@ -873,13 +901,13 @@ function GitPanel({
 
     const update = () => {
       raf = 0
-      const el = footerRef.current
-      if (!el) return
+      const root = panelRef.current
+      if (!root) return
       const kb =
         mq.matches && vv
           ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop))
           : 0
-      el.style.setProperty('--git-kb-offset', `${kb}px`)
+      root.style.setProperty('--git-kb-offset', `${kb}px`)
     }
 
     // The keyboard open/close sequence fires a burst of viewport events —
@@ -898,6 +926,35 @@ function GitPanel({
       vv?.removeEventListener('resize', onEvent)
       vv?.removeEventListener('scroll', onEvent)
       window.removeEventListener('resize', onEvent)
+    }
+  }, [])
+
+  // The pinned composer is out of flow on mobile, so its height is reserved as
+  // bottom padding inside the column — otherwise the last change/history rows
+  // would scroll behind it. Mirrors the composer's height one-to-one via a CSS
+  // var (set imperatively, no re-render), keeping the layout identical whether
+  // the bar is in-flow (desktop) or pinned (mobile).
+  useLayoutEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)')
+    const root = panelRef.current
+    const sync = () => {
+      if (!root) return
+      root.style.setProperty(
+        '--git-composer-h',
+        mq.matches && composerRef.current
+          ? `${composerRef.current.offsetHeight}px`
+          : '0px',
+      )
+    }
+    sync()
+    const ro = new ResizeObserver(sync)
+    if (composerRef.current) ro.observe(composerRef.current)
+    mq.addEventListener('change', sync)
+    window.addEventListener('resize', sync)
+    return () => {
+      ro.disconnect()
+      mq.removeEventListener('change', sync)
+      window.removeEventListener('resize', sync)
     }
   }, [])
 
@@ -994,9 +1051,12 @@ function GitPanel({
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+    <div
+      ref={panelRef}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
+    >
       {/* Left column — branch, changes, commit box, history */}
-      <div className="flex min-w-0 flex-col border-b border-outline-variant/70 pb-[env(safe-area-inset-bottom)] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
+      <div className="flex min-w-0 flex-col border-b border-outline-variant/70 pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
         {/* Branch + sync actions */}
         <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
           <select
@@ -1128,56 +1188,50 @@ function GitPanel({
           )}
         </div>
 
-        {/* Commit + push box + history. The footer lifts together above the
-            mobile keyboard via --git-kb-offset (managed by the effect above);
-            its opaque surface matches the page so nothing shows through while
-            it overlaps the changes list. */}
-        <div
-          ref={footerRef}
-          className="relative z-10 shrink-0 bg-surface-container-high transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none"
-          style={{
-            transform:
-              'translate3d(0, calc(var(--git-kb-offset, 0px) * -1), 0)',
-          }}
-        >
-          <CommitBox
-            configured={configured}
-            status={status}
-            busy={busy}
-            changesLength={changes.length}
-            canPush={canPush}
-            onCommit={handleCommit}
-            onPush={handlePush}
-            onPull={handlePull}
-          />
+        {/* Commit + push box. On mobile this is a fixed bar pinned to the
+            bottom of the visual viewport (above the keyboard) — the timezone
+            sheet's stability model: anchored once, never re-anchoring while
+            typing. The column reserves its height via --git-composer-h so the
+            surrounding layout stays identical. Desktop uses the normal
+            in-flow box. */}
+        <CommitBox
+          ref={composerRef}
+          configured={configured}
+          status={status}
+          busy={busy}
+          changesLength={changes.length}
+          canPush={canPush}
+          onCommit={handleCommit}
+          onPush={handlePush}
+          onPull={handlePull}
+        />
 
-          {/* History */}
-          <div className="shrink-0 border-t border-outline-variant/70">
-            <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
-              <History className="h-3.5 w-3.5 text-on-surface-variant" />
-              <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
-                History
-              </span>
-              <IconButton
-                variant="text"
-                size="sm"
-                icon={<RefreshCw className="h-3 w-3" />}
-                aria-label="Refresh history"
-                title="Refresh history"
-                onClick={() => void files.loadHistory()}
-              />
-            </div>
-            <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
-              {files.history.length === 0 ? (
-                <p className="px-2 py-1 text-body-xs text-on-surface-variant">
-                  No commits yet.
-                </p>
-              ) : (
-                files.history.map((commit) => (
-                  <HistoryRow key={commit.sha} commit={commit} />
-                ))
-              )}
-            </div>
+        {/* History */}
+        <div className="shrink-0 border-t border-outline-variant/70">
+          <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
+            <History className="h-3.5 w-3.5 text-on-surface-variant" />
+            <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
+              History
+            </span>
+            <IconButton
+              variant="text"
+              size="sm"
+              icon={<RefreshCw className="h-3 w-3" />}
+              aria-label="Refresh history"
+              title="Refresh history"
+              onClick={() => void files.loadHistory()}
+            />
+          </div>
+          <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
+            {files.history.length === 0 ? (
+              <p className="px-2 py-1 text-body-xs text-on-surface-variant">
+                No commits yet.
+              </p>
+            ) : (
+              files.history.map((commit) => (
+                <HistoryRow key={commit.sha} commit={commit} />
+              ))
+            )}
           </div>
         </div>
       </div>
