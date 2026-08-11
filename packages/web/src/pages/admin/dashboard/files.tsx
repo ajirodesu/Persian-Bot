@@ -634,12 +634,14 @@ function GitChangeRow({
   return (
     <div className="flex w-full items-center gap-2 rounded-[var(--radius-input)] py-1.5 pr-1 pl-1.5 transition-colors duration-fast hover:bg-on-surface/5">
       <Icon className={cn('h-4 w-4 shrink-0', meta.className)} />
-      <span
-        className="min-w-0 flex-1 truncate font-mono text-label-sm text-on-surface"
-        title={change.path}
+      <button
+        type="button"
+        onClick={onDiff}
+        title={`Show diff for ${change.path}`}
+        className="min-w-0 flex-1 truncate text-left font-mono text-label-sm text-on-surface transition-colors duration-fast hover:text-primary"
       >
         {change.path}
-      </span>
+      </button>
       {change.hasUnstagedMods && (
         <Badge color="warning" variant="tonal" size="sm">
           also modified
@@ -649,7 +651,7 @@ function GitChangeRow({
         type="button"
         onClick={onDiff}
         title={`Show diff for ${change.path}`}
-        className="flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast hover:bg-on-surface/10 hover:text-on-surface"
+        className="flex h-8 shrink-0 items-center gap-1 rounded px-2 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:h-6 lg:px-1.5 hover:bg-on-surface/10 hover:text-on-surface"
       >
         Diff
       </button>
@@ -726,7 +728,7 @@ function GitPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
       {/* Left column — branch, changes, commit box, history */}
-      <div className="flex min-w-0 flex-col border-b border-outline-variant/70 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
+      <div className="flex min-w-0 flex-col border-b border-outline-variant/70 pb-[env(safe-area-inset-bottom)] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
         {/* Branch + sync actions */}
         <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
           <select
@@ -814,7 +816,7 @@ function GitPanel({
                     type="button"
                     onClick={() => void run('Unstaged all', () => files.unstagePaths([]))}
                     disabled={busy !== null}
-                    className="ml-auto text-label-xs font-medium text-on-surface-variant transition-colors duration-fast hover:text-on-surface"
+                    className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
                   >
                     Unstage all
                   </button>
@@ -844,7 +846,7 @@ function GitPanel({
                     type="button"
                     onClick={() => void run('Staged all changes', () => files.stageAll())}
                     disabled={busy !== null}
-                    className="ml-auto text-label-xs font-medium text-on-surface-variant transition-colors duration-fast hover:text-on-surface"
+                    className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
                   >
                     Stage all
                   </button>
@@ -868,7 +870,7 @@ function GitPanel({
         </div>
 
         {/* Commit + push box */}
-        <div className="flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 p-3">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 bg-surface-container p-3">
           <textarea
             value={commitMsg}
             onChange={(e) => setCommitMsg(e.target.value)}
@@ -988,8 +990,8 @@ function GitPanel({
         </div>
       </div>
 
-      {/* Right column — diff viewer */}
-      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+      {/* Right column — diff viewer (desktop side-by-side) */}
+      <div className="hidden min-w-0 min-h-0 flex-1 flex-col lg:flex">
         {files.gitDiffPath ? (
           <>
             <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
@@ -1037,7 +1039,99 @@ function GitPanel({
           </div>
         )}
       </div>
+
+      {/* Mobile diff sheet — replaces the side-by-side column below lg */}
+      <div className="lg:hidden">
+        {files.gitDiffPath !== null && (
+          <MobileDiffSheet
+            path={files.gitDiffPath}
+            staged={files.gitDiffStaged}
+            content={files.gitDiff}
+            loading={files.gitDiffLoading}
+            error={files.gitDiffError}
+            onClose={files.closeDiff}
+          />
+        )}
+      </div>
     </div>
+  )
+}
+
+// ── Mobile diff sheet (full-screen, shown below the lg breakpoint) ────────────
+
+function MobileDiffSheet({
+  path,
+  staged,
+  content,
+  loading,
+  error,
+  onClose,
+}: {
+  path: string
+  staged: boolean
+  content: string | null
+  loading: boolean
+  error: string | null
+  onClose: () => void
+}) {
+  // Lock page scroll + handle Escape while the sheet is open.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Diff for ${path}`}
+      className="fixed inset-0 z-overlay flex flex-col overflow-hidden bg-surface-container-lowest [height:100dvh]"
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2 [padding-top:max(0.75rem,env(safe-area-inset-top))]">
+        <GitCommitHorizontal className="h-4 w-4 shrink-0 text-on-surface-variant" />
+        <span className="min-w-0 flex-1 truncate font-mono text-label-sm text-on-surface">
+          {path}
+        </span>
+        {staged && (
+          <Badge color="primary" variant="tonal" size="sm">
+            staged
+          </Badge>
+        )}
+        <IconButton
+          variant="text"
+          size="sm"
+          icon={<X className="h-4 w-4" />}
+          aria-label="Close diff"
+          title="Close diff"
+          onClick={onClose}
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto bg-surface-container-lowest p-3 [padding-bottom:calc(1rem+env(safe-area-inset-bottom))]">
+        {loading ? (
+          <Skeleton variant="rectangular" className="h-full" />
+        ) : error ? (
+          <Alert
+            variant="tonal"
+            color="error"
+            title="Failed to load diff"
+            message={error}
+          />
+        ) : (
+          <pre className="font-mono text-label-sm leading-relaxed text-on-surface">
+            {content ?? ''}
+          </pre>
+        )}
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1460,7 +1554,7 @@ export default function AdminFilesPage() {
               />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+<div className="min-h-0 flex-1 overflow-y-auto p-2 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))]">
               {treeQueryActive ? (
                 searchResults === undefined ? (
                   files.treeError ? (
@@ -1548,6 +1642,16 @@ export default function AdminFilesPage() {
           <div className="flex min-w-0 min-h-0 flex-1 flex-col">
             {/* Tab bar */}
             <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-outline-variant/70 bg-surface-container/70 px-2 py-1 scrollbar-hidden">
+              {/* Mobile-only: open the file explorer drawer */}
+              <IconButton
+                variant="text"
+                size="sm"
+                className="shrink-0 lg:hidden"
+                icon={<FolderGit2 className="h-4 w-4" />}
+                aria-label="Browse files"
+                title="Browse files"
+                onClick={() => setMobileFilesOpen(true)}
+              />
               {files.tabs.length > 0 ? (
                 files.tabs.map((tab) => {
                   const active = tab.entry.path === openEntry?.path
