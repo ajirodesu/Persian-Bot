@@ -1,14 +1,16 @@
 /**
- * /lifeinfo — Lifetime Body Statistics
+ * /lifeinfo — Lifetime Body Statistics (conversational)
  *
- * Given a birthdate (YYYY-MM-DD), queries the Nexray "livefunfact" endpoint
- * and summarises the estimated scale of the body's lifetime activity — age in
- * every unit, total heartbeats, breaths taken, calories burned, plus a handful
- * of amazing physiological facts and a life-expectancy comparison.
+ * Uses the onReply flow instead of requiring a command argument:
+ *   1. User: /lifeinfo
+ *   2. Bot:  Please reply and type your `<birthdate (YYYY-MM-DD)>`
+ *   3. User: [quotes bot] 2005-05-17
+ *   4. Bot:  🧬 **Life Info** — age, heartbeats, breaths, amazing facts, ...
  *
- * Flow:
- *   User: /lifeinfo 2005-05-17
- *   Bot:  🧬 **Life Info** — age, heartbeats, breaths, amazing facts, ...
+ * The bot's prompt is registered as a pending onReply state (keyed by the
+ * bot-sent message ID). When the user quotes that message, dispatchOnReply
+ * matches the ID, reads the birthdate from the reply, validates it, and
+ * queries the Nexray "livefunfact" endpoint. Invalid input re-prompts.
  *
  * API: GET https://api.nexray.eu.cc/fun/livefunfact?birthdate=YYYY-MM-DD
  * Response shape: { status, author, result: { basic_info, cardiovascular,
@@ -21,6 +23,11 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+
+/** Pending-flow state registered on the bot's birthdate prompt message. */
+const STATE = {
+  awaiting_birthdate: 'awaiting_birthdate',
+} as const;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -171,52 +178,98 @@ function formatLifeInfo(birthdate: string, info: LiveFunFactResult): string {
 export const meta: CommandMeta = {
   name: 'lifeinfo',
   aliases: ['lifefact', 'life'] as string[],
-  version: '1.0.0',
+  version: '1.1.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Get lifetime body statistics based on your birthdate.',
+  description:
+    'Get lifetime body statistics. Reply to the bot with your birthdate (YYYY-MM-DD).',
   category: 'Utility',
-  usage: '<birthdate (YYYY-MM-DD)>',
+  usage: '',
   cooldown: 5,
   hasPrefix: true,
 };
 
 // ── Command Handler ───────────────────────────────────────────────────────────
 
-export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args, usage } = ctx;
+export const onCommand = async ({ chat, state }: AppCtx): Promise<void> => {
+  const messageID = await chat.replyMessage({
+    style: MessageStyle.MARKDOWN,
+    message:
+      'Please reply and type your `<birthdate (YYYY-MM-DD)>`\nExample: `2005-05-17`',
+  });
 
-  if (!args.length) {
-    await usage();
-    return;
-  }
-
-  const birthdate = (args[0] ?? '').trim();
-
-  if (!isValidBirthdate(birthdate)) {
+  // Guard: platforms that do not return a message ID from replyMessage cannot
+  // support onReply because there is no stable key to register the state on.
+  if (!messageID) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message:
-        '⚠️ **Invalid birthdate.**\nPlease use the format `YYYY-MM-DD` (e.g. `/lifeinfo 2005-05-17`) and make sure it is not in the future.',
+        '❌ onReply unavailable: this platform did not return a message ID from chat.replyMessage().',
     });
     return;
   }
 
-  try {
-    const info = await fetchLifeData(birthdate);
-    const message = formatLifeInfo(birthdate, info);
+  state.create({
+    id: state.generateID({ id: String(messageID) }),
+    state: STATE.awaiting_birthdate,
+    context: {},
+  });
+};
 
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message,
-    });
-  } catch (err) {
-    const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `⚠️ Failed to fetch life info for **${birthdate}**: \`${
-        error.message ?? 'Unknown error'
-      }\``,
-    });
-  }
+// ── Reply Handler ─────────────────────────────────────────────────────────────
+
+export const onReply = {
+  /**
+   * User replied to the bot's prompt with a birthdate. Validates it and, when
+   * valid, fetches + sends the life info. Invalid input re-prompts by
+   * registering a fresh state on the new (error) message so the user can retry.
+   */
+  [STATE.awaiting_birthdate]: async ({
+    chat,
+    session,
+    event,
+    state,
+  }: AppCtx): Promise<void> => {
+    // Remove the current state before continuing to prevent double-firing if
+    // the user replies to the same prompt message a second time.
+    state.delete(session.id);
+
+    const raw = ((event['message'] as string | undefined) ?? '').trim();
+    const birthdate = raw.split(/\s+/)[0] ?? '';
+
+    if (!isValidBirthdate(birthdate)) {
+      const retryID = await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message:
+          '⚠️ **Invalid birthdate.**\nPlease reply and type your `<birthdate (YYYY-MM-DD)>` (e.g. `2005-05-17`).',
+      });
+
+      if (retryID) {
+        state.create({
+          id: state.generateID({ id: String(retryID) }),
+          state: STATE.awaiting_birthdate,
+          context: {},
+        });
+      }
+      return;
+    }
+
+    try {
+      const info = await fetchLifeData(birthdate);
+      const message = formatLifeInfo(birthdate, info);
+
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message,
+      });
+    } catch (err) {
+      const error = err as { message?: string };
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message: `⚠️ Failed to fetch life info for **${birthdate}**: \`${
+          error.message ?? 'Unknown error'
+        }\``,
+      });
+    }
+  },
 };

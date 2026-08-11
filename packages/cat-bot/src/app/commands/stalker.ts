@@ -22,6 +22,9 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
+import type { NamedStreamAttachment } from '@/engine/adapters/models/interfaces/index.js';
+import { withRetry, isNetworkError } from '@/engine/lib/retry.lib.js';
+import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // ── Shared response envelope ──────────────────────────────────────────────
 
@@ -58,6 +61,7 @@ interface ThreadsResult {
   name?: string;
   bio?: string;
   profile_picture?: string;
+  hd_profile_picture?: string;
   is_verified?: boolean;
   followers?: number;
   links?: unknown[];
@@ -99,79 +103,226 @@ interface YoutubeResult {
 
 // ── Formatting helpers ────────────────────────────────────────────────────
 
+/** Divider used to break the profile card into sections — matches the HR in help.ts. */
+const DIVIDER = '─────────────────';
+/** Separator between a field label and its value. */
+const SEP = ' · ';
+
 function orNA(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return 'N/A';
   return String(value);
 }
 
+/** Full number with thousand separators: 5707447 → "5,707,447". */
 function fmtCount(value: number | undefined): string {
   return value === undefined ? 'N/A' : value.toLocaleString('en-US');
 }
 
-function fmtLine(label: string, value: string | number | null | undefined): string {
-  return `\n${label}: ${orNA(value)}`;
+/** Compact number for large counts: 5707447 → "5.7M", 2200 → "2.2K". */
+function fmtCompact(value: number | undefined): string {
+  if (value === undefined) return 'N/A';
+  const abs = Math.abs(value);
+  const units: Array<[number, string]> = [
+    [1e9, 'B'],
+    [1e6, 'M'],
+    [1e3, 'K'],
+  ];
+  for (const [base, suffix] of units) {
+    if (abs >= base) {
+      const scaled = value / base;
+      return `${scaled >= 100 ? Math.round(scaled) : scaled.toFixed(1)}${suffix}`;
+    }
+  }
+  return value.toLocaleString('en-US');
+}
+
+/** Human-readable date: "2024-09-05T12:18:25Z" → "Sep 5, 2024". Falls back to raw input. */
+function fmtDate(value: string | undefined): string {
+  if (!value) return 'N/A';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/** Normalises "@Foo" / "Foo" → "@Foo"; falls back to "N/A" when empty. */
+function handle(value: string | null | undefined): string {
+  const name = orNA(value);
+  return name === 'N/A' ? name : `@${name.replace(/^@+/, '')}`;
+}
+
+/** Renders a single "label · value" row, e.g. "👤 **Name** · Lance Cochangco". */
+function row(label: string, value: string | number | null | undefined): string {
+  return `${label}${SEP}${orNA(value)}`;
+}
+
+/** Convenience for conditionally adding a line: (cond, label & value) or (cond, line). */
+function lineWhen(cond: unknown, ...parts: unknown[]): string[] {
+  return cond ? [parts.join(' ')] : [];
+}
+
+// ── Avatar download ─────────────────────────────────────────────────────────
+
+const AVATAR_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
+};
+
+/** Hard cap on a downloaded avatar — profile pictures are small, this guards runaway responses. */
+const MAX_AVATAR_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Downloads a profile picture into a Buffer with browser headers and retry on
+ * transient network errors. Returns null when the download fails so the reply
+ * still goes out without the photo.
+ */
+async function downloadAvatar(url: string): Promise<Buffer | null> {
+  try {
+    return await withRetry(
+      async () => {
+        const res = await axios.get<ArrayBuffer>(url, {
+          timeout: 15_000,
+          headers: AVATAR_HEADERS,
+          responseType: 'arraybuffer',
+          maxContentLength: MAX_AVATAR_BYTES,
+          maxBodyLength: MAX_AVATAR_BYTES,
+          validateStatus: (status) => status >= 200 && status < 300,
+        });
+        const buf = Buffer.from(res.data);
+        return buf.length === 0 ? null : buf;
+      },
+      {
+        maxAttempts: 3,
+        initialDelayMs: 500,
+        maxDelayMs: 2_000,
+        shouldRetry: (err) => isNetworkError(err),
+      },
+    );
+  } catch (err) {
+    logger.warn(`[stalker] avatar download failed: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
 }
 
 // ── Response formatters ───────────────────────────────────────────────────
 
 function formatGithub(r: GithubResult): string {
-  return [
-    `🐙 **GitHub Profile — ${orNA(r.username)}**`,
-    ...(r.nickname ? fmtLine('👤 Name', r.nickname).split('\n') : []),
-    ...(r.bio ? fmtLine('📝 Bio', r.bio).split('\n') : []),
-    fmtLine('🆔 ID', r.id),
-    ...(r.type ? fmtLine('🧩 Type', r.type).split('\n') : []),
-    ...(r.company ? fmtLine('🏢 Company', r.company).split('\n') : []),
-    ...(r.location ? fmtLine('📍 Location', r.location).split('\n') : []),
-    ...(r.email ? fmtLine('📧 Email', r.email).split('\n') : []),
-    fmtLine('📁 Repos', `${r.public_repo ?? 'N/A'} (${r.public_gists ?? 'N/A'} gists)`),
-    fmtLine('⭐ Followers', fmtCount(r.followers)),
-    fmtLine('👣 Following', fmtCount(r.following)),
-    ...(r.url ? fmtLine('🔗 URL', r.url).split('\n') : []),
-    ...(r.created_at ? fmtLine('📅 Joined', r.created_at.replace('T', ' ').replace('Z', '')).split('\n') : []),
-  ].join('');
+  const lines: string[] = [
+    `🐙 **GitHub Profile**${SEP}\`${handle(r.username)}\``,
+    DIVIDER,
+    ...lineWhen(r.nickname, row('👤 **Name**', r.nickname)),
+    ...lineWhen(r.bio, row('📝 **Bio**', r.bio)),
+    row('🆔 **ID**', r.id),
+    ...lineWhen(r.company, row('🏢 **Company**', r.company)),
+    ...lineWhen(r.location, row('📍 **Location**', r.location)),
+    ...lineWhen(r.email, row('📧 **Email**', r.email)),
+    row('📦 **Repos**', `${fmtCount(r.public_repo)} · ${fmtCount(r.public_gists)} Gists`),
+    DIVIDER,
+    row('⭐ **Followers**', fmtCompact(r.followers)),
+    row('👣 **Following**', fmtCompact(r.following)),
+    DIVIDER,
+  ];
+
+  if (r.created_at) {
+    lines.push(row('📅 **Joined**', fmtDate(r.created_at)));
+    lines.push(DIVIDER);
+  }
+  if (r.url) {
+    lines.push(`🔗 [Visit GitHub Profile](${r.url})`);
+  }
+
+  return lines.join('\n');
 }
 
 function formatThreads(r: ThreadsResult): string {
-  return [
-    `🧵 **Threads Profile — ${orNA(r.username)}**`,
-    ...(r.name ? fmtLine('👤 Name', r.name).split('\n') : []),
-    ...(r.bio ? fmtLine('📝 Bio', r.bio).split('\n') : []),
-    fmtLine('✅ Verified', r.is_verified ? 'Yes' : 'No'),
-    fmtLine('👥 Followers', fmtCount(r.followers)),
-    fmtLine('🆔 ID', r.id),
-  ].join('');
+  const lines: string[] = [
+    `🧵 **Threads Profile**${SEP}\`${handle(r.username)}\``,
+    DIVIDER,
+    ...lineWhen(r.name, row('👤 **Name**', r.name)),
+    ...lineWhen(r.bio, row('📝 **Bio**', r.bio)),
+    row('✅ **Verified**', r.is_verified ? 'Yes 🟢' : 'No 🔴'),
+    row('👥 **Followers**', fmtCompact(r.followers)),
+    row('🆔 **ID**', r.id),
+    DIVIDER,
+  ];
+
+  return lines.join('\n');
 }
 
 function formatTwitter(r: TwitterResult): string {
+  const lines: string[] = [
+    `🐦 **X Profile**${SEP}\`${handle(r.username)}\``,
+    DIVIDER,
+    ...lineWhen(r.name, row('👤 **Name**', r.name)),
+    row('✅ **Verified**', r.verified ? 'Yes 🟢' : 'No 🔴'),
+    ...lineWhen(
+      r.description && r.description !== '-',
+      row('📝 **Bio**', r.description),
+    ),
+    ...lineWhen(r.location && r.location !== '-', row('📍 **Location**', r.location)),
+    DIVIDER,
+  ];
+
   const stats = r.stats;
-  return [
-    `🐦 **X Profile — ${orNA(r.username)}**`,
-    ...(r.name ? fmtLine('👤 Name', r.name).split('\n') : []),
-    fmtLine('✅ Verified', r.verified ? 'Yes' : 'No'),
-    ...(r.description && r.description !== '-' ? fmtLine('📝 Bio', r.description).split('\n') : []),
-    ...(r.location && r.location !== '-' ? fmtLine('📍 Location', r.location).split('\n') : []),
-    stats
-      ? `\n📊 **Stats**: ${fmtCount(stats.tweets)} Tweets · ${fmtCount(stats.following)} Following · ${fmtCount(stats.followers)} Followers · ${fmtCount(stats.likes)} Likes`
-      : '',
-    ...(r.created_at ? fmtLine('📅 Joined', r.created_at).split('\n') : []),
-  ].join('');
+  if (stats) {
+    lines.push('📊 **Stats**');
+    lines.push(row('✍️ **Posts**', fmtCompact(stats.tweets)),
+      row('👥 **Followers**', fmtCompact(stats.followers)),
+      row('🔁 **Following**', fmtCompact(stats.following)),
+      row('❤️ **Likes**', fmtCompact(stats.likes)));
+    lines.push(DIVIDER);
+  }
+
+  if (r.created_at) {
+    lines.push(row('📅 **Joined**', fmtDate(r.created_at)));
+    lines.push(DIVIDER);
+  }
+  lines.push(`🔗 [Visit X Profile](https://x.com/${orNA(r.username)})`);
+
+  return lines.join('\n');
 }
 
 function formatYoutube(r: YoutubeResult): string {
   const c = r.channel;
   if (!c) return '⚠️ No channel data was returned.';
-  return [
-    `📺 **YouTube Channel — ${orNA(c.username)}**`,
-    ...(c.name ? fmtLine('👤 Name', c.name).split('\n') : []),
-    ...(c.subscriberCount ? fmtLine('🔢 Subscribers', c.subscriberCount).split('\n') : []),
-    ...(c.videoCount ? fmtLine('🎬 Videos', c.videoCount).split('\n') : []),
-    ...(c.description ? fmtLine('📝 Description', c.description).split('\n') : []),
-    ...(c.channelUrl ? fmtLine('🔗 Channel', c.channelUrl).split('\n') : []),
-  ].join('');
+
+  const lines: string[] = [
+    `📺 **YouTube Channel**${SEP}\`${handle(c.username)}\``,
+    DIVIDER,
+    ...lineWhen(c.name, row('👤 **Name**', c.name)),
+    ...lineWhen(c.subscriberCount, row('🔢 **Subscribers**', c.subscriberCount)),
+    ...lineWhen(c.videoCount, row('🎬 **Videos**', c.videoCount)),
+  ];
+
+  const description = c.description;
+  if (description) {
+    lines.push(DIVIDER);
+    lines.push(row('📝 **Description**', description));
+  }
+
+  if (c.channelUrl) {
+    lines.push(DIVIDER);
+    lines.push(`🔗 [Visit YouTube Channel](${c.channelUrl})`);
+  }
+
+  return lines.join('\n');
 }
 
 // ── Config table ──────────────────────────────────────────────────────────
+
+interface StalkerResult {
+  message: string;
+  avatarUrl?: string;
+}
+
+/** Builds a StalkerResult, omitting avatarUrl entirely when no avatar was returned. */
+function stalkerResult(message: string, avatarUrl: string | undefined): StalkerResult {
+  return avatarUrl ? { message, avatarUrl } : { message };
+}
 
 interface StalkerConfig {
   name: string;
@@ -179,7 +330,7 @@ interface StalkerConfig {
   label: string;
   description: string;
   example: string;
-  fetch: (username: string) => Promise<string>;
+  fetch: (username: string) => Promise<StalkerResult>;
 }
 
 const STALKER_CONFIGS: StalkerConfig[] = [
@@ -195,7 +346,7 @@ const STALKER_CONFIGS: StalkerConfig[] = [
         { params: { username }, timeout: 15_000 },
       );
       if (!data.status || !data.result) throw new Error(data.error ?? 'User not found.');
-      return formatGithub(data.result);
+      return stalkerResult(formatGithub(data.result), data.result.profile_pic);
     },
   },
   {
@@ -210,7 +361,10 @@ const STALKER_CONFIGS: StalkerConfig[] = [
         { params: { username }, timeout: 15_000 },
       );
       if (!data.status || !data.result) throw new Error(data.error ?? 'User not found.');
-      return formatThreads(data.result);
+      return stalkerResult(
+        formatThreads(data.result),
+        data.result.hd_profile_picture || data.result.profile_picture,
+      );
     },
   },
   {
@@ -225,7 +379,7 @@ const STALKER_CONFIGS: StalkerConfig[] = [
         { params: { username }, timeout: 15_000 },
       );
       if (!data.status || !data.result) throw new Error(data.error ?? 'User not found.');
-      return formatTwitter(data.result);
+      return stalkerResult(formatTwitter(data.result), data.result.profile?.avatar);
     },
   },
   {
@@ -240,7 +394,7 @@ const STALKER_CONFIGS: StalkerConfig[] = [
         { params: { username }, timeout: 15_000 },
       );
       if (!data.status || !data.result) throw new Error(data.error ?? 'Channel not found.');
-      return formatYoutube(data.result);
+      return stalkerResult(formatYoutube(data.result), data.result.channel?.avatarUrl);
     },
   },
 ];
@@ -255,10 +409,10 @@ async function runStalker(ctx: AppCtx, config: StalkerConfig): Promise<void> {
       style: MessageStyle.MARKDOWN,
       message: [
         `🔎 **${config.label} Profile Stalker**`,
-        '',
+        DIVIDER,
         `» \`${prefix || '/'}${config.example}\``,
         '',
-        `_Look up a ${config.label} profile by username._`,
+        `_Look up a ${config.label} profile by username. Pass the username (with or without @) as the first argument._`,
       ].join('\n'),
     });
     return;
@@ -272,10 +426,18 @@ async function runStalker(ctx: AppCtx, config: StalkerConfig): Promise<void> {
   }
 
   try {
-    const profile = await config.fetch(username);
+    const { message, avatarUrl } = await config.fetch(username);
+
+    let attachment: NamedStreamAttachment[] | undefined;
+    if (avatarUrl) {
+      const buffer = await downloadAvatar(avatarUrl);
+      if (buffer) attachment = [{ name: 'avatar.jpg', stream: buffer }];
+    }
+
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: profile,
+      message,
+      ...(attachment ? { attachment } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
