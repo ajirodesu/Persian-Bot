@@ -786,7 +786,7 @@ const CommitBox = memo(function CommitBox({
             void handleSubmit()
           }
         }}
-        placeholder="Commit message (Ctrl/⌘+Enter)"
+        placeholder="Commit message"
         rows={2}
         disabled={!configured || busy !== null}
         autoComplete="off"
