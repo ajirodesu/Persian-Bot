@@ -13,7 +13,6 @@
  * object, no new onCommand function required.
  *
  * Commands:
- *   /npm   — look up an npm package by name        (aliases: npmsearch)
  *   /steam — look up a Steam game/app by name       (aliases: steamsearch)
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
@@ -21,8 +20,8 @@
  * exactly like a standalone command module.
  *
  * Flow (per command):
- *   User: /npm popcat-wrapper
- *   Bot:  📦 **popcat-wrapper** details (with optional image)
+ *   User: /steam minecraft
+ *   Bot:  🎮 **minecraft** details (with optional image)
  */
 
 import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
@@ -47,19 +46,6 @@ interface SearchEnvelope<T> {
 }
 
 // ── Per-provider response shapes ─────────────────────────────────────────────
-
-interface NpmResult {
-  name: string;
-  version: string;
-  description: string;
-  keywords: string;
-  author: string;
-  author_email: string;
-  last_published: string;
-  maintainers: string;
-  repository: string;
-  downloads_this_year: string;
-}
 
 interface SteamResult {
   type: string;
@@ -90,25 +76,7 @@ interface SearchConfig<T = Record<string, unknown>> {
   getImageUrl?: (message: T) => string | undefined;
 }
 
-const SEARCH_CONFIGS: SearchConfig<any>[] = [
-  {
-    name: 'npm',
-    aliases: ['npmsearch'],
-    path: '/v2/npm',
-    label: 'NPM Package',
-    emoji: '📦',
-    description: 'Look up an npm package by name.',
-    example: 'popcat-wrapper',
-    formatMessage: (pkg: NpmResult) =>
-      `📦 **${pkg.name}** \`v${pkg.version}\`\n\n` +
-      `${pkg.description || 'No description provided.'}\n\n` +
-      `🏷️ **Keywords:** ${pkg.keywords || 'N/A'}\n` +
-      `👤 **Author:** ${pkg.author || 'N/A'}${pkg.author_email ? ` (${pkg.author_email})` : ''}\n` +
-      `📅 **Last Published:** ${pkg.last_published || 'N/A'}\n` +
-      `🧑‍🤝‍🧑 **Maintainers:** ${pkg.maintainers || 'N/A'}\n` +
-      `🔗 **Repository:** ${pkg.repository || 'N/A'}\n` +
-      `⬇️ **Downloads This Year:** ${pkg.downloads_this_year || 'N/A'}`,
-  },
+const SEARCH_CONFIGS: SearchConfig<SteamResult>[] = [
   {
     name: 'steam',
     aliases: ['steamsearch'],
@@ -151,7 +119,7 @@ async function fetchSearchResult<T>(config: SearchConfig<T>, query: string): Pro
 
 // ── Shared handler ────────────────────────────────────────────────────────────
 
-async function runSearch(ctx: AppCtx, config: SearchConfig): Promise<void> {
+async function runSearch<T>(ctx: AppCtx, config: SearchConfig<T>): Promise<void> {
   const { args, usage } = ctx;
 
   const query = args.join(' ').trim();
