@@ -65,14 +65,6 @@ interface EnvConfig {
   // checkout that contains this process; override to point at another clone.
   readonly ADMIN_REPO_PATH?: string | undefined;
 
-  // AI agent browser tool (puppeteer-core) — optional. Path to a specific
-  // Chrome/Chromium executable. When absent the tool auto-detects a system
-  // browser (Windows/macOS/Linux) and only errors if none can be found.
-  readonly PUPPETEER_EXEC_PATH?: string | undefined;
-  // Controls browser visibility: "true" (default) runs headless, any other value
-  // (e.g. "false") opens a visible window — useful when debugging the agent.
-  readonly AGENT_BROWSER_HEADLESS?: string | undefined;
-
   // Security
   readonly ENCRYPTION_KEY: string;
   // Derived boolean helpers
@@ -250,10 +242,6 @@ export const env: EnvConfig = {
   GITHUB_REPO_NAME: getOptionalEnv('GITHUB_REPO_NAME'),
   GITHUB_REPO_BASE_PATH: getOptionalEnv('GITHUB_REPO_BASE_PATH'),
   ADMIN_REPO_PATH: getOptionalEnv('ADMIN_REPO_PATH'),
-
-  // AI agent browser tool — absent PUPPETEER_EXEC_PATH disables the tool gracefully
-  PUPPETEER_EXEC_PATH: getOptionalEnv('PUPPETEER_EXEC_PATH'),
-  AGENT_BROWSER_HEADLESS: getOptionalEnv('AGENT_BROWSER_HEADLESS'),
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),

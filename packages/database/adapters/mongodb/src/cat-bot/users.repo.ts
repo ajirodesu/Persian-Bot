@@ -108,46 +108,6 @@ export async function getUserAvatar(userId: string): Promise<string | null> {
   return rec?.avatarUrl ?? null;
 }
 
-/**
- * Returns the full stored record for a bot user, or null when the user has not
- * been synced yet. Powers the AI agent's `get_user` tool (analogous to
- * project-canis's getUserbyLid) — a rich single-row lookup by platform user id.
- */
-export async function getUserById(
-  userId: string,
-): Promise<{
-  id: string;
-  platformId: number;
-  name: string;
-  firstName: string | null;
-  username: string | null;
-  avatarUrl: string | null;
-  createdAt: Date | null;
-} | null> {
-  const db = getMongoDb();
-  const rec = await db
-    .collection<{
-      id: string;
-      platformId: number;
-      name: string;
-      firstName?: string | null;
-      username?: string | null;
-      avatarUrl?: string | null;
-      createdAt?: Date | null;
-    }>('botUsers')
-    .findOne({ id: userId });
-  if (!rec) return null;
-  return {
-    id: rec.id,
-    platformId: rec.platformId,
-    name: rec.name,
-    firstName: rec.firstName ?? null,
-    username: rec.username ?? null,
-    avatarUrl: rec.avatarUrl ?? null,
-    createdAt: rec.createdAt ?? null,
-  };
-}
-
 export async function updateUserAvatar(
   userId: string,
   avatarUrl: string,

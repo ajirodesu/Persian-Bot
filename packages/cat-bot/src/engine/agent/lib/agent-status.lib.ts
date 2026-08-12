@@ -82,15 +82,6 @@ export function describeToolStatus(
     }
     case 'send_result':
       return '📤 Sending reply…';
-    case 'shell': {
-      const command =
-        typeof args['command'] === 'string' ? args['command'].trim() : '';
-      return command
-        ? `⌨️ Running \`${command}\`…`
-        : '⌨️ Running shell command…';
-    }
-    case 'bot_stats':
-      return '📊 Checking bot stats…';
     default:
       return `🔧 Using ${toolName}…`;
   }

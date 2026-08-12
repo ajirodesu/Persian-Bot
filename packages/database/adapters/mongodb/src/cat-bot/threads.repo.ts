@@ -113,49 +113,6 @@ export async function getThreadName(threadId: string): Promise<string> {
   return rec?.name ?? 'Unknown thread';
 }
 
-/**
- * Returns the full stored record for a group/thread, or null when it has not
- * been synced yet. Powers the AI agent's `get_group` tool (analogous to
- * project-canis's getGroupbyLid) — a rich single-row lookup by chat/thread id.
- */
-export async function getGroupById(
-  groupId: string,
-): Promise<{
-  id: string;
-  platformId: number;
-  name: string | null;
-  isGroup: boolean;
-  type: string | null;
-  memberCount: number | null;
-  avatarUrl: string | null;
-  createdAt: Date | null;
-} | null> {
-  const db = getMongoDb();
-  const rec = await db
-    .collection<{
-      id: string;
-      platformId: number;
-      name?: string | null;
-      isGroup?: boolean;
-      type?: string | null;
-      memberCount?: number | null;
-      avatarUrl?: string | null;
-      createdAt?: Date | null;
-    }>('botThreads')
-    .findOne({ id: groupId });
-  if (!rec) return null;
-  return {
-    id: rec.id,
-    platformId: rec.platformId,
-    name: rec.name ?? null,
-    isGroup: rec.isGroup ?? false,
-    type: rec.type ?? null,
-    memberCount: rec.memberCount ?? null,
-    avatarUrl: rec.avatarUrl ?? null,
-    createdAt: rec.createdAt ?? null,
-  };
-}
-
 // ── Thread Session Data ────────────────────────────────────────────────────────
 
 /**

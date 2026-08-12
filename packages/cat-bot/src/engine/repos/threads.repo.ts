@@ -24,7 +24,6 @@ import {
   upsertThreadSession as _upsertThreadSession,
   isThreadAdmin as _isThreadAdmin,
   getThreadName as _getThreadName,
-  getGroupById as _getGroupById,
   getThreadSessionData as _getThreadSessionData,
   setThreadSessionData as _setThreadSessionData,
   getAllGroupThreadIds as _getAllGroupThreadIds,
@@ -63,8 +62,6 @@ const threadAdminsSetKey = (threadId: string): string =>
   `thread:admins:set:${threadId}`;
 
 const threadNameKey = (threadId: string): string => `thread:name:${threadId}`;
-
-const threadByIdKey = (threadId: string): string => `thread:byId:${threadId}`;
 
 const threadSessionDataKey = (
   userId: string,
@@ -131,9 +128,6 @@ export async function upsertThread(
   await _upsertThread(data);
   lruCache.set(threadExistsKey(data.id), true);
   lruCache.del(threadNameKey(data.id));
-  // Full-record cache (getGroupById) is rebuilt on next read — the upsert payload
-  // lacks createdAt, so evict rather than guess a payload.
-  lruCache.del(threadByIdKey(data.id));
   // Cache admin IDs as a single Set — O(threads) entries instead of O(threads × participants).
   // Every isThreadAdmin check for this thread resolves via Set.has() in memory without a new
   // cache entry per (thread, sender) pair. Data is fresh from the just-completed upsert.
@@ -295,34 +289,6 @@ export async function getThreadName(threadId: string): Promise<string> {
   } else {
     result = await _getThreadName(threadId);
   }
-  lruCache.set(key, result);
-  return result;
-}
-
-/**
- * Full single-row group/thread lookup (LRU-cached) — powers the AI agent's
- * `get_group` tool. Returns null when the thread has not been synced yet.
- */
-interface GroupInfoRecord {
-  id: string;
-  platformId: number;
-  name: string | null;
-  isGroup: boolean;
-  type: string | null;
-  memberCount: number | null;
-  avatarUrl: string | null;
-  createdAt: Date | null;
-}
-
-export async function getGroupById(
-  groupId: string,
-): Promise<GroupInfoRecord | null> {
-  const key = threadByIdKey(groupId);
-  const cached = lruCache.get<GroupInfoRecord | null>(key);
-  if (cached !== undefined) return cached;
-  // _getGroupById comes from the `database` package whose dynamic adapter export
-  // is typed as any — cast to the concrete record shape.
-  const result = (await _getGroupById(groupId)) as GroupInfoRecord | null;
   lruCache.set(key, result);
   return result;
 }
