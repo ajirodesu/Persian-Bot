@@ -14,6 +14,7 @@ import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { getPayment } from '@/engine/types/module-meta.types.js';
 import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import {
   getCachedSessionAdminOnly,
   setCachedSessionAdminOnly,
@@ -57,6 +58,23 @@ export const meta: CommandMeta = {
 //   • Rate-limited to one notification per 15 s per user per mode (prevents flooding).
 //   • hideNoti / adminOnlyHideNoti → completely silent rejection.
 //   • System admin > bot admin > thread admin bypass (most → least privileged).
+
+// ── Telegram @username vs. nickname conflict guard ─────────────────────────
+//
+// The nickname trigger below does a plain substring match against the raw message
+// text. On Telegram, "@BotUsername" mentions — either attached to a command
+// ("/help@ShiaBot") or standalone ("@ShiaBot what's up") — are addressing syntax,
+// not the nickname feature. When a bot's nickname happens to be identical or
+// similar to its Telegram @username (a common setup), that substring match would
+// otherwise misfire alongside (or instead of) the actual command/mention handling.
+//
+// Stripping every "@token" before the nickname check keeps the two features
+// independent: "/help@ShiaBot" is routed purely through command dispatch, and a
+// bare nickname mention elsewhere in the message (without "@") still triggers the
+// AI as intended. Scoped to Telegram only, per platform.
+function stripTelegramMentions(message: string): string {
+  return message.replace(/@\S+/g, ' ');
+}
 
 // ── Per-user Groq key gate ───────────────────────────────────────────────────
 // AI requires the requesting account to have configured its own Groq API key
@@ -253,9 +271,9 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
 /**
  * Passive middleware listener. Checks every incoming message.
- * Responds to user requests directly — no bot-nickname mention is required —
- * while prefixed command invocations are left to the command pipeline. The
- * agent still respects adminonly/onlyadminbox restrictions.
+ * If it matches the bot's name (e.g., "Hey Cat-Bot, do something"), triggers
+ * the agent transparently — but ONLY when the user is not restricted by
+ * adminonly or onlyadminbox modes.
  */
 export const onChat = async (ctx: AppCtx): Promise<void> => {
   const message = ((ctx.event['message'] as string | undefined) || '').trim();
@@ -267,8 +285,8 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
     '') as string;
   const threadID = (ctx.event['threadID'] ?? '') as string;
 
-  // Fetch nickname and display name in parallel — both are injected into the
-  // agent's system prompt, and neither depends on the other.
+  // Fetch nickname and display name in parallel — both are needed for the
+  // match check, and neither depends on the other.
   const [nickname, userName] = await Promise.all([
     ctx.native.userId && ctx.native.sessionId
       ? getBotNickname(
@@ -280,13 +298,23 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
     senderID ? ctx.user.getName(senderID) : Promise.resolve(null),
   ]);
 
-  // Respond to user requests even when the bot's nickname is not mentioned —
-  // the AI agent must never ignore a request just because the bot's name is
-  // absent from the message. Skip only prefixed command invocations: those are
-  // handled by the command pipeline, so they never get a duplicate passive AI
-  // reply. All other gates below (admin-only, payment, Groq key) still apply.
-  const prefix = ctx.prefix || '/';
-  if (message.toLowerCase().startsWith(prefix.toLowerCase())) return;
+  // webchatNickname is injected by the web chat room socket handler so the
+  // user's custom bot nickname (stored client-side) triggers the AI without a
+  // DB lookup.
+  const webchatNickname = ctx.native['webchatNickname'] as string | null | undefined;
+  const targetName = nickname || webchatNickname || 'Cat-Bot';
+
+  // On Telegram, ignore "@..." mention tokens when checking for the nickname so
+  // an @username mention (e.g. attached to a command like "/help@ShiaBot", or
+  // typed standalone) never conflicts with a nickname that's identical or
+  // similar to the bot's actual @username.  See stripTelegramMentions() above.
+  const nicknameMatchSource =
+    ctx.native.platform === Platforms.Telegram
+      ? stripTelegramMentions(message)
+      : message;
+
+  if (!nicknameMatchSource.toLowerCase().includes(targetName.toLowerCase()))
+    return;
 
   // ── Typing indicator + admin gate + agent ──────────────────────────────────
   // The typing indicator now wraps the admin check as well as the agent call.
