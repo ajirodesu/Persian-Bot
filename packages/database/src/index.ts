@@ -90,6 +90,8 @@ export const isThreadAdmin = m.isThreadAdmin;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getThreadName = m.getThreadName;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getGroupById = m.getGroupById;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getThreadSessionData = m.getThreadSessionData;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const setThreadSessionData = m.setThreadSessionData;
@@ -136,6 +138,8 @@ export const upsertUserSession = m.upsertUserSession;
 export const getUserName = m.getUserName;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getUserAvatar = m.getUserAvatar;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getUserById = m.getUserById;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const updateUserAvatar = m.updateUserAvatar;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment

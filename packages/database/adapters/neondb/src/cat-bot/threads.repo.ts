@@ -183,6 +183,50 @@ export async function getThreadName(threadId: string): Promise<string> {
   return res.rows[0]?.name ?? 'Unknown thread';
 }
 
+/**
+ * Returns the full stored record for a group/thread, or null when it has not
+ * been synced yet. Powers the AI agent's `get_group` tool (analogous to
+ * project-canis's getGroupbyLid) — a rich single-row lookup by chat/thread id.
+ */
+export async function getGroupById(
+  groupId: string,
+): Promise<{
+  id: string;
+  platformId: number;
+  name: string | null;
+  isGroup: boolean;
+  type: string | null;
+  memberCount: number | null;
+  avatarUrl: string | null;
+  createdAt: Date | null;
+} | null> {
+  const res = await pool.query<{
+    platform_id: number;
+    name: string | null;
+    is_group: boolean;
+    type: string | null;
+    member_count: number | null;
+    avatar_url: string | null;
+    created_at: Date | null;
+  }>(
+    `SELECT platform_id, name, is_group, type, member_count, avatar_url, created_at
+     FROM bot_threads WHERE id = $1`,
+    [groupId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    id: groupId,
+    platformId: row.platform_id,
+    name: row.name,
+    isGroup: row.is_group,
+    type: row.type,
+    memberCount: row.member_count,
+    avatarUrl: row.avatar_url,
+    createdAt: row.created_at,
+  };
+}
+
 // ── Thread Session Data ────────────────────────────────────────────────────────
 
 /**

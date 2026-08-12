@@ -20,6 +20,7 @@ import {
   upsertUserSession as _upsertUserSession,
   getUserName as _getUserName,
   getUserAvatar as _getUserAvatar,
+  getUserById as _getUserById,
   updateUserAvatar as _updateUserAvatar,
   getUserSessionData as _getUserSessionData,
   setUserSessionData as _setUserSessionData,
@@ -34,6 +35,8 @@ import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 const userExistsKey = (userId: string): string => `user:exists:${userId}`;
 
 const userNameKey = (userId: string): string => `user:name:${userId}`;
+
+const userByIdKey = (userId: string): string => `user:byId:${userId}`;
 
 const userSessionExistsKey = (
   userId: string,
@@ -75,6 +78,9 @@ export async function upsertUser(
   // on the very next userExists or getUserName call for this user.
   lruCache.set(userExistsKey(data.id), true);
   lruCache.set(userNameKey(data.id), data.name);
+  // The full-record cache (getUserById) is rebuilt from scratch on next read —
+  // the upsert payload lacks createdAt, so evict rather than guess a payload.
+  lruCache.del(userByIdKey(data.id));
 }
 
 export async function userExists(
@@ -148,6 +154,33 @@ export async function getUserName(userId: string): Promise<string> {
 
 export async function getUserAvatar(userId: string): Promise<string | null> {
   return _getUserAvatar(userId);
+}
+
+/**
+ * Full single-row user lookup (LRU-cached) — powers the AI agent's `get_user`
+ * tool. Returns null when the user has not been synced yet.
+ */
+interface UserInfoRecord {
+  id: string;
+  platformId: number;
+  name: string;
+  firstName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  createdAt: Date | null;
+}
+
+export async function getUserById(
+  userId: string,
+): Promise<UserInfoRecord | null> {
+  const key = userByIdKey(userId);
+  const cached = lruCache.get<UserInfoRecord | null>(key);
+  if (cached !== undefined) return cached;
+  // _getUserById comes from the `database` package whose dynamic adapter export
+  // is typed as any — cast to the concrete record shape.
+  const result = (await _getUserById(userId)) as UserInfoRecord | null;
+  lruCache.set(key, result);
+  return result;
 }
 
 export async function updateUserAvatar(

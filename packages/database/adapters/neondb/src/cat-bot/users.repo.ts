@@ -102,6 +102,47 @@ export async function getUserAvatar(userId: string): Promise<string | null> {
   return res.rows[0]?.avatar_url ?? null;
 }
 
+/**
+ * Returns the full stored record for a bot user, or null when the user has not
+ * been synced yet. Powers the AI agent's `get_user` tool (analogous to
+ * project-canis's getUserbyLid) — a rich single-row lookup by platform user id.
+ */
+export async function getUserById(
+  userId: string,
+): Promise<{
+  id: string;
+  platformId: number;
+  name: string;
+  firstName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  createdAt: Date | null;
+} | null> {
+  const res = await pool.query<{
+    platform_id: number;
+    name: string;
+    first_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+    created_at: Date | null;
+  }>(
+    `SELECT platform_id, name, first_name, username, avatar_url, created_at
+     FROM bot_users WHERE id = $1`,
+    [userId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    id: userId,
+    platformId: row.platform_id,
+    name: row.name,
+    firstName: row.first_name,
+    username: row.username,
+    avatarUrl: row.avatar_url,
+    createdAt: row.created_at,
+  };
+}
+
 export async function updateUserAvatar(
   userId: string,
   avatarUrl: string,
