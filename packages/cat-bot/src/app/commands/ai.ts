@@ -1,7 +1,7 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import { runAgent } from '@/engine/agent/agent.js';
+import { runAgent, AgentRateLimitError } from '@/engine/agent/agent.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
@@ -84,6 +84,11 @@ function stripTelegramMentions(message: string): string {
 const NO_GROQ_KEY_MESSAGE =
   '🤖 **AI is disabled.** No Groq API key is configured for this account.\n' +
   'Add your key in **Dashboard → Settings** to enable AI features.';
+
+const GROQ_RATE_LIMIT_MESSAGE =
+  '⏳ **The AI is temporarily unavailable** — the Groq API key for this account ' +
+  'has reached its rate limit.\n' +
+  'Please try again in a few minutes.';
 
 async function resolveGroqKeyOrWarn(ctx: AppCtx): Promise<string | null> {
   const sessionUserId = ctx.native.userId ?? '';
@@ -250,6 +255,13 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       });
     }
   } catch (err) {
+    if (err instanceof AgentRateLimitError) {
+      await ctx.chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message: GROQ_RATE_LIMIT_MESSAGE,
+      });
+      return;
+    }
     await ctx.chat.replyMessage({
       style: MessageStyle.TEXT,
       message: `AI Error: ${err instanceof Error ? err.message : String(err)}`,
@@ -430,6 +442,23 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
       }
     });
   } catch (err) {
+    if (err instanceof AgentRateLimitError) {
+      // The passive nickname path hides agent errors unless a tool already
+      // replied — surface the rate limit explicitly so the user isn't left
+      // with silence (cooldown-limited to prevent group flooding).
+      const sessionUserId = ctx.native.userId ?? '';
+      const sessionId = ctx.native.sessionId ?? '';
+      const platform = ctx.native.platform;
+      const noticeKey = `ai_rate_limit_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+      if (cooldownStore.check(noticeKey, Date.now()) === null) {
+        await ctx.chat.replyMessage({
+          style: MessageStyle.MARKDOWN,
+          message: GROQ_RATE_LIMIT_MESSAGE,
+        });
+        cooldownStore.record(noticeKey, Date.now(), 15_000);
+      }
+      return;
+    }
     ctx.logger.error('[ai.ts] onChat agent execution failed', { error: err });
   }
 };

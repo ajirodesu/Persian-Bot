@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import Groq from 'groq-sdk';
+import Groq, { APIError, RateLimitError } from 'groq-sdk';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { resolveAgentContext } from '@/engine/agent/agent.util.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
@@ -110,6 +110,27 @@ function extractFailedToolGeneration(err: unknown): RecoveredToolCall | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Thrown by runAgent when the account's Groq API key has exhausted its rate
+ * limit (HTTP 429). Callers distinguish this from a generic AI failure so they
+ * can surface a friendly rate-limit notice instead of a raw API error.
+ */
+export class AgentRateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentRateLimitError';
+  }
+}
+
+/**
+ * Detects the SDK's rate-limit error type — or any Groq APIError with HTTP 429,
+ * so detection stays robust even if a duplicate copy of the SDK ends up bundled.
+ */
+function isGroqRateLimitError(err: unknown): boolean {
+  if (err instanceof RateLimitError) return true;
+  return err instanceof APIError && err.status === 429;
 }
 
 // ============================================================================
@@ -373,6 +394,12 @@ export async function runAgent(
         tool_choice: 'auto',
       });
     } catch (err) {
+      if (isGroqRateLimitError(err)) {
+        throw new AgentRateLimitError(
+          'Your Groq API key has reached its rate limit. ' +
+            'AI features are temporarily paused — wait a moment and try again.',
+        );
+      }
       const recovered = extractFailedToolGeneration(err);
       const aliasedName = recovered ? TOOL_NAME_ALIASES[recovered.name] : undefined;
       const aliasedTool = aliasedName ? cachedToolsMap!.get(aliasedName) : undefined;
