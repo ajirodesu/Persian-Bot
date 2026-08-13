@@ -94,10 +94,6 @@ export function describeToolStatus(
       return '👥 Looking up group info…';
     case 'get_user':
       return '🧑 Looking up user info…';
-    case 'shell':
-      return '💻 Running shell command…';
-    case 'send_file':
-      return '📎 Sending file…';
     default:
       return `🔧 Using ${toolName}…`;
   }
