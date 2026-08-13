@@ -27,7 +27,6 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { EventMeta } from '@/engine/types/module-meta.types.js';
-import { LogMessageType } from '@/engine/adapters/models/enums/index.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';

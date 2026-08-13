@@ -23,7 +23,7 @@ import {
   isValidGroqApiKey,
 } from '@/engine/repos/groq-key.repo.js';
 
-export class GroqKeyController {
+class GroqKeyController {
   // GET /api/v1/settings/groq-key
   async get(req: Request, res: Response): Promise<void> {
     const userId = await requireSession(req, res);

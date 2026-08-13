@@ -40,22 +40,6 @@ export interface UnifiedUserInfo {
 }
 
 /**
- * Frozen prototype documenting every key a consumer may safely read.
- * createUnifiedUserInfo() is the production factory; use that instead of
- * spreading this object to ensure new fields always get defaults.
- */
-export const PROTO_UNIFIED_USER_INFO: Readonly<UnifiedUserInfo> = Object.freeze(
-  {
-    platform: 'unknown' as PlatformId,
-    id: '',
-    name: '',
-    firstName: null,
-    username: null,
-    avatarUrl: null,
-  },
-);
-
-/**
  * Creates a UnifiedUserInfo from partial data, filling in safe defaults for any
  * missing field. All platform wrapper getFullUserInfo() implementations must go
  * through this factory — never construct the shape inline, so that adding a new

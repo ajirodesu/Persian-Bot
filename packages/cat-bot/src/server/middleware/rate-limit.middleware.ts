@@ -47,7 +47,7 @@ interface WindowRecord {
  * Express's `trust proxy` setting — so `X-Forwarded-For` is used in production
  * when `app.set('trust proxy', 1)` is active (set in server/app.ts).
  */
-export function createRateLimiter(options: RateLimitOptions): RequestHandler {
+function createRateLimiter(options: RateLimitOptions): RequestHandler {
   const { windowMs, max } = options;
   const message = options.message ?? 'Too Many Requests';
 

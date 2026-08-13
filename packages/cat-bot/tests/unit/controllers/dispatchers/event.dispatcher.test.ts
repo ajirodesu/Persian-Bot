@@ -9,12 +9,22 @@ describe('Event Dispatcher', () => {
       ['log:subscribe', [{ meta: { name: 'join' }, onEvent: mockHandler }]],
     ]);
 
-    const ctx = { native: { platform: 'discord' }, event: {} };
+    const ctx = {
+      native: { platform: 'discord' },
+      event: {},
+    } as unknown as Parameters<typeof dispatchEvent>[2];
 
     await dispatchEvent(eventModules, 'log:subscribe', ctx);
 
     expect(mockHandler).toHaveBeenCalledOnce();
-    expect(mockHandler).toHaveBeenCalledWith(ctx);
+    // The dispatcher enriches the context with the matched module and event type
+    expect(mockHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...ctx,
+        mod: { meta: { name: 'join' }, onEvent: mockHandler },
+        eventType: 'log:subscribe',
+      }),
+    );
   });
 
   it('should safely ignore event types with no registered handlers', async () => {
@@ -42,7 +52,10 @@ describe('Event Dispatcher', () => {
       ],
     ]);
 
-    const ctx = { native: { platform: 'discord' }, event: {} };
+    const ctx = {
+      native: { platform: 'discord' },
+      event: {},
+    } as unknown as Parameters<typeof dispatchEvent>[2];
 
     await dispatchEvent(eventModules, 'log:subscribe', ctx);
 

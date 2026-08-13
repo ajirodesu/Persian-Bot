@@ -61,12 +61,11 @@ export function useEmailServiceEnabled(): UseEmailServiceEnabledResult {
   const [isLoading, setIsLoading] = useState(cachedEnabled === null)
 
   useEffect(() => {
-    if (cachedEnabled !== null) {
-      setIsEmailEnabled(cachedEnabled)
-      setIsLoading(false)
-      return
-    }
-
+    // No synchronous setState needed: initial state is already derived from the
+    // module-level cache, so a cache hit at mount renders correctly on the first pass.
+    // When the cache is empty this subscribes to the shared in-flight promise and
+    // updates state once it resolves (a cache-hit resolves in a microtask and the
+    // identical-value setStates are no-ops for React's renderer).
     let cancelled = false
     fetchEmailServiceStatus().then((enabled) => {
       if (cancelled) return

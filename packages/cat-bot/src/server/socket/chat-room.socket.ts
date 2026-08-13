@@ -13,7 +13,7 @@
  * chatroom:clear. A max-session cap prevents unbounded memory growth.
  */
 
-import type { Server as SocketIOServer, Socket } from 'socket.io';
+import type { Server as SocketIOServer } from 'socket.io';
 import {
   WebChatApi,
   type ChatMessage,

@@ -32,6 +32,11 @@ import {
   upsertUserSession,
 } from '@/engine/repos/users.repo.js';
 
+// The vi.mock() factories above swap these modules at runtime; vi.mocked() restores
+// the mock API for TypeScript so .mockResolvedValue() calls type-check.
+const mockedGetThreadSessionUpdatedAt = vi.mocked(getThreadSessionUpdatedAt);
+const mockedGetUserSessionUpdatedAt = vi.mocked(getUserSessionUpdatedAt);
+
 const typed = <T>(v: unknown) => v as T;
 
 function makeCtx(event: Record<string, unknown>) {
@@ -49,8 +54,8 @@ function makeCtx(event: Record<string, unknown>) {
 describe('on-chat.middleware: DM sender sync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getThreadSessionUpdatedAt.mockResolvedValue(null);
-    getUserSessionUpdatedAt.mockResolvedValue(null);
+    mockedGetThreadSessionUpdatedAt.mockResolvedValue(null);
+    mockedGetUserSessionUpdatedAt.mockResolvedValue(null);
   });
 
   it('syncs the sender for a Telegram DM (isGroup=false) but skips thread sync', async () => {
@@ -77,7 +82,7 @@ describe('on-chat.middleware: DM sender sync', () => {
   });
 
   it('still syncs thread AND sender for a Telegram group (isGroup=true)', async () => {
-    getThreadSessionUpdatedAt.mockResolvedValue(null);
+    mockedGetThreadSessionUpdatedAt.mockResolvedValue(null);
     const ctx = makeCtx({
       type: 'message',
       threadID: '67890',
@@ -102,7 +107,7 @@ describe('on-chat.middleware: DM sender sync', () => {
   });
 
   it('skips sender sync when senderUpdatedAt is fresh (within SYNC_INTERVAL)', async () => {
-    getUserSessionUpdatedAt.mockResolvedValue(new Date());
+    mockedGetUserSessionUpdatedAt.mockResolvedValue(new Date());
     const ctx = makeCtx({
       type: 'message',
       threadID: '12345',
@@ -117,7 +122,7 @@ describe('on-chat.middleware: DM sender sync', () => {
 
   it('optimistically stamps an existing user session and re-syncs a stale sender', async () => {
     const stale = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    getUserSessionUpdatedAt.mockResolvedValue(stale);
+    mockedGetUserSessionUpdatedAt.mockResolvedValue(stale);
     const ctx = makeCtx({
       type: 'message',
       threadID: '12345',

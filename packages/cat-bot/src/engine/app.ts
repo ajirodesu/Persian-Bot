@@ -30,7 +30,6 @@ import { upsertSessionEvents } from '@/engine/modules/session/bot-session-events
 import type { SessionConfigs } from '@/engine/modules/session/session-loader.util.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import {
-  createCollectionManager,
   createThreadCollectionManager,
   createBotCollectionManager,
 } from '@/engine/lib/db-collection.lib.js';
@@ -411,7 +410,13 @@ async function main(): Promise<void> {
     native: import('@/engine/types/controller.types.js').NativeContext,
   ): Promise<void> {
     if (!native.userId || !native.sessionId) return;
-    if (prefixManager.getThreadPrefix(threadID) !== undefined) return;
+    // Negative cache fast path: once a thread's custom-prefix state is known this process
+    // (loaded from DB, or set/cleared via /prefix), skip the DB entirely. This converts the
+    // previous two-DB-round-trip cost per message into a single in-memory Set lookup for the
+    // overwhelmingly common case (threads without a custom prefix). Correctness is preserved:
+    // every write path (/prefix set, /prefix reset) marks the thread checked, and the set is
+    // cleared on full reset, so the only DB reads left happen once per thread after a restart.
+    if (prefixManager.isThreadPrefixChecked(threadID)) return;
     try {
       const threadColl = createThreadCollectionManager(
         native.userId,
@@ -425,6 +430,11 @@ async function main(): Promise<void> {
       }
     } catch {
       /* fail-open — falls back to session prefix */
+    } finally {
+      // Mark checked regardless of outcome — found, absent, or DB error — so subsequent
+      // messages never re-query. setThreadPrefix() above already marks it, but the finally
+      // also covers the absent/error paths.
+      prefixManager.markThreadPrefixChecked(threadID);
     }
   }
 

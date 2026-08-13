@@ -32,7 +32,7 @@ export const COLORS = {
 // The Aqua theme is dark by default, so the forced dark-mode overrides simply
 // restate the same swatches to keep transactional mail consistent with the app
 // regardless of the reader's preferred color scheme.
-export const DARK_COLORS = {
+const DARK_COLORS = {
   primary: '#34e0be',
   onPrimary: '#051617',
   surface: '#0a1114',

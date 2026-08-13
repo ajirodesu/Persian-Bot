@@ -36,6 +36,15 @@ import {
 /** Max length for a system admin ID — generous enough for any platform's native ID format (Discord/Telegram snowflakes, UUIDs, etc). */
 const SYSTEM_ADMIN_ID_MAX_LENGTH = 128;
 
+/** True if the string contains a C0 control character (0x00-0x1F) or DEL (0x7F). */
+function hasControlCharacter(id: string): boolean {
+  for (let i = 0; i < id.length; i++) {
+    const code = id.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 /**
  * Validates a submitted system admin ID server-side — the client-side check in
  * settings.tsx is a UX convenience only, never the source of truth. Returns the
@@ -53,13 +62,16 @@ function validateSystemAdminId(raw: unknown): { id: string } | { error: string }
     return { error: `adminId must be ${SYSTEM_ADMIN_ID_MAX_LENGTH} characters or fewer` };
   }
   // Reject embedded whitespace/control characters — a valid platform user ID never contains these.
-  if (/[\s\u0000-\u001f]/.test(id)) {
+  // Implemented as /\s/ (whitespace, no control chars in the literal) plus an explicit char-code
+  // scan for C0 controls (0x00-0x1F) and DEL (0x7F) — identical semantics to /[\s\u0000-\u001f]/
+  // without a control-character regex literal that trips no-control-regex.
+  if (/\s/.test(id) || hasControlCharacter(id)) {
     return { error: 'adminId cannot contain whitespace or control characters' };
   }
   return { id };
 }
 
-export class AdminController {
+class AdminController {
   // In-process re-entrancy guard — see resetAllDatabase() safeguard #3.
   #resetInProgress = false;
 

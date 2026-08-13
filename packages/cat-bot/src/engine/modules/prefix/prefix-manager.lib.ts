@@ -14,6 +14,11 @@ class PrefixManager {
   // Thread-level prefix overrides — keyed by platform threadId (Discord channelId, FB threadId, etc.).
   // A thread entry wins over the session prefix so individual groups can customise the trigger character.
   private threadPrefixes = new Map<string, string>();
+  // Negative cache: thread IDs whose custom-prefix state is already known (either loaded from
+  // the DB at boot, or set/cleared in-process). Lets restoreThreadPrefix skip the DB lookup
+  // entirely for the common case (threads WITHOUT a custom prefix) — that lookup previously
+  // ran on every single message, costing two DB round-trips on the hot path.
+  private threadPrefixesChecked = new Set<string>();
 
   private getKey(userId: string, platform: string, sessionId: string): string {
     return `${userId}:${platform}:${sessionId}`;
@@ -49,6 +54,8 @@ class PrefixManager {
    */
   setThreadPrefix(threadId: string, prefix: string): void {
     this.threadPrefixes.set(threadId, prefix);
+    // The authoritative state is now known in-process — no DB re-check needed.
+    this.threadPrefixesChecked.add(threadId);
     logger.debug(
       `[prefix-manager] Thread prefix for ${threadId} set to "${prefix}"`,
     );
@@ -69,9 +76,21 @@ class PrefixManager {
    */
   clearThreadPrefix(threadId: string): void {
     this.threadPrefixes.delete(threadId);
+    // Same rationale as setThreadPrefix: the cleared state is authoritative.
+    this.threadPrefixesChecked.add(threadId);
     logger.debug(
       `[prefix-manager] Thread prefix cleared for ${threadId} — reverting to session default`,
     );
+  }
+
+  /** True when the thread's custom-prefix state has already been resolved this process. */
+  isThreadPrefixChecked(threadId: string): boolean {
+    return this.threadPrefixesChecked.has(threadId);
+  }
+
+  /** Records that the thread's custom-prefix state was just resolved (found or not). */
+  markThreadPrefixChecked(threadId: string): void {
+    this.threadPrefixesChecked.add(threadId);
   }
 
   /**
@@ -95,6 +114,7 @@ class PrefixManager {
   clearAll(): void {
     this.prefixes.clear();
     this.threadPrefixes.clear();
+    this.threadPrefixesChecked.clear();
   }
 }
 

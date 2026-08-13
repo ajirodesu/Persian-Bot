@@ -6,9 +6,6 @@
  * server-side validation. Keep the two files in sync.
  */
 
-/** Fallback shown when a session has never had a reaction emoji configured. */
-export const DEFAULT_COMMAND_REACT_EMOJI = '🔥'
-
 /**
  * Complete set of emoji Telegram's Bot API accepts for ReactionTypeEmoji
  * reactions (verified against the official Bot API docs). Any emoji outside
@@ -42,11 +39,6 @@ const DISCORD_UNICODE_EMOJI_PATTERN = new RegExp(
   `^(?:${DISCORD_EMOJI_UNIT}(?:\\p{Emoji_Modifier})?)(?:\\u200D${DISCORD_EMOJI_UNIT}(?:\\p{Emoji_Modifier})?)*$`,
   'u',
 )
-
-/** Whether the given emoji is in Telegram's supported reaction set. */
-export function isTelegramReactionEmoji(emoji: string): boolean {
-  return TELEGRAM_REACTION_EMOJIS.includes(emoji)
-}
 
 /** Whether the given emoji is a valid Discord reaction (unicode or custom ref). */
 export function isDiscordReactionEmoji(emoji: string): boolean {

@@ -6,8 +6,7 @@
  * WebSocket upgrade events before Express ever sees the request.
  *
  * initSocketIO() must be called once in server.ts after createServer(app)
- * and before httpServer.listen(). All other modules call getSocketIO() to
- * emit events without needing to pass the instance through the call chain.
+ * and before httpServer.listen().
  */
 
 import { Server as SocketIOServer } from 'socket.io';
@@ -30,13 +29,5 @@ export function initSocketIO(
       methods: ['GET', 'POST'],
     },
   });
-  return io;
-}
-
-/**
- * Returns the Socket.IO Server instance or null when not yet initialised.
- * Callers (validation.socket.ts) must guard against null for safety.
- */
-export function getSocketIO(): SocketIOServer | null {
   return io;
 }

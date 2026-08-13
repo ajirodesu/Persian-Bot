@@ -20,13 +20,6 @@ export function getGroqKeyHint(apiKey: string): string {
   return apiKey.trim().slice(-4);
 }
 
-/** Cheap existence probe (no decrypt) — used by the agent pre-flight gate. */
-export async function hasUserGroqApiKey(userId: string): Promise<boolean> {
-  if (!userId) return false;
-  const stored = await _getUserGroqKey(userId);
-  return stored !== null && stored.encryptedKey.length > 0;
-}
-
 /**
  * Returns the user's decrypted Groq API key, or null when unset or undecryptable.
  * The key is scoped to a single user's account — callers must resolve the account

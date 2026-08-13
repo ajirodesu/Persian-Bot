@@ -28,7 +28,7 @@ export async function upsertThread(data: BotThreadData): Promise<void> {
 }
 
 export async function threadExists(
-  platform: string,
+  _platform: string,
   threadId: string,
 ): Promise<boolean> {
   const db = getMongoDb();

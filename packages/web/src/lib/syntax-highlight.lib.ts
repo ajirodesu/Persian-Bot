@@ -158,7 +158,7 @@ function getLangConfig(lang: string): LangConfig {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** HTML-escapes raw source so injected code can never break out of the DOM. */
-export function escapeHtml(code: string): string {
+function escapeHtml(code: string): string {
   return code
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

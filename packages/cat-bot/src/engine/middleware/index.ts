@@ -6,7 +6,7 @@
  * module evaluation time, before any platform events fire.
  *
  * To extend the pipeline from app.ts or anywhere else:
- *   import { use } from '@/engine/middleware/index.js';
+ *   import { use } from '@/engine/lib/middleware.lib.js';
  *   use.onCommand([myAuthMiddleware, myRateLimitMiddleware]);
  *
  * Execution order per lifecycle (first registered = first executed):
@@ -16,7 +16,6 @@
  *   onReact:   reactStateValidation   → [user-added] → onReact handler
  */
 
-export { use, middlewareRegistry } from '@/engine/lib/middleware.lib.js';
 export type {
   MiddlewareFn,
   MiddlewareUse,

@@ -1,8 +1,5 @@
 import { PLATFORM_LABELS } from '@/constants/platform.constants'
 
-// Local binding required before re-exporting so getPlatformLabel can read it below
-export { PLATFORM_LABELS }
-
 /**
  * Returns human-readable label for a given platform internal key.
  */

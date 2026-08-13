@@ -48,7 +48,7 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
 };
 
 /** Detected editor key for a filename, or null for unknown/binary extensions. */
-export function languageForName(name: string): string | null {
+function languageForName(name: string): string | null {
   const dot = name.lastIndexOf('.');
   if (dot <= 0) return null;
   return EXTENSION_LANGUAGE[name.slice(dot).toLowerCase()] ?? null;
@@ -110,15 +110,6 @@ export interface RepoMutationResult {
   /** Always false — file-manager writes are working-tree changes, never commits. */
   synced: boolean;
   commitSha?: string | undefined;
-}
-
-/**
- * The commit message is asked from the operator — never auto-generated. Kept as
- * a placeholder for the panel's message field; file-manager writes no longer
- * produce commits.
- */
-export function defaultCommitMessage(action: string, repoPath: string): string {
-  return `chore(file-manager): ${action} ${repoPath}`;
 }
 
 // ── Internals ─────────────────────────────────────────────────────────────────

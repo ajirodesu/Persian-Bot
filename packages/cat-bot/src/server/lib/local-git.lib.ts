@@ -47,7 +47,7 @@ function findRepoRoot(start: string): string | null {
  * ADMIN_REPO_PATH env override; otherwise auto-detects the nearest git checkout
  * walking up from the process working directory. Returns null when unconfigured.
  */
-export function resolveRepoRoot(): string | null {
+function resolveRepoRoot(): string | null {
   const override = env.ADMIN_REPO_PATH;
   if (override && override.trim() !== '') {
     const root = isAbsolute(override) ? override : resolve(process.cwd(), override);
@@ -60,15 +60,6 @@ export function resolveRepoRoot(): string | null {
     return root;
   }
   return findRepoRoot(process.cwd());
-}
-
-/** True when the local git checkout is configured and usable. */
-export function isRepoConfigured(): boolean {
-  try {
-    return resolveRepoRoot() !== null;
-  } catch {
-    return false;
-  }
 }
 
 /** Returns the repo root or throws a 503 so callers can short-circuit. */
@@ -357,7 +348,7 @@ export async function getCurrentBranch(): Promise<string | null> {
 }
 
 /** Upstream tracking ref (e.g. `origin/main`) or null when there is none. */
-export async function getUpstream(): Promise<string | null> {
+async function getUpstream(): Promise<string | null> {
   const res = await runGitProbe([
     'rev-parse',
     '--abbrev-ref',
@@ -368,7 +359,7 @@ export async function getUpstream(): Promise<string | null> {
 }
 
 /** Count of commits the local branch is ahead of / behind its upstream. */
-export async function getAheadBehind(): Promise<{ ahead: number; behind: number }> {
+async function getAheadBehind(): Promise<{ ahead: number; behind: number }> {
   const res = await runGitProbe(['rev-list', '--left-right', '--count', 'HEAD...@{upstream}']);
   if (res.code !== 0) return { ahead: 0, behind: 0 };
   return parseAheadBehind(res.stdout);

@@ -56,7 +56,7 @@ describe('On-Command Middleware: Cooldown Enforcement', () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(chatMock.replyMessage).toHaveBeenCalledOnce();
-    expect(chatMock.replyMessage.mock.calls[0][0].message).toContain(
+    expect(chatMock.replyMessage.mock.calls[0]?.[0]?.message).toContain(
       'Please wait',
     );
   });

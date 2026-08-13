@@ -59,27 +59,6 @@ export interface UnifiedThreadInfo {
 }
 
 /**
- * Frozen prototype documenting every key a consumer may safely read.
- * Useful for tests and as a reference shape — createUnifiedThreadInfo() is the
- * production factory and should be used instead of spreading this object.
- */
-export const PROTO_UNIFIED_THREAD_INFO: Readonly<UnifiedThreadInfo> =
-  Object.freeze({
-    platform: 'unknown' as PlatformId,
-    threadID: '',
-    name: null,
-    isGroup: false,
-    memberCount: null,
-    participantIDs: [],
-    adminIDs: [],
-    avatarUrl: null,
-    serverID: null,
-    channelName: null,
-    channelType: null,
-    type: null,
-  });
-
-/**
  * Creates a UnifiedThreadInfo from partial data, filling in safe defaults for any
  * missing field. All platform wrapper getFullThreadInfo() implementations must go
  * through this factory — never construct the shape inline, so that adding a new

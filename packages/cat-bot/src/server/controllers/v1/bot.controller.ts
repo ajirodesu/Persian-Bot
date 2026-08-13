@@ -7,7 +7,7 @@ import type {
 } from '@/server/dtos/bot.dto.js';
 import { logRelay } from '@/engine/modules/logger/log-relay.lib.js';
 
-export class BotController {
+class BotController {
   // Session verification happens before any business logic so the service layer
   // never receives unauthenticated requests — keeps services auth-agnostic and testable.
   async create(req: Request, res: Response): Promise<void> {

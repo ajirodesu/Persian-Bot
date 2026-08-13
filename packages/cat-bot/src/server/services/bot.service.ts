@@ -71,7 +71,7 @@ async function fetchDiscordClientId(discordToken: string): Promise<string> {
   return response.data.id;
 }
 
-export class BotService {
+class BotService {
   async createBot(userId: string, dto: CreateBotRequestDto): Promise<CreateBotResponseDto> {
     const sessionId = randomUUID();
     const credentials = dto.credentials.platform === 'discord'

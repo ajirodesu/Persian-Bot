@@ -85,7 +85,7 @@ export interface BotDatabaseQueryOptions {
   sortDir?: BotDatabaseSortDir
 }
 
-export class BotService {
+class BotService {
   async createBot(dto: CreateBotRequestDto): Promise<CreateBotResponseDto> {
     // Vite's dev proxy (vite.config.ts server.proxy) forwards /api/* to Express at
     // localhost:3000 — no explicit baseURL needed. Production deploys behind the same

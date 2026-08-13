@@ -10,14 +10,14 @@ import https from 'https';
 import dns from 'dns';
 import axios from 'axios';
 
-export const keepAliveHttpAgent = new http.Agent({
+const keepAliveHttpAgent = new http.Agent({
   keepAlive: true,
   keepAliveMsecs: 10_000,
   maxSockets: 256,
   maxFreeSockets: 64,
 });
 
-export const keepAliveHttpsAgent = new https.Agent({
+const keepAliveHttpsAgent = new https.Agent({
   keepAlive: true,
   keepAliveMsecs: 10_000,
   maxSockets: 256,

@@ -5,10 +5,8 @@
  * pre/code blocks: _ * [ ] ( ) ~ ` > # + - = | { } . !
  * '\' itself must also be escaped as '\\'.
  *
- * Three exports:
- *   escapeMarkdownV2   — full escape for plain text (no formatting)
+ * Exports:
  *   sanitizeMarkdownV2 — smart converter: keeps markers, escapes content, **→*
- *   validateMarkdownV2 — true iff sanitizeMarkdownV2 would not change the input
  *
  * sanitizeMarkdownV2 pipeline:
  *   1. preprocessMarkdown  — converts CommonMark/LLM constructs to Telegram equivalents
@@ -23,23 +21,6 @@ const RESERVED = new Set<string>([
   '_', '*', '[', ']', '(', ')', '~', '`',
   '>', '#', '+', '-', '=', '|', '{', '}', '.', '!',
 ]);
-
-/**
- * Full escape — every reserved character AND '\' is escaped so the text renders
- * as literal plain text. Use for raw user-supplied strings; never when intentional
- * formatting is present. Escapes '\' first to avoid double-escaping.
- */
-export function escapeMarkdownV2(text: string): string {
-  let result = '';
-  for (const ch of text) {
-    if (ch === '\\' || RESERVED.has(ch)) {
-      result += '\\' + ch;
-    } else {
-      result += ch;
-    }
-  }
-  return result;
-}
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -301,9 +282,4 @@ export function sanitizeMarkdownV2(text: string): string {
   }
 
   return result;
-}
-
-/** Returns true if the text is already valid Telegram MarkdownV2 (sanitizeMarkdownV2 is idempotent). */
-export function validateMarkdownV2(text: string): boolean {
-  return sanitizeMarkdownV2(text) === text;
 }

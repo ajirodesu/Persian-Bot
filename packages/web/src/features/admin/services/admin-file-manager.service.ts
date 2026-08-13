@@ -104,7 +104,7 @@ export interface GitCommitInfoDto {
   subject: string
 }
 
-export class AdminFileManagerService {
+class AdminFileManagerService {
   // GET /api/v1/admin/files/meta — repo identity + branch + configured
   async getMeta(): Promise<RepoMetaDto> {
     const response = await apiClient.get<RepoMetaDto>('/api/v1/admin/files/meta')

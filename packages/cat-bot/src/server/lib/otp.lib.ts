@@ -47,13 +47,6 @@ export function generateOtp(email: string, purpose: OtpPurpose): string {
   return code;
 }
 
-/** Returns the currently stored code for `email` + `purpose`, or null. */
-export function getOtp(email: string, purpose: OtpPurpose): string | null {
-  const record = store.get(key(email, purpose));
-  if (!record || Date.now() > record.expiresAt) return null;
-  return record.code;
-}
-
 /**
  * Checks a submitted code WITHOUT consuming it on success, so the same code
  * can be carried into a subsequent confirm request. Failed attempts still

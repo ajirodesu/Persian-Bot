@@ -176,33 +176,3 @@ export function formatDate(
   }).format(date)
 }
 
-/** Formats an ISO/Date as "Wed, Jan 5" in the given timezone (chat-room date dividers). */
-export function formatShortDate(
-  input: string | number | Date | null | undefined,
-  timezone: string,
-): string {
-  if (!input) return '—'
-  const date = input instanceof Date ? input : new Date(input)
-  if (Number.isNaN(date.getTime())) return '—'
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: isValidTimezone(timezone) ? timezone : 'UTC',
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }).format(date)
-}
-
-/** Formats an ISO/Date as "09:41 AM" in the given timezone. */
-export function formatTime(
-  input: string | number | Date | null | undefined,
-  timezone: string,
-): string {
-  if (!input) return '—'
-  const date = input instanceof Date ? input : new Date(input)
-  if (Number.isNaN(date.getTime())) return '—'
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: isValidTimezone(timezone) ? timezone : 'UTC',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}

@@ -82,7 +82,7 @@ async function resolvePlatform(
 
 // ── Controller Class ──────────────────────────────────────────────────────────
 
-export class BotSessionConfigController {
+class BotSessionConfigController {
   // GET /api/v1/bots/:id/commands
   async getCommands(req: Request, res: Response): Promise<void> {
     const userId = await requireSession(req, res);

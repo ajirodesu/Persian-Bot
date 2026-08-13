@@ -78,7 +78,7 @@ export interface GetMaintenanceModeResponseDto {
 
 // ── Service class ──────────────────────────────────────────────────────────────
 
-export class AdminService {
+class AdminService {
   // GET /api/v1/admin/bots — all bot sessions across all owners
   async getAdminBots(
     page = 1,

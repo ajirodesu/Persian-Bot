@@ -24,7 +24,7 @@ export async function upsertUser(data: BotUserData): Promise<void> {
 }
 
 export async function userExists(
-  platform: string,
+  _platform: string,
   userId: string,
 ): Promise<boolean> {
   const res = await tursoClient.execute({

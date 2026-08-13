@@ -17,21 +17,6 @@ export type {
   AppCtx,
 } from '@/engine/types/controller.types.js';
 
-// Options — OptionsMap runtime class and OptionDef type for TypeScript command modules
-// Re-exported from lib/ for backward compatibility with consumers that import from controllers
-export { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
-export type { OptionDef } from '@/engine/modules/options/options-map.lib.js';
-
-// Parsing
-export { parseCommand } from '../modules/command/command-parser.util.js';
-
-// Fan-out
-export { runOnChat } from './on-chat-runner.js';
-
-// Dispatchers
-export { dispatchCommand } from './dispatchers/command.dispatcher.js';
-export { dispatchEvent } from './dispatchers/event.dispatcher.js';
-
 // Entry points
 export { handleMessage } from './handlers/message.handler.js';
 export { handleEvent } from './handlers/event.handler.js';

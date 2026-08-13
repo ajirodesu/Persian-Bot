@@ -336,8 +336,6 @@ const Snackbar: React.FC<SnackbarProps> = ({
   )
 }
 
-export default Snackbar
-
 // ============================================================================
 // Snackbar Container Component
 // ============================================================================

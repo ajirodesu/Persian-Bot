@@ -61,7 +61,10 @@ export async function setupTelegram(): Promise<PlatformTestContext | null> {
       deleteMessage: (msgId: number | string) =>
         bot.api.deleteMessage(chatId, Number(msgId)),
       setChatPhoto: (photo: unknown) =>
-        bot.api.setChatPhoto(chatId, photo as string),
+        bot.api.setChatPhoto(
+          chatId,
+          photo as unknown as import('grammy').InputFile,
+        ),
       deleteChatPhoto: () => bot.api.deleteChatPhoto(chatId),
     };
 

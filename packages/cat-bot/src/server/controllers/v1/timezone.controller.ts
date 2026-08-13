@@ -23,7 +23,7 @@ import {
   isValidTimezone,
 } from '@/engine/repos/timezone.repo.js';
 
-export class TimezoneController {
+class TimezoneController {
   // GET /api/v1/settings/timezone
   async get(req: Request, res: Response): Promise<void> {
     const userId = await requireAnySession(req, res);

@@ -133,12 +133,3 @@ export function decrypt(value: string): string {
 
   return decipher.update(ciphertext).toString('utf8') + decipher.final('utf8');
 }
-
-/**
- * Returns true when a stored value has already been encrypted by this module.
- * Guards write paths against double-encrypting a credential that was read from
- * the DB and passed through the update flow unchanged.
- */
-export function isEncrypted(value: string): boolean {
-  return value.startsWith(ENCRYPTED_PREFIX);
-}

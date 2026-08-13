@@ -54,20 +54,6 @@ import {
   eventRegistry,
 } from '@/engine/lib/module-registry.lib.js';
 
-/**
- * Every registered platform ID in one place — derived from each platform's own index.ts constant.
- * Adding a new transport requires only: (1) export PLATFORM_ID from its index.ts and
- * (2) add it to this array. adapters/models/ never needs to change.
- */
-export const PLATFORM_IDS = [
-  Platforms.Discord,
-  Platforms.Telegram,
-  Platforms.Fluxer,
-] as const;
-
-/** Union of all registered platform IDs plus the 'unknown' sentinel for pre-identification contexts. */
-export type PlatformId = (typeof PLATFORM_IDS)[number] | 'unknown';
-
 // ── Per-session config shapes — one entry per session directory ───────────────
 
 export interface DiscordConfig {

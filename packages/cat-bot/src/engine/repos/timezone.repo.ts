@@ -1,11 +1,10 @@
 import {
   getUserTimezone as _getUserTimezone,
   upsertUserTimezone as _upsertUserTimezone,
-  deleteUserTimezone as _deleteUserTimezone,
 } from 'database';
 
 /** Dashboard-wide fallback when a user hasn't picked a timezone yet. */
-export const DEFAULT_TIMEZONE = 'UTC';
+const DEFAULT_TIMEZONE = 'UTC';
 
 /** Validates an IANA timezone identifier via Intl — the same source the frontend's
  * searchable picker is built from, so anything the UI can select is accepted here. */
@@ -43,9 +42,4 @@ export async function saveUserTimezone(
     throw new Error('Invalid timezone. Choose a value from the timezone list.');
   }
   await _upsertUserTimezone(userId, trimmed);
-}
-
-export async function removeUserTimezone(userId: string): Promise<void> {
-  if (!userId) return;
-  await _deleteUserTimezone(userId);
 }

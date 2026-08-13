@@ -38,7 +38,7 @@ import {
   unstagePaths,
 } from '@/server/lib/local-git.lib.js';
 
-export class AdminFileManagerController {
+class AdminFileManagerController {
   // GET /api/v1/admin/files/meta — repo identity + branch + configured flag.
   async getMeta(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;

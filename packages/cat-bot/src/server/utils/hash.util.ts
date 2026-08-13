@@ -6,13 +6,6 @@
 import { createHash } from 'node:crypto';
 import { env } from '@/engine/config/env.config.js';
 
-export function generateVerifyToken(userId: string): string {
-  return createHash('sha256')
-    .update(userId + 'verify')
-    .digest('hex')
-    .substring(0, 10);
-}
-
 /**
  * Derives a per-session Telegram webhook secret token from ENCRYPTION_KEY + userId + sessionId.
  * Telegram Bot API requires: A–Z, a–z, 0–9, _ and - (1–256 chars).

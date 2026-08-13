@@ -16,7 +16,7 @@ import { TTLMap } from '@/engine/lib/ttl-map.lib.js';
 
 // 30-minute sliding TTL with a 5-minute background sweep. Sliding ensures
 // multi-step button flows stay alive as long as the user keeps clicking.
-export const buttonContextStore = new TTLMap<Record<string, unknown>>({
+const buttonContextStore = new TTLMap<Record<string, unknown>>({
   ttlMs: 30 * 60 * 1000,
   sliding: true,
   cleanupIntervalMs: 5 * 60 * 1000,
@@ -30,7 +30,7 @@ export interface ButtonOverride {
 
 // Overrides share the same 30-minute lifecycle as button contexts — an expired
 // context has no associated override worth retrieving.
-export const buttonOverridesStore = new TTLMap<ButtonOverride>({
+const buttonOverridesStore = new TTLMap<ButtonOverride>({
   ttlMs: 30 * 60 * 1000,
   sliding: true,
   cleanupIntervalMs: 5 * 60 * 1000,

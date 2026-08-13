@@ -113,7 +113,13 @@ export async function dispatchCommand(
   }
 
   // Command completed successfully — react to the exact triggering message.
-  // Uses the shared react-on-succss helper (session emoji, best-effort, never
+  // Uses the shared react-on-success helper (session emoji, best-effort, never
   // throws), so a reaction failure can never crash the dispatch pipeline.
-  await reactOnSuccess(ctx, ctx.event);
+  //
+  // Fire-and-forget (not awaited): the reaction is a UX touch that adds a full
+  // platform API round-trip to the tail of every command. Awaiting it delays the
+  // transport's update handler from resolving (per-chat serialisation under load,
+  // and the webhook HTTP response in webhook mode), which directly inflates the
+  // perceived response time. The reply the user cares about is already sent by now.
+  void reactOnSuccess(ctx, ctx.event);
 }
