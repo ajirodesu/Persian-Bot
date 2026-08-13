@@ -22,6 +22,7 @@
  */
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
+import { extractHumanText } from '../agent.util.js';
 import { commandResultStore } from '../lib/command-result-store.lib.js';
 // This tool delivers the agent's actual reply via ctx.api.replyMessage
 // directly (bypassing ctx.chat), so it must fire the same instant-stop
@@ -102,19 +103,36 @@ export const config = {
 // ============================================================================
 
 export const run = async (
-  {
-    message,
-    attachment_url,
-    button,
-    attachment,
-  }: {
-    message: string;
-    attachment_url?: string[];
-    button?: string[];
-    attachment?: string[];
+  args: {
+    message?: unknown;
+    attachment_url?: unknown;
+    button?: unknown;
+    attachment?: unknown;
+    // The recovered Groq "json" quirk passes Harmony envelope keys
+    // (`commentary`/`final`) instead of `message` — allow any extra keys.
+    [key: string]: unknown;
   },
   ctx: AppCtx,
 ): Promise<string> => {
+  // Extract the actual reply text from whatever the model produced. When the
+  // Groq "json" tool-call quirk is recovered, the args are the Harmony
+  // "commentary/final json" envelope (`{ commentary, final }`) with NO
+  // `message` key — extractHumanText collapses the envelope (or a
+  // double-encoded JSON string) down to the real value so the user never
+  // receives raw JSON.
+  const message = extractHumanText(args) ?? '';
+  // Narrow the optional list fields back to string[] — the model may pass them
+  // as anything, and the collection loops below require real string keys.
+  const attachment_url = Array.isArray(args['attachment_url'])
+    ? (args['attachment_url'] as string[])
+    : undefined;
+  const button = Array.isArray(args['button'])
+    ? (args['button'] as string[])
+    : undefined;
+  const attachment = Array.isArray(args['attachment'])
+    ? (args['attachment'] as string[])
+    : undefined;
+
   const threadID = (ctx.event['threadID'] as string) || '';
   // Thread the agent reply to the user's triggering message for visual conversation anchoring.
   const replyToID = (ctx.event['messageID'] as string) || '';
@@ -152,6 +170,17 @@ export const run = async (
         allButtonRows.push(...(grid as unknown as ButtonItem[][]));
       }
     }
+  }
+
+  // Nothing user-facing to deliver (no text AND no attachments/buttons) — fail
+  // visibly instead of sending an empty message.
+  if (
+    !message.trim() &&
+    allAttachmentUrls.length === 0 &&
+    allButtonRows.length === 0 &&
+    allBinaryAttachments.length === 0
+  ) {
+    return 'Delivery failed: send_result received no message text and no attachments to deliver.';
   }
 
   // Always deliver as markdown — the LLM composes formatted text (bold, lists, code) and it

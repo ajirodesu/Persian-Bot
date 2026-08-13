@@ -4,7 +4,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import Groq, { APIError, RateLimitError } from 'groq-sdk';
 import type { AppCtx } from '@/engine/types/controller.types.js';
-import { resolveAgentContext } from '@/engine/agent/agent.util.js';
+import {
+  resolveAgentContext,
+  extractHumanText,
+} from '@/engine/agent/agent.util.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
@@ -379,6 +382,12 @@ export async function runAgent(
 
   let turns = 20; // Safety limit — prevents runaway tool-call loops
 
+  // Tracks whether send_result actually delivered a reply this turn. Bare-text
+  // final answers are suppressed ONLY when this is true — otherwise a model that
+  // answers conversationally without the tool workflow would be dropped entirely,
+  // leaving the user with total silence.
+  let delivered = false;
+
   while (turns-- > 0) {
     // Reasoning phase — reset to the generic "thinking" phrase before each
     // model call; it will be overwritten with a specific action below the
@@ -435,6 +444,12 @@ export async function runAgent(
       setAgentStatus(ctx, describeToolStatus(aliasedName, args));
       try {
         const result = await aliasedTool.run(args, ctx);
+        if (aliasedName === 'send_result') {
+          // send_result returns 'Delivery failed: …' (not a throw) on error — only
+          // count genuine deliveries so a failed send followed by a text apology
+          // is still surfaced to the user.
+          delivered = !String(result).startsWith('Delivery failed:');
+        }
         messages.push({
           role: 'tool',
           tool_call_id: syntheticId,
@@ -459,11 +474,18 @@ export async function runAgent(
     messages.push(message);
 
     // ✅ FINAL ANSWER — agent should have called send_result for delivery.
-    // Bare text responses (no tool call) are suppressed: send_result already sent the message,
-    // and returning text here would cause ai.ts to re-send it as a duplicate.
-    // Return '' so ai.ts's `if (result)` guard skips the redundant replyMessage call.
+    // When the model finishes with bare text (no tool call): if send_result already
+    // delivered, return '' so ai.ts's `if (result)` guard skips a duplicate reply.
+    // If NOTHING was delivered, this text IS the answer — return it so ai.ts sends
+    // it. Dropping it unconditionally made the bot go silent whenever the model
+    // answered a simple conversational prompt without the tool workflow.
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      return ''; // Delivery handled by send_result — suppress to prevent duplicate messages
+      if (delivered) return '';
+      // Unwrap the model's content down to the actual reply text — gpt-oss-120b
+      // occasionally finishes with the Harmony "commentary/final json" envelope
+      // (or a double-encoded JSON string) instead of plain text. extractHumanText
+      // collapses those to the real value so the user never sees raw JSON.
+      return extractHumanText(message.content) ?? '';
     }
 
     // =========================
@@ -495,6 +517,12 @@ export async function runAgent(
       try {
         // Execute dynamic tool passing the requested args and the application context
         const result = await tool.run(args, ctx);
+        if (toolCall.function.name === 'send_result') {
+          // send_result returns 'Delivery failed: …' (not a throw) on error — only
+          // count genuine deliveries so a failed send followed by a text apology
+          // is still surfaced to the user.
+          delivered = !String(result).startsWith('Delivery failed:');
+        }
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

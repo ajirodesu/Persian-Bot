@@ -90,16 +90,24 @@ const GROQ_RATE_LIMIT_MESSAGE =
   'has reached its rate limit.\n' +
   'Please try again in a few minutes.';
 
-async function resolveGroqKeyOrWarn(ctx: AppCtx): Promise<string | null> {
+/**
+ * Pure key read — no side effects. Used by the parallel gate resolution in
+ * onChat so the key lookup overlaps the admin/payment gate reads instead of
+ * adding a serial DB round-trip. Fail-closed: null on error or no key.
+ */
+async function resolveGroqKey(ctx: AppCtx): Promise<string | null> {
   const sessionUserId = ctx.native.userId ?? '';
-  let apiKey: string | null = null;
-  if (sessionUserId) {
-    try {
-      apiKey = await getUserGroqApiKey(sessionUserId);
-    } catch {
-      // Fail-closed — a DB error must not let the agent run keyless
-    }
+  if (!sessionUserId) return null;
+  try {
+    return await getUserGroqApiKey(sessionUserId);
+  } catch {
+    // Fail-closed — a DB error must not let the agent run keyless
+    return null;
   }
+}
+
+async function resolveGroqKeyOrWarn(ctx: AppCtx): Promise<string | null> {
+  const apiKey = await resolveGroqKey(ctx);
   if (!apiKey) {
     await ctx.chat.replyMessage({
       style: MessageStyle.MARKDOWN,
@@ -108,6 +116,46 @@ async function resolveGroqKeyOrWarn(ctx: AppCtx): Promise<string | null> {
     return null;
   }
   return apiKey;
+}
+
+// ── Payment eligibility (onChat path only) ───────────────────────────────────
+// Mirrors enforcePayment in the command middleware chain, which onChat bypasses.
+// This is the PURE READ phase — it resolves the caller's privilege tier and
+// balance with no side effect, so onChat can run it in parallel with the admin
+// and key gates. The three privilege checks are independent and run concurrently
+// instead of sequentially, keeping the pre-agent latency close to the original
+// Cat-Bot's (which had no payment gate at all).
+interface PaymentEligibility {
+  bypass: boolean;
+  balance: number;
+  currencies: ReturnType<typeof createCurrenciesContext>;
+}
+
+async function resolvePaymentEligibility(
+  ctx: AppCtx,
+  senderID: string,
+): Promise<PaymentEligibility> {
+  const sessionUserId = ctx.native.userId ?? '';
+  const sessionId = ctx.native.sessionId ?? '';
+  const platform = ctx.native.platform;
+
+  const [isSysAdmin, isAdmin, isPremiumUser] = await Promise.all([
+    isSystemAdmin(senderID),
+    sessionUserId && sessionId
+      ? isBotAdmin(sessionUserId, platform, sessionId, senderID)
+      : Promise.resolve(false),
+    sessionUserId && sessionId
+      ? isBotPremium(sessionUserId, platform, sessionId, senderID)
+      : Promise.resolve(false),
+  ]);
+
+  const bypass = isSysAdmin || isAdmin || isPremiumUser;
+  const currencies = createCurrenciesContext(sessionUserId, platform, sessionId);
+  // Admins/premium bypass the gate entirely — no balance read needed (matches
+  // the sequential version's short-circuit).
+  if (bypass) return { bypass: true, balance: 0, currencies };
+  const balance = await currencies.getMoney(senderID);
+  return { bypass: false, balance, currencies };
 }
 
 async function isBlockedByAdminRestrictions(
@@ -324,91 +372,85 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   // DB reads complete.
   try {
     await withThinkingIndicator(ctx, threadID, async () => {
-      // ── Admin restriction gate ───────────────────────────────────────────
+      // ── Parallel gate reads ───────────────────────────────────────────────
+      // Admin restriction, payment eligibility, and Groq key resolution are all
+      // independent reads. Resolving them concurrently — instead of serially —
+      // collapses the pre-agent chain to ~max(gate) latency instead of their
+      // sum, matching the original Cat-Bot's time-to-first-LLM-call while still
+      // enforcing every gate. Side effects (notices, the charge) are applied
+      // below in the original priority order so observable behaviour is unchanged.
+      const paymentMeta = getPayment(meta as unknown as Record<string, unknown>);
+      const needsPayment =
+        senderID !== '' && typeof paymentMeta === 'number' && paymentMeta > 0;
+
+      const [blockResult, apiKey, payment] = await Promise.all([
+        isBlockedByAdminRestrictions(ctx, senderID, threadID).catch(() => null),
+        resolveGroqKey(ctx),
+        needsPayment
+          ? resolvePaymentEligibility(ctx, senderID).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      // ── Admin restriction gate (side effects) ─────────────────────────────
       // Must mirror enforceAdminOnly because onChat bypasses the command
       // middleware chain.
-      try {
-        const { blocked, reason, hideNoti } = await isBlockedByAdminRestrictions(
-          ctx,
-          senderID,
-          threadID,
-        );
+      if (blockResult?.blocked) {
+        if (!blockResult.hideNoti) {
+          // Rate-limit the notification to once per 15 s so a chatty user
+          // doesn't flood the thread with rejection messages.
+          const sessionUserId = ctx.native.userId ?? '';
+          const sessionId     = ctx.native.sessionId ?? '';
+          const platform      = ctx.native.platform;
+          const now           = Date.now();
 
-        if (blocked) {
-          if (!hideNoti) {
-            // Rate-limit the notification to once per 15 s so a chatty user
-            // doesn't flood the thread with rejection messages.
-            const sessionUserId = ctx.native.userId ?? '';
-            const sessionId     = ctx.native.sessionId ?? '';
-            const platform      = ctx.native.platform;
-            const now           = Date.now();
+          const noticeKey =
+            blockResult.reason === 'adminonly'
+              ? `ai_adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`
+              : `ai_adminbox_noti:${sessionUserId}:${platform}:${sessionId}:${threadID}:${senderID}`;
 
-            const noticeKey =
-              reason === 'adminonly'
-                ? `ai_adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`
-                : `ai_adminbox_noti:${sessionUserId}:${platform}:${sessionId}:${threadID}:${senderID}`;
+          if (cooldownStore.check(noticeKey, now) === null) {
+            const noticeMsg =
+              blockResult.reason === 'adminonly'
+                ? `🤖 Sorry, the AI assistant is currently **restricted to bot admins only**.\nIf you believe this is a mistake, please contact a bot admin.`
+                : `🤖 Sorry, the AI assistant is currently **restricted to group admins** in this thread.\nIf you believe this is a mistake, please contact a group admin.`;
 
-            if (cooldownStore.check(noticeKey, now) === null) {
-              const noticeMsg =
-                reason === 'adminonly'
-                  ? `🤖 Sorry, the AI assistant is currently **restricted to bot admins only**.\nIf you believe this is a mistake, please contact a bot admin.`
-                  : `🤖 Sorry, the AI assistant is currently **restricted to group admins** in this thread.\nIf you believe this is a mistake, please contact a group admin.`;
-
-              await ctx.chat.replyMessage({
-                style: MessageStyle.MARKDOWN,
-                message: noticeMsg,
-              });
-              cooldownStore.record(noticeKey, now, 15_000);
-            }
+            await ctx.chat.replyMessage({
+              style: MessageStyle.MARKDOWN,
+              message: noticeMsg,
+            });
+            cooldownStore.record(noticeKey, now, 15_000);
           }
-          return; // Abort — do NOT run the agent
         }
-      } catch {
-        // Fail-open — a DB outage must not silently prevent the AI from responding
+        return; // Abort — do NOT run the agent
       }
 
-      // ── Payment gate ─────────────────────────────────────────────────────
+      // ── Payment gate (side effects) ───────────────────────────────────────
       // Mirrors enforcePayment in the command middleware chain, which onChat
       // bypasses. Charges the user unless they are a system admin, bot admin,
-      // or premium (unlimited access) user.
-      if (senderID) {
+      // or premium (unlimited access) user. Fail-open on DB error (payment ===
+      // null) so a storage hiccup never blocks the AI — identical to the
+      // previous try/catch semantics.
+      if (needsPayment && payment && !payment.bypass) {
         try {
-          const payment = getPayment(meta as unknown as Record<string, unknown>);
-          if (typeof payment === 'number' && payment > 0) {
+          const amount = paymentMeta as number;
+          if (payment.balance < amount) {
             const sessionUserId = ctx.native.userId ?? '';
             const sessionId = ctx.native.sessionId ?? '';
             const platform = ctx.native.platform;
-
-            const isSysAdmin = await isSystemAdmin(senderID);
-            const isAdmin = sessionUserId && sessionId
-              ? await isBotAdmin(sessionUserId, platform, sessionId, senderID)
-              : false;
-            const isPremiumUser = sessionUserId && sessionId
-              ? await isBotPremium(sessionUserId, platform, sessionId, senderID)
-              : false;
-            const bypass = isSysAdmin || isAdmin || isPremiumUser;
-
-            if (!bypass) {
-              const currencies = createCurrenciesContext(
-                sessionUserId,
-                platform,
-                sessionId,
-              );
-              const balance = await currencies.getMoney(senderID);
-              if (balance < payment) {
-                const noticeKey = `ai_payment_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
-                if (cooldownStore.check(noticeKey, Date.now()) === null) {
-                  await ctx.chat.replyMessage({
-                    style: MessageStyle.MARKDOWN,
-                    message: `💳 **Insufficient balance to use this command.**\nRequired: **$${payment.toLocaleString()}**\nYour balance: **$${balance.toLocaleString()}**`,
-                  });
-                  cooldownStore.record(noticeKey, Date.now(), 15_000);
-                }
-                return; // Abort — insufficient balance
-              }
-              await currencies.decreaseMoney({ user_id: senderID, money: payment });
+            const noticeKey = `ai_payment_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+            if (cooldownStore.check(noticeKey, Date.now()) === null) {
+              await ctx.chat.replyMessage({
+                style: MessageStyle.MARKDOWN,
+                message: `💳 **Insufficient balance to use this command.**\nRequired: **$${amount.toLocaleString()}**\nYour balance: **$${payment.balance.toLocaleString()}**`,
+              });
+              cooldownStore.record(noticeKey, Date.now(), 15_000);
             }
+            return; // Abort — insufficient balance
           }
+          await payment.currencies.decreaseMoney({
+            user_id: senderID,
+            money: amount,
+          });
         } catch {
           // Fail-open — a DB hiccup must never block the AI from responding.
         }
@@ -417,8 +459,13 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
       // ── Per-user Groq key gate ─────────────────────────────────────────
       // Resolve the account's own key; when absent, reply with a notice and
       // abort so AI never runs keyless (or with another user's key).
-      const groqApiKey = await resolveGroqKeyOrWarn(ctx);
-      if (!groqApiKey) return;
+      if (!apiKey) {
+        await ctx.chat.replyMessage({
+          style: MessageStyle.MARKDOWN,
+          message: NO_GROQ_KEY_MESSAGE,
+        });
+        return;
+      }
 
       // ── Agent invocation ─────────────────────────────────────────────────
       const result = await runAgent(
@@ -427,7 +474,7 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
         nickname,
         userName,
         undefined,
-        groqApiKey,
+        apiKey,
       );
       if (result) {
         await ctx.chat.replyMessage({
@@ -460,5 +507,21 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
       return;
     }
     ctx.logger.error('[ai.ts] onChat agent execution failed', { error: err });
+    // Generic agent failure (transient Groq/network error, tool crash, etc.) — the
+    // user would otherwise get total silence and assume the bot is ignoring them.
+    // Surface a brief, rate-limited error notice using the same pattern as the
+    // rate-limit notice above.
+    const sessionUserId = ctx.native.userId ?? '';
+    const sessionId = ctx.native.sessionId ?? '';
+    const platform = ctx.native.platform;
+    const noticeKey = `ai_error_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+    if (cooldownStore.check(noticeKey, Date.now()) === null) {
+      await ctx.chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message:
+          '🤖 **The AI assistant hit an unexpected error and could not complete your request.**\nPlease try again in a moment.',
+      });
+      cooldownStore.record(noticeKey, Date.now(), 15_000);
+    }
   }
 };

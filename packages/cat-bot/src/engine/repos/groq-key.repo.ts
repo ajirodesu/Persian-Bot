@@ -4,6 +4,12 @@ import {
   deleteUserGroqKey as _deleteUserGroqKey,
 } from 'database';
 import { encrypt, decrypt } from '@/engine/utils/crypto.util.js';
+import { lruCache } from '@/engine/lib/lru-cache.lib.js';
+
+// The per-user key is resolved on EVERY AI invocation (runAgent + ai.ts's key gate)
+// — caching it eliminates a DB round-trip from the pre-agent hot path. Keys change
+// rarely and save/remove invalidate explicitly, so the 15-min TTL is only a fallback.
+const userKeyCacheKey = (userId: string): string => `groq:key:${userId}`;
 
 // Groq API keys always begin with "gsk_" followed by a base64url token that is
 // typically ~48 characters long. Reject anything else before it ever touches
@@ -27,15 +33,21 @@ export function getGroqKeyHint(apiKey: string): string {
  */
 export async function getUserGroqApiKey(userId: string): Promise<string | null> {
   if (!userId) return null;
+  const cached = lruCache.get<string | null>(userKeyCacheKey(userId));
+  if (cached !== undefined) return cached;
   const stored = await _getUserGroqKey(userId);
-  if (!stored?.encryptedKey) return null;
-  try {
-    return decrypt(stored.encryptedKey);
-  } catch {
-    // Corrupt/tampered ciphertext — treat as "no key" so AI stays disabled
-    // rather than leaking or failing with a cryptic error.
-    return null;
+  let result: string | null = null;
+  if (stored?.encryptedKey) {
+    try {
+      result = decrypt(stored.encryptedKey);
+    } catch {
+      // Corrupt/tampered ciphertext — treat as "no key" so AI stays disabled
+      // rather than leaking or failing with a cryptic error.
+      result = null;
+    }
   }
+  lruCache.set(userKeyCacheKey(userId), result);
+  return result;
 }
 
 /** Dashboard status payload — reports presence + hint, never the key itself. */
@@ -63,9 +75,14 @@ export async function saveUserGroqApiKey(
     );
   }
   await _upsertUserGroqKey(userId, encrypt(key), getGroqKeyHint(key));
+  // Invalidate the cached key so the next AI invocation sees the new value immediately.
+  lruCache.del(userKeyCacheKey(userId));
 }
 
 export async function removeUserGroqApiKey(userId: string): Promise<void> {
   if (!userId) return;
   await _deleteUserGroqKey(userId);
+  // Invalidate the cached key so a subsequent AI invocation falls back to the
+  // env key (or the "no key" notice) instead of serving the removed value.
+  lruCache.del(userKeyCacheKey(userId));
 }

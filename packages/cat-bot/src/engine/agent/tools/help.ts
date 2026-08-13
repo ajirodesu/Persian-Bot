@@ -8,8 +8,11 @@ import { Role } from '@/engine/constants/role.constants.js';
 
 // ============================================================================
 // HELP TOOL UTILITIES
-// Mirrors help.ts exactly — kept in sync so the agent sees the same filtered,
-// paginated command list as the /help command.
+// Mirrors help.ts (filters, pagination, detail fields) — kept in sync so the
+// agent sees the same filtered command list as the /help command. One intentional
+// divergence: meta.usage is rendered inline in BOTH views (the user-facing /help
+// only shows it in the detail card) so the LLM gets the invocation signature
+// without an extra help round-trip before calling test_command.
 // ============================================================================
 
 const COMMANDS_PER_PAGE = 10;
@@ -199,9 +202,21 @@ export const run = async (
     const cooldown =
       cfg['cooldown'] != null ? `${String(cfg['cooldown'])}s` : 'None';
     const description = String(cfg['description'] ?? 'No description.');
-    const usage = String(cfg['usage'] ?? '');
     const author = String(cfg['author'] ?? 'Unknown');
-    const usageLine = `${ctx.prefix || '/'}${name}${usage ? ` ${usage}` : ''}`;
+    // Full meta.usage support (string | string[]), mirroring help.ts: a single
+    // pattern renders as one line; multiple patterns each render on their own
+    // line so the LLM sees every valid invocation signature.
+    const usageLines: string[] = (() => {
+      const rawUsage = cfg['usage'];
+      const withPrefix = (u: string): string =>
+        `${ctx.prefix || '/'}${name}${u ? ` ${u}` : ''}`;
+      if (Array.isArray(rawUsage)) {
+        const items = rawUsage as string[];
+        if (items.length <= 1) return [withPrefix(String(items[0] ?? ''))];
+        return items.map((u) => withPrefix(String(u)));
+      }
+      return [withPrefix(String(rawUsage ?? ''))];
+    })();
 
     return [
       `『 ${name} 』`,
@@ -210,7 +225,8 @@ export const run = async (
       HR,
       `Category : ${category}`,
       `Aliases  : ${aliases}`,
-      `Usage    : ${usageLine}`,
+      `Usage    : ${usageLines[0] ?? ''}`,
+      ...usageLines.slice(1).map((l) => `           ${l}`),
       HR,
       `Role     : ${roleLabel}`,
       `Cooldown : ${cooldown}`,
@@ -233,7 +249,17 @@ export const run = async (
     const name = String(cfg?.['name'] ?? '');
     const desc = String(cfg?.['description'] ?? '');
     const num = startIdx + i + 1;
-    return `${String(num).padStart(2, ' ')}. \`${ctx.prefix || '/'}${name}\` — ${crop(desc, 60)}`;
+    // Inline usage alongside name + description (see the header note on why this
+    // intentionally diverges from the user-facing /help list). First pattern only
+    // in the list view — the detail view exposes every pattern.
+    const rawUsage = cfg?.['usage'];
+    const firstUsage = Array.isArray(rawUsage)
+      ? String((rawUsage as string[])[0] ?? '')
+      : String(rawUsage ?? '');
+    const usageSuffix = firstUsage
+      ? ` | \`${ctx.prefix || '/'}${name} ${firstUsage}\``
+      : '';
+    return `${String(num).padStart(2, ' ')}. \`${ctx.prefix || '/'}${name}\` — ${crop(desc, 60)}${usageSuffix}`;
   });
 
   return [
