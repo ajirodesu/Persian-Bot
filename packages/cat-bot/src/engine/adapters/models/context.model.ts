@@ -11,7 +11,11 @@
 import { stateStore } from '@/engine/lib/state.lib.js';
 import { buttonContextLib } from '@/engine/lib/button-context.lib.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
-import { stopTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
+import {
+  stopTypingIndicator,
+  switchTypingIndicator,
+  actionFromAttachments,
+} from '@/engine/lib/typing-indicator.lib.js';
 import type { UnifiedUserInfo } from './user.model.js';
 import type { UnifiedApi } from './api.model.js';
 import type { ButtonItem } from './interfaces/index.js';
@@ -242,6 +246,11 @@ export function createChatContext(
       const customMessageID = opts.messageID || opts.reply_to_message_id;
       const sendAsNewMessage = shouldSendAsNewMessage(opts);
       logger.debug('[context.model] ChatContext.reply called', { threadID: targetThreadID, hasMessage: !!message, buttonCount: button.length });
+      // Make the live typing indicator match what's about to be delivered: a photo/video/
+      // audio reply switches the notice to "sending photo…/video…/audio…" right before the
+      // upload starts (no-op when no indicator is active — text replies keep "typing…").
+      const mediaAction = actionFromAttachments(attachment, attachment_url);
+      if (mediaAction) switchTypingIndicator(targetThreadID, mediaAction);
       const result = await api.replyMessage(targetThreadID, {
         message,
         attachment,
@@ -268,6 +277,9 @@ export function createChatContext(
       const targetMessageID = getMessageID(opts);
       const sendAsNewMessage = shouldSendAsNewMessage(opts);
       logger.debug('[context.model] ChatContext.replyMessage called', { threadID: targetThreadID, messageID: targetMessageID, hasMessage: !!message, buttonCount: button.length, sendAsNewMessage });
+      // Same media-aware indicator switch as chat.reply — see comment there.
+      const mediaAction = actionFromAttachments(attachment, attachment_url);
+      if (mediaAction) switchTypingIndicator(targetThreadID, mediaAction);
       const result = await api.replyMessage(targetThreadID, {
         message,
         attachment,

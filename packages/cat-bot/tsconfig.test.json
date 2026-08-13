@@ -9,8 +9,8 @@
        Safe because noEmit means TypeScript never writes output paths derived from rootDir. */
     "rootDir": ".",
 
-    /* Re-add tests/ to the @/ alias so test helpers can cross-import via @/mocks/... or
-       @/integration/shared/... without relative path gymnastics. */
+    /* Re-add tests/ to the @/ alias so test helpers can cross-import via @/mocks/...
+       without relative path gymnastics. */
     "paths": {
       "@/*": ["./src/*", "./tests/*"]
     }
