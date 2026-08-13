@@ -30,6 +30,7 @@ import type { EventMeta } from '@/engine/types/module-meta.types.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
+import { getMessage } from './greeting-messages.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
@@ -93,10 +94,9 @@ export const onEvent = async ({
     const botName = nickname || 'Cat-Bot';
     const group = groupName || 'this group';
     const mentions = joiners.map((p) => `**${getName(p)}**`).join(', ');
-    const greeting =
-      joiners.length === 1
-        ? `Hey ${mentions}, we're glad you're here! 👋`
-        : `Hey ${mentions}, welcome aboard! 👋`;
+    // Randomized greeting — one of the project-canis welcome lines, with the
+    // member name(s) interpolated (multi-joiner events pass the joined names).
+    const greeting = getMessage('welcome', mentions);
 
     const lines = [
       `🎉 **Welcome to ${group}!**`,
@@ -132,7 +132,7 @@ export const onEvent = async ({
             avatar,
             username: joinerName,
             serverName: group,
-            message: `Glad to have you here, ${joinerName}!`,
+            message: getMessage('welcome', joinerName),
             memberCount,
           });
 

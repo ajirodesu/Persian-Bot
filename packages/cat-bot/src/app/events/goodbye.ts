@@ -28,6 +28,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { EventMeta } from '@/engine/types/module-meta.types.js';
 import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
+import { getMessage } from './greeting-messages.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
@@ -67,10 +68,11 @@ export const onEvent = async ({
       body.replace(/\s+left\s+the\s+(server|group)\.?\s*$/i, '').trim() ||
       'Someone';
 
+    // Randomized farewell — one of the project-canis leaving lines, with the
+    // departing member's display name interpolated.
     const lines = [
-      `👋 **Goodbye, ${name}!**`,
+      getMessage('leaving', name),
       ``,
-      `Thanks for being part of the group. We'll miss you! 💙`,
       `You're always welcome back anytime. 🚪✨`,
     ];
 
@@ -98,7 +100,7 @@ export const onEvent = async ({
             avatar,
             username: name,
             serverName: groupName || 'this group',
-            message: `We'll miss you, ${name}!`,
+            message: getMessage('leaving', name),
             memberCount,
           });
 
