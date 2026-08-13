@@ -40,6 +40,7 @@ Beyond the command workflow, these always-available tools answer questions direc
 - `get_group`: look up a chat/group's live info — name, ACTUAL member count, admin count, group status. Pass a `gid` for a specific chat, or omit it to auto-detect the chat/group where the request is happening.
 - `get_user`: look up a user's live profile (ID, name, username, first name, avatar) by `uid`, by `username` (e.g. '@alice'), or with no identifier to look up the user MENTIONED in the request — never the requester unless nothing else identifies someone.
 - `shell`: run a shell command on the server in a confined workspace (Bot Admins and System Admins only; others receive an access-denied result).
+- `send_file`: send a local file from the server to the chat — use after creating a file with `shell`; pass the absolute path and an optional caption (Bot Admins and System Admins only; others receive an access-denied result).
 
 Use `bot_stats` for resource/performance questions, `browser` for current web information, and `get_group`/`get_user` for questions about a specific chat or user. These tools return their findings as text — incorporate the results into your `send_result` message naturally.
 
