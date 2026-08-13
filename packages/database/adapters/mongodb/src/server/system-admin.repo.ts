@@ -93,6 +93,7 @@ export async function deleteUser(userId: string): Promise<void> {
   await db.collection('botPremiums').deleteMany({ userId });
   await db.collection('botCredentialDiscord').deleteMany({ userId });
   await db.collection('botCredentialTelegram').deleteMany({ userId });
+  await db.collection('botCredentialFluxer').deleteMany({ userId });
 
   // Finally remove the user row itself. better-auth's mongodb adapter stores its
   // generated string id directly — fall back to _id for safety, same pattern listAllUsers uses.
@@ -148,6 +149,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
   await db.collection('botPremiums').deleteMany(notAdmin);
   await db.collection('botCredentialDiscord').deleteMany(notAdmin);
   await db.collection('botCredentialTelegram').deleteMany(notAdmin);
+  await db.collection('botCredentialFluxer').deleteMany(notAdmin);
 
   // ── Step 3: every other user account. Mirrors deleteUser's $or lookup so both
   // the better-auth-generated `id` field and the raw `_id` are honoured. ──────────

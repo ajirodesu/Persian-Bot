@@ -8,6 +8,7 @@ export type { Platform } from '@/constants/platform.constants'
 export type PlatformCredentials =
   | { platform: 'discord'; discordToken: string; discordClientId?: string }
   | { platform: 'telegram'; telegramToken: string }
+  | { platform: 'fluxer'; fluxerToken: string }
 
 export interface CreateBotRequestDto {
   botNickname: string

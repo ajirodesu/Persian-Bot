@@ -75,7 +75,7 @@ export const meta: CommandMeta = {
   ],
   cooldown: 3,
   hasPrefix: true,
-  platform: [Platforms.Discord, Platforms.Telegram],
+  platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
   options: [
     {
       type: OptionType.string,

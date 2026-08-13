@@ -77,7 +77,9 @@ export const chatPassthrough: MiddlewareFn<OnChatCtx> = async function (
   // keep syncing its thread session. Events without the flag (reactions, system events)
   // keep the default path; threads.service is the authoritative guard.
   const eventIsKnownDm =
-    (platform === Platforms.Discord || platform === Platforms.Telegram) &&
+    (platform === Platforms.Discord ||
+      platform === Platforms.Telegram ||
+      platform === Platforms.Fluxer) &&
     (ctx.event['isGroup'] as boolean | undefined) === false;
 
   // All four fields required — partial context can't produce a valid composite session key.

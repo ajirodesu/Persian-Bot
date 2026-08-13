@@ -170,6 +170,48 @@ async function resolveDiscordActor(
 }
 
 /**
+ * Fluxer: like Discord, fetch the guild audit log and find the entry whose target
+ * is the bot. The actor id is `entry.userId` and its identity is hydrated in the
+ * `users` array returned by the SDK. Best-effort — any failure returns null.
+ */
+async function resolveFluxerActor(
+  native: NativeContext,
+  botId: string,
+): Promise<ResolvedActor | null> {
+  const member = native['member'] as
+    | { guild?: { fetchAuditLogs?: (opts?: unknown) => Promise<unknown> } }
+    | undefined;
+  const guild = member?.guild;
+  if (!guild?.fetchAuditLogs) return null;
+
+  try {
+    const audit = (await guild.fetchAuditLogs({
+      limit: 10,
+    })) as {
+      entries?: Array<{
+        targetId: string | null;
+        userId: string | null;
+      }>;
+      users?: Array<{ id: string; username: string; globalName?: string | null }>;
+    };
+    const entry = (audit?.entries ?? []).find((e) => e.targetId === botId);
+    const actorId = entry?.userId;
+    if (!actorId) return null;
+    const actorUser = (audit?.users ?? []).find((u) => u.id === actorId);
+    return {
+      id: actorId,
+      label: formatActorLabel(
+        actorUser?.username ?? '',
+        actorUser?.globalName ?? actorUser?.username ?? '',
+        actorId,
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolves the actor who added/removed the bot. Returns a ResolvedActor with a
  * real display label, or throws so the caller can log an explicit error — the
  * "unknown" placeholder is never produced.
@@ -189,6 +231,9 @@ async function resolveActor(
     if (inline) return inline;
   } else if (platform === Platforms.Discord) {
     const inline = await resolveDiscordActor(event, native, botId);
+    if (inline) return inline;
+  } else if (platform === Platforms.Fluxer) {
+    const inline = await resolveFluxerActor(native, botId);
     if (inline) return inline;
   }
 

@@ -4,7 +4,7 @@ import { ArrowRight, Zap, Bot, LayoutDashboard, Globe, ChevronRight, MessageSqua
 import Button from '@/components/ui/buttons/Button'
 import { ROUTES } from '@/constants/routes.constants'
 import { useUserAuth } from '@/contexts/UserAuthContext'
-import { DiscordIcon, TelegramIcon } from '@/components/icons/PlatformIcons'
+import { DiscordIcon, TelegramIcon, FluxerIcon } from '@/components/icons/PlatformIcons'
 import { getPlatformColors } from '@/components/icons/platform-icon.util'
 import { Platforms } from '@/constants/platform.constants'
 
@@ -22,6 +22,11 @@ const PLATFORMS = [
     bg: getPlatformColors(Platforms.Telegram),
   },
   {
+    name: 'Fluxer',
+    Icon: FluxerIcon,
+    bg: getPlatformColors(Platforms.Fluxer),
+  },
+  {
     name: 'Chat Room',
     Icon: MessageSquare,
     bg: 'bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20',
@@ -33,7 +38,7 @@ const FEATURES = [
     Icon: Globe,
     title: 'Multi-Platform',
     description:
-      'One codebase that runs natively on Discord and Telegram — no per-platform rewrites.',
+      'One codebase that runs natively on Discord, Telegram, and Fluxer — no per-platform rewrites.',
   },
   {
     Icon: Bot,
@@ -124,8 +129,9 @@ export default function HomePage() {
                   }}
                 >
                   Cat-Bot is a unified chatbot framework that runs across
-                  Discord and Telegram — all from a single codebase. Manage
-                  multiple independent bot sessions from one powerful dashboard.
+                  Discord, Telegram, and Fluxer — all from a single
+                  codebase. Manage multiple independent bot sessions from one
+                  powerful dashboard.
                 </p>
               </div>
 

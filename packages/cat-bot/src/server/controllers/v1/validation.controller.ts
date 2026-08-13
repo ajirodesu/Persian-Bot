@@ -3,8 +3,7 @@
  *
  * POST /api/v1/validate/discord          — verify Discord bot token via /users/@me
  * POST /api/v1/validate/telegram         — verify Telegram token via getMe
- * POST /api/v1/validate/discord          — verify Discord bot token via /users/@me
- * POST /api/v1/validate/telegram         — verify Telegram token via getMe
+ * POST /api/v1/validate/fluxer           — verify Fluxer bot token via /users/@me
  * POST /api/v1/validate/email-reset      — check email existence (+ adminOnly role)
  * GET  /api/v1/validate/email-service-status — is transactional email configured?
  * POST /api/v1/validate/email-status     — email existence + verification flag
@@ -85,6 +84,33 @@ export async function validateTelegram(req: Request, res: Response): Promise<voi
     if (e.response?.status === 401) { res.status(200).json({ valid: false, error: 'Invalid Telegram bot token' }); return; }
     logger.error('[validate] Telegram validation request failed', { error: err });
     res.status(500).json({ error: 'Failed to validate Telegram token' });
+  }
+}
+
+// ── Fluxer ────────────────────────────────────────────────────────────────────
+
+/** POST /api/v1/validate/fluxer — body: { fluxerToken } */
+export async function validateFluxer(req: Request, res: Response): Promise<void> {
+  const userId = await requireSession(req, res);
+  if (!userId) return;
+
+  const { fluxerToken } = req.body as { fluxerToken?: string };
+  if (!fluxerToken) { res.status(400).json({ error: 'Missing fluxerToken' }); return; }
+
+  try {
+    const response = await withRetry(
+      () => axios.get<{ username: string; id: string }>(
+        'https://api.fluxer.app/v1/users/@me',
+        { headers: { Authorization: `Bot ${fluxerToken}` } },
+      ),
+      { maxAttempts: 3, initialDelayMs: 1000, shouldRetry: (err) => !isAuthError(err) && isNetworkError(err) },
+    );
+    res.status(200).json({ valid: true, botName: response.data.username, botId: response.data.id });
+  } catch (err) {
+    const e = err as { response?: { status: number } };
+    if (e.response?.status === 401) { res.status(200).json({ valid: false, error: 'Invalid Fluxer bot token' }); return; }
+    logger.error('[validate] Fluxer validation request failed', { error: err });
+    res.status(500).json({ error: 'Failed to validate Fluxer token' });
   }
 }
 

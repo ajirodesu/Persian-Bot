@@ -211,6 +211,14 @@ CREATE TABLE IF NOT EXISTS bot_credential_telegram (
   PRIMARY KEY (user_id, platform_id, session_id)
 );
 
+CREATE TABLE IF NOT EXISTS bot_credential_fluxer (
+  user_id      TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  platform_id  INTEGER NOT NULL,
+  session_id   TEXT    NOT NULL,
+  fluxer_token TEXT    NOT NULL,
+  PRIMARY KEY (user_id, platform_id, session_id)
+);
+
 -- ── Session tracking join tables ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bot_users_session (
   user_id         TEXT    NOT NULL,

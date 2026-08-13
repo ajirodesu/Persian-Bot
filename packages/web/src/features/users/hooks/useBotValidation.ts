@@ -85,6 +85,31 @@ export function useBotValidation(): {
           })
         break
       }
+
+      case Platforms.Fluxer: {
+        void validationService
+          .validateFluxer(credentials.fluxerToken)
+          .then((result) => {
+            setStatus(
+              result.valid
+                ? {
+                    phase: 'success',
+                    info: result.botName ? `Bot: ${result.botName}` : undefined,
+                  }
+                : {
+                    phase: 'error',
+                    message: result.error ?? 'Invalid Fluxer bot token',
+                  },
+            )
+          })
+          .catch((err: unknown) => {
+            setStatus({
+              phase: 'error',
+              message: err instanceof Error ? err.message : 'Validation failed',
+            })
+          })
+        break
+      }
     }
   }, [])
 

@@ -153,7 +153,7 @@ export const meta: CommandMeta = {
   usage: '<image>',
   cooldown: 6,
   hasPrefix: true,
-  platform: [Platforms.Discord, Platforms.Telegram],
+  platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
 };
 
 // ── Command Handler ──────────────────────────────────────────────────────────

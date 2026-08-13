@@ -107,6 +107,10 @@ export default function BotSettingsPage() {
         bot.credentials.platform === Platforms.Telegram
           ? bot.credentials.telegramToken
           : '',
+      fluxerToken:
+        bot.credentials.platform === Platforms.Fluxer
+          ? bot.credentials.fluxerToken
+          : '',
     },
   })
 
@@ -182,6 +186,8 @@ export default function BotSettingsPage() {
         return !!form.platformFields.discordToken
       case Platforms.Telegram:
         return !!form.platformFields.telegramToken
+      case Platforms.Fluxer:
+        return !!form.platformFields.fluxerToken
       default:
         return false
     }
@@ -201,6 +207,12 @@ export default function BotSettingsPage() {
         credentials = {
           platform: Platforms.Telegram,
           telegramToken: form.platformFields.telegramToken,
+        }
+        break
+      case Platforms.Fluxer:
+        credentials = {
+          platform: Platforms.Fluxer,
+          fluxerToken: form.platformFields.fluxerToken,
         }
         break
       default:
@@ -224,6 +236,13 @@ export default function BotSettingsPage() {
         form.platformFields.telegramToken !==
         (bot.credentials.platform === Platforms.Telegram
           ? bot.credentials.telegramToken
+          : '')
+      )
+    if (form.platform === Platforms.Fluxer)
+      return (
+        form.platformFields.fluxerToken !==
+        (bot.credentials.platform === Platforms.Fluxer
+          ? bot.credentials.fluxerToken
           : '')
       )
     return false
@@ -254,6 +273,12 @@ export default function BotSettingsPage() {
         credentials = {
           platform: Platforms.Telegram,
           telegramToken: form.platformFields.telegramToken,
+        }
+        break
+      case Platforms.Fluxer:
+        credentials = {
+          platform: Platforms.Fluxer,
+          fluxerToken: form.platformFields.fluxerToken,
         }
         break
       default:

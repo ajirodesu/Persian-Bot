@@ -29,4 +29,12 @@ export const validationService = {
     )
     return response.data
   },
+
+  async validateFluxer(fluxerToken: string): Promise<ValidateResult> {
+    const response = await apiClient.post<ValidateResult>(
+      '/api/v1/validate/fluxer',
+      { fluxerToken },
+    )
+    return response.data
+  },
 }

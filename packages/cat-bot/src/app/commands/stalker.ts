@@ -467,7 +467,7 @@ export const commands: CommandEntry[] = STALKER_CONFIGS.map((config) => ({
     usage: '<username>',
     cooldown: 5,
     hasPrefix: true,
-    platform: [Platforms.Discord, Platforms.Telegram],
+    platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
     options: [
       {
         type: OptionType.string,

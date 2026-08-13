@@ -13,6 +13,7 @@
  *   1  discord
  *   2  telegram
  *   3  webchat
+ *   4  fluxer
  */
 
 // Single source of truth for platform string literals
@@ -23,18 +24,23 @@ export const Platforms = {
   // packages/cat-bot/src/server/socket/chat-room.socket.ts (WebChatApi).
   // Added as id 3 per the APPEND-only contract above; never reuse/renumber.
   Webchat: 'webchat',
+  // Fluxer platform — @fluxerjs/core SDK. Added as id 4 per the APPEND-only
+  // contract above; never reuse/renumber.
+  Fluxer: 'fluxer',
 } as const;
 
 export const PLATFORM_TO_ID = {
   [Platforms.Discord]: 1,
   [Platforms.Telegram]: 2,
   [Platforms.Webchat]: 3,
+  [Platforms.Fluxer]: 4,
 } as const;
 
 export const ID_TO_PLATFORM = {
   1: Platforms.Discord,
   2: Platforms.Telegram,
   3: Platforms.Webchat,
+  4: Platforms.Fluxer,
 } as const;
 
 /** Union of all recognised platform name strings. */

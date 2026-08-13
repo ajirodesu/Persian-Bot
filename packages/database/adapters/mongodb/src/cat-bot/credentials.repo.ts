@@ -103,6 +103,22 @@ export async function findAllTelegramCredentials(): Promise<any[]> {
   }));
 }
 
+// ── Fluxer ────────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function findAllFluxerCredentials(): Promise<any[]> {
+  const db = getMongoDb();
+  const rows = await db
+    .collection('botCredentialFluxer')
+    .find({}, { projection: { _id: 0 } })
+    .toArray();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return rows.map((r: any) => ({
+    ...r,
+    fluxerToken: decrypt(r.fluxerToken as string),
+  }));
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function findAllBotSessions(): Promise<any[]> {
   const db = getMongoDb();

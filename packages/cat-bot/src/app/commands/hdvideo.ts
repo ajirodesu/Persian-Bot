@@ -162,7 +162,7 @@ export const meta: CommandMeta = {
   usage: '<video>',
   cooldown: 10,
   hasPrefix: true,
-  platform: [Platforms.Discord, Platforms.Telegram],
+  platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
 };
 
 // ── Command Handler ──────────────────────────────────────────────────────────

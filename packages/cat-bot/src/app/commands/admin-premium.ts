@@ -217,7 +217,7 @@ export const commands: CommandEntry[] = LIST_CONFIGS.map((config) => ({
     usage: '<add|list|remove> [uid]',
     cooldown: 5,
     hasPrefix: true,
-    platform: [Platforms.Discord, Platforms.Telegram],
+    platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
     options: [
       {
         type: OptionType.string,

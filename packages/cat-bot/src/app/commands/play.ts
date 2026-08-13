@@ -334,7 +334,7 @@ export const commands: CommandEntry[] = MEDIA_CONFIGS.map((config) => ({
     usage: '<YouTube URL | search query>',
     cooldown: 15,
     hasPrefix: true,
-    platform: [Platforms.Discord, Platforms.Telegram],
+    platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
     options: [
       {
         type: OptionType.string,

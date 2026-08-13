@@ -79,6 +79,17 @@ export class BotRepo {
             telegramToken: encrypt(credentials.telegramToken),
           },
         });
+      } else if (credentials.platform === Platforms.Fluxer) {
+        await tx.execute({
+          sql: `INSERT INTO bot_credential_fluxer (user_id, platform_id, session_id, fluxer_token)
+                VALUES (:userId, :platformId, :sessionId, :fluxerToken)`,
+          args: {
+            userId,
+            platformId,
+            sessionId,
+            fluxerToken: encrypt(credentials.fluxerToken),
+          },
+        });
       } else {
         throw new Error(`Unknown platform: ${JSON.stringify(credentials)}`);
       }
@@ -154,6 +165,18 @@ export class BotRepo {
       credentials = {
         platform: Platforms.Telegram,
         telegramToken: decrypt(credRow.telegram_token),
+      };
+    } else if (platform === Platforms.Fluxer) {
+      const credRes = await tursoClient.execute({
+        sql: `SELECT fluxer_token FROM bot_credential_fluxer
+              WHERE user_id = :userId AND session_id = :sessionId LIMIT 1`,
+        args: { userId, sessionId },
+      });
+      const credRow = credRes.rows[0] as { fluxer_token: string } | undefined;
+      if (!credRow) throw new Error('Missing credentials');
+      credentials = {
+        platform: Platforms.Fluxer,
+        fluxerToken: decrypt(credRow.fluxer_token),
       };
     } else {
       throw new Error(`Unknown platform ${platform}`);
@@ -264,6 +287,18 @@ export class BotRepo {
             platformId,
             sessionId,
             telegramToken: encrypt(credentials.telegramToken),
+          },
+        });
+      } else if (credentials.platform === Platforms.Fluxer) {
+        await tx.execute({
+          sql: `UPDATE bot_credential_fluxer
+                SET fluxer_token = :fluxerToken
+                WHERE user_id = :userId AND platform_id = :platformId AND session_id = :sessionId`,
+          args: {
+            userId,
+            platformId,
+            sessionId,
+            fluxerToken: encrypt(credentials.fluxerToken),
           },
         });
       } else {
@@ -490,6 +525,10 @@ export class BotRepo {
       });
       await tx.execute({
         sql: `DELETE FROM bot_credential_telegram WHERE user_id = :userId AND session_id = :sessionId`,
+        args: { userId, sessionId },
+      });
+      await tx.execute({
+        sql: `DELETE FROM bot_credential_fluxer WHERE user_id = :userId AND session_id = :sessionId`,
         args: { userId, sessionId },
       });
       // Parent session row last.

@@ -29,6 +29,7 @@ const INITIAL_PLATFORM_FIELDS: PlatformFields = {
   discordToken: '',
   discordClientId: '',
   telegramToken: '',
+  fluxerToken: '',
 }
 
 interface FormState {
@@ -42,6 +43,7 @@ interface FormState {
 const PLATFORM_OPTIONS: SelectOption[] = [
   { value: Platforms.Discord, label: 'Discord' },
   { value: Platforms.Telegram, label: 'Telegram' },
+  { value: Platforms.Fluxer, label: 'Fluxer' },
 ]
 
 const INITIAL_FORM: FormState = {
@@ -139,6 +141,8 @@ export default function NewBotPage() {
         return !!f.discordToken
       case Platforms.Telegram:
         return !!f.telegramToken
+      case Platforms.Fluxer:
+        return !!f.fluxerToken
       default:
         return false
     }
@@ -160,6 +164,12 @@ export default function NewBotPage() {
         creds = {
           platform: Platforms.Telegram,
           telegramToken: form.platformFields.telegramToken,
+        }
+        break
+      case Platforms.Fluxer:
+        creds = {
+          platform: Platforms.Fluxer,
+          fluxerToken: form.platformFields.fluxerToken,
         }
         break
     }
@@ -185,6 +195,12 @@ export default function NewBotPage() {
           telegramToken: form.platformFields.telegramToken,
         }
         break
+      case Platforms.Fluxer:
+        creds = {
+          platform: Platforms.Fluxer,
+          fluxerToken: form.platformFields.fluxerToken,
+        }
+        break
     }
 
     void createBot({
@@ -205,6 +221,8 @@ export default function NewBotPage() {
         return [
           { label: 'Telegram Token', value: form.platformFields.telegramToken },
         ]
+      case Platforms.Fluxer:
+        return [{ label: 'Fluxer Token', value: form.platformFields.fluxerToken }]
       default:
         return []
     }

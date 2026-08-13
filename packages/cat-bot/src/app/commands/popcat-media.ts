@@ -570,6 +570,7 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     platform: [
     Platforms.Discord,
     Platforms.Telegram,
+    Platforms.Fluxer,
   ],
     options: buildOptions(config),
   },

@@ -175,6 +175,20 @@ export async function initDb(): Promise<void> {
     });
   }
 
+  // bot_credential_fluxer — same idempotent-outside-the-fast-path pattern as
+  // bot_user_groq_key above, so already-initialised databases pick up the Fluxer
+  // credential table without a manual migration. Fresh databases get it from the
+  // CREATE TABLE inside the guarded DDL block below.
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS bot_credential_fluxer (
+      user_id      TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      platform_id  INTEGER NOT NULL,
+      session_id   TEXT    NOT NULL,
+      fluxer_token TEXT    NOT NULL,
+      PRIMARY KEY (user_id, platform_id, session_id)
+    );
+  `);
+
   if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`

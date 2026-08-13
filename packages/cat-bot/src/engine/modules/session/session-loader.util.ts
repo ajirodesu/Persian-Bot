@@ -14,6 +14,7 @@
 import {
   findAllDiscordCredentials,
   findAllTelegramCredentials,
+  findAllFluxerCredentials,
   findAllBotSessions,
 } from '@/engine/repos/credentials.repo.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
@@ -39,10 +40,19 @@ export interface ResolvedTelegramConfig {
   sessionId: string;
 }
 
+/** Resolved Fluxer session config — one entry per BotCredentialFluxer row. */
+export interface ResolvedFluxerConfig {
+  token: string;
+  prefix: string;
+  userId: string;
+  sessionId: string;
+}
+
 /** Fully-resolved configuration for all platforms, consumed by app.ts. */
 export interface SessionConfigs {
   discord: ResolvedDiscordConfig[];
   telegram: ResolvedTelegramConfig[];
+  fluxer: ResolvedFluxerConfig[];
 }
 
 /**
@@ -60,10 +70,12 @@ export async function loadSessionConfigs(): Promise<SessionConfigs> {
   const [
     discordCreds,
     telegramCreds,
+    fluxerCreds,
     botSessions,
   ] = await Promise.all([
     findAllDiscordCredentials(),
     findAllTelegramCredentials(),
+    findAllFluxerCredentials(),
     findAllBotSessions(),
   ]);
 
@@ -150,9 +162,32 @@ export async function loadSessionConfigs(): Promise<SessionConfigs> {
       }),
     );
 
+  const fluxer: ResolvedFluxerConfig[] = fluxerCreds
+    .filter(
+      (c: {
+        userId: string;
+        platformId: number;
+        sessionId: string;
+        fluxerToken: string;
+      }) => runningKeys.has(`${c.userId}:${c.platformId}:${c.sessionId}`),
+    )
+    .map(
+      (c: {
+        userId: string;
+        platformId: number;
+        sessionId: string;
+        fluxerToken: string;
+      }) => ({
+        token: c.fluxerToken,
+        prefix: getPrefix(c.userId, c.platformId, c.sessionId),
+        userId: c.userId,
+        sessionId: c.sessionId,
+      }),
+    );
+
   logger.info(
-    `[session-loader] Loaded from DB — Discord: ${discord.length}, Telegram: ${telegram.length}`,
+    `[session-loader] Loaded from DB — Discord: ${discord.length}, Telegram: ${telegram.length}, Fluxer: ${fluxer.length}`,
   );
 
-  return { discord, telegram };
+  return { discord, telegram, fluxer };
 }

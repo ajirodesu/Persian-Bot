@@ -46,6 +46,8 @@ export const updateTelegramCredentialCommandHash =
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const findAllTelegramCredentials = m.findAllTelegramCredentials;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const findAllFluxerCredentials = m.findAllFluxerCredentials;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const findAllBotSessions = m.findAllBotSessions;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const isBotAdmin = m.isBotAdmin;

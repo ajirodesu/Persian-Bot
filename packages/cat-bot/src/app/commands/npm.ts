@@ -128,7 +128,7 @@ export const meta: CommandMeta = {
   usage: '<package-name>',
   cooldown: 8,
   hasPrefix: true,
-  platform: [Platforms.Discord, Platforms.Telegram],
+  platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
   options: [
     {
       type: OptionType.string,

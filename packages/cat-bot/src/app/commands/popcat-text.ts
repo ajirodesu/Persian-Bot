@@ -233,7 +233,7 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     usage: '<text> (or reply to a message)',
     cooldown: 8,
     hasPrefix: true,
-    platform: [Platforms.Discord, Platforms.Telegram],
+    platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
     options: [
       {
         type: OptionType.string,

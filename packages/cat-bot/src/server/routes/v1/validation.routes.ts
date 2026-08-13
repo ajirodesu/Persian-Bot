@@ -8,6 +8,7 @@ import { Router } from 'express';
 import {
   validateDiscord,
   validateTelegram,
+  validateFluxer,
   validateEmailForPasswordReset,
   requestPasswordResetCustom,
   verifyResetCodeCustom,
@@ -27,6 +28,11 @@ validationRouter.post('/discord', (req, res) => {
 // POST /api/v1/validate/telegram — verify Telegram bot token via getMe
 validationRouter.post('/telegram', (req, res) => {
   void validateTelegram(req, res);
+});
+
+// POST /api/v1/validate/fluxer — verify Fluxer bot token via /users/@me
+validationRouter.post('/fluxer', (req, res) => {
+  void validateFluxer(req, res);
 });
 
 // POST /api/v1/validate/email-reset — check email existence + optional admin-role filter

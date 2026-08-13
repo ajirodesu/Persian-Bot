@@ -216,6 +216,11 @@ async function syncCommandsAndEvents(
       sessionId: s.sessionId,
       platform: Platforms.Telegram,
     })),
+    ...sessionConfigs.fluxer.map((s) => ({
+      userId: s.userId,
+      sessionId: s.sessionId,
+      platform: Platforms.Fluxer,
+    })),
   ];
 
   await Promise.all(
@@ -314,6 +319,11 @@ async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
         sessionId: s.sessionId,
         platform: Platforms.Telegram,
       })),
+      ...sessionConfigs.fluxer.map((s) => ({
+        userId: s.userId,
+        sessionId: s.sessionId,
+        platform: Platforms.Fluxer,
+      })),
     ];
 
     await Promise.allSettled([
@@ -392,6 +402,7 @@ async function main(): Promise<void> {
   const platform = createUnifiedPlatformListener({
     discord: sessionConfigs.discord,
     telegram: sessionConfigs.telegram,
+    fluxer: sessionConfigs.fluxer,
   });
 
   // Restores a thread's custom prefix from DB on the first message seen after restart.

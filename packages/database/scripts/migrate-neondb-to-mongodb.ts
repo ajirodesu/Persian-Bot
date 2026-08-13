@@ -190,6 +190,16 @@ const tablesDef = [
     },
   },
   {
+    jsonKey: 'botCredentialFluxer',
+    table: 'bot_credential_fluxer',
+    cols: {
+      userId: 'user_id',
+      platformId: 'platform_id',
+      sessionId: 'session_id',
+      fluxerToken: 'fluxer_token',
+    },
+  },
+  {
     jsonKey: 'botUserSession',
     table: 'bot_users_session',
     cols: {

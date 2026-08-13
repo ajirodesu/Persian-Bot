@@ -331,6 +331,14 @@ export async function initDb(): Promise<void> {
       PRIMARY KEY (user_id, platform_id, session_id)
     );
 
+    CREATE TABLE IF NOT EXISTS bot_credential_fluxer (
+      user_id              TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      platform_id          INTEGER NOT NULL,
+      session_id           TEXT    NOT NULL,
+      fluxer_token         TEXT    NOT NULL,
+      PRIMARY KEY (user_id, platform_id, session_id)
+    );
+
     -- ── Session tracking join tables ─────────────────────────────────────────────────
     -- last_updated_at is managed explicitly (no @updatedAt equivalent in raw SQL) —
     -- upsert operations always set it to NOW() so staleness checks stay accurate.

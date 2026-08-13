@@ -18,7 +18,7 @@
  *   'button_action'    — Discord, Telegram
  *
  * Retry architecture:
- *   Each platform listener (discord/, telegram/) owns its own exponential-backoff
+ *   Each platform listener (discord/, telegram/, fluxer/) owns its own exponential-backoff
  *   retry loop inside emitter.start(). This file is a pure orchestrator — it wires
  *   start/stop lifecycle handles but applies NO retry logic of its own. One failing
  *   platform session is fully self-contained and cannot cause zombie behaviour in
@@ -37,6 +37,7 @@
 import { EventEmitter } from 'events';
 import { createDiscordListener } from './discord/index.js';
 import { createTelegramListener } from './telegram/index.js';
+import { createFluxerListener } from './fluxer/index.js';
 import { createLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 import type { SessionLogger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
@@ -61,6 +62,7 @@ import {
 export const PLATFORM_IDS = [
   Platforms.Discord,
   Platforms.Telegram,
+  Platforms.Fluxer,
 ] as const;
 
 /** Union of all registered platform IDs plus the 'unknown' sentinel for pre-identification contexts. */
@@ -83,6 +85,13 @@ export interface TelegramConfig {
   sessionId: string;
 }
 
+export interface FluxerConfig {
+  token: string;
+  prefix: string;
+  userId: string;
+  sessionId: string;
+}
+
 /**
  * Per-platform arrays of session configs.
  * An empty array for any platform means that transport is simply not activated —
@@ -91,6 +100,7 @@ export interface TelegramConfig {
 interface PlatformConfig {
   discord: DiscordConfig[];
   telegram: TelegramConfig[];
+  fluxer: FluxerConfig[];
 }
 
 type UnifiedPlatformEmitter = EventEmitter & {
@@ -130,12 +140,16 @@ export function createUnifiedPlatformListener(
   const telegramListeners = config.telegram.map((c) =>
     createTelegramListener(c),
   );
+  const fluxerListeners = config.fluxer.map((c) =>
+    createFluxerListener(c),
+  );
 
   // Forward events from every session of every platform to the single unified emitter.
   // The payload shape is identical across all sessions — app.ts needs no per-session branching.
   for (const transport of [
     ...discordListeners,
     ...telegramListeners,
+    ...fluxerListeners,
   ]) {
     for (const eventType of FORWARDED_EVENTS) {
       transport.on(eventType, (payload: unknown) =>
@@ -209,6 +223,34 @@ export function createUnifiedPlatformListener(
         }),
       );
     });
+
+    // Retry and markActive are now owned by each Fluxer listener internally.
+    config.fluxer.forEach((c, i) => {
+      const l = fluxerListeners[i]!;
+      const smKey = `${c.userId}:${Platforms.Fluxer}:${c.sessionId}`;
+      const sessionLogger = createLogger({
+        userId: c.userId,
+        platformId: PLATFORM_TO_ID[Platforms.Fluxer],
+        sessionId: c.sessionId,
+      });
+      const stopFn = async (signal?: string, persist = true) => {
+        if (persist) {
+          await sessionManager.markInactive(smKey);
+        } else {
+          sessionManager.markInactiveTransient(smKey);
+        }
+        await l.stop(signal);
+      };
+      sessionManager.register(smKey, {
+        start: () => l.start(commands),
+        stop: stopFn,
+      });
+      void sessionManager.start(smKey).catch((err) =>
+        sessionLogger.error(`[fluxer] Fatal startup error:`, {
+          error: err,
+        }),
+      );
+    });
   };
 
   return emitter;
@@ -223,7 +265,7 @@ export function createUnifiedPlatformListener(
  */
 export async function spawnDynamicSession(
   platform: string,
-  sessionConfig: DiscordConfig | TelegramConfig,
+  sessionConfig: DiscordConfig | TelegramConfig | FluxerConfig,
 ): Promise<void> {
   if (!globalEmitter || !activeCommands) {
     // Application orchestrator has not booted yet (e.g. testing context or pre-init API call).
@@ -281,6 +323,24 @@ export async function spawnDynamicSession(
     sessionLogger = createLogger({
       userId: sessionConfig.userId,
       platformId: PLATFORM_TO_ID[Platforms.Telegram],
+      sessionId: sessionConfig.sessionId,
+    });
+    startFn = () => l.start(activeCommands!);
+    stopFn = async (signal?: string, persist = true) => {
+      if (persist) {
+        await sessionManager.markInactive(smKey);
+      } else {
+        sessionManager.markInactiveTransient(smKey);
+      }
+      await l.stop(signal);
+    };
+  } else if (platform === Platforms.Fluxer) {
+    const l = createFluxerListener(sessionConfig as FluxerConfig);
+    listener = l;
+    smKey = `${sessionConfig.userId}:${Platforms.Fluxer}:${sessionConfig.sessionId}`;
+    sessionLogger = createLogger({
+      userId: sessionConfig.userId,
+      platformId: PLATFORM_TO_ID[Platforms.Fluxer],
       sessionId: sessionConfig.sessionId,
     });
     startFn = () => l.start(activeCommands!);

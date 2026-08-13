@@ -152,6 +152,30 @@ export async function findAllTelegramCredentials(): Promise<
   }));
 }
 
+// ── Fluxer ────────────────────────────────────────────────────────────────────
+
+export async function findAllFluxerCredentials(): Promise<
+  Record<string, unknown>[]
+> {
+  const res = await tursoClient.execute(
+    `SELECT user_id, platform_id, session_id, fluxer_token
+     FROM bot_credential_fluxer`,
+  );
+  return (
+    res.rows as unknown as Array<{
+      user_id: string;
+      platform_id: number;
+      session_id: string;
+      fluxer_token: string;
+    }>
+  ).map((r) => ({
+    userId: r.user_id,
+    platformId: r.platform_id,
+    sessionId: r.session_id,
+    fluxerToken: decrypt(r.fluxer_token),
+  }));
+}
+
 // ── Bot Sessions ──────────────────────────────────────────────────────────────
 
 export async function findAllBotSessions(): Promise<Record<string, unknown>[]> {
