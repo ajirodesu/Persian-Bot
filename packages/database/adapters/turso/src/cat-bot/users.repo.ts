@@ -1,5 +1,8 @@
 import { tursoClient } from '../client.js';
-import type { BotUserData } from '@cat-bot/engine/models/users.model.js';
+import type {
+  BotUserData,
+  StoredUserProfile,
+} from '@cat-bot/engine/models/users.model.js';
 import { toPlatformNumericId } from '@cat-bot/engine/modules/platform/platform-id.util.js';
 
 export async function upsertUser(data: BotUserData): Promise<void> {
@@ -104,6 +107,59 @@ export async function getUserAvatar(userId: string): Promise<string | null> {
   });
   const row = res.rows[0] as { avatar_url: string | null } | undefined;
   return row?.avatar_url ?? null;
+}
+
+/**
+ * Returns the full stored profile for a user by platform user ID, or null when
+ * the user has not been synced yet. A single query (vs. exists + name + avatar).
+ */
+export async function getUserById(
+  platform: string,
+  userId: string,
+): Promise<StoredUserProfile | null> {
+  const platformId = toPlatformNumericId(platform);
+  const res = await tursoClient.execute({
+    sql: `SELECT id, name, first_name, username, avatar_url
+          FROM bot_users WHERE id = :userId AND platform_id = :platformId
+          LIMIT 1`,
+    args: { userId, platformId },
+  });
+  const row = res.rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    id: String(row['id']),
+    name: String(row['name']),
+    firstName: row['first_name'] == null ? null : String(row['first_name']),
+    username: row['username'] == null ? null : String(row['username']),
+    avatarUrl: row['avatar_url'] == null ? null : String(row['avatar_url']),
+  };
+}
+
+/**
+ * Returns the full stored profile for a user by username (no @ prefix),
+ * scoped to the given platform so a handle shared across platforms resolves
+ * to the right user. Most-recently-synced row wins when multiple match.
+ */
+export async function getUserByUsername(
+  platform: string,
+  username: string,
+): Promise<StoredUserProfile | null> {
+  const platformId = toPlatformNumericId(platform);
+  const res = await tursoClient.execute({
+    sql: `SELECT id, name, first_name, username, avatar_url
+          FROM bot_users WHERE LOWER(username) = LOWER(:username) AND platform_id = :platformId
+          ORDER BY updated_at DESC LIMIT 1`,
+    args: { username, platformId },
+  });
+  const row = res.rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    id: String(row['id']),
+    name: String(row['name']),
+    firstName: row['first_name'] == null ? null : String(row['first_name']),
+    username: row['username'] == null ? null : String(row['username']),
+    avatarUrl: row['avatar_url'] == null ? null : String(row['avatar_url']),
+  };
 }
 
 export async function updateUserAvatar(

@@ -62,16 +62,16 @@ export const config = {
     type: 'object',
     properties: {
       commands: {
-        type: 'array',
+        type: ['array', 'null'],
         items: {
           type: 'object',
           properties: {
             command: {
-              type: 'string',
+              type: ['string', 'null'],
               description: 'Command name without prefix',
             },
             args: {
-              type: 'array',
+              type: ['array', 'null'],
               items: { type: 'string' },
               description: 'Arguments',
             },

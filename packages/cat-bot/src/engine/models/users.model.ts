@@ -33,6 +33,24 @@ export interface BotUserData {
   avatarUrl: string | null;
 }
 
+/**
+ * StoredUserProfile — the persisted user row shape returned by profile lookups
+ * (getUserById / getUserByUsername). Used by the agent's get_user tool so a
+ * single query returns the user's full stored profile instead of N lookups.
+ */
+export interface StoredUserProfile {
+  /** Platform-specific user ID. */
+  id: string;
+  /** Best available display name — never empty. */
+  name: string;
+  /** First name if the platform surfaces it separately; null otherwise. */
+  firstName: string | null;
+  /** Handle / vanity slug without @ prefix; null if unavailable. */
+  username: string | null;
+  /** Profile picture URL; null if unavailable. */
+  avatarUrl: string | null;
+}
+
 // ── Mapper ────────────────────────────────────────────────────────────────────
 
 /**

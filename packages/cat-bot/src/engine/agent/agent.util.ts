@@ -36,6 +36,47 @@ export function resolveAgentContext(ctx: AppCtx) {
   };
 }
 
+/**
+ * Variables for {@link renderSystemPrompt} — keyed by the full `{{NAME}}` token.
+ */
+export type PromptVariables = Record<string, string>;
+
+// Matches any {{...}} token, e.g. {{BOT_NAME}} or {{hello-world}}.
+const PLACEHOLDER_PATTERN = /\{\{[^}]*\}\}/g;
+
+/**
+ * Renders a system-prompt template by substituting every `{{NAME}}`
+ * placeholder with its real value.
+ *
+ * WHY A SINGLE PASS OVER THE WHOLE TEMPLATE (not per-variable .replace()):
+ *   - `String.replace('{{BOT_NAME}}', …)` only replaces the FIRST occurrence —
+ *     the prompt uses {{BOT_NAME}} 6× and {{USER_NAME}} 2×, so every later
+ *     occurrence stayed literal. The LLM then sees `{{BOT_NAME}}` in its own
+ *     system prompt and echoes it back verbatim into user-facing replies.
+ *   - A regex substitution scans the whole template once, replacing ALL
+ *     occurrences.
+ *   - Replacement values (nicknames, usernames, command lists) are inserted
+ *     without being rescanned, so a value that itself contains `{{...}}` is
+ *     never substituted a second time.
+ *
+ * Unknown placeholders (not present in `variables`) and any `{{...}}` tokens
+ * introduced by inserted values are stripped entirely, guaranteeing a literal
+ * placeholder token can never reach the LLM — and therefore can never leak
+ * into the agent's output.
+ */
+export function renderSystemPrompt(
+  template: string,
+  variables: PromptVariables,
+): string {
+  const rendered = template.replace(PLACEHOLDER_PATTERN, (match) => {
+    const value = variables[match];
+    if (value !== undefined) return value;
+    return '';
+  });
+  // Safety net for tokens introduced by the inserted values themselves.
+  return rendered.replace(PLACEHOLDER_PATTERN, '');
+}
+
 // Keys scanned, in priority order, when unwrapping a JSON envelope down to the
 // actual human-readable reply. `message` is our own send_result contract key;
 // `final`/`response`/`answer`/`text`/`content` cover the common model output

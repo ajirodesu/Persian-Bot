@@ -85,6 +85,8 @@ export {
   upsertUserSession,
   getUserName,
   getUserAvatar,
+  getUserById,
+  getUserByUsername,
   updateUserAvatar,
   getUserSessionData,
   setUserSessionData,

@@ -7,6 +7,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import {
   resolveAgentContext,
   extractHumanText,
+  renderSystemPrompt,
 } from '@/engine/agent/agent.util.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
@@ -358,18 +359,22 @@ export async function runAgent(
       `(across all \`test_command\` calls combined). This is a hard limit — it cannot ` +
       `be increased or bypassed for this user.`;
 
+  // Single-pass substitution replaces EVERY occurrence of each placeholder
+  // (the old per-variable .replace() only handled the first, leaking literal
+  // {{BOT_NAME}}/{{USER_NAME}} into the system prompt — and, when the model
+  // echoed them, into the user's output). renderSystemPrompt also strips any
+  // residual {{...}} so a placeholder token can never reach the model.
   const systemContent = systemPromptOverride
     ? systemPromptOverride
-    : SYSTEM_PROMPT_TEMPLATE.replace(
-        '{{BOT_NAME}}',
-        nickname || 'Cat-Bot',
-      )
-        .replace('{{USER_NAME}}', userName || 'User')
-        .replace('{{COMMAND_PREFIX}}', ctx.prefix || '/')
-        .replace('{{USER_ROLE}}', userRoleLabel)
-        .replace('{{AVAILABLE_COMMANDS}}', availableCommandsList)
-        .replace('{{AGENT_COMMAND_LIMIT_NOTE}}', agentCommandLimitNote)
-        .replaceAll('{{AGENT_COMMAND_LIMIT}}', String(AGENT_COMMAND_LIMIT));
+    : renderSystemPrompt(SYSTEM_PROMPT_TEMPLATE, {
+        '{{BOT_NAME}}': nickname || 'Cat-Bot',
+        '{{USER_NAME}}': userName || 'User',
+        '{{COMMAND_PREFIX}}': ctx.prefix || '/',
+        '{{USER_ROLE}}': userRoleLabel,
+        '{{AVAILABLE_COMMANDS}}': availableCommandsList,
+        '{{AGENT_COMMAND_LIMIT_NOTE}}': agentCommandLimitNote,
+        '{{AGENT_COMMAND_LIMIT}}': String(AGENT_COMMAND_LIMIT),
+      });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
@@ -410,12 +415,21 @@ export async function runAgent(
         );
       }
       const recovered = extractFailedToolGeneration(err);
-      const aliasedName = recovered ? TOOL_NAME_ALIASES[recovered.name] : undefined;
-      const aliasedTool = aliasedName ? cachedToolsMap!.get(aliasedName) : undefined;
+      // The recovered name is either a known alias (the Groq "json" quirk →
+      // send_result) or a REAL tool name whose arguments Groq's server-side
+      // validation rejected (e.g. get_user called with {"uid": null}). Resolve
+      // either way so a validation failure executes the tool directly instead
+      // of killing the whole agent turn.
+      const recoveredName = recovered
+        ? (TOOL_NAME_ALIASES[recovered.name] ?? recovered.name)
+        : undefined;
+      const recoveredTool = recoveredName
+        ? cachedToolsMap!.get(recoveredName)
+        : undefined;
 
-      if (!recovered || !aliasedName || !aliasedTool) {
-        // Not the known "json" quirk (or no alias/tool matches) — nothing to
-        // recover, surface the original error to the caller as before.
+      if (!recovered || !recoveredName || !recoveredTool) {
+        // No tool matches the recovered name — nothing to recover, surface the
+        // original error to the caller as before.
         throw err;
       }
 
@@ -429,7 +443,7 @@ export async function runAgent(
           {
             id: syntheticId,
             type: 'function',
-            function: { name: aliasedName, arguments: recovered.arguments },
+            function: { name: recoveredName, arguments: recovered.arguments },
           },
         ],
       });
@@ -441,10 +455,10 @@ export async function runAgent(
         args = {};
       }
 
-      setAgentStatus(ctx, describeToolStatus(aliasedName, args));
+      setAgentStatus(ctx, describeToolStatus(recoveredName, args));
       try {
-        const result = await aliasedTool.run(args, ctx);
-        if (aliasedName === 'send_result') {
+        const result = await recoveredTool.run(args, ctx);
+        if (recoveredName === 'send_result') {
           // send_result returns 'Delivery failed: …' (not a throw) on error — only
           // count genuine deliveries so a failed send followed by a text apology
           // is still surfaced to the user.

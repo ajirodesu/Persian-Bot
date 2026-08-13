@@ -20,12 +20,16 @@ import {
   upsertUserSession as _upsertUserSession,
   getUserName as _getUserName,
   getUserAvatar as _getUserAvatar,
+  getUserById as _getUserById,
+  getUserByUsername as _getUserByUsername,
   updateUserAvatar as _updateUserAvatar,
   getUserSessionData as _getUserSessionData,
   setUserSessionData as _setUserSessionData,
   getAllUserSessionData as _getAllUserSessionData,
   getUserSessionUpdatedAt as _getUserSessionUpdatedAt,
 } from 'database';
+import type { StoredUserProfile } from '@/engine/models/users.model.js';
+import { fromPlatformNumericId } from '@/engine/modules/platform/platform-id.util.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 
@@ -34,6 +38,14 @@ import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 const userExistsKey = (userId: string): string => `user:exists:${userId}`;
 
 const userNameKey = (userId: string): string => `user:name:${userId}`;
+
+// Full-profile lookups used by the agent's get_user tool. Keyed by platform +
+// id/username; upsertUser invalidates both (a sync can change name/username).
+const userByIdKey = (platform: string, userId: string): string =>
+  `user:byId:${platform}:${userId}`;
+
+const userByUsernameKey = (platform: string, username: string): string =>
+  `user:byUsername:${platform}:${username.toLowerCase()}`;
 
 const userSessionExistsKey = (
   userId: string,
@@ -75,6 +87,14 @@ export async function upsertUser(
   // on the very next userExists or getUserName call for this user.
   lruCache.set(userExistsKey(data.id), true);
   lruCache.set(userNameKey(data.id), data.name);
+  // Full-profile caches must reflect the fresh row — a sync may have changed
+  // the user's name, username, or first name. byId always invalidated; byUsername
+  // invalidated under the new username so the next lookup resolves the update.
+  const platformName = fromPlatformNumericId(data.platformId);
+  lruCache.del(userByIdKey(platformName, data.id));
+  if (data.username) {
+    lruCache.del(userByUsernameKey(platformName, data.username));
+  }
 }
 
 export async function userExists(
@@ -148,6 +168,42 @@ export async function getUserName(userId: string): Promise<string> {
 
 export async function getUserAvatar(userId: string): Promise<string | null> {
   return _getUserAvatar(userId);
+}
+
+/**
+ * Returns the full stored profile for a user by platform user ID, or null when
+ * not yet synced. Cached — profile lookups are answered from memory after the
+ * first read, and upsertUser invalidates on every sync.
+ */
+export async function getUserById(
+  platform: string,
+  userId: string,
+): Promise<StoredUserProfile | null> {
+  const key = userByIdKey(platform, userId);
+  const cached = lruCache.get<StoredUserProfile | null>(key);
+  if (cached !== undefined) return cached;
+  const result = await _getUserById(platform, userId);
+  lruCache.set(key, result);
+  return result;
+}
+
+/**
+ * Returns the full stored profile for a user by username (no @ prefix), scoped
+ * to the given platform. Cached per (platform, username) — upsertUser
+ * invalidates the entry for the user's current username on every sync.
+ */
+export async function getUserByUsername(
+  platform: string,
+  username: string,
+): Promise<StoredUserProfile | null> {
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return null;
+  const key = userByUsernameKey(platform, normalized);
+  const cached = lruCache.get<StoredUserProfile | null>(key);
+  if (cached !== undefined) return cached;
+  const result = await _getUserByUsername(platform, username.trim());
+  lruCache.set(key, result);
+  return result;
 }
 
 export async function updateUserAvatar(

@@ -25,6 +25,17 @@ vi.mock('@/engine/repos/system-admin.repo.js', () => ({
   isSystemAdmin: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock('@/engine/repos/users.repo.js', () => ({
+  getUserById: vi.fn().mockResolvedValue({
+    id: 'u1',
+    name: 'Alice',
+    firstName: 'Alice',
+    username: 'alice',
+    avatarUrl: null,
+  }),
+  getUserByUsername: vi.fn(),
+}));
+
 import { runAgent } from '@/engine/agent/agent.js';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 
@@ -127,5 +138,78 @@ describe('agent: bare-text response delivery', () => {
     const result = await runAgent('give me a meme', ctx, null, null, null, 'gsk_test_1234567890123456789012345');
     // Delivery failed → the model's explanation must reach the user.
     expect(result).toBe('I could not send it right now.');
+  });
+});
+
+describe('agent: tool_use_failed validation recovery', () => {
+  beforeEach(() => {
+    mockCreate.mockReset();
+  });
+
+  /**
+   * Builds the exact error shape Groq returns when its server-side schema
+   * validation rejects a tool call (400 tool_use_failed + failed_generation).
+   */
+  function validationError(name: string, args: unknown): Error {
+    const err = new Error(
+      '400 Tool call validation failed: parameters for tool ' +
+        `${name} did not match schema`,
+    );
+    (err as unknown as { error: unknown }).error = {
+      error: {
+        code: 'tool_use_failed',
+        failed_generation: JSON.stringify({ name, arguments: args }),
+      },
+    };
+    return err;
+  }
+
+  it('recovers a rejected REAL tool call instead of killing the turn', async () => {
+    // Regression: the model called get_user with null args; Groq rejected the
+    // call server-side. The agent must execute the recovered call directly and
+    // continue — not die with a 400.
+    const ctx = makeCtx();
+    mockCreate
+      .mockRejectedValueOnce(
+        validationError('get_user', { uid: null, username: null }),
+      )
+      .mockResolvedValueOnce(
+        bareTextResponse('I found the current user for you.'),
+      );
+
+    const result = await runAgent(
+      'who am i',
+      ctx,
+      null,
+      null,
+      null,
+      'gsk_test_1234567890123456789012345',
+    );
+    expect(result).toBe('I found the current user for you.');
+  });
+
+  it('keeps the json → send_result alias recovery working', async () => {
+    const ctx = makeCtx();
+    mockCreate
+      .mockRejectedValueOnce(
+        validationError('json', { commentary: 'reasoning', final: 'done' }),
+      )
+      .mockResolvedValueOnce(bareTextResponse(''));
+
+    const result = await runAgent(
+      'do the thing',
+      ctx,
+      null,
+      null,
+      null,
+      'gsk_test_1234567890123456789012345',
+    );
+    // The recovered json call maps to send_result which DELIVERS the message,
+    // so the trailing bare text is suppressed (delivered === true).
+    expect(result).toBe('');
+    expect(
+      (ctx.api as unknown as { replyMessage: ReturnType<typeof vi.fn> })
+        .replyMessage,
+    ).toHaveBeenCalledTimes(1);
   });
 });

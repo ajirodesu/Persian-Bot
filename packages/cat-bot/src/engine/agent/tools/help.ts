@@ -81,7 +81,7 @@ export const config = {
     type: 'object',
     properties: {
       query: {
-        type: 'string',
+        type: ['string', 'null'],
         description:
           "An exact command name (e.g. 'balance', 'ping'), a page number (e.g. '2'), or omit/empty for page 1.",
       },

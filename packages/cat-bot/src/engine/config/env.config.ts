@@ -67,6 +67,12 @@ interface EnvConfig {
 
   // Security
   readonly ENCRYPTION_KEY: string;
+
+  // Agent shell tool — when exactly 'true' the shell tool runs commands inside
+  // a bwrap sandbox (Linux only, requires the bwrap binary); any other value
+  // falls back to direct execution confined to a temp workspace directory.
+  readonly AGENT_SANDBOX?: string | undefined;
+
   // Derived boolean helpers
   readonly isDevelopment: boolean;
   readonly isProduction: boolean;
@@ -245,6 +251,9 @@ export const env: EnvConfig = {
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),
+
+  // Agent shell tool sandbox toggle — read at startup; absent/other values disable bwrap
+  AGENT_SANDBOX: getOptionalEnv('AGENT_SANDBOX'),
 
   // Derived boolean helpers for convenience
   isDevelopment: nodeEnv === 'development',

@@ -82,6 +82,20 @@ export function describeToolStatus(
     }
     case 'send_result':
       return '📤 Sending reply…';
+    case 'bot_stats':
+      return '📊 Reading bot statistics…';
+    case 'browser': {
+      const input = typeof args['input'] === 'string' ? args['input'].trim() : '';
+      return input
+        ? `🌐 ${/^https?:\/\//i.test(input) ? 'Opening' : 'Searching the web for'}\`${input}\`…`
+        : '🌐 Browsing the web…';
+    }
+    case 'get_group':
+      return '👥 Looking up group info…';
+    case 'get_user':
+      return '🧑 Looking up user info…';
+    case 'shell':
+      return '💻 Running shell command…';
     default:
       return `🔧 Using ${toolName}…`;
   }

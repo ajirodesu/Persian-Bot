@@ -1,5 +1,8 @@
 import { getMongoDb } from '../client.js';
-import type { BotUserData } from '@cat-bot/engine/models/users.model.js';
+import type {
+  BotUserData,
+  StoredUserProfile,
+} from '@cat-bot/engine/models/users.model.js';
 import { toPlatformNumericId } from '@cat-bot/engine/modules/platform/platform-id.util.js';
 
 export async function upsertUser(data: BotUserData): Promise<void> {
@@ -106,6 +109,81 @@ export async function getUserAvatar(userId: string): Promise<string | null> {
     .collection<{ avatarUrl?: string | null }>('botUsers')
     .findOne({ id: userId }, { projection: { avatarUrl: 1, _id: 0 } });
   return rec?.avatarUrl ?? null;
+}
+
+/**
+ * Returns the full stored profile for a user by platform user ID, or null when
+ * the user has not been synced yet. A single query (vs. exists + name + avatar).
+ */
+export async function getUserById(
+  platform: string,
+  userId: string,
+): Promise<StoredUserProfile | null> {
+  const db = getMongoDb();
+  const platformId = toPlatformNumericId(platform);
+  const rec = await db
+    .collection<StoredUserProfile & { platformId?: number }>('botUsers')
+    .findOne(
+      { id: userId, platformId },
+      {
+        projection: {
+          id: 1,
+          name: 1,
+          firstName: 1,
+          username: 1,
+          avatarUrl: 1,
+          _id: 0,
+        },
+      },
+    );
+  if (!rec) return null;
+  return {
+    id: rec.id,
+    name: rec.name,
+    firstName: rec.firstName ?? null,
+    username: rec.username ?? null,
+    avatarUrl: rec.avatarUrl ?? null,
+  };
+}
+
+/**
+ * Returns the full stored profile for a user by username (no @ prefix),
+ * scoped to the given platform so a handle shared across platforms resolves
+ * to the right user. Most-recently-synced row wins when multiple match.
+ */
+export async function getUserByUsername(
+  platform: string,
+  username: string,
+): Promise<StoredUserProfile | null> {
+  const db = getMongoDb();
+  const platformId = toPlatformNumericId(platform);
+  // Case-insensitive match — handles are case-insensitive on most platforms.
+  // The username is regex-escaped so a hostile handle can never inject patterns.
+  const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rec = await db
+    .collection<StoredUserProfile & { platformId?: number }>('botUsers')
+    .findOne(
+      { username: { $regex: `^${escaped}$`, $options: 'i' }, platformId },
+      {
+        sort: { updatedAt: -1 as const },
+        projection: {
+          id: 1,
+          name: 1,
+          firstName: 1,
+          username: 1,
+          avatarUrl: 1,
+          _id: 0,
+        },
+      },
+    );
+  if (!rec) return null;
+  return {
+    id: rec.id,
+    name: rec.name,
+    firstName: rec.firstName ?? null,
+    username: rec.username ?? null,
+    avatarUrl: rec.avatarUrl ?? null,
+  };
 }
 
 export async function updateUserAvatar(

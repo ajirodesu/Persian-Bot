@@ -1,5 +1,8 @@
 import { pool } from '../client.js';
-import type { BotUserData } from '@cat-bot/engine/models/users.model.js';
+import type {
+  BotUserData,
+  StoredUserProfile,
+} from '@cat-bot/engine/models/users.model.js';
 import { toPlatformNumericId } from '@cat-bot/engine/modules/platform/platform-id.util.js';
 
 export async function upsertUser(data: BotUserData): Promise<void> {
@@ -100,6 +103,71 @@ export async function getUserAvatar(userId: string): Promise<string | null> {
     [userId],
   );
   return res.rows[0]?.avatar_url ?? null;
+}
+
+/**
+ * Returns the full stored profile for a user by platform user ID, or null when
+ * the user has not been synced yet. A single query (vs. exists + name + avatar).
+ */
+export async function getUserById(
+  platform: string,
+  userId: string,
+): Promise<StoredUserProfile | null> {
+  const platformId = toPlatformNumericId(platform);
+  const res = await pool.query<{
+    id: string;
+    name: string;
+    first_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  }>(
+    `SELECT id, name, first_name, username, avatar_url
+     FROM bot_users WHERE id = $1 AND platform_id = $2
+     LIMIT 1`,
+    [userId, platformId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    firstName: row.first_name,
+    username: row.username,
+    avatarUrl: row.avatar_url,
+  };
+}
+
+/**
+ * Returns the full stored profile for a user by username (no @ prefix),
+ * scoped to the given platform so a handle shared across platforms resolves
+ * to the right user. Most-recently-synced row wins when multiple match.
+ */
+export async function getUserByUsername(
+  platform: string,
+  username: string,
+): Promise<StoredUserProfile | null> {
+  const platformId = toPlatformNumericId(platform);
+  const res = await pool.query<{
+    id: string;
+    name: string;
+    first_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  }>(
+    `SELECT id, name, first_name, username, avatar_url
+     FROM bot_users WHERE LOWER(username) = LOWER($1) AND platform_id = $2
+     ORDER BY updated_at DESC LIMIT 1`,
+    [username, platformId],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    firstName: row.first_name,
+    username: row.username,
+    avatarUrl: row.avatar_url,
+  };
 }
 
 export async function updateUserAvatar(

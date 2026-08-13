@@ -60,14 +60,16 @@ export const config = {
     type: 'object',
     properties: {
       message: {
-        type: 'string',
+        // ['string', 'null'] — Groq rejects a bare type: 'string' server-side
+        // (400 tool_use_failed) when the model passes null.
+        type: ['string', 'null'],
         description:
           'Your synthesized reply text. Write this yourself based on the `calls` ' +
           'text returned by test_command — do not copy raw command output verbatim. ' +
           'This is the primary text the user will see.',
       },
       attachment_url: {
-        type: 'array',
+        type: ['array', 'null'],
         items: { type: 'string' },
         description:
           'Optional list of `attachment_key` values returned by test_command (the ' +
@@ -76,7 +78,7 @@ export const config = {
           'no commands produced attachments.',
       },
       attachment: {
-        type: 'array',
+        type: ['array', 'null'],
         items: { type: 'string' },
         description:
           'Optional list of `binary_attachment_key` values returned by test_command. ' +
@@ -85,7 +87,7 @@ export const config = {
           'no commands produced binary attachments.',
       },
       button: {
-        type: 'array',
+        type: ['array', 'null'],
         items: { type: 'string' },
         description:
           'Optional list of `button_key` values returned by test_command (the ' +

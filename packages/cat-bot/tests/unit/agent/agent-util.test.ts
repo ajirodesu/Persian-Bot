@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { extractHumanText } from '@/engine/agent/agent.util.js';
+import {
+  extractHumanText,
+  renderSystemPrompt,
+} from '@/engine/agent/agent.util.js';
+
+describe('renderSystemPrompt', () => {
+  const variables = {
+    '{{BOT_NAME}}': 'Kitty',
+    '{{USER_NAME}}': 'Alice',
+    '{{COMMAND_PREFIX}}': '/',
+  };
+
+  it('replaces every occurrence of repeated placeholders (not just the first)', () => {
+    const template =
+      '{{BOT_NAME}} is {{BOT_NAME}}. {{BOT_NAME}} helps {{USER_NAME}}, {{USER_NAME}}.';
+    const out = renderSystemPrompt(template, variables);
+    expect(out).toBe('Kitty is Kitty. Kitty helps Alice, Alice.');
+    expect(out).not.toContain('{{');
+  });
+
+  it('never substitutes a token twice, even when a value contains one', () => {
+    // A value that itself contains '{{BOT_NAME}}' must NOT be substituted a
+    // second time — the first pass inserts it verbatim and the safety net
+    // strips the residual token, so the model never sees (or echoes) a
+    // placeholder.
+    const out = renderSystemPrompt('Hi {{USER_NAME}}', {
+      '{{USER_NAME}}': '{{BOT_NAME}}',
+    });
+    expect(out).toBe('Hi ');
+    expect(out).not.toContain('{{');
+    expect(out).not.toContain('Kitty');
+  });
+
+  it('strips unknown placeholders so a literal token can never reach the LLM', () => {
+    const out = renderSystemPrompt(
+      '{{BOT_NAME}} and {{NOT_WIRED}} and {{USER_NAME}}',
+      variables,
+    );
+    expect(out).toBe('Kitty and  and Alice');
+    expect(out).not.toContain('{{NOT_WIRED}}');
+  });
+
+  it('strips placeholders introduced by inserted values as a safety net', () => {
+    const out = renderSystemPrompt('{{BOT_NAME}}', {
+      '{{BOT_NAME}}': 'Weird {{mixed}} name',
+    });
+    expect(out).toBe('Weird  name');
+    expect(out).not.toContain('{{');
+  });
+
+  it('leaves text without placeholders untouched', () => {
+    const template = 'Plain text, no tokens.';
+    expect(renderSystemPrompt(template, variables)).toBe(template);
+  });
+});
 
 describe('extractHumanText', () => {
   it('passes plain text through unchanged (trimmed)', () => {
