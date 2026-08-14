@@ -94,6 +94,12 @@ export function describeToolStatus(
       return '👥 Looking up group info…';
     case 'get_user':
       return '🧑 Looking up user info…';
+    case 'generate_image': {
+      const prompt = typeof args['prompt'] === 'string' ? args['prompt'].trim() : '';
+      return prompt
+        ? `🎨 Generating image: "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}"`
+        : '🎨 Generating image…';
+    }
     default:
       return `🔧 Using ${toolName}…`;
   }

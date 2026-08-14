@@ -8,6 +8,10 @@ import {
   resolveAgentContext,
   extractHumanText,
   renderSystemPrompt,
+  describeUserMedia,
+  getPendingMedia,
+  clearPendingMedia,
+  deliverAgentMedia,
 } from '@/engine/agent/agent.util.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
@@ -257,6 +261,11 @@ export async function runAgent(
   // action instead of a generic placeholder for the whole turn.
   initAgentStatus(ctx);
 
+  // Fresh per-turn media accumulator — test_command/generate_image push
+  // captured image/video/audio here, send_result merges it automatically, and
+  // the bare-text fallback below delivers it as a last resort.
+  clearPendingMedia(ctx);
+
   // loadAgentTools() is idempotent and returns the cached list after the first call.
   // cachedGroqTools and cachedToolsMap are populated in the same call — safe to use directly.
   await loadAgentTools();
@@ -376,13 +385,22 @@ export async function runAgent(
         '{{AGENT_COMMAND_LIMIT}}': String(AGENT_COMMAND_LIMIT),
       });
 
+  // Surface attached media to the model: when the user's message carries an
+  // image (or replies to one), append a short note so the agent knows it can
+  // transform it (generate_image auto-detects the URL — the note carries
+  // metadata only, never token-bearing CDN URLs).
+  const mediaContext = describeUserMedia(ctx.event);
+  const userContent = mediaContext
+    ? `${userInput}\n\n${mediaContext}`
+    : userInput;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
     {
       role: 'system',
       content: systemContent,
     },
-    { role: 'user', content: userInput },
+    { role: 'user', content: userContent },
   ];
 
   let turns = 20; // Safety limit — prevents runaway tool-call loops
@@ -499,7 +517,22 @@ export async function runAgent(
       // occasionally finishes with the Harmony "commentary/final json" envelope
       // (or a double-encoded JSON string) instead of plain text. extractHumanText
       // collapses those to the real value so the user never sees raw JSON.
-      return extractHumanText(message.content) ?? '';
+      const text = extractHumanText(message.content) ?? '';
+      // Safety net: the model finished with bare text while media was captured
+      // this turn (test_command/generate_image) but send_result was never
+      // called. Deliver the text together with the media so a requested image
+      // or video is NEVER answered with text only. Returns '' once delivered
+      // so ai.ts's `if (result)` guard skips the duplicate text reply.
+      const pending = getPendingMedia(ctx);
+      if (
+        text &&
+        (pending.urls.length > 0 || pending.binaries.length > 0)
+      ) {
+        const ok = await deliverAgentMedia(ctx, text);
+        clearPendingMedia(ctx);
+        if (ok) return '';
+      }
+      return text;
     }
 
     // =========================

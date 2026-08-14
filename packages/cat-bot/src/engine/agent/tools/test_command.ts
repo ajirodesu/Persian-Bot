@@ -27,7 +27,10 @@
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import type { Readable } from 'node:stream';
-import { resolveAgentContext } from '../agent.util.js';
+import {
+  resolveAgentContext,
+  getPendingMedia,
+} from '../agent.util.js';
 import { inspectCommandConstraints } from '@/engine/agent/agent-command-guard.lib.js';
 import { dispatchCommand } from '@/engine/controllers/dispatchers/command.dispatcher.js';
 import { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
@@ -384,6 +387,19 @@ export const run = async (
           continue;
         }
 
+        // AI Image category commands are owned exclusively by the generate_image
+        // tool. Running them here would (a) trigger the real image fetch inside
+        // the command and (b) compete with generate_image's captured-media
+        // delivery — the same request could generate twice or deliver two
+        // images. Redirect instead of executing, so the two paths never conflict.
+        const cmdMeta = mod['meta'] as Record<string, unknown> | undefined;
+        if (cmdMeta?.['category'] === 'AI Image') {
+          errors.push(
+            `Command '${command}' is an AI Image command — call the 'generate_image' tool (with the image prompt) instead of test_command.`,
+          );
+          continue;
+        }
+
         const simulatedMessage =
           `${ctx.prefix || '/'}${command} ${(args || []).join(' ')}`.trim();
         const simulatedEvent = {
@@ -527,6 +543,13 @@ export const run = async (
           rawBinaryAttachments,
         );
 
+      // Accumulate the captured media on the per-turn store so send_result can
+      // auto-include it even when the model omits the keys — a media request
+      // must never be answered with text only.
+      const pending = getPendingMedia(ctx);
+      pending.urls.push(...collectedAttachments);
+      pending.binaries.push(...rawBinaryAttachments);
+
       // Build LLM-readable representations with named fields and event coordinates
       const llmCalls = storableCalls.map((call) =>
         formatCallForLLM(call, senderID, eventMessageID),
@@ -545,6 +568,10 @@ export const run = async (
           button_key: buttonKey,
           callCount: storableCalls.length,
           calls: llmCalls,
+          // Blocked/redirected commands stay visible even when other commands
+          // produced calls — the model must see them to act (e.g. reroute an
+          // AI Image request to generate_image) instead of assuming success.
+          ...(errors.length > 0 ? { errors } : {}),
           ...(trimNote ? { limit_warning: trimNote } : {}),
           note:
             'Read the `calls` text to synthesize your reply message. Then call ' +

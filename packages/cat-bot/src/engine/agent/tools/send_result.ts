@@ -22,7 +22,11 @@
  */
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
-import { extractHumanText } from '../agent.util.js';
+import {
+  extractHumanText,
+  getPendingMedia,
+  clearPendingMedia,
+} from '../agent.util.js';
 import { commandResultStore } from '../lib/command-result-store.lib.js';
 // This tool delivers the agent's actual reply via ctx.api.replyMessage
 // directly (bypassing ctx.chat), so it must fire the same instant-stop
@@ -135,6 +139,14 @@ export const run = async (
     ? (args['attachment'] as string[])
     : undefined;
 
+  // Media captured this turn by test_command / generate_image. When the model
+  // omits a key category, the captured media is merged in automatically — a
+  // requested image/video is delivered with the reply regardless of model
+  // adherence, never dropped into a text-only answer.
+  const pending = getPendingMedia(ctx);
+  const hasUrlKeys = (attachment_url ?? []).length > 0;
+  const hasBinaryKeys = (attachment ?? []).length > 0;
+
   const threadID = (ctx.event['threadID'] as string) || '';
   // Thread the agent reply to the user's triggering message for visual conversation anchoring.
   const replyToID = (ctx.event['messageID'] as string) || '';
@@ -159,6 +171,13 @@ export const run = async (
     if (binaries) allBinaryAttachments.push(...binaries);
     commandResultStore.deleteBinaryAttachments(binKey);
   }
+
+  // Safety net: when the model supplied no keys for a category, auto-include the
+  // media captured this turn instead of dropping it.
+  if (!hasUrlKeys && pending.urls.length > 0)
+    allAttachmentUrls.push(...(pending.urls as NamedUrlAttachment[]));
+  if (!hasBinaryKeys && pending.binaries.length > 0)
+    allBinaryAttachments.push(...pending.binaries);
 
   // Collect and stack button rows from all provided button keys.
   // Each key holds an array of ButtonItem[][] (one per API call that produced buttons).
@@ -218,5 +237,9 @@ export const run = async (
     return parts.join(' ');
   } catch (err) {
     return `Delivery failed: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    // Pending media is single-use per turn — always consumed here so a later
+    // bare-text fallback (or a second send_result) can never double-deliver.
+    clearPendingMedia(ctx);
   }
 };

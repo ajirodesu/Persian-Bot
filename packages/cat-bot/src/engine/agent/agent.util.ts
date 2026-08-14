@@ -1,4 +1,8 @@
 import type { AppCtx } from '@/engine/types/controller.types.js';
+import type { BinaryAttachment } from './lib/command-result-store.lib.js';
+import type { ReplyMessageOptions, NamedStreamAttachment } from '@/engine/adapters/models/interfaces/index.js';
+import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import { stopTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 
 /**
  * Standard interface for dynamically loaded agent tools.
@@ -34,6 +38,165 @@ export function resolveAgentContext(ctx: AppCtx) {
     sessionId: ctx.native.sessionId ?? '',
     platform: ctx.native.platform,
   };
+}
+
+// ── Media attachment awareness ─────────────────────────────────────────────────
+
+/** Minimal unified attachment entry shape read off event['attachments']. */
+interface RawAttachmentEntry {
+  type?: string;
+  url?: string | null;
+  filename?: string | null;
+  name?: string | null;
+}
+
+const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|bmp)(?:\?.*)?$/i;
+
+/** True when a unified attachment entry looks like a static/animated image. */
+export function isImageAttachment(att: RawAttachmentEntry): boolean {
+  const type = (att.type ?? '').toLowerCase();
+  if (type === 'photo' || type === 'animated_image' || type === 'gif') {
+    return true;
+  }
+  return IMAGE_EXT_RE.test(att.filename ?? att.name ?? att.url ?? '');
+}
+
+/**
+ * Collects the image attachment URLs from an event — the message's own
+ * attachments first, then the replied-to message's. Only entries with a
+ * usable public url are returned; every platform normalizer (Discord,
+ * Telegram via file_id → CDN, Fluxer) populates it on the event.
+ */
+export function extractEventImageUrls(
+  event: Record<string, unknown>,
+): Array<{ url: string; label: string }> {
+  const out: Array<{ url: string; label: string }> = [];
+  const pushFrom = (list: unknown): void => {
+    if (!Array.isArray(list)) return;
+    for (const a of list) {
+      if (a !== null && typeof a === 'object') {
+        const entry = a as RawAttachmentEntry;
+        if (
+          typeof entry.url === 'string' &&
+          entry.url &&
+          isImageAttachment(entry)
+        ) {
+          out.push({
+            url: entry.url,
+            label: entry.filename ?? entry.name ?? 'image',
+          });
+        }
+      }
+    }
+  };
+  pushFrom(event['attachments']);
+  const reply = event['messageReply'] as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  if (reply) pushFrom(reply['attachments']);
+  return out;
+}
+
+/**
+ * Builds a short human-readable note describing the media attached to the
+ * triggering message. Returns '' when nothing is attached.
+ *
+ * Deliberately includes NO URLs — Telegram CDN links embed the bot token, and
+ * the model never needs them: generate_image resolves the attached image itself
+ * (extractEventImageUrls). Media metadata only reaches the prompt, keeping
+ * token-bearing URLs out of the LLM conversation entirely.
+ */
+export function describeUserMedia(event: Record<string, unknown>): string {
+  const images = extractEventImageUrls(event);
+  if (images.length === 0) return '';
+  const lines = images
+    .map((img, i) => `- image #${i + 1}: ${img.label || 'attached image'}`)
+    .join('\n');
+  return (
+    `📎 The user attached ${images.length === 1 ? 'an image' : `${images.length} images`} to this message:\n` +
+    lines +
+    '\nYou can transform or edit the attached image by calling `generate_image` ' +
+    '(omit `image_url` — the attached image is detected automatically; AI Image ' +
+    'commands such as nanobanana are handled by generate_image, never ' +
+    'test_command). For upscaling/HD enhancement use `hd` via `test_command`.'
+  );
+}
+
+// ── Per-turn media accumulator ─────────────────────────────────────────────────
+
+/**
+ * Media captured by agent tools during the current turn, awaiting delivery.
+ * test_command and generate_image push into it; send_result merges it
+ * automatically (and the agent loop's bare-text fallback delivers it too), so
+ * a requested image/video is ALWAYS delivered even when the model forgets the
+ * attachment keys. Attached to ctx, so it dies with the invocation.
+ */
+export interface PendingAgentMedia {
+  /** URL-based attachments (forwarded as attachment_url). */
+  urls: Array<{ name: string; url: string }>;
+  /** Buffer/stream attachments (forwarded as attachment). */
+  binaries: BinaryAttachment[];
+}
+
+const PENDING_MEDIA_KEY = '_agentPendingMedia';
+
+/** Returns (creating on first use) the per-turn media accumulator on ctx. */
+export function getPendingMedia(ctx: AppCtx): PendingAgentMedia {
+  const map = ctx as unknown as Record<string, unknown>;
+  let pending = map[PENDING_MEDIA_KEY] as PendingAgentMedia | undefined;
+  if (!pending) {
+    pending = { urls: [], binaries: [] };
+    map[PENDING_MEDIA_KEY] = pending;
+  }
+  return pending;
+}
+
+/** Removes the per-turn media accumulator — called after delivery. */
+export function clearPendingMedia(ctx: AppCtx): void {
+  (ctx as unknown as Record<string, unknown>)[PENDING_MEDIA_KEY] = undefined;
+}
+
+/**
+ * Delivers a message plus any pending captured media in a single reply,
+ * threaded to the triggering message. Returns true when something was sent.
+ *
+ * This is the safety net behind "the agent never answers a media request with
+ * text only": if the model finishes without send_result keys (or without
+ * send_result at all), the captured image/video/audio still reaches the user.
+ */
+export async function deliverAgentMedia(
+  ctx: AppCtx,
+  message: string,
+): Promise<boolean> {
+  const pending = getPendingMedia(ctx);
+  if (
+    !message.trim() &&
+    pending.urls.length === 0 &&
+    pending.binaries.length === 0
+  ) {
+    return false;
+  }
+
+  const threadID = (ctx.event['threadID'] as string) || '';
+  const replyToID = (ctx.event['messageID'] as string) || '';
+  const replyOptions: ReplyMessageOptions = {
+    message,
+    style: MessageStyle.MARKDOWN,
+    ...(replyToID ? { reply_to_message_id: replyToID } : {}),
+  };
+  if (pending.urls.length > 0) replyOptions.attachment_url = pending.urls;
+  if (pending.binaries.length > 0)
+    replyOptions.attachment = pending.binaries as NamedStreamAttachment[];
+
+  try {
+    await ctx.api.replyMessage(threadID, replyOptions);
+    // Kill any lingering typing/thinking indicator — the reply has landed.
+    stopTypingIndicator(threadID);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
