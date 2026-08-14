@@ -135,13 +135,12 @@ export {
   resetAllDatabase,
 } from '../adapters/turso/src/server/system-admin.repo.js';
 
-// --- USER AI PROVIDER KEY ---
+// --- USER GROQ KEY ---
 export {
-  getUserAiConfig,
-  saveUserAiKey,
-  updateUserAiModel,
-  deleteUserAiKey,
-} from '../adapters/turso/src/server/provider-key.repo.js';
+  getUserGroqKey,
+  upsertUserGroqKey,
+  deleteUserGroqKey,
+} from '../adapters/turso/src/server/groq-key.repo.js';
 
 // --- USER TIMEZONE ---
 export {

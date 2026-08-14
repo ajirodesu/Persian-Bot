@@ -127,13 +127,12 @@ export {
 // dbReady     — resolves once the initial connection is established (boot readiness gate).
 export { mongoClient, getMongoDb, dbReady } from '../adapters/mongodb/src/client.js';
 
-// --- USER AI PROVIDER KEY ---
+// --- USER GROQ KEY ---
 export {
-  getUserAiConfig,
-  saveUserAiKey,
-  updateUserAiModel,
-  deleteUserAiKey,
-} from '../adapters/mongodb/src/server/provider-key.repo.js';
+  getUserGroqKey,
+  upsertUserGroqKey,
+  deleteUserGroqKey,
+} from '../adapters/mongodb/src/server/groq-key.repo.js';
 
 // --- USER TIMEZONE ---
 export {

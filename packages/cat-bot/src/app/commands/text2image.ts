@@ -4,8 +4,8 @@
  * Generates an image from a text prompt via the Alwayscodex "text2image"
  * endpoint. An optional leading `W:H` aspect ratio token (e.g. "16:9") may be
  * supplied before the prompt; it defaults to "1:1" when omitted. The endpoint
- * renders the image and the result URL is forwarded directly via
- * `attachment_url` — the bot never downloads the bytes.
+ * returns the rendered image directly (binary), not JSON, so the response
+ * body is downloaded and forwarded as an attachment.
  *
  * Flow:
  *   User: /text2image 16:9 anime girl with short blue hair
@@ -20,6 +20,24 @@ import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 
 const DEFAULT_RATIO = '1:1';
+
+// ── Fetcher ───────────────────────────────────────────────────────────────────
+
+async function fetchText2Image(prompt: string, ratio: string): Promise<Buffer> {
+  const url = createUrl('alwayscodex', '/api/imageai/text2image', {
+    teks: prompt,
+    ratio,
+  });
+  const response = await fetch(url);
+
+  if (!response.ok)
+    throw new Error(`Text2Image API responded with status ${response.status}`);
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
+
+  return Buffer.from(arrayBuffer);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -100,14 +118,11 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
-    const url = createUrl('alwayscodex', '/api/imageai/text2image', {
-      teks: prompt,
-      ratio,
-    });
+    const image = await fetchText2Image(prompt, ratio);
     await finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}\n📐 **Ratio:** ${ratio}`,
-      attachment_url: [{ name: 'text2image.png', url }],
+      attachment: [{ name: 'text2image.png', stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };

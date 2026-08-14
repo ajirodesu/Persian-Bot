@@ -3,9 +3,8 @@
  *
  * Ports the `commands/ai/flux.js` and `commands/ai/pollinations.js` commands
  * to Cat-Bot's TypeScript multi-command shape. Both hit Alwayscodex image
- * endpoints that render the image and serve it back — the result URL is
- * forwarded directly via `attachment_url` (same convention as text2image.ts),
- * so the bot never downloads the bytes.
+ * endpoints that render the image directly (binary), so the response body is
+ * downloaded and forwarded as an attachment — same convention as text2image.ts.
  *
  * Commands:
  *   /flux <prompt>          — Flux text-to-image (aliases: none)
@@ -22,6 +21,19 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+
+// ── Fetcher ───────────────────────────────────────────────────────────────────
+
+async function fetchGeneratedImage(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok)
+    throw new Error(`Image API responded with status ${response.status}`);
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
+
+  return Buffer.from(arrayBuffer);
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -77,11 +89,12 @@ async function runAiImage(ctx: AppCtx, cfg: AiImageConfig): Promise<void> {
     const url = createUrl('alwayscodex', cfg.endpoint, {
       [cfg.textParam]: prompt,
     });
+    const image = await fetchGeneratedImage(url);
 
     await ctx.chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}`,
-      attachment_url: [{ name: cfg.filename, url }],
+      attachment: [{ name: cfg.filename, stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };

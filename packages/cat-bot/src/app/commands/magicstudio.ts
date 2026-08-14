@@ -2,8 +2,8 @@
  * /magicstudio — Magic Studio Text-to-Image Generator
  *
  * Generates an image from a text prompt via the Nexray "magicstudio"
- * endpoint. The endpoint renders the image and the result URL is forwarded
- * directly via `attachment_url` — the bot never downloads the bytes.
+ * endpoint. The endpoint returns the rendered image directly (binary), not
+ * JSON, so the response body is downloaded and forwarded as an attachment.
  *
  * Flow:
  *   User: /magicstudio anime girl with short blue hair
@@ -16,6 +16,21 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
+
+// ── Fetcher ───────────────────────────────────────────────────────────────────
+
+async function fetchMagicStudioImage(prompt: string): Promise<Buffer> {
+  const url = createUrl('nexray', '/ai/magicstudio', { prompt });
+  const response = await fetch(url);
+
+  if (!response.ok)
+    throw new Error(`Magic Studio API responded with status ${response.status}`);
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
+
+  return Buffer.from(arrayBuffer);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,11 +98,11 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
-    const url = createUrl('nexray', '/ai/magicstudio', { prompt });
+    const image = await fetchMagicStudioImage(prompt);
     await finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}`,
-      attachment_url: [{ name: 'magicstudio.png', url }],
+      attachment: [{ name: 'magicstudio.png', stream: image }],
     });
   } catch (err) {
     const error = err as { message?: string };

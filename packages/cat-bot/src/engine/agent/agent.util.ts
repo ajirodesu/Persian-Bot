@@ -193,9 +193,6 @@ export async function deliverAgentMedia(
     await ctx.api.replyMessage(threadID, replyOptions);
     // Kill any lingering typing/thinking indicator — the reply has landed.
     stopTypingIndicator(threadID);
-    // Mark this turn as delivered so the agent loop's bare-text final answer
-    // is suppressed — the media + text just sent IS the reply.
-    (ctx as unknown as Record<string, unknown>)['_agentReplyDelivered'] = true;
     return true;
   } catch {
     return false;

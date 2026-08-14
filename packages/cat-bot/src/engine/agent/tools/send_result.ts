@@ -53,12 +53,13 @@ import type { BinaryAttachment } from '../lib/command-result-store.lib.js';
 export const config = {
   name: 'send_result',
   description:
-    'Deliver the user-facing reply: your synthesized `message` plus URL attachments ' +
-    '(`attachment_url`) and buttons (`button`) captured by test_command. Write ' +
-    '`message` from the `calls` content — do not copy raw command output. Pass ' +
-    'non-null keys from test_command; all entries merge into one platform reply ' +
-    '(multiple photos deliver together as one album). Call once after running ' +
-    'the needed test_command calls; each key is single-use.',
+    'Deliver a unified reply to the user combining your synthesized message text with ' +
+    'URL attachments (attachment_url) and button grids captured by one or more test_command calls. ' +
+    'Write the `message` yourself based on the `calls` content returned by test_command. ' +
+    'Pass any non-null `attachment_key` values in `attachment_url` and any non-null ' +
+    '`button_key` values in `button` — all entries are merged into a single platform reply. ' +
+    'Run all needed test_command calls before calling this tool once to combine results. ' +
+    'Each key is single-use and is deleted after delivery.',
   parameters: {
     type: 'object',
     properties: {
@@ -67,33 +68,36 @@ export const config = {
         // (400 tool_use_failed) when the model passes null.
         type: ['string', 'null'],
         description:
-          'Your synthesized reply text, written from the `calls` content returned by ' +
-          'test_command (not raw command output). Describe the actual media being ' +
-          'delivered (real subject/count) dynamically and accurately in fresh natural ' +
-          'language — never a static template; for an album of photos one caption ' +
-          'covers all of them. This is the primary text the user sees.',
+          'Your synthesized reply text. Write this yourself based on the `calls` ' +
+          'text returned by test_command — do not copy raw command output verbatim. ' +
+          'This is the primary text the user will see.',
       },
       attachment_url: {
         type: ['array', 'null'],
         items: { type: 'string' },
         description:
-          'Optional `attachment_key` values from test_command (the `attachment_key` ' +
-          'field, not `key`). Their URL attachments merge into the reply. Omit or [] ' +
-          'when none.',
+          'Optional list of `attachment_key` values returned by test_command (the ' +
+          '`attachment_key` field, not the main `key`). URL-based file attachments from ' +
+          'all provided keys are merged into the single reply. Omit or pass [] when ' +
+          'no commands produced attachments.',
       },
       attachment: {
         type: ['array', 'null'],
         items: { type: 'string' },
         description:
-          'Optional `binary_attachment_key` values from test_command. Their buffer ' +
-          'attachments (e.g. raw images) merge into the reply. Omit or [] when none.',
+          'Optional list of `binary_attachment_key` values returned by test_command. ' +
+          'Buffer-based file attachments (e.g. raw images from commands like /cat) from ' +
+          'all provided keys are merged into the single reply. Omit or pass [] when ' +
+          'no commands produced binary attachments.',
       },
       button: {
         type: ['array', 'null'],
         items: { type: 'string' },
         description:
-          'Optional `button_key` values from test_command (the `button_key` field, ' +
-          'not `key`). Their button rows stack into one keyboard. Omit or [] when none.',
+          'Optional list of `button_key` values returned by test_command (the ' +
+          '`button_key` field, not the main `key`). Button rows from all provided ' +
+          'keys are stacked into one combined keyboard layout. Omit or pass [] when ' +
+          'no commands produced buttons.',
       },
     },
     required: ['message'],
@@ -116,20 +120,6 @@ export const run = async (
   },
   ctx: AppCtx,
 ): Promise<string> => {
-  // Per-turn duplicate-reply guard: when ANY delivery already happened this turn
-  // (this tool, the bare-text media fallback, or a direct test_command
-  // execution), refuse to send again. Models occasionally call send_result
-  // twice (or after a direct execution despite the prompt) — without this guard
-  // the user would receive two replies. A genuinely failed first delivery
-  // leaves the flags unset, so a retry still works.
-  const deliveryMap = ctx as unknown as Record<string, unknown>;
-  if (
-    deliveryMap['_agentDirectDelivered'] === true ||
-    deliveryMap['_agentReplyDelivered'] === true
-  ) {
-    return 'Reply already delivered this turn — skipped to avoid sending a duplicate message.';
-  }
-
   // Extract the actual reply text from whatever the model produced. When the
   // Groq "json" tool-call quirk is recovered, the args are the Harmony
   // "commentary/final json" envelope (`{ commentary, final }`) with NO
@@ -234,9 +224,6 @@ export const run = async (
     // thread instantly rather than letting it keep refreshing while the
     // agent potentially keeps reasoning or calling more tools afterward.
     stopTypingIndicator(threadID);
-    // Mark this turn as delivered so the agent loop's bare-text final answer
-    // (and any further send_result call) is suppressed — never a duplicate.
-    deliveryMap['_agentReplyDelivered'] = true;
 
     const parts: string[] = ['Message delivered.'];
     if (allAttachmentUrls.length > 0)
