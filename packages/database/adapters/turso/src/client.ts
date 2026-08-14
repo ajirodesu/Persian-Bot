@@ -98,9 +98,10 @@ export async function initDb(): Promise<void> {
   //
   // The table holds the per-user AI provider config: groq keys in
   // encrypted_key/key_hint, openrouter keys in openrouter_encrypted_key/
-  // openrouter_key_hint, the active provider, and each provider's remembered
-  // model. New columns are nullable so pre-existing rows (and cross-adapter
-  // migrations from sources without the fields) stay insertable.
+  // openrouter_key_hint, nvidia keys in nvidia_encrypted_key/nvidia_key_hint,
+  // the active provider, and each provider's remembered model. New columns are
+  // nullable so pre-existing rows (and cross-adapter migrations from sources
+  // without the fields) stay insertable.
   await tursoClient.execute(`
     CREATE TABLE IF NOT EXISTS bot_user_groq_key (
       user_id                  TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
@@ -108,9 +109,12 @@ export async function initDb(): Promise<void> {
       key_hint                 TEXT NOT NULL DEFAULT '',
       openrouter_encrypted_key TEXT,
       openrouter_key_hint      TEXT,
+      nvidia_encrypted_key     TEXT,
+      nvidia_key_hint          TEXT,
       provider                 TEXT DEFAULT 'openrouter',
       groq_model               TEXT,
       openrouter_model         TEXT,
+      nvidia_model             TEXT,
       created_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
@@ -127,9 +131,12 @@ export async function initDb(): Promise<void> {
   const groqKeyNewCols: Array<[string, string]> = [
     ['openrouter_encrypted_key', 'TEXT'],
     ['openrouter_key_hint', 'TEXT'],
+    ['nvidia_encrypted_key', 'TEXT'],
+    ['nvidia_key_hint', 'TEXT'],
     ['provider', "TEXT DEFAULT 'openrouter'"],
     ['groq_model', 'TEXT'],
     ['openrouter_model', 'TEXT'],
+    ['nvidia_model', 'TEXT'],
   ];
   for (const [colName, colDef] of groqKeyNewCols) {
     if (!groqKeyColNames.has(colName)) {

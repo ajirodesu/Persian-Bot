@@ -431,7 +431,7 @@ export async function runAgent(
   if (!ai) {
     throw new Error(
       'AI is disabled — no AI provider key is configured for this account. ' +
-        'Add your OpenRouter or Groq key in Dashboard → Settings → AI Integration to enable AI.',
+        'Add your OpenRouter, Groq, or NVIDIA key in Dashboard → Settings → AI Integration to enable AI.',
     );
   }
   const aiClient = createAiClient(ai.provider, ai.apiKey);

@@ -1,13 +1,13 @@
 /**
  * AI Provider Catalog — single source of truth for every LLM provider the bot's
- * agent can run on (OpenRouter is the PRIMARY provider; Groq is the secondary).
- * Used by:
+ * agent can run on (OpenRouter is the PRIMARY provider; Groq and NVIDIA are the
+ * secondary providers). Used by:
  *   • the settings API (dashboard model lists + provider labels),
  *   • key/model validation before anything reaches the database,
  *   • the agent's client factory (per-provider base URL + model selection).
  *
- * Both providers speak the OpenAI-compatible chat-completions API, so the same
- * OpenAI-compatible SDK drives both — only the base URL and model id differ.
+ * Every provider speaks the OpenAI-compatible chat-completions API, so the same
+ * OpenAI-compatible SDK drives them all — only the base URL and model id differ.
  *
  * Model catalogs: the FULL model list is fetched live from each provider's
  * /models endpoint (see ai-model-catalog.lib.ts) so every model — including all
@@ -15,7 +15,7 @@
  * when the live fetch fails (offline resilience).
  */
 
-export type AiProviderId = 'openrouter' | 'groq';
+export type AiProviderId = 'openrouter' | 'groq' | 'nvidia';
 
 export interface AiProviderModel {
   /** The model id sent to the provider's API (e.g. "openai/gpt-oss-120b"). */
@@ -44,7 +44,7 @@ export interface AiProviderDefinition {
 
 // OpenRouter is the PRIMARY provider — it is listed first, supplies the default
 // model, and is the fallback whenever a stored/unknown provider value appears.
-// Groq remains available as the secondary provider.
+// Groq and NVIDIA remain available as secondary providers.
 export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
   openrouter: {
     id: 'openrouter',
@@ -88,6 +88,30 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
       { id: 'qwen/qwen3-8b', label: 'Qwen 3 8B' },
     ],
   },
+  nvidia: {
+    id: 'nvidia',
+    label: 'NVIDIA',
+    description:
+      'NVIDIA NIM — accelerated LLM inference on NVIDIA hardware (build.nvidia.com).',
+    // NVIDIA serves the OpenAI-compatible API directly at /v1/… with NO
+    // /openai/v1 segment — the agent's client factory strips the SDK-injected
+    // segment for every provider with a custom baseURL.
+    baseURL: 'https://integrate.api.nvidia.com/v1',
+    modelsUrl: 'https://integrate.api.nvidia.com/v1/models',
+    keyPlaceholder: 'nvapi-…',
+    // NVIDIA API keys begin with "nvapi-" followed by a token.
+    keyPattern: /^nvapi-[A-Za-z0-9_-]{20,}$/,
+    // Default picked for strong tool calling + general-purpose answers.
+    defaultModel: 'meta/llama-3.3-70b-instruct',
+    fallbackModels: [
+      { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
+      { id: 'meta/llama-3.1-8b-instruct', label: 'Llama 3.1 8B Instruct' },
+      { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', label: 'Nemotron Ultra 253B' },
+      { id: 'microsoft/phi-4', label: 'Microsoft Phi-4' },
+      { id: 'deepseek-ai/deepseek-r1', label: 'DeepSeek R1' },
+      { id: 'qwen/qwen2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder 32B' },
+    ],
+  },
 };
 
 export const AI_PROVIDER_IDS = Object.keys(AI_PROVIDERS) as AiProviderId[];
@@ -110,14 +134,15 @@ export function isValidAiProviderKey(
 
 /**
  * Infers the provider from a complete key's format: `sk-or-v1-…` → OpenRouter
- * (checked first — the primary provider), `gsk_…` → Groq. Returns null for keys
- * that match neither pattern (e.g. a malformed key mid-typing). Used to
- * auto-match the provider when a key is added — the key's format wins over any
- * pre-selected provider.
+ * (checked first — the primary provider), `gsk_…` → Groq, `nvapi-…` → NVIDIA.
+ * Returns null for keys that match neither pattern (e.g. a malformed key
+ * mid-typing). Used to auto-match the provider when a key is added — the key's
+ * format wins over any pre-selected provider.
  */
 export function detectAiProviderFromKey(apiKey: string): AiProviderId | null {
   const trimmed = apiKey.trim();
   if (AI_PROVIDERS.openrouter.keyPattern.test(trimmed)) return 'openrouter';
+  if (AI_PROVIDERS.nvidia.keyPattern.test(trimmed)) return 'nvidia';
   if (AI_PROVIDERS.groq.keyPattern.test(trimmed)) return 'groq';
   return null;
 }

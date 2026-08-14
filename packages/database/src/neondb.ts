@@ -137,7 +137,7 @@ export {
   saveUserAiKey,
   updateUserAiModel,
   deleteUserAiKey,
-} from '../adapters/neondb/src/server/groq-key.repo.js';
+} from '../adapters/neondb/src/server/provider-key.repo.js';
 
 // --- USER TIMEZONE ---
 export {

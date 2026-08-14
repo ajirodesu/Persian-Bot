@@ -41,6 +41,7 @@ export interface AiSettingsStatus {
   model: string;
   groqModel: string;
   openrouterModel: string;
+  nvidiaModel: string;
   providers: Record<AiProviderId, AiProviderKeyStatus>;
   models: Record<AiProviderId, AiProviderModel[]>;
 }
@@ -57,6 +58,44 @@ export interface SaveAiConfigPayload {
   provider: AiProviderId;
   model?: string;
   apiKey?: string;
+}
+
+// ============================================================================
+// Stored-config helpers
+// ============================================================================
+// The database stores one key+model slot per provider (groq fields double as
+// the "legacy" columns). These helpers map a provider to its stored key/model
+// so callers never hand-write a chain of provider ternaries.
+
+interface StoredAiConfigLike {
+  encryptedKey: string;
+  keyHint: string;
+  openrouterEncryptedKey: string;
+  openrouterKeyHint: string;
+  nvidiaEncryptedKey: string;
+  nvidiaKeyHint: string;
+  provider: AiProviderId;
+  groqModel: string;
+  openrouterModel: string;
+  nvidiaModel: string;
+}
+
+function storedKeyOf(
+  stored: StoredAiConfigLike,
+  provider: AiProviderId,
+): string {
+  if (provider === 'openrouter') return stored.openrouterEncryptedKey;
+  if (provider === 'nvidia') return stored.nvidiaEncryptedKey;
+  return stored.encryptedKey;
+}
+
+function storedModelOf(
+  stored: StoredAiConfigLike,
+  provider: AiProviderId,
+): string {
+  if (provider === 'openrouter') return stored.openrouterModel;
+  if (provider === 'nvidia') return stored.nvidiaModel;
+  return stored.groqModel;
 }
 
 // ============================================================================
@@ -143,17 +182,12 @@ export async function getAiProviderConfig(
   let result: AiRuntimeConfig | null = null;
   if (stored) {
     const provider = providerOf(stored.provider);
-    const encryptedKey =
-      provider === 'openrouter'
-        ? stored.openrouterEncryptedKey
-        : stored.encryptedKey;
+    const encryptedKey = storedKeyOf(stored, provider);
     if (encryptedKey) {
       try {
         const apiKey = decrypt(encryptedKey);
         if (apiKey) {
-          const storedModel = (
-            provider === 'openrouter' ? stored.openrouterModel : stored.groqModel
-          ).trim();
+          const storedModel = storedModelOf(stored, provider).trim();
           result = {
             provider,
             model: storedModel || AI_PROVIDERS[provider].defaultModel,
@@ -183,8 +217,8 @@ export async function getAiSettingsStatus(
 
   const provider = providerOf(stored.provider);
 
-  // Decrypt the stored Groq key (if any) so the live Groq catalog can be
-  // fetched — Groq's model list is per-key. Fail-open: no key / decrypt error
+  // Decrypt the stored Groq/NVIDIA keys (if any) so those live catalogs can be
+  // fetched — their model lists are per-key. Fail-open: no key / decrypt error
   // just falls back to the static catalog.
   let groqKey: string | null = null;
   if (stored.encryptedKey) {
@@ -194,44 +228,72 @@ export async function getAiSettingsStatus(
       groqKey = null;
     }
   }
+  let nvidiaKey: string | null = null;
+  if (stored.nvidiaEncryptedKey) {
+    try {
+      nvidiaKey = decrypt(stored.nvidiaEncryptedKey);
+    } catch {
+      nvidiaKey = null;
+    }
+  }
 
-  // Both catalogs are cached (6h) — parallel fetch, sequential after warm-up.
-  const [groqList, openrouterList] = await Promise.all([
-    resolveModelList('groq', groqKey, userId),
+  // Catalogs are cached (6h) — parallel fetch, sequential after warm-up.
+  const [openrouterList, groqList, nvidiaList] = await Promise.all([
     resolveModelList('openrouter'),
+    resolveModelList('groq', groqKey, userId),
+    resolveModelList('nvidia', nvidiaKey, userId),
   ]);
 
-  const groqModel = normalizeFromList(
-    groqList.models,
-    groqList.live,
-    stored.groqModel,
-    AI_PROVIDERS.groq.defaultModel,
-  );
   const openrouterModel = normalizeFromList(
     openrouterList.models,
     openrouterList.live,
     stored.openrouterModel,
     AI_PROVIDERS.openrouter.defaultModel,
   );
+  const groqModel = normalizeFromList(
+    groqList.models,
+    groqList.live,
+    stored.groqModel,
+    AI_PROVIDERS.groq.defaultModel,
+  );
+  const nvidiaModel = normalizeFromList(
+    nvidiaList.models,
+    nvidiaList.live,
+    stored.nvidiaModel,
+    AI_PROVIDERS.nvidia.defaultModel,
+  );
+
+  const activeModel =
+    provider === 'openrouter'
+      ? openrouterModel
+      : provider === 'nvidia'
+        ? nvidiaModel
+        : groqModel;
 
   return {
     provider,
-    model: provider === 'openrouter' ? openrouterModel : groqModel,
-    groqModel,
+    model: activeModel,
     openrouterModel,
+    groqModel,
+    nvidiaModel,
     providers: {
-      groq: {
-        hasKey: stored.encryptedKey.length > 0,
-        keyHint: stored.keyHint || null,
-      },
       openrouter: {
         hasKey: stored.openrouterEncryptedKey.length > 0,
         keyHint: stored.openrouterKeyHint || null,
       },
+      groq: {
+        hasKey: stored.encryptedKey.length > 0,
+        keyHint: stored.keyHint || null,
+      },
+      nvidia: {
+        hasKey: stored.nvidiaEncryptedKey.length > 0,
+        keyHint: stored.nvidiaKeyHint || null,
+      },
     },
     models: {
-      groq: groqList.models,
       openrouter: openrouterList.models,
+      groq: groqList.models,
+      nvidia: nvidiaList.models,
     },
   };
 }
@@ -266,10 +328,9 @@ export async function saveUserAiConfig(
   const providerDef = AI_PROVIDERS[provider];
 
   if (apiKey && !isValidAiProviderKey(provider, apiKey)) {
+    const hint = AI_PROVIDERS[provider].keyPlaceholder;
     throw new AiConfigError(
-      provider === 'groq'
-        ? 'Invalid Groq API key. Keys start with "gsk_" and are at least 20 characters long.'
-        : 'Invalid OpenRouter API key. Keys start with "sk-or-v1-" and are at least 20 characters long.',
+      `Invalid ${providerDef.label} API key. Keys start with "${hint}" and are at least 20 characters long.`,
     );
   }
 
@@ -282,11 +343,24 @@ export async function saveUserAiConfig(
       storedGroqKey = null;
     }
   }
+  let storedNvidiaKey: string | null = null;
+  if (stored?.nvidiaEncryptedKey) {
+    try {
+      storedNvidiaKey = decrypt(stored.nvidiaEncryptedKey);
+    } catch {
+      storedNvidiaKey = null;
+    }
+  }
 
   // Resolve the live (or fallback) catalog for this provider so the picked
   // model is validated/normalized against what's actually available. When a
-  // new Groq key is being saved, prefer it for the fetch.
-  const fetchKey = provider === 'groq' ? (apiKey || storedGroqKey) : undefined;
+  // new Groq/NVIDIA key is being saved, prefer it for the fetch.
+  const fetchKey =
+    provider === 'groq'
+      ? (apiKey || storedGroqKey)
+      : provider === 'nvidia'
+        ? (apiKey || storedNvidiaKey)
+        : undefined;
   const { models: providerModels, live } = await resolveModelList(
     provider,
     fetchKey,
@@ -316,11 +390,7 @@ export async function saveUserAiConfig(
     // No new key — require the provider to already have one before we persist
     // a provider/model switch (a model-only save on a keyless provider would
     // silently no-op on the DB row).
-    const hasKey =
-      stored !== null &&
-      (provider === 'openrouter'
-        ? stored.openrouterEncryptedKey.length > 0
-        : stored.encryptedKey.length > 0);
+    const hasKey = stored !== null && storedKeyOf(stored, provider).length > 0;
     if (!hasKey) {
       throw new AiConfigError(
         `An ${providerDef.label} API key is required before saving.`,
@@ -361,15 +431,18 @@ function buildEmptyStatus(): AiSettingsStatus {
   return {
     provider: 'openrouter',
     model: AI_PROVIDERS.openrouter.defaultModel,
-    groqModel: AI_PROVIDERS.groq.defaultModel,
     openrouterModel: AI_PROVIDERS.openrouter.defaultModel,
+    groqModel: AI_PROVIDERS.groq.defaultModel,
+    nvidiaModel: AI_PROVIDERS.nvidia.defaultModel,
     providers: {
-      groq: { hasKey: false, keyHint: null },
       openrouter: { hasKey: false, keyHint: null },
+      groq: { hasKey: false, keyHint: null },
+      nvidia: { hasKey: false, keyHint: null },
     },
     models: {
-      groq: AI_PROVIDERS.groq.fallbackModels,
       openrouter: AI_PROVIDERS.openrouter.fallbackModels,
+      groq: AI_PROVIDERS.groq.fallbackModels,
+      nvidia: AI_PROVIDERS.nvidia.fallbackModels,
     },
   };
 }

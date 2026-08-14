@@ -25,6 +25,7 @@ const MODELS_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const MODELS_FETCH_TIMEOUT_MS = 10_000;
 
 const OPENROUTER_CACHE_KEY = 'ai:models:openrouter';
+const NVIDIA_CACHE_KEY = 'ai:models:nvidia';
 const groqCacheKey = (userId: string): string => `ai:models:groq:${userId}`;
 
 // ── API response shapes ──────────────────────────────────────────────────────
@@ -129,6 +130,32 @@ async function fetchGroqModels(apiKey: string): Promise<AiProviderModel[] | null
   return models.length > 0 ? sortModels(models) : null;
 }
 
+/**
+ * Fetches NVIDIA NIM's OpenAI-shaped /models list. The endpoint is public, but
+ * an API key is sent when available (some accounts/tiers require it).
+ */
+async function fetchNvidiaModels(
+  apiKey?: string | null,
+): Promise<AiProviderModel[] | null> {
+  const { data } = await axios.get<GroqModelsResponse>(
+    AI_PROVIDERS.nvidia.modelsUrl,
+    {
+      timeout: MODELS_FETCH_TIMEOUT_MS,
+      ...(apiKey
+        ? { headers: { Authorization: `Bearer ${apiKey}` } }
+        : {}),
+    },
+  );
+  const entries = data?.data;
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const models: AiProviderModel[] = [];
+  for (const e of entries) {
+    if (typeof e.id !== 'string' || e.id.length === 0) continue;
+    models.push({ id: e.id, label: formatModelLabel(e.id) });
+  }
+  return models.length > 0 ? sortModels(models) : null;
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -136,7 +163,7 @@ async function fetchGroqModels(apiKey: string): Promise<AiProviderModel[] | null
  * (callers fall back to the static catalog). Results are cached for 6h.
  *
  * @param apiKey  Required for groq (the endpoint authenticates per key); unused
- *                for openrouter (public endpoint).
+ *                for openrouter (public endpoint), optional for nvidia.
  * @param cacheKey User id for groq — the catalog is cached per user because
  *                Groq's model list can differ between keys.
  */
@@ -145,20 +172,25 @@ export async function getProviderModelsCached(
   apiKey?: string | null,
   cacheKey?: string,
 ): Promise<AiProviderModel[] | null> {
-  const key =
-    provider === 'openrouter'
-      ? OPENROUTER_CACHE_KEY
-      : groqCacheKey(cacheKey || 'default');
+  let cacheKeyId: string;
+  let fetcher: () => Promise<AiProviderModel[] | null>;
+  if (provider === 'openrouter') {
+    cacheKeyId = OPENROUTER_CACHE_KEY;
+    fetcher = () => fetchOpenRouterModels();
+  } else if (provider === 'nvidia') {
+    cacheKeyId = NVIDIA_CACHE_KEY;
+    fetcher = () => fetchNvidiaModels(apiKey);
+  } else {
+    cacheKeyId = groqCacheKey(cacheKey || 'default');
+    fetcher = () => fetchGroqModels(apiKey ?? '');
+  }
 
-  const cached = lruCache.get<AiProviderModel[]>(key);
+  const cached = lruCache.get<AiProviderModel[]>(cacheKeyId);
   if (cached !== undefined) return cached;
 
   try {
-    const models =
-      provider === 'openrouter'
-        ? await fetchOpenRouterModels()
-        : await fetchGroqModels(apiKey ?? '');
-    if (models) lruCache.set(key, models, MODELS_CACHE_TTL_MS);
+    const models = await fetcher();
+    if (models) lruCache.set(cacheKeyId, models, MODELS_CACHE_TTL_MS);
     return models;
   } catch (err) {
     // Fail-open — never cache a failure; the caller uses the fallback catalog

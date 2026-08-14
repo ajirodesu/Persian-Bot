@@ -141,7 +141,7 @@ export {
   saveUserAiKey,
   updateUserAiModel,
   deleteUserAiKey,
-} from '../adapters/turso/src/server/groq-key.repo.js';
+} from '../adapters/turso/src/server/provider-key.repo.js';
 
 // --- USER TIMEZONE ---
 export {

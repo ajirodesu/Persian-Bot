@@ -99,7 +99,7 @@ function hasDeliveredReply(ctx: AppCtx): boolean {
 // identically to the /ai command and the passive onChat path.
 const NO_AI_KEY_MESSAGE =
   '🤖 **AI is disabled.** No AI provider key is configured for this account.\n' +
-  'Add your **OpenRouter** or **Groq** key in **Dashboard → Settings → AI Integration** ' +
+  'Add your **OpenRouter**, **Groq**, or **NVIDIA** key in **Dashboard → Settings → AI Integration** ' +
   'to enable AI features.';
 
 const AI_RATE_LIMIT_MESSAGE =

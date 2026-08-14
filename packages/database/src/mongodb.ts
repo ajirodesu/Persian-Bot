@@ -133,7 +133,7 @@ export {
   saveUserAiKey,
   updateUserAiModel,
   deleteUserAiKey,
-} from '../adapters/mongodb/src/server/groq-key.repo.js';
+} from '../adapters/mongodb/src/server/provider-key.repo.js';
 
 // --- USER TIMEZONE ---
 export {

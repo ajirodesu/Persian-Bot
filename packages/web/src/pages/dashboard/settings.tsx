@@ -26,7 +26,7 @@ import { ROUTES } from '@/constants/routes.constants'
 // AI Integration — provider + model types
 // ============================================================================
 
-type AiProviderId = 'groq' | 'openrouter'
+type AiProviderId = 'groq' | 'openrouter' | 'nvidia'
 
 interface AiProviderKeyStatus {
   hasKey: boolean
@@ -38,6 +38,7 @@ interface AiSettingsStatus {
   model: string
   groqModel: string
   openrouterModel: string
+  nvidiaModel: string
   providers: Record<AiProviderId, AiProviderKeyStatus>
   models: Record<
     AiProviderId,
@@ -48,25 +49,29 @@ interface AiSettingsStatus {
 const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
   groq: 'Groq',
   openrouter: 'OpenRouter',
+  nvidia: 'NVIDIA',
 }
 
 const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
   groq: 'gsk_…',
   openrouter: 'sk-or-v1-…',
+  nvidia: 'nvapi-…',
 }
 
 const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: 'openrouter', label: 'OpenRouter' },
   { value: 'groq', label: 'Groq' },
+  { value: 'nvidia', label: 'NVIDIA' },
 ]
 
 // Infers the provider from a key's prefix as it's typed/pasted —
 // `sk-or-v1-` is an OpenRouter key (checked first — the primary provider),
-// `gsk_` a Groq key. Returns null while the key is too short or doesn't match
-// either format.
+// `nvapi-` an NVIDIA key, `gsk_` a Groq key. Returns null while the key is too
+// short or doesn't match any format.
 const detectProviderFromKey = (key: string): AiProviderId | null => {
   const trimmed = key.trim()
   if (trimmed.startsWith('sk-or-v1')) return 'openrouter'
+  if (trimmed.startsWith('nvapi-')) return 'nvidia'
   if (trimmed.startsWith('gsk_')) return 'groq'
   return null
 }
@@ -77,11 +82,13 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
   model: '',
   groqModel: '',
   openrouterModel: '',
+  nvidiaModel: '',
   providers: {
     groq: { hasKey: false, keyHint: null },
     openrouter: { hasKey: false, keyHint: null },
+    nvidia: { hasKey: false, keyHint: null },
   },
-  models: { groq: [], openrouter: [] },
+  models: { groq: [], openrouter: [], nvidia: [] },
 }
 
 // ============================================================================
@@ -378,16 +385,25 @@ export default function SettingsPage() {
 
   // The saved model for a given provider — used when switching providers so the
   // model select reflects what was last saved for each one.
-  const savedModelFor = (provider: AiProviderId): string =>
-    provider === 'groq'
-      ? (aiStatus?.groqModel ?? '')
-      : (aiStatus?.openrouterModel ?? '')
+  const savedModelFor = (provider: AiProviderId): string => {
+    if (provider === 'groq') return aiStatus?.groqModel ?? ''
+    if (provider === 'nvidia') return aiStatus?.nvidiaModel ?? ''
+    return aiStatus?.openrouterModel ?? ''
+  }
 
   const providerStatus =
     aiStatus?.providers[providerDraft] ?? { hasKey: false, keyHint: null }
-  const otherProvider: AiProviderId =
-    providerDraft === 'groq' ? 'openrouter' : 'groq'
-  const otherProviderStatus = aiStatus?.providers[otherProvider]
+  // The first OTHER provider that already has a key connected — used for the
+  // "switch to X" hint when the current provider has none (any of the other
+  // providers may be configured, not just a hardcoded second one).
+  const otherConfiguredProvider = aiStatus
+    ? (Object.keys(aiStatus.providers) as AiProviderId[]).find(
+        (p) => p !== providerDraft && aiStatus.providers[p].hasKey,
+      ) ?? null
+    : null
+  const otherProviderStatus = otherConfiguredProvider
+    ? aiStatus?.providers[otherConfiguredProvider]
+    : undefined
 
   const modelOptions = (aiStatus?.models[providerDraft] ?? []).map((m) => ({
     value: m.id,
@@ -417,14 +433,20 @@ export default function SettingsPage() {
       setAiStatus(res.data)
       setAiEditing(false)
       setAiKeyInput('')
-      // If the removed provider was the active one but the other provider still
+      // If the removed provider was the active one but another provider still
       // has a key, switch the drafts to it so AI stays usable.
       if (!res.data.providers[providerDraft].hasKey) {
-        const other = otherProvider
-        if (res.data.providers[other].hasKey) {
-          setProviderDraft(other)
+        const fallback = (Object.keys(res.data.providers) as AiProviderId[]).find(
+          (p) => p !== providerDraft && res.data.providers[p].hasKey,
+        )
+        if (fallback) {
+          setProviderDraft(fallback)
           setModelDraft(
-            other === 'groq' ? res.data.groqModel : res.data.openrouterModel,
+            fallback === 'groq'
+              ? res.data.groqModel
+              : fallback === 'nvidia'
+                ? res.data.nvidiaModel
+                : res.data.openrouterModel,
           )
         }
       }
@@ -586,9 +608,9 @@ export default function SettingsPage() {
             <div>
               <Card.Title as="h2">AI Integration</Card.Title>
               <Card.Description>
-                AI features run on your own OpenRouter or Groq API key. Pick a
-                provider, choose a model, and store your key — it's kept
-                encrypted and used only by your bots.
+                AI features run on your own provider API key (OpenRouter, Groq,
+                or NVIDIA). Pick a provider, choose a model, and store your key —
+                it's kept encrypted and used only by your bots.
               </Card.Description>
             </div>
             {aiDirty && (
@@ -670,19 +692,19 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 </div>
-              ) : otherProviderStatus?.hasKey ? (
+              ) : otherProviderStatus?.hasKey && otherConfiguredProvider ? (
                 <Alert
                   variant="tonal"
                   color="info"
                   title={`No ${AI_PROVIDER_LABELS[providerDraft]} key configured`}
-                  message={`Add a ${AI_PROVIDER_LABELS[providerDraft]} key below to use it, or switch to ${AI_PROVIDER_LABELS[otherProvider]} — it already has a key connected.`}
+                  message={`Add a ${AI_PROVIDER_LABELS[providerDraft]} key below to use it, or switch to ${AI_PROVIDER_LABELS[otherConfiguredProvider]} — it already has a key connected.`}
                 />
               ) : (
                 <Alert
                   variant="tonal"
                   color="warning"
                   title="AI features are disabled"
-                  message="No AI provider key is configured for your account. Add your own OpenRouter or Groq key below to enable AI features."
+                  message="No AI provider key is configured for your account. Add your own provider key below to enable AI features."
                 />
               )}
 

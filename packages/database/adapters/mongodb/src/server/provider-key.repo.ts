@@ -5,22 +5,25 @@ import { getMongoDb } from '../client.js';
  * name predates the multi-provider feature and is kept for migration
  * compatibility).
  *
- * Each user may configure a key for EITHER provider (or both) — groq keys live
+ * Each user may configure a key for ANY provider (or several) — groq keys live
  * in encryptedKey/keyHint, openrouter keys in openrouterEncryptedKey/
- * openrouterKeyHint. `provider` selects the active one, and each provider's
- * model choice is remembered independently so switching providers keeps the
- * user's preferred model for each.
+ * openrouterKeyHint, nvidia keys in nvidiaEncryptedKey/nvidiaKeyHint. `provider`
+ * selects the active one, and each provider's model choice is remembered
+ * independently so switching providers keeps the user's preferred model each.
  */
-export type AiProvider = 'openrouter' | 'groq';
+export type AiProvider = 'openrouter' | 'groq' | 'nvidia';
 
 export interface StoredAiConfig {
   encryptedKey: string;
   keyHint: string;
   openrouterEncryptedKey: string;
   openrouterKeyHint: string;
+  nvidiaEncryptedKey: string;
+  nvidiaKeyHint: string;
   provider: AiProvider;
   groqModel: string;
   openrouterModel: string;
+  nvidiaModel: string;
 }
 
 interface StoredAiConfigDoc {
@@ -28,9 +31,12 @@ interface StoredAiConfigDoc {
   keyHint?: string;
   openrouterEncryptedKey?: string;
   openrouterKeyHint?: string;
+  nvidiaEncryptedKey?: string;
+  nvidiaKeyHint?: string;
   provider?: string;
   groqModel?: string;
   openrouterModel?: string;
+  nvidiaModel?: string;
 }
 
 export async function getUserAiConfig(
@@ -48,9 +54,12 @@ export async function getUserAiConfig(
           keyHint: 1,
           openrouterEncryptedKey: 1,
           openrouterKeyHint: 1,
+          nvidiaEncryptedKey: 1,
+          nvidiaKeyHint: 1,
           provider: 1,
           groqModel: 1,
           openrouterModel: 1,
+          nvidiaModel: 1,
         },
       },
     );
@@ -60,16 +69,25 @@ export async function getUserAiConfig(
     keyHint: rec.keyHint ?? '',
     openrouterEncryptedKey: rec.openrouterEncryptedKey ?? '',
     openrouterKeyHint: rec.openrouterKeyHint ?? '',
-    provider: rec.provider === 'groq' ? 'groq' : 'openrouter',
+    nvidiaEncryptedKey: rec.nvidiaEncryptedKey ?? '',
+    nvidiaKeyHint: rec.nvidiaKeyHint ?? '',
+    provider: providerOf(rec.provider),
     groqModel: rec.groqModel ?? '',
     openrouterModel: rec.openrouterModel ?? '',
+    nvidiaModel: rec.nvidiaModel ?? '',
   };
+}
+
+function providerOf(value: string | undefined): AiProvider {
+  if (value === 'groq') return 'groq';
+  if (value === 'nvidia') return 'nvidia';
+  return 'openrouter';
 }
 
 /**
  * Upserts the encrypted key for ONE provider and makes that provider active
  * with the given model. Only that provider's key fields are touched, so
- * configuring a second provider never wipes the first.
+ * configuring another provider never wipes the first.
  */
 export async function saveUserAiKey(
   userId: string,
@@ -87,12 +105,19 @@ export async function saveUserAiKey(
           provider,
           openrouterModel: model,
         }
-      : {
-          encryptedKey,
-          keyHint,
-          provider,
-          groqModel: model,
-        };
+      : provider === 'nvidia'
+        ? {
+            nvidiaEncryptedKey: encryptedKey,
+            nvidiaKeyHint: keyHint,
+            provider,
+            nvidiaModel: model,
+          }
+        : {
+            encryptedKey,
+            keyHint,
+            provider,
+            groqModel: model,
+          };
   set.updatedAt = new Date();
   await db.collection('botUserGroqKeys').updateOne(
     { userId },
@@ -114,7 +139,9 @@ export async function updateUserAiModel(
   const set: Record<string, unknown> =
     provider === 'openrouter'
       ? { provider, openrouterModel: model }
-      : { provider, groqModel: model };
+      : provider === 'nvidia'
+        ? { provider, nvidiaModel: model }
+        : { provider, groqModel: model };
   set.updatedAt = new Date();
   await db.collection('botUserGroqKeys').updateOne({ userId }, { $set: set });
 }
@@ -128,7 +155,9 @@ export async function deleteUserAiKey(
   const set: Record<string, unknown> =
     provider === 'openrouter'
       ? { openrouterEncryptedKey: '', openrouterKeyHint: '' }
-      : { encryptedKey: '', keyHint: '' };
+      : provider === 'nvidia'
+        ? { nvidiaEncryptedKey: '', nvidiaKeyHint: '' }
+        : { encryptedKey: '', keyHint: '' };
   set.updatedAt = new Date();
   await db.collection('botUserGroqKeys').updateOne({ userId }, { $set: set });
 }
