@@ -8,13 +8,17 @@ import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
-import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
+import {
+  getAiProviderConfig,
+  type AiRuntimeConfig,
+} from '@/engine/repos/ai-provider.repo.js';
 import { reactOnSuccess } from '@/engine/lib/react-on-success.lib.js';
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { getPayment } from '@/engine/types/module-meta.types.js';
 import { withThinkingIndicator } from '@/engine/lib/thinking-indicator.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import {
   getCachedSessionAdminOnly,
   setCachedSessionAdminOnly,
@@ -76,46 +80,50 @@ function stripTelegramMentions(message: string): string {
   return message.replace(/@\S+/g, ' ');
 }
 
-// ── Per-user Groq key gate ───────────────────────────────────────────────────
-// AI requires the requesting account to have configured its own Groq API key
-// (Dashboard → Settings). When the key is missing, reply with a friendly notice
-// and abort — this is the "AI features stay disabled until a valid key exists"
-// guarantee, applied identically to the /ai command and the passive onChat path.
-const NO_GROQ_KEY_MESSAGE =
-  '🤖 **AI is disabled.** No Groq API key is configured for this account.\n' +
-  'Add your key in **Dashboard → Settings** to enable AI features.';
+// ── Per-user AI provider gate ────────────────────────────────────────────────
+// AI requires the requesting account to have configured its own AI provider
+// key + model (Dashboard → Settings → AI Integration). When the active
+// provider's key is missing, reply with a friendly notice and abort — this is
+// the "AI features stay disabled until a valid key exists" guarantee, applied
+// identically to the /ai command and the passive onChat path.
+const NO_AI_KEY_MESSAGE =
+  '🤖 **AI is disabled.** No AI provider key is configured for this account.\n' +
+  'Add your **Groq** or **OpenRouter** key in **Dashboard → Settings → AI Integration** ' +
+  'to enable AI features.';
 
-const GROQ_RATE_LIMIT_MESSAGE =
-  '⏳ **The AI is temporarily unavailable** — the Groq API key for this account ' +
+const AI_RATE_LIMIT_MESSAGE =
+  '⏳ **The AI is temporarily unavailable** — the AI provider key for this account ' +
   'has reached its rate limit.\n' +
   'Please try again in a few minutes.';
 
 /**
- * Pure key read — no side effects. Used by the parallel gate resolution in
- * onChat so the key lookup overlaps the admin/payment gate reads instead of
- * adding a serial DB round-trip. Fail-closed: null on error or no key.
+ * Pure config read — no side effects. Used by the parallel gate resolution in
+ * onChat so the provider lookup overlaps the admin/payment gate reads instead
+ * of adding a serial DB round-trip. Fail-closed: null on error or no key.
  */
-async function resolveGroqKey(ctx: AppCtx): Promise<string | null> {
+async function resolveAiConfig(ctx: AppCtx): Promise<AiRuntimeConfig | null> {
   const sessionUserId = ctx.native.userId ?? '';
   if (!sessionUserId) return null;
   try {
-    return await getUserGroqApiKey(sessionUserId);
+    return await getAiProviderConfig(sessionUserId);
   } catch {
     // Fail-closed — a DB error must not let the agent run keyless
     return null;
   }
 }
 
-async function resolveGroqKeyOrWarn(ctx: AppCtx): Promise<string | null> {
-  const apiKey = await resolveGroqKey(ctx);
-  if (!apiKey) {
+async function resolveAiConfigOrWarn(
+  ctx: AppCtx,
+): Promise<AiRuntimeConfig | null> {
+  const aiConfig = await resolveAiConfig(ctx);
+  if (!aiConfig) {
     await ctx.chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: NO_GROQ_KEY_MESSAGE,
+      message: NO_AI_KEY_MESSAGE,
     });
     return null;
   }
-  return apiKey;
+  return aiConfig;
 }
 
 // ── Payment eligibility (onChat path only) ───────────────────────────────────
@@ -287,14 +295,15 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
   const threadID = (ctx.event['threadID'] ?? '') as string;
 
-  // Per-user Groq key gate — reply with a notice and abort when the account has
-  // no key configured (AI features stay disabled until a valid key is provided).
-  const groqApiKey = await resolveGroqKeyOrWarn(ctx);
-  if (!groqApiKey) return;
+  // Per-user AI provider gate — reply with a notice and abort when the account
+  // has no key for the active provider (AI features stay disabled until a valid
+  // key is provided).
+  const aiConfig = await resolveAiConfigOrWarn(ctx);
+  if (!aiConfig) return;
 
   try {
     const result = await withThinkingIndicator(ctx, threadID, () =>
-      runAgent(prompt, ctx, nickname, userName, null, groqApiKey),
+      runAgent(prompt, ctx, nickname, userName, null, aiConfig),
     );
     if (result) {
       await ctx.chat.replyMessage({
@@ -306,7 +315,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     if (err instanceof AgentRateLimitError) {
       await ctx.chat.replyMessage({
         style: MessageStyle.MARKDOWN,
-        message: GROQ_RATE_LIMIT_MESSAGE,
+        message: AI_RATE_LIMIT_MESSAGE,
       });
       return;
     }
@@ -326,6 +335,32 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 export const onChat = async (ctx: AppCtx): Promise<void> => {
   const message = ((ctx.event['message'] as string | undefined) || '').trim();
   if (!message) return;
+
+  // ── Command-invocation guard ───────────────────────────────────────────────
+  // The onChat fan-out runs before prefix parsing for EVERY message, so a
+  // message that starts with the bot's command prefix (or invokes a registered
+  // prefix-less command) is owned by the command pipeline — including /ai
+  // itself, whose onCommand already runs the agent. Running this passive
+  // trigger as well would execute the agent TWICE (double cost, racing
+  // replies), and for any other command it would stack a full agent round trip
+  // on top of a manual-speed command. Skip command invocations entirely — this
+  // also saves the nickname/name DB lookups below for every command message.
+  const trimmedMessage = message.trim();
+  if (trimmedMessage.startsWith(ctx.prefix || '/')) return;
+  const firstToken = trimmedMessage.split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (firstToken) {
+    const firstMod = ctx.commands.get(firstToken);
+    const firstCfg = firstMod?.['meta'] as
+      | { hasPrefix?: boolean }
+      | undefined;
+    if (
+      firstMod &&
+      firstCfg?.hasPrefix === false &&
+      isPlatformAllowed(firstMod, ctx.native.platform)
+    ) {
+      return;
+    }
+  }
 
   // Resolve IDs synchronously — no await needed.
   const senderID = (ctx.event['senderID'] ??
@@ -373,7 +408,7 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   try {
     await withThinkingIndicator(ctx, threadID, async () => {
       // ── Parallel gate reads ───────────────────────────────────────────────
-      // Admin restriction, payment eligibility, and Groq key resolution are all
+      // Admin restriction, payment eligibility, and AI provider resolution are all
       // independent reads. Resolving them concurrently — instead of serially —
       // collapses the pre-agent chain to ~max(gate) latency instead of their
       // sum, matching the original Cat-Bot's time-to-first-LLM-call while still
@@ -383,9 +418,9 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
       const needsPayment =
         senderID !== '' && typeof paymentMeta === 'number' && paymentMeta > 0;
 
-      const [blockResult, apiKey, payment] = await Promise.all([
+      const [blockResult, aiConfig, payment] = await Promise.all([
         isBlockedByAdminRestrictions(ctx, senderID, threadID).catch(() => null),
-        resolveGroqKey(ctx),
+        resolveAiConfig(ctx),
         needsPayment
           ? resolvePaymentEligibility(ctx, senderID).catch(() => null)
           : Promise.resolve(null),
@@ -456,13 +491,13 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
         }
       }
 
-      // ── Per-user Groq key gate ─────────────────────────────────────────
-      // Resolve the account's own key; when absent, reply with a notice and
-      // abort so AI never runs keyless (or with another user's key).
-      if (!apiKey) {
+      // ── Per-user AI provider gate ──────────────────────────────────────
+      // Resolve the account's own provider config; when absent, reply with a
+      // notice and abort so AI never runs keyless (or with another user's key).
+      if (!aiConfig) {
         await ctx.chat.replyMessage({
           style: MessageStyle.MARKDOWN,
-          message: NO_GROQ_KEY_MESSAGE,
+          message: NO_AI_KEY_MESSAGE,
         });
         return;
       }
@@ -474,7 +509,7 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
         nickname,
         userName,
         undefined,
-        apiKey,
+        aiConfig,
       );
       if (result) {
         await ctx.chat.replyMessage({
@@ -500,14 +535,14 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
       if (cooldownStore.check(noticeKey, Date.now()) === null) {
         await ctx.chat.replyMessage({
           style: MessageStyle.MARKDOWN,
-          message: GROQ_RATE_LIMIT_MESSAGE,
+          message: AI_RATE_LIMIT_MESSAGE,
         });
         cooldownStore.record(noticeKey, Date.now(), 15_000);
       }
       return;
     }
     ctx.logger.error('[ai.ts] onChat agent execution failed', { error: err });
-    // Generic agent failure (transient Groq/network error, tool crash, etc.) — the
+    // Generic agent failure (transient provider/network error, tool crash, etc.) — the
     // user would otherwise get total silence and assume the bot is ignoring them.
     // Surface a brief, rate-limited error notice using the same pattern as the
     // rate-limit notice above.

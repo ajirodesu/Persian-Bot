@@ -288,13 +288,29 @@ CREATE TABLE IF NOT EXISTS system_admin (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Per-user AI provider config: groq keys in encrypted_key/key_hint, openrouter
+-- keys in openrouter_encrypted_key/openrouter_key_hint, the active provider, and
+-- each provider's remembered model.
 CREATE TABLE IF NOT EXISTS bot_user_groq_key (
-  user_id       TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
-  encrypted_key TEXT NOT NULL,
-  key_hint      TEXT NOT NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  user_id                  TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  encrypted_key            TEXT NOT NULL DEFAULT '',
+  key_hint                 TEXT NOT NULL DEFAULT '',
+  openrouter_encrypted_key TEXT,
+  openrouter_key_hint      TEXT,
+  provider                 TEXT DEFAULT 'groq',
+  groq_model               TEXT,
+  openrouter_model         TEXT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Idempotent column migration for pre-existing databases that predate the
+-- multi-provider feature.
+ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_encrypted_key TEXT;
+ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_key_hint TEXT;
+ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'groq';
+ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS groq_model TEXT;
+ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_model TEXT;
 
 -- Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
 -- Applied across the dashboard's time-based displays, logs, and bot-facing

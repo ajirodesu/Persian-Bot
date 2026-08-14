@@ -61,12 +61,15 @@ export const config = {
     'you can inspect it, then deliver via `send_result`; (2) DIRECT mode — pass ' +
     '`deliver: true` and each command runs against the real platform API and ' +
     'sends its own reply immediately, exactly like a manually typed command ' +
-    '(fastest, one tool call, no preview or replay needed). Use DIRECT mode for ' +
-    'straightforward command requests; use PREVIEW mode when you need to see the ' +
-    'output first or combine multiple commands into one reply. Always use the ' +
-    '`commands` array. In PREVIEW mode, when the combined output contains more ' +
-    'than one attachment, `button_key` is automatically null because platforms ' +
-    'cannot deliver multiple file attachments alongside interactive buttons.',
+    '(fastest, one tool call, no preview or replay needed). Each command sends ' +
+    'its own reply — after a successful direct execution do NOT call ' +
+    '`send_result` or add a closing message; the command reply is the answer. ' +
+    'Use DIRECT mode for straightforward command requests; use PREVIEW mode ' +
+    'when you need to see the output first or combine multiple commands into ' +
+    'one reply. Always use the `commands` array. In PREVIEW mode, when the ' +
+    'combined output contains more than one attachment, `button_key` is ' +
+    'automatically null because platforms cannot deliver multiple file ' +
+    'attachments alongside interactive buttons.',
   parameters: {
     type: 'object',
     properties: {
@@ -697,6 +700,12 @@ export const run = async (
         commandCtx.prefix,
       );
       executed.push(command);
+      // Flag for the agent loop: this command's own reply is already on the
+      // wire (identical to a manual command). runAgent ends the turn right
+      // after the tool batch instead of spending another LLM round trip on a
+      // closing message that would be suppressed anyway.
+      (ctx as unknown as Record<string, unknown>)['_agentDirectDelivered'] =
+        true;
     }
 
     if (executed.length === 0) {
@@ -709,8 +718,8 @@ export const run = async (
         ...(directErrors.length > 0 ? { errors: directErrors } : {}),
         note:
           'Each command ran with the real platform API and sent its own reply ' +
-          'directly — same as a manual command. Send a brief closing message ' +
-          'via send_result.',
+          'directly — same as a manual command. The reply is already delivered: ' +
+          'do NOT call send_result or send any additional message.',
       },
       null,
       2,

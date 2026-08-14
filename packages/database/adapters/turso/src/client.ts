@@ -95,15 +95,49 @@ export async function initDb(): Promise<void> {
   // Idempotent table that must exist even when the fast-path above returns early
   // (already-initialised databases would otherwise never receive new tables that
   // are added after their initial bootstrap). Run unconditionally before the guard.
+  //
+  // The table holds the per-user AI provider config: groq keys in
+  // encrypted_key/key_hint, openrouter keys in openrouter_encrypted_key/
+  // openrouter_key_hint, the active provider, and each provider's remembered
+  // model. New columns are nullable so pre-existing rows (and cross-adapter
+  // migrations from sources without the fields) stay insertable.
   await tursoClient.execute(`
     CREATE TABLE IF NOT EXISTS bot_user_groq_key (
-      user_id       TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
-      encrypted_key TEXT NOT NULL,
-      key_hint      TEXT NOT NULL,
-      created_at    TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
-      updated_at    TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      user_id                  TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+      encrypted_key            TEXT NOT NULL DEFAULT '',
+      key_hint                 TEXT NOT NULL DEFAULT '',
+      openrouter_encrypted_key TEXT,
+      openrouter_key_hint      TEXT,
+      provider                 TEXT DEFAULT 'groq',
+      groq_model               TEXT,
+      openrouter_model         TEXT,
+      created_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
   `);
+  // Idempotent column upgrade for pre-existing databases that predate the
+  // multi-provider feature — same PRAGMA introspection + ALTER TABLE ADD COLUMN
+  // pattern as bot_discord_channel below (SQLite has no ADD COLUMN IF NOT EXISTS).
+  const groqKeyCols = await tursoClient.execute(
+    `PRAGMA table_info(bot_user_groq_key)`,
+  );
+  const groqKeyColNames = new Set(
+    (groqKeyCols.rows as unknown as Array<{ name: string }>).map((r) => r.name),
+  );
+  const groqKeyNewCols: Array<[string, string]> = [
+    ['openrouter_encrypted_key', 'TEXT'],
+    ['openrouter_key_hint', 'TEXT'],
+    ['provider', "TEXT DEFAULT 'groq'"],
+    ['groq_model', 'TEXT'],
+    ['openrouter_model', 'TEXT'],
+  ];
+  for (const [colName, colDef] of groqKeyNewCols) {
+    if (!groqKeyColNames.has(colName)) {
+      await tursoClient.execute({
+        sql: `ALTER TABLE bot_user_groq_key ADD COLUMN ${colName} ${colDef}`,
+      });
+    }
+  }
 
   // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
   // Same idempotent-outside-the-fast-path pattern as bot_user_groq_key above, so

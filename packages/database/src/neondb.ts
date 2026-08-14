@@ -131,11 +131,12 @@ export {
   resetAllDatabase,
 } from '../adapters/neondb/src/server/system-admin.repo.js';
 
-// --- USER GROQ KEY ---
+// --- USER AI PROVIDER KEY ---
 export {
-  getUserGroqKey,
-  upsertUserGroqKey,
-  deleteUserGroqKey,
+  getUserAiConfig,
+  saveUserAiKey,
+  updateUserAiModel,
+  deleteUserAiKey,
 } from '../adapters/neondb/src/server/groq-key.repo.js';
 
 // --- USER TIMEZONE ---

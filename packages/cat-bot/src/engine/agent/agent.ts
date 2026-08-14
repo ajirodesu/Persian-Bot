@@ -17,7 +17,11 @@ import type { AgentTool } from '@/engine/agent/agent.util.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
-import { getUserGroqApiKey } from '@/engine/repos/groq-key.repo.js';
+import {
+  getAiProviderConfig,
+  type AiRuntimeConfig,
+} from '@/engine/repos/ai-provider.repo.js';
+import { AI_PROVIDERS } from '@/engine/repos/ai-provider.constants.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import {
   initAgentStatus,
@@ -40,25 +44,55 @@ const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
 );
 
 // ============================================================================
-// GROQ CLIENT FACTORY
+// AI CLIENT FACTORY
 // ============================================================================
-// Every AI request must use the *requesting user's own* Groq API key — the key is
-// resolved per invocation from the authenticated account id (see runAgent below)
-// and a fresh Groq client is built from it. There is deliberately NO process-wide
-// singleton here: the platform key (env GROQ_API_KEY) was previously shared by
-// every user, which violates the per-user ownership requirement. Building a client
-// per turn is negligible (the SDK client is a stateless config wrapper).
+// Every AI request must use the *requesting user's own* provider config — the
+// key is resolved per invocation from the authenticated account id (see
+// runAgent below) and a fresh client is built from it. There is deliberately NO
+// process-wide singleton here: a shared platform key would violate the
+// per-user ownership requirement. Building a client per turn is negligible (the
+// SDK client is a stateless config wrapper).
+//
+// Both providers (Groq, OpenRouter) speak the OpenAI-compatible chat API, so
+// the same groq-sdk client drives both — only the base URL differs.
 /** Maximum bot commands a non-system-admin user may request per agent invocation. */
 export const AGENT_COMMAND_LIMIT = 5;
 
-function createGroq(apiKey: string): Groq {
-  return new Groq({ apiKey });
+function createAiClient(provider: AiRuntimeConfig['provider'], apiKey: string): Groq {
+  const baseURL = AI_PROVIDERS[provider].baseURL;
+  // baseURL undefined → the SDK's default (Groq's own API root, which serves
+  // the API under /openai/v1/… — exactly what the SDK appends).
+  if (!baseURL) return new Groq({ apiKey });
+
+  // groq-sdk builds request URLs as `${baseURL}/openai/v1/<resource>` — correct
+  // for Groq (root https://api.groq.com), but wrong for OpenRouter: it serves
+  // the same OpenAI-compatible API directly at /api/v1/… with NO /openai/v1
+  // segment. Without this rewrite the SDK posts to
+  // https://openrouter.ai/api/v1/openai/v1/chat/completions and OpenRouter's
+  // website answers with an HTML 404 page — surfaced as `404 <!DOCTYPE html>…`
+  // — which broke EVERY agent message on OpenRouter. The wrapper strips the
+  // SDK-injected segment so requests hit the canonical endpoint
+  // (https://openrouter.ai/api/v1/chat/completions). Only used for providers
+  // with a custom baseURL (OpenRouter).
+  return new Groq({
+    apiKey,
+    baseURL,
+    fetch: (input, init) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      return fetch(url.replace('/openai/v1/', '/'), init);
+    },
+  });
 }
 
-// Hard ceiling for a single Groq completion — the SDK's own default is 10
+// Hard ceiling for a single model completion — the SDK's own default is 10
 // minutes, far too long for the model step of an agent turn. A stalled network
 // request must not pin the turn (and the user's typing indicator) indefinitely.
-const GROQ_REQUEST_TIMEOUT_MS = 90_000;
+const AI_REQUEST_TIMEOUT_MS = 90_000;
 
 // Ceiling for a single non-test_command tool call. test_command is exempt: it
 // self-limits with its own 10-minute race designed for long-running commands
@@ -95,20 +129,21 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 // ============================================================================
-// GROQ "json" TOOL-CALL QUIRK RECOVERY
+// PROVIDER "json" TOOL-CALL QUIRK RECOVERY
 // ============================================================================
-// Groq's openai/gpt-oss-120b occasionally emits a synthetic tool call literally
-// named "json" (instead of the real tool name) when it produces what looks like
-// a final structured answer — the model's Harmony-format "commentary/final json"
-// channel leaking through the OpenAI-compatible tool-calling shim. Groq validates
-// tool-call names SERVER-SIDE against the requested `tools` list and rejects the
-// *entire* completion with a 400 ("tool_use_failed") when the name doesn't match
-// — even though the arguments the model generated are a perfectly valid call to
-// one of our real tools. Because the rejection happens before the SDK returns a
-// normal response, we can't intercept it in the usual tool-dispatch loop below;
-// we have to catch the thrown error, recover the intended call from the error
+// Some provider models (observed on Groq's openai/gpt-oss-120b) occasionally
+// emit a synthetic tool call literally named "json" (instead of the real tool
+// name) when they produce what looks like a final structured answer — the
+// model's Harmony-format "commentary/final json" channel leaking through the
+// OpenAI-compatible tool-calling shim. The provider validates tool-call names
+// SERVER-SIDE against the requested `tools` list and rejects the *entire*
+// completion with a 400 ("tool_use_failed") when the name doesn't match — even
+// though the arguments the model generated are a perfectly valid call to one of
+// our real tools. Because the rejection happens before the SDK returns a normal
+// response, we can't intercept it in the usual tool-dispatch loop below; we
+// have to catch the thrown error, recover the intended call from the error
 // body's `failed_generation` field, and splice it back into the conversation as
-// if Groq had returned it normally.
+// if the provider had returned it normally.
 //
 // Only "json" → "send_result" is aliased for now: it's the only observed case,
 // and send_result is the sole tool whose argument shape (`message`, plus optional
@@ -124,10 +159,11 @@ interface RecoveredToolCall {
 }
 
 /**
- * Attempts to pull `{ name, arguments }` out of a Groq APIError's
+ * Attempts to pull `{ name, arguments }` out of an APIError's
  * `error.error.failed_generation` field (the raw JSON text the model produced
- * for the tool call Groq refused to accept). Returns null for any error shape
- * that doesn't match — callers should rethrow the original error in that case.
+ * for the tool call the provider refused to accept). Returns null for any error
+ * shape that doesn't match — callers should rethrow the original error in that
+ * case.
  */
 function extractFailedToolGeneration(err: unknown): RecoveredToolCall | null {
   const failedGeneration = (
@@ -160,7 +196,7 @@ function extractFailedToolGeneration(err: unknown): RecoveredToolCall | null {
 }
 
 /**
- * Thrown by runAgent when the account's Groq API key has exhausted its rate
+ * Thrown by runAgent when the account's AI provider key has exhausted its rate
  * limit (HTTP 429). Callers distinguish this from a generic AI failure so they
  * can surface a friendly rate-limit notice instead of a raw API error.
  */
@@ -172,7 +208,7 @@ export class AgentRateLimitError extends Error {
 }
 
 /**
- * Detects the SDK's rate-limit error type — or any Groq APIError with HTTP 429,
+ * Detects the SDK's rate-limit error type — or any APIError with HTTP 429,
  * so detection stays robust even if a duplicate copy of the SDK ends up bundled.
  */
 function isGroqRateLimitError(err: unknown): boolean {
@@ -263,11 +299,12 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
  * Runs the ReAct-style agent loop, resolving tool calls recursively until a
  * final text answer is produced or the turn limit is reached.
  *
- * The Groq API key is ALWAYS the calling user's own (resolved from the bot
- * session's account id). Callers that already resolved the key (e.g. the ai
- * command's friendly pre-flight check) can pass it via `groqApiKey` to avoid a
- * second DB read; when omitted it is resolved here. If the account has no key,
- * AI is disabled and a clear error is thrown.
+ * The AI config (provider + model + key) is ALWAYS the calling user's own
+ * (resolved from the bot session's account id). Callers that already resolved
+ * it (e.g. the ai command's friendly pre-flight check) can pass it via
+ * `aiConfig` to avoid a second DB read; when omitted it is resolved here. If
+ * the account has no key for the active provider, AI is disabled and a clear
+ * error is thrown.
  */
 export async function runAgent(
   userInput: string,
@@ -275,25 +312,25 @@ export async function runAgent(
   nickname?: string | null,
   userName?: string | null,
   systemPromptOverride?: string | null,
-  groqApiKey?: string | null,
+  aiConfig?: AiRuntimeConfig | null,
 ): Promise<string> {
-  // ── Per-user Groq API key ──────────────────────────────────────────────────
-  // AI requests must use the configured key of the account that owns the bot.
-  // No key → AI is disabled; the caller surfaces a friendly notice.
+  // ── Per-user AI provider config ────────────────────────────────────────────
+  // AI requests must use the configured provider + key of the account that owns
+  // the bot. No key → AI is disabled; the caller surfaces a friendly notice.
   const { senderID, threadID, sessionUserId, sessionId, platform } =
     resolveAgentContext(ctx);
 
-  let apiKey = groqApiKey ?? null;
-  if (!apiKey) {
-    apiKey = sessionUserId ? await getUserGroqApiKey(sessionUserId) : null;
+  let ai = aiConfig ?? null;
+  if (!ai) {
+    ai = sessionUserId ? await getAiProviderConfig(sessionUserId) : null;
   }
-  if (!apiKey) {
+  if (!ai) {
     throw new Error(
-      'AI is disabled — no Groq API key is configured for this account. ' +
-        'Add your key in Dashboard → Settings to enable AI.',
+      'AI is disabled — no AI provider key is configured for this account. ' +
+        'Add your Groq or OpenRouter key in Dashboard → Settings → AI Integration to enable AI.',
     );
   }
-  const groq = createGroq(apiKey);
+  const groq = createAiClient(ai.provider, ai.apiKey);
 
   // Live status ref, read by withThinkingIndicator's refresh loop so the
   // "bot is typing/thinking" signal reflects the agent's actual current
@@ -304,6 +341,11 @@ export async function runAgent(
   // image/video/audio here, send_result merges it automatically, and the
   // bare-text fallback below delivers it as a last resort.
   clearPendingMedia(ctx);
+
+  // Fresh per-turn direct-execution flag — set by test_command (deliver: true)
+  // once a command has sent its own reply; the loop short-circuits on it. Reset
+  // defensively so a reused ctx can never carry a stale flag into a new turn.
+  (ctx as unknown as Record<string, unknown>)['_agentDirectDelivered'] = false;
 
   // loadAgentTools() is idempotent and returns the cached list after the first call.
   // cachedGroqTools and cachedToolsMap are populated in the same call — safe to use directly.
@@ -455,17 +497,17 @@ export async function runAgent(
     try {
       response = await groq.chat.completions.create(
         {
-          model: 'openai/gpt-oss-120b',
+          model: ai.model,
           messages,
           tools: groqTools,
           tool_choice: 'auto',
         },
-        { timeout: GROQ_REQUEST_TIMEOUT_MS },
+        { timeout: AI_REQUEST_TIMEOUT_MS },
       );
     } catch (err) {
       if (isGroqRateLimitError(err)) {
         throw new AgentRateLimitError(
-          'Your Groq API key has reached its rate limit. ' +
+          'Your AI provider key has reached its rate limit. ' +
             'AI features are temporarily paused — wait a moment and try again.',
         );
       }
@@ -638,6 +680,20 @@ export async function runAgent(
           }`,
         });
       }
+    }
+
+    // ── Direct-execution short-circuit ───────────────────────────────────────
+    // test_command with `deliver: true` already sent each command's own reply
+    // to the thread — identical to a manually typed command. The model's
+    // typical follow-up "closing message" would cost an extra LLM round trip
+    // for text that would be suppressed anyway (delivered), so end the turn
+    // right here: the reply is already in front of the user at manual-command
+    // speed.
+    if (
+      (ctx as unknown as Record<string, unknown>)['_agentDirectDelivered'] ===
+      true
+    ) {
+      return '';
     }
   }
 

@@ -1,83 +1,112 @@
 /**
- * Groq Key Controller — per-user Groq API key management for the dashboard.
+ * AI Provider Controller — per-user AI provider configuration for the
+ * dashboard (AI Integration card).
  *
- * Owns the three endpoints that let a registered user configure the Groq API key
- * used exclusively by their own bots:
+ * Owns the three endpoints that let a registered user configure the LLM
+ * provider + model used exclusively by their own bots:
  *
- *   GET    /api/v1/settings/groq-key  → { hasKey, keyHint } (never the key itself)
- *   PUT    /api/v1/settings/groq-key  → validate + encrypt + store the key
- *   DELETE /api/v1/settings/groq-key  → remove the stored key
+ *   GET    /api/v1/settings/ai  → { provider, model, providers: {...}, models: {...} }
+ *   PUT    /api/v1/settings/ai  → body { provider, model?, apiKey? } — validate +
+ *                                 encrypt + store, switch provider/model
+ *   DELETE /api/v1/settings/ai  → body { provider } — remove that provider's key
  *
  * Auth model: the user's better-auth session (requireSession) — the returned
- * userId IS the account that owns every bot session, so the key is always scoped
- * to exactly one user and is never shared or reused across accounts.
+ * userId IS the account that owns every bot session, so the config is always
+ * scoped to exactly one user and is never shared or reused across accounts.
  */
 
 import type { Request, Response } from 'express';
 import { requireSession } from '@/server/validators/auth-session.validator.js';
 import {
-  getUserGroqKeyStatus,
-  saveUserGroqApiKey,
-  removeUserGroqApiKey,
-  getGroqKeyHint,
-  isValidGroqApiKey,
-} from '@/engine/repos/groq-key.repo.js';
+  getAiSettingsStatus,
+  saveUserAiConfig,
+  removeUserAiKey,
+  AiConfigError,
+  type SaveAiConfigPayload,
+} from '@/engine/repos/ai-provider.repo.js';
+import { isAiProviderId } from '@/engine/repos/ai-provider.constants.js';
 
-class GroqKeyController {
-  // GET /api/v1/settings/groq-key
+class AiProviderController {
+  // GET /api/v1/settings/ai
   async get(req: Request, res: Response): Promise<void> {
     const userId = await requireSession(req, res);
     if (!userId) return;
     try {
-      const status = await getUserGroqKeyStatus(userId);
-      res.json(status);
+      res.json(await getAiSettingsStatus(userId));
     } catch (err) {
-      console.error('[GroqKeyController.get]', err);
-      res.status(500).json({ error: 'Failed to load Groq key status' });
+      console.error('[AiProviderController.get]', err);
+      res.status(500).json({ error: 'Failed to load AI provider settings' });
     }
   }
 
-  // PUT /api/v1/settings/groq-key — body: { apiKey: string }
+  // PUT /api/v1/settings/ai — body: { provider, model?, apiKey? }
   async save(req: Request, res: Response): Promise<void> {
     const userId = await requireSession(req, res);
     if (!userId) return;
 
-    const apiKey = (req.body as { apiKey?: unknown } | undefined)?.apiKey;
-    if (typeof apiKey !== 'string' || !apiKey.trim()) {
-      res.status(400).json({ error: 'apiKey is required' });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const provider = body['provider'];
+    if (!isAiProviderId(provider)) {
+      res.status(400).json({ error: 'provider is required' });
+      return;
+    }
+    if (
+      body['model'] !== undefined &&
+      typeof body['model'] !== 'string'
+    ) {
+      res.status(400).json({ error: 'model must be a string' });
+      return;
+    }
+    if (
+      body['apiKey'] !== undefined &&
+      typeof body['apiKey'] !== 'string'
+    ) {
+      res.status(400).json({ error: 'apiKey must be a string' });
       return;
     }
 
-    const trimmed = apiKey.trim();
-    if (!isValidGroqApiKey(trimmed)) {
-      res.status(400).json({
-        error:
-          'Invalid Groq API key. Keys start with "gsk_" and are at least 20 characters long.',
-      });
-      return;
+    const payload: SaveAiConfigPayload = { provider };
+    if (body['model'] !== undefined) {
+      payload.model = body['model'] as string;
+    }
+    if (body['apiKey'] !== undefined) {
+      payload.apiKey = body['apiKey'] as string;
     }
 
     try {
-      await saveUserGroqApiKey(userId, trimmed);
-      res.json({ hasKey: true, keyHint: getGroqKeyHint(trimmed) });
+      res.json(await saveUserAiConfig(userId, payload));
     } catch (err) {
-      console.error('[GroqKeyController.save]', err);
-      res.status(500).json({ error: 'Failed to save Groq API key' });
+      if (err instanceof AiConfigError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      console.error('[AiProviderController.save]', err);
+      res.status(500).json({ error: 'Failed to save AI provider settings' });
     }
   }
 
-  // DELETE /api/v1/settings/groq-key
+  // DELETE /api/v1/settings/ai — body: { provider }
   async remove(req: Request, res: Response): Promise<void> {
     const userId = await requireSession(req, res);
     if (!userId) return;
+
+    const provider = (req.body as { provider?: unknown } | undefined)?.provider;
+    if (!isAiProviderId(provider)) {
+      res.status(400).json({ error: 'provider is required' });
+      return;
+    }
+
     try {
-      await removeUserGroqApiKey(userId);
-      res.json({ hasKey: false, keyHint: null });
+      res.json(await removeUserAiKey(userId, provider));
     } catch (err) {
-      console.error('[GroqKeyController.remove]', err);
-      res.status(500).json({ error: 'Failed to remove Groq API key' });
+      if (err instanceof AiConfigError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      console.error('[AiProviderController.remove]', err);
+      res.status(500).json({ error: 'Failed to remove AI provider key' });
     }
   }
 }
 
-export const groqKeyController = new GroqKeyController();
+export const aiProviderController = new AiProviderController();
