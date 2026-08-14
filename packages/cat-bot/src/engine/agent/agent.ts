@@ -261,9 +261,9 @@ export async function runAgent(
   // action instead of a generic placeholder for the whole turn.
   initAgentStatus(ctx);
 
-  // Fresh per-turn media accumulator — test_command/generate_image push
-  // captured image/video/audio here, send_result merges it automatically, and
-  // the bare-text fallback below delivers it as a last resort.
+  // Fresh per-turn media accumulator — test_command pushes captured
+  // image/video/audio here, send_result merges it automatically, and the
+  // bare-text fallback below delivers it as a last resort.
   clearPendingMedia(ctx);
 
   // loadAgentTools() is idempotent and returns the cached list after the first call.
@@ -387,8 +387,8 @@ export async function runAgent(
 
   // Surface attached media to the model: when the user's message carries an
   // image (or replies to one), append a short note so the agent knows it can
-  // transform it (generate_image auto-detects the URL — the note carries
-  // metadata only, never token-bearing CDN URLs).
+  // process it via image commands (the note carries metadata only, never
+  // token-bearing CDN URLs).
   const mediaContext = describeUserMedia(ctx.event);
   const userContent = mediaContext
     ? `${userInput}\n\n${mediaContext}`
@@ -519,10 +519,10 @@ export async function runAgent(
       // collapses those to the real value so the user never sees raw JSON.
       const text = extractHumanText(message.content) ?? '';
       // Safety net: the model finished with bare text while media was captured
-      // this turn (test_command/generate_image) but send_result was never
-      // called. Deliver the text together with the media so a requested image
-      // or video is NEVER answered with text only. Returns '' once delivered
-      // so ai.ts's `if (result)` guard skips the duplicate text reply.
+      // this turn (test_command) but send_result was never called. Deliver the
+      // text together with the media so a requested image or video is NEVER
+      // answered with text only. Returns '' once delivered so ai.ts's
+      // `if (result)` guard skips the duplicate text reply.
       const pending = getPendingMedia(ctx);
       if (
         text &&

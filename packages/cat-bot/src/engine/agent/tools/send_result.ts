@@ -139,10 +139,10 @@ export const run = async (
     ? (args['attachment'] as string[])
     : undefined;
 
-  // Media captured this turn by test_command / generate_image. When the model
-  // omits a key category, the captured media is merged in automatically — a
-  // requested image/video is delivered with the reply regardless of model
-  // adherence, never dropped into a text-only answer.
+  // Media captured this turn by test_command. When the model omits a key
+  // category, the captured media is merged in automatically — a requested
+  // image/video is delivered with the reply regardless of model adherence,
+  // never dropped into a text-only answer.
   const pending = getPendingMedia(ctx);
   const hasUrlKeys = (attachment_url ?? []).length > 0;
   const hasBinaryKeys = (attachment ?? []).length > 0;

@@ -387,19 +387,6 @@ export const run = async (
           continue;
         }
 
-        // AI Image category commands are owned exclusively by the generate_image
-        // tool. Running them here would (a) trigger the real image fetch inside
-        // the command and (b) compete with generate_image's captured-media
-        // delivery — the same request could generate twice or deliver two
-        // images. Redirect instead of executing, so the two paths never conflict.
-        const cmdMeta = mod['meta'] as Record<string, unknown> | undefined;
-        if (cmdMeta?.['category'] === 'AI Image') {
-          errors.push(
-            `Command '${command}' is an AI Image command — call the 'generate_image' tool (with the image prompt) instead of test_command.`,
-          );
-          continue;
-        }
-
         const simulatedMessage =
           `${ctx.prefix || '/'}${command} ${(args || []).join(' ')}`.trim();
         const simulatedEvent = {
@@ -568,9 +555,8 @@ export const run = async (
           button_key: buttonKey,
           callCount: storableCalls.length,
           calls: llmCalls,
-          // Blocked/redirected commands stay visible even when other commands
-          // produced calls — the model must see them to act (e.g. reroute an
-          // AI Image request to generate_image) instead of assuming success.
+          // Blocked/skipped commands stay visible even when other commands
+          // produced calls — the model must see them instead of assuming success.
           ...(errors.length > 0 ? { errors } : {}),
           ...(trimNote ? { limit_warning: trimNote } : {}),
           note:

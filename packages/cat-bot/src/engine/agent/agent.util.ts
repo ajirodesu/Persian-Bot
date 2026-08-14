@@ -103,9 +103,10 @@ export function extractEventImageUrls(
  * triggering message. Returns '' when nothing is attached.
  *
  * Deliberately includes NO URLs — Telegram CDN links embed the bot token, and
- * the model never needs them: generate_image resolves the attached image itself
- * (extractEventImageUrls). Media metadata only reaches the prompt, keeping
- * token-bearing URLs out of the LLM conversation entirely.
+ * the model never needs them: the media commands resolve the attached image
+ * from the event themselves (extractEventImageUrls exists for the agent's own
+ * inspection). Media metadata only reaches the prompt, keeping token-bearing
+ * URLs out of the LLM conversation entirely.
  */
 export function describeUserMedia(event: Record<string, unknown>): string {
   const images = extractEventImageUrls(event);
@@ -116,10 +117,9 @@ export function describeUserMedia(event: Record<string, unknown>): string {
   return (
     `📎 The user attached ${images.length === 1 ? 'an image' : `${images.length} images`} to this message:\n` +
     lines +
-    '\nYou can transform or edit the attached image by calling `generate_image` ' +
-    '(omit `image_url` — the attached image is detected automatically; AI Image ' +
-    'commands such as nanobanana are handled by generate_image, never ' +
-    'test_command). For upscaling/HD enhancement use `hd` via `test_command`.'
+    '\nYou can process the attached image by running an image command via ' +
+    '`test_command` — e.g. `nanobanana` (restyle) or `hd` (upscale) — then ' +
+    'deliver the result with `send_result`.'
   );
 }
 
@@ -127,9 +127,9 @@ export function describeUserMedia(event: Record<string, unknown>): string {
 
 /**
  * Media captured by agent tools during the current turn, awaiting delivery.
- * test_command and generate_image push into it; send_result merges it
- * automatically (and the agent loop's bare-text fallback delivers it too), so
- * a requested image/video is ALWAYS delivered even when the model forgets the
+ * test_command pushes into it; send_result merges it automatically (and the
+ * agent loop's bare-text fallback delivers it too), so a requested
+ * image/video/audio is ALWAYS delivered even when the model forgets the
  * attachment keys. Attached to ctx, so it dies with the invocation.
  */
 export interface PendingAgentMedia {

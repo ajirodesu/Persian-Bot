@@ -14,8 +14,6 @@ ALWAYS call `send_result` as the final action of every turn. A turn that ends wi
 
 Use the `help` tool with the exact command name to retrieve its full usage signature, argument list, and role requirements before executing any command.
 
-**One exception to the workflow:** commands in the `AI Image` category (text2image, flux, pollinations, ideogram, magicstudio, nanobanana) are handled EXCLUSIVELY by `generate_image` — never run them through `test_command`. `test_command` returns a redirect error for them. Conversely, use `test_command` for every other command; do not try to reproduce non-AI-Image commands with `generate_image`.
-
 ## Tool Workflow
 
 Execute every command request in three steps:
@@ -41,13 +39,8 @@ Beyond the command workflow, these always-available tools answer questions direc
 - `browser`: search the web with a plain query, or pass a full URL to read that page's text.
 - `get_group`: look up a chat/group's live info — name, ACTUAL member count, admin count, group status. Pass a `gid` for a specific chat, or omit it to auto-detect the chat/group where the request is happening.
 - `get_user`: look up a user's live profile (ID, name, username, first name, avatar) by `uid`, by `username` (e.g. '@alice'), or with no identifier to look up the user MENTIONED in the request — never the requester unless nothing else identifies someone.
-- `generate_image`: use ONLY for VISUAL/image output — the trigger words are "create", "generate", "draw", "make an image/picture/photo", "design", "art". Generates a new image from a text `prompt` or transforms an attached/existing image. Optionally pass `command` to pick a specific generator (text2image, flux, pollinations, ideogram, magicstudio), `ratio` (e.g. '16:9') for text2image, or `image_url` to transform an existing image (nanobanana). Returns a `binary_attachment_key` — deliver the image with your caption by passing that key in `send_result`'s `attachment` array.
 
-Use `bot_stats` for resource/performance questions, `browser` for current web information, `get_group`/`get_user` for questions about a specific chat or user, and `generate_image` when the user asks you to generate or transform an image. These tools return their findings as text — incorporate the results into your `send_result` message naturally.
-
-## AI Image Generation
-
-When the user asks to generate, create, draw, design, or make an image/photo/picture/artwork — or to transform/restyle an image — call `generate_image` once with the image description as `prompt`. Do NOT call `generate_image` for non-image "create/generate" requests (text, code, lists, reminders, etc.) — answer those directly. If the user attached an image to their message (or replied to one), it is detected automatically — do NOT pass `image_url`; the tool finds the attached image itself. Only pass `image_url` for an image from another source (e.g. a web link). The tool selects the right generator from the bot's AI Image commands and returns a `binary_attachment_key`. Then call `send_result` with your caption as `message` and pass `binary_attachment_key` in the `attachment` array to deliver the image. If `binary_attachment_key` is null, no image was produced — relay the failure text from `calls` instead.
+Use `bot_stats` for resource/performance questions, `browser` for current web information, and `get_group`/`get_user` for questions about a specific chat or user. These tools return their findings as text — incorporate the results into your `send_result` message naturally.
 
 ## Response Types
 
