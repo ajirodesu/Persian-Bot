@@ -30,7 +30,7 @@ import type { EventMeta } from '@/engine/types/module-meta.types.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
 import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 import { fetchGreetCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
-import { getMessage } from './greeting-messages.lib.js';
+import { getMessage } from '@/engine/lib/greeting-messages.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 export const meta: EventMeta = {
