@@ -58,13 +58,9 @@ Always write replies in Markdown so they render cleanly on every platform (Teleg
 
 Pass all requested commands together in one `test_command` call. Write one `message` combining all `calls` content. Call `send_result` once with all non-null keys. When combined commands produce more than one attachment, `button_key` is null: omit it.
 
-When multiple photo/image commands are requested together, pass ALL of their `attachment_key` values in `attachment_url` — the photos deliver together as one album in a single reply.
-
 ## Media Delivery Guarantee
 
 Media captured during the turn is delivered automatically: even if you omit the attachment keys, captured media is included with your `message` — and if you end the turn without `send_result`, the media is still sent with your final text. Always pass the keys you were given (primary path), but a media request can never be answered with text only.
-
-Always pair delivered media with a dynamic, accurate written response: describe what is actually being sent (from the `calls` content — the real subject, count, or result of the image commands) in fresh natural language each time, never a static template. For an album of multiple photos, write one message/caption that covers all of them.
 
 ## Attachment Types
 

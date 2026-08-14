@@ -56,8 +56,9 @@ export const config = {
     'Deliver the user-facing reply: your synthesized `message` plus URL attachments ' +
     '(`attachment_url`) and buttons (`button`) captured by test_command. Write ' +
     '`message` from the `calls` content — do not copy raw command output. Pass ' +
-    'non-null keys from test_command; all entries merge into one platform reply. ' +
-    'Call once after running the needed test_command calls; each key is single-use.',
+    'non-null keys from test_command; all entries merge into one platform reply ' +
+    '(multiple photos deliver together as one album). Call once after running ' +
+    'the needed test_command calls; each key is single-use.',
   parameters: {
     type: 'object',
     properties: {
@@ -67,7 +68,10 @@ export const config = {
         type: ['string', 'null'],
         description:
           'Your synthesized reply text, written from the `calls` content returned by ' +
-          'test_command (not raw command output). This is the primary text the user sees.',
+          'test_command (not raw command output). Describe the actual media being ' +
+          'delivered (real subject/count) dynamically and accurately in fresh natural ' +
+          'language — never a static template; for an album of photos one caption ' +
+          'covers all of them. This is the primary text the user sees.',
       },
       attachment_url: {
         type: ['array', 'null'],

@@ -64,7 +64,9 @@ export const config = {
     '`send_result` or add a closing message, the command reply is the answer. ' +
     'Use DIRECT for straightforward requests; PREVIEW to inspect output or combine ' +
     'multiple commands into one reply. Always use the `commands` array. In PREVIEW ' +
-    'mode, `button_key` is null when the combined output has more than one attachment.',
+    'mode, `button_key` is null when the combined output has more than one attachment; ' +
+    'when combining multiple photo/image commands, return ALL their attachment keys so ' +
+    'they deliver together as one photo album.',
   parameters: {
     type: 'object',
     properties: {
