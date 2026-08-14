@@ -53,13 +53,11 @@ import type { BinaryAttachment } from '../lib/command-result-store.lib.js';
 export const config = {
   name: 'send_result',
   description:
-    'Deliver a unified reply to the user combining your synthesized message text with ' +
-    'URL attachments (attachment_url) and button grids captured by one or more test_command calls. ' +
-    'Write the `message` yourself based on the `calls` content returned by test_command. ' +
-    'Pass any non-null `attachment_key` values in `attachment_url` and any non-null ' +
-    '`button_key` values in `button` — all entries are merged into a single platform reply. ' +
-    'Run all needed test_command calls before calling this tool once to combine results. ' +
-    'Each key is single-use and is deleted after delivery.',
+    'Deliver the user-facing reply: your synthesized `message` plus URL attachments ' +
+    '(`attachment_url`) and buttons (`button`) captured by test_command. Write ' +
+    '`message` from the `calls` content — do not copy raw command output. Pass ' +
+    'non-null keys from test_command; all entries merge into one platform reply. ' +
+    'Call once after running the needed test_command calls; each key is single-use.',
   parameters: {
     type: 'object',
     properties: {
@@ -68,36 +66,30 @@ export const config = {
         // (400 tool_use_failed) when the model passes null.
         type: ['string', 'null'],
         description:
-          'Your synthesized reply text. Write this yourself based on the `calls` ' +
-          'text returned by test_command — do not copy raw command output verbatim. ' +
-          'This is the primary text the user will see.',
+          'Your synthesized reply text, written from the `calls` content returned by ' +
+          'test_command (not raw command output). This is the primary text the user sees.',
       },
       attachment_url: {
         type: ['array', 'null'],
         items: { type: 'string' },
         description:
-          'Optional list of `attachment_key` values returned by test_command (the ' +
-          '`attachment_key` field, not the main `key`). URL-based file attachments from ' +
-          'all provided keys are merged into the single reply. Omit or pass [] when ' +
-          'no commands produced attachments.',
+          'Optional `attachment_key` values from test_command (the `attachment_key` ' +
+          'field, not `key`). Their URL attachments merge into the reply. Omit or [] ' +
+          'when none.',
       },
       attachment: {
         type: ['array', 'null'],
         items: { type: 'string' },
         description:
-          'Optional list of `binary_attachment_key` values returned by test_command. ' +
-          'Buffer-based file attachments (e.g. raw images from commands like /cat) from ' +
-          'all provided keys are merged into the single reply. Omit or pass [] when ' +
-          'no commands produced binary attachments.',
+          'Optional `binary_attachment_key` values from test_command. Their buffer ' +
+          'attachments (e.g. raw images) merge into the reply. Omit or [] when none.',
       },
       button: {
         type: ['array', 'null'],
         items: { type: 'string' },
         description:
-          'Optional list of `button_key` values returned by test_command (the ' +
-          '`button_key` field, not the main `key`). Button rows from all provided ' +
-          'keys are stacked into one combined keyboard layout. Omit or pass [] when ' +
-          'no commands produced buttons.',
+          'Optional `button_key` values from test_command (the `button_key` field, ' +
+          'not `key`). Their button rows stack into one keyboard. Omit or [] when none.',
       },
     },
     required: ['message'],

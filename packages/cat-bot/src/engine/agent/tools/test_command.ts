@@ -56,20 +56,15 @@ const EXECUTION_TIMEOUT_MS = 10 * 60 * 1_000;
 export const config = {
   name: 'test_command',
   description:
-    'Execute bot commands. Two modes: (1) default PREVIEW mode — commands run ' +
-    'silently and their output is intercepted and returned as `key`/`calls` so ' +
-    'you can inspect it, then deliver via `send_result`; (2) DIRECT mode — pass ' +
-    '`deliver: true` and each command runs against the real platform API and ' +
-    'sends its own reply immediately, exactly like a manually typed command ' +
-    '(fastest, one tool call, no preview or replay needed). Each command sends ' +
-    'its own reply — after a successful direct execution do NOT call ' +
-    '`send_result` or add a closing message; the command reply is the answer. ' +
-    'Use DIRECT mode for straightforward command requests; use PREVIEW mode ' +
-    'when you need to see the output first or combine multiple commands into ' +
-    'one reply. Always use the `commands` array. In PREVIEW mode, when the ' +
-    'combined output contains more than one attachment, `button_key` is ' +
-    'automatically null because platforms cannot deliver multiple file ' +
-    'attachments alongside interactive buttons.',
+    'Execute bot commands. PREVIEW mode (default): commands run silently and their ' +
+    'output is intercepted and returned as `key`/`calls` for inspection, then ' +
+    'delivered via `send_result`. DIRECT mode (`deliver: true`): commands run against ' +
+    'the real platform API and send their own reply immediately, like a manually ' +
+    'typed command — fastest, one call, no preview/replay; after success do NOT call ' +
+    '`send_result` or add a closing message, the command reply is the answer. ' +
+    'Use DIRECT for straightforward requests; PREVIEW to inspect output or combine ' +
+    'multiple commands into one reply. Always use the `commands` array. In PREVIEW ' +
+    'mode, `button_key` is null when the combined output has more than one attachment.',
   parameters: {
     type: 'object',
     properties: {
@@ -95,10 +90,8 @@ export const config = {
       deliver: {
         type: ['boolean', 'null'],
         description:
-          'Optional. When true, commands execute against the real platform API ' +
-          'and send their own replies directly (manual-command speed, single ' +
-          'call). When false or omitted, outputs are intercepted for preview ' +
-          'and delivered later via send_result.',
+          'Optional. `true` = run commands directly (they send their own replies). ' +
+          '`false`/omitted = intercept output for preview, deliver via send_result.',
       },
     },
     required: ['commands'],

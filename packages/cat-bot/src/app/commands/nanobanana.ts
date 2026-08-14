@@ -99,18 +99,11 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
       url: imageUrl,
       prompt,
     });
-    const response = await fetch(url);
-    if (!response.ok)
-      throw new Error(`Nano Banana API responded with status ${response.status}`);
-
-    const arrayBuffer = await response.arrayBuffer();
-    if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
-    const image = Buffer.from(arrayBuffer);
 
     await ctx.chat.replyMessage({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}`,
-      attachment: [{ name: 'nanobanana.png', stream: image }],
+      attachment_url: [{ name: 'nanobanana.png', url }],
     });
   } catch (err) {
     const error = err as { message?: string };

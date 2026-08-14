@@ -17,6 +17,7 @@ import {
   deliverAgentMedia,
 } from '@/engine/agent/agent.util.js';
 import type { AgentTool } from '@/engine/agent/agent.util.js';
+import { createAgentMcpSession } from '@/engine/agent/agent-mcp.lib.js';
 import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
@@ -123,7 +124,7 @@ const AI_MAX_TOKENS = 2048;
 // Tool results are fed straight back into the next model call — a huge result
 // (browser dump, help wall) bloats input tokens and slows the next completion.
 // Truncate aggressively so the model still gets the essential payload quickly.
-const MAX_TOOL_RESULT_CHARS = 4000;
+const MAX_TOOL_RESULT_CHARS = 2000;
 
 function truncateToolResult(value: string): string {
   if (value.length <= MAX_TOOL_RESULT_CHARS) return value;
@@ -328,10 +329,6 @@ function isAiRateLimitError(err: unknown): boolean {
 type ChatTool = Groq.Chat.Completions.ChatCompletionTool;
 
 let cachedTools: AgentTool[] | null = null;
-/** Pre-built OpenAI-compatible tool descriptors — derived once from cachedTools. */
-let cachedChatTools: ChatTool[] | null = null;
-/** O(1) name→tool lookup — replaces the O(n) Array.find() on every tool call. */
-let cachedToolsMap: Map<string, AgentTool> | null = null;
 
 // ============================================================================
 // COMMAND LIST CACHE
@@ -356,8 +353,6 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
 
   if (!fs.existsSync(dir)) {
     cachedTools = [];
-    cachedChatTools = [];
-    cachedToolsMap = new Map();
     return cachedTools;
   }
 
@@ -382,17 +377,6 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
   }
 
   cachedTools = tools;
-  // Derive O(1) lookup map and pre-built OpenAI-compatible descriptors once,
-  // reuse forever.
-  cachedToolsMap = new Map(tools.map((t) => [t.config.name, t]));
-  cachedChatTools = tools.map((t) => ({
-    type: 'function' as const,
-    function: {
-      name: t.config.name,
-      description: t.config.description,
-      parameters: t.config.parameters,
-    },
-  }));
   return cachedTools;
 }
 
@@ -456,13 +440,41 @@ export async function runAgent(
   // the bare-text fallback can never leak a second message.
   (ctx as unknown as Record<string, unknown>)['_agentReplyDelivered'] = false;
 
-  // loadAgentTools() is idempotent and returns the cached list after the first call.
-  // cachedChatTools and cachedToolsMap are populated in the same call — safe to use directly.
-  await loadAgentTools();
-  if (!cachedChatTools) {
+// loadAgentTools() is idempotent and returns the cached list after the first
+  // call. The tools are exposed through an in-process MCP server bound to THIS
+  // ctx, and the agent reaches them over MCP: tools/list → OpenAI-compatible
+  // descriptors, tools/call → execution. A fresh session per run keeps the
+  // per-invocation AppCtx (sender/thread/session, delivery flags) from leaking
+  // across turns; the in-memory transport holds no open resources, so the pair
+  // is garbage-collected when the turn ends.
+  const tools = await loadAgentTools();
+  if (tools.length === 0) {
     throw new Error('Agent tools failed to load — AI is unavailable.');
   }
-  const chatTools = cachedChatTools;
+  const mcp = await createAgentMcpSession(tools, ctx);
+  const listedTools = await mcp.listTools();
+  const chatTools: ChatTool[] = listedTools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+  // O(1) existence check for tool names — the MCP server resolves a missing
+  // tool into an error result, but the loop wants to short-circuit before the
+  // round trip.
+  const toolNames = new Set(listedTools.map((t) => t.name));
+  // Runs a tool through MCP with the same timeout contract as the direct path:
+  // test_command self-limits with its own 10-minute race; every other tool is
+  // capped so a hung network/DB call can never pin the agent loop.
+  const runMcpTool = (
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<string> =>
+    name === 'test_command'
+      ? mcp.callTool(name, args)
+      : withTimeout(mcp.callTool(name, args), TOOL_TIMEOUT_MS, name);
 
   // ── Role + exemption checks (parallel) ─────────────────────────────────────
   // isBotAdmin (role label + command-limit exemption), isSystemAdmin (limit
@@ -640,8 +652,8 @@ export async function runAgent(
         ? (TOOL_NAME_ALIASES[recovered.name] ?? recovered.name)
         : undefined;
       const recoveredTool = recoveredName
-        ? cachedToolsMap!.get(recoveredName)
-        : undefined;
+        ? toolNames.has(recoveredName)
+        : false;
 
       if (!recovered || !recoveredName || !recoveredTool) {
         // No tool matches the recovered name — nothing to recover, surface the
@@ -674,18 +686,11 @@ export async function runAgent(
       setAgentStatus(ctx, describeToolStatus(recoveredName, args));
       try {
         // Same per-tool timeout as the normal dispatch path below.
-        const result =
-          recoveredName === 'test_command'
-            ? await recoveredTool.run(args, ctx)
-            : await withTimeout(
-                Promise.resolve(recoveredTool.run(args, ctx)),
-                TOOL_TIMEOUT_MS,
-                recoveredName,
-              );
+        const result = await runMcpTool(recoveredName, args);
         messages.push({
           role: 'tool',
           tool_call_id: syntheticId,
-          content: truncateToolResult(String(result)),
+          content: truncateToolResult(result),
         });
       } catch (toolErr) {
         messages.push({
@@ -757,9 +762,7 @@ export async function runAgent(
     // 🔧 TOOL EXECUTION
     // =========================
     for (const toolCall of message.tool_calls) {
-      const tool = cachedToolsMap!.get(toolCall.function.name);
-
-      if (!tool) {
+      if (!toolNames.has(toolCall.function.name)) {
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
@@ -780,24 +783,18 @@ export async function runAgent(
       setAgentStatus(ctx, describeToolStatus(toolCall.function.name, args));
 
       try {
-        // Execute dynamic tool passing the requested args and the application context.
-        // test_command self-limits with its own 10-minute race; every other tool is
-        // capped so a hung network/DB call can never pin the agent loop.
-        const result =
-          toolCall.function.name === 'test_command'
-            ? await tool.run(args, ctx)
-            : await withTimeout(
-                Promise.resolve(tool.run(args, ctx)),
-                TOOL_TIMEOUT_MS,
-                toolCall.function.name,
-              );
+        // Execute the tool over MCP with the requested args (bound to this
+        // turn's ctx server-side). test_command self-limits with its own
+        // 10-minute race; every other tool is capped so a hung network/DB call
+        // can never pin the agent loop.
+        const result = await runMcpTool(toolCall.function.name, args);
         // send_result marks ctx._agentReplyDelivered itself on success (and
         // test_command sets _agentDirectDelivered for direct execution), so the
         // delivery flags stay consistent regardless of which dispatch path ran.
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: truncateToolResult(String(result)),
+          content: truncateToolResult(result),
         });
       } catch (err) {
         messages.push({
