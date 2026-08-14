@@ -251,7 +251,7 @@ export async function saveUserAiConfig(
   const apiKey = typeof payload.apiKey === 'string' ? payload.apiKey.trim() : '';
 
   // Provider auto-detection: when a key is present, its format identifies the
-  // provider (`gsk_` → Groq, `sk-or-v1-` → OpenRouter) and wins over the
+  // provider (`sk-or-v1-` → OpenRouter, `gsk_` → Groq) and wins over the
   // submitted provider. A malformed key falls back to the submitted provider
   // so the validation below reports a useful format error.
   let provider: AiProviderId | null = isAiProviderId(payload.provider)
@@ -354,13 +354,13 @@ export async function removeUserAiKey(
 // ============================================================================
 
 function providerOf(value: string | undefined): AiProviderId {
-  return isAiProviderId(value) ? value : 'groq';
+  return isAiProviderId(value) ? value : 'openrouter';
 }
 
 function buildEmptyStatus(): AiSettingsStatus {
   return {
-    provider: 'groq',
-    model: AI_PROVIDERS.groq.defaultModel,
+    provider: 'openrouter',
+    model: AI_PROVIDERS.openrouter.defaultModel,
     groqModel: AI_PROVIDERS.groq.defaultModel,
     openrouterModel: AI_PROVIDERS.openrouter.defaultModel,
     providers: {

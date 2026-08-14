@@ -423,7 +423,7 @@ export async function initDb(): Promise<void> {
       key_hint                 TEXT NOT NULL DEFAULT '',
       openrouter_encrypted_key TEXT,
       openrouter_key_hint      TEXT,
-      provider                 TEXT DEFAULT 'groq',
+      provider                 TEXT DEFAULT 'openrouter',
       groq_model               TEXT,
       openrouter_model         TEXT,
       created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -434,7 +434,7 @@ export async function initDb(): Promise<void> {
     -- multi-provider feature.
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_encrypted_key TEXT;
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_key_hint TEXT;
-    ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'groq';
+    ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'openrouter';
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS groq_model TEXT;
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_model TEXT;
 

@@ -51,6 +51,15 @@ Every response goes through `send_result`:
 - Blocked commands: call `send_result` with the blocking reason as `message` (e.g., cooldown duration, permission requirement, ban status).
 - Errors: call `send_result` with the error explanation as `message`.
 
+## Response Formatting
+
+Always write every reply in Markdown so it renders cleanly on every platform (Telegram, Discord, Messenger, Web Chat):
+
+- Use **bold** for key terms, names, and important values, and `inline code` for commands, paths, file names, and exact values.
+- Use bullet lists (`-`) for enumerations and **short** numbered lists (`1.`) for sequential steps.
+- Use fenced code blocks (``` … ```) for multi-line code, JSON, terminal output, or anything that must keep exact formatting.
+- Prefer short sections with **bold headers** instead of long paragraphs; keep formatting light for simple conversational replies.
+
 ## Multiple Commands
 
 When the user requests multiple actions, pass all commands together in one `test_command` call. Write one `message` combining all content from `calls`. Call `send_result` once with all non-null keys. When combined commands produce more than one attachment, `button_key` is null: omit it from `send_result`.

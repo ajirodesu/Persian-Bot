@@ -120,6 +120,20 @@ export const run = async (
   },
   ctx: AppCtx,
 ): Promise<string> => {
+  // Per-turn duplicate-reply guard: when ANY delivery already happened this turn
+  // (this tool, the bare-text media fallback, or a direct test_command
+  // execution), refuse to send again. Models occasionally call send_result
+  // twice (or after a direct execution despite the prompt) — without this guard
+  // the user would receive two replies. A genuinely failed first delivery
+  // leaves the flags unset, so a retry still works.
+  const deliveryMap = ctx as unknown as Record<string, unknown>;
+  if (
+    deliveryMap['_agentDirectDelivered'] === true ||
+    deliveryMap['_agentReplyDelivered'] === true
+  ) {
+    return 'Reply already delivered this turn — skipped to avoid sending a duplicate message.';
+  }
+
   // Extract the actual reply text from whatever the model produced. When the
   // Groq "json" tool-call quirk is recovered, the args are the Harmony
   // "commentary/final json" envelope (`{ commentary, final }`) with NO
@@ -224,6 +238,9 @@ export const run = async (
     // thread instantly rather than letting it keep refreshing while the
     // agent potentially keeps reasoning or calling more tools afterward.
     stopTypingIndicator(threadID);
+    // Mark this turn as delivered so the agent loop's bare-text final answer
+    // (and any further send_result call) is suppressed — never a duplicate.
+    deliveryMap['_agentReplyDelivered'] = true;
 
     const parts: string[] = ['Message delivered.'];
     if (allAttachmentUrls.length > 0)

@@ -80,6 +80,17 @@ function stripTelegramMentions(message: string): string {
   return message.replace(/@\S+/g, ' ');
 }
 
+// ── Duplicate-reply guard ────────────────────────────────────────────────────
+// runAgent already returns '' whenever a tool delivered this turn, but defense
+// in depth: if any delivery flag leaked onto ctx, never send a second reply.
+function hasDeliveredReply(ctx: AppCtx): boolean {
+  const map = ctx as unknown as Record<string, unknown>;
+  return (
+    map['_agentReplyDelivered'] === true ||
+    map['_agentDirectDelivered'] === true
+  );
+}
+
 // ── Per-user AI provider gate ────────────────────────────────────────────────
 // AI requires the requesting account to have configured its own AI provider
 // key + model (Dashboard → Settings → AI Integration). When the active
@@ -88,7 +99,7 @@ function stripTelegramMentions(message: string): string {
 // identically to the /ai command and the passive onChat path.
 const NO_AI_KEY_MESSAGE =
   '🤖 **AI is disabled.** No AI provider key is configured for this account.\n' +
-  'Add your **Groq** or **OpenRouter** key in **Dashboard → Settings → AI Integration** ' +
+  'Add your **OpenRouter** or **Groq** key in **Dashboard → Settings → AI Integration** ' +
   'to enable AI features.';
 
 const AI_RATE_LIMIT_MESSAGE =
@@ -305,7 +316,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     const result = await withThinkingIndicator(ctx, threadID, () =>
       runAgent(prompt, ctx, nickname, userName, null, aiConfig),
     );
-    if (result) {
+    if (result && !hasDeliveredReply(ctx)) {
       await ctx.chat.replyMessage({
         style: MessageStyle.MARKDOWN,
         message: result,
@@ -511,7 +522,7 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
         undefined,
         aiConfig,
       );
-      if (result) {
+      if (result && !hasDeliveredReply(ctx)) {
         await ctx.chat.replyMessage({
           style: MessageStyle.MARKDOWN,
           message: result,

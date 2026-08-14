@@ -56,23 +56,24 @@ const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
 }
 
 const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
-  { value: 'groq', label: 'Groq' },
   { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'groq', label: 'Groq' },
 ]
 
-// Infers the provider from a key's prefix as it's typed/pasted — `gsk_` is
-// always a Groq key, `sk-or-v1-` an OpenRouter key. Returns null while the key
-// is too short or doesn't match either format.
+// Infers the provider from a key's prefix as it's typed/pasted —
+// `sk-or-v1-` is an OpenRouter key (checked first — the primary provider),
+// `gsk_` a Groq key. Returns null while the key is too short or doesn't match
+// either format.
 const detectProviderFromKey = (key: string): AiProviderId | null => {
   const trimmed = key.trim()
-  if (trimmed.startsWith('gsk_')) return 'groq'
   if (trimmed.startsWith('sk-or-v1')) return 'openrouter'
+  if (trimmed.startsWith('gsk_')) return 'groq'
   return null
 }
 
 // Fallback shown if the status fetch fails — models are re-fetched on save.
 const EMPTY_AI_STATUS: AiSettingsStatus = {
-  provider: 'groq',
+  provider: 'openrouter',
   model: '',
   groqModel: '',
   openrouterModel: '',
@@ -345,7 +346,7 @@ export default function SettingsPage() {
   // ── AI Integration state (provider + model + key) ────────────────────────
   const [aiStatus, setAiStatus] = useState<AiSettingsStatus | null>(null)
   const [aiLoading, setAiLoading] = useState(true)
-  const [providerDraft, setProviderDraft] = useState<AiProviderId>('groq')
+  const [providerDraft, setProviderDraft] = useState<AiProviderId>('openrouter')
   const [modelDraft, setModelDraft] = useState('')
   const [aiKeyInput, setAiKeyInput] = useState('')
   const [aiEditing, setAiEditing] = useState(false)
@@ -394,7 +395,7 @@ export default function SettingsPage() {
     hint: m.free ? 'Free' : undefined,
   }))
 
-  const providerDirty = providerDraft !== (aiStatus?.provider ?? 'groq')
+  const providerDirty = providerDraft !== (aiStatus?.provider ?? 'openrouter')
   const modelDirty = modelDraft !== savedModelFor(providerDraft)
   const aiKeyDirty = aiKeyInput.trim() !== ''
   const aiDirty = providerDirty || modelDirty || aiKeyDirty
@@ -585,7 +586,7 @@ export default function SettingsPage() {
             <div>
               <Card.Title as="h2">AI Integration</Card.Title>
               <Card.Description>
-                AI features run on your own Groq or OpenRouter API key. Pick a
+                AI features run on your own OpenRouter or Groq API key. Pick a
                 provider, choose a model, and store your key — it's kept
                 encrypted and used only by your bots.
               </Card.Description>
@@ -681,7 +682,7 @@ export default function SettingsPage() {
                   variant="tonal"
                   color="warning"
                   title="AI features are disabled"
-                  message="No AI provider key is configured for your account. Add your own Groq or OpenRouter key below to enable AI features."
+                  message="No AI provider key is configured for your account. Add your own OpenRouter or Groq key below to enable AI features."
                 />
               )}
 

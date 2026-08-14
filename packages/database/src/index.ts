@@ -233,7 +233,7 @@ export const deleteUser = m.deleteUser;
 export const resetAllDatabase = m.resetAllDatabase;
 
 // --- USER AI PROVIDER KEY ---
-// Per-user AI provider config (Groq/OpenRouter API keys, AES-256-GCM encrypted
+// Per-user AI provider config (OpenRouter/Groq API keys, AES-256-GCM encrypted
 // at rest, plus the active provider + per-provider model). Always scoped to a
 // single user's own account — never shared or reused across users.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -247,7 +247,7 @@ export const deleteUserAiKey = m.deleteUserAiKey;
 
 // --- USER TIMEZONE ---
 // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
-// Scoped to a single user's own account, same ownership model as the Groq key above.
+// Scoped to a single user's own account, same ownership model as the AI key above.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getUserTimezone = m.getUserTimezone;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment

@@ -10,7 +10,7 @@ import { tursoClient } from '../client.js';
  * model choice is remembered independently so switching providers keeps the
  * user's preferred model for each.
  */
-export type AiProvider = 'groq' | 'openrouter';
+export type AiProvider = 'openrouter' | 'groq';
 
 export interface StoredAiConfig {
   encryptedKey: string;
@@ -50,7 +50,7 @@ export async function getUserAiConfig(
     keyHint: row.key_hint ?? '',
     openrouterEncryptedKey: row.openrouter_encrypted_key ?? '',
     openrouterKeyHint: row.openrouter_key_hint ?? '',
-    provider: row.provider === 'openrouter' ? 'openrouter' : 'groq',
+    provider: row.provider === 'groq' ? 'groq' : 'openrouter',
     groqModel: row.groq_model ?? '',
     openrouterModel: row.openrouter_model ?? '',
   };

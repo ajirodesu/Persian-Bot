@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// groq-sdk is used purely as an OpenAI-compatible HTTP client. OpenRouter is the
+// PRIMARY AI provider; the SDK talks to it via its base URL using the same chat
+// completions contract Groq speaks.
 import Groq, { APIError, RateLimitError } from 'groq-sdk';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import {
@@ -53,10 +56,16 @@ const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
 // per-user ownership requirement. Building a client per turn is negligible (the
 // SDK client is a stateless config wrapper).
 //
-// Both providers (Groq, OpenRouter) speak the OpenAI-compatible chat API, so
-// the same groq-sdk client drives both — only the base URL differs.
+// Both providers (OpenRouter primary, Groq secondary) speak the OpenAI-
+// compatible chat API, so the same SDK client drives both — only the base URL
+// differs.
 /** Maximum bot commands a non-system-admin user may request per agent invocation. */
 export const AGENT_COMMAND_LIMIT = 5;
+
+// App identity headers recommended by OpenRouter (HTTP-Referer + X-Title) so
+// requests are attributed to this app in OpenRouter's dashboard and routing.
+const OPENROUTER_REFERER = 'https://github.com/ajirodesu/Persian-Bot';
+const OPENROUTER_APP_TITLE = 'Persian-Bot';
 
 function createAiClient(provider: AiRuntimeConfig['provider'], apiKey: string): Groq {
   const baseURL = AI_PROVIDERS[provider].baseURL;
@@ -64,10 +73,10 @@ function createAiClient(provider: AiRuntimeConfig['provider'], apiKey: string): 
   // the API under /openai/v1/… — exactly what the SDK appends).
   if (!baseURL) return new Groq({ apiKey });
 
-  // groq-sdk builds request URLs as `${baseURL}/openai/v1/<resource>` — correct
-  // for Groq (root https://api.groq.com), but wrong for OpenRouter: it serves
-  // the same OpenAI-compatible API directly at /api/v1/… with NO /openai/v1
-  // segment. Without this rewrite the SDK posts to
+  // OpenRouter serves the OpenAI-compatible API directly at /api/v1/… with NO
+  // /openai/v1 segment. groq-sdk builds request URLs as
+  // `${baseURL}/openai/v1/<resource>` — correct for Groq, wrong for OpenRouter:
+  // without this rewrite the SDK posts to
   // https://openrouter.ai/api/v1/openai/v1/chat/completions and OpenRouter's
   // website answers with an HTML 404 page — surfaced as `404 <!DOCTYPE html>…`
   // — which broke EVERY agent message on OpenRouter. The wrapper strips the
@@ -77,6 +86,10 @@ function createAiClient(provider: AiRuntimeConfig['provider'], apiKey: string): 
   return new Groq({
     apiKey,
     baseURL,
+    defaultHeaders: {
+      'HTTP-Referer': OPENROUTER_REFERER,
+      'X-Title': OPENROUTER_APP_TITLE,
+    },
     fetch: (input, init) => {
       const url =
         typeof input === 'string'
@@ -92,13 +105,33 @@ function createAiClient(provider: AiRuntimeConfig['provider'], apiKey: string): 
 // Hard ceiling for a single model completion — the SDK's own default is 10
 // minutes, far too long for the model step of an agent turn. A stalled network
 // request must not pin the turn (and the user's typing indicator) indefinitely.
-const AI_REQUEST_TIMEOUT_MS = 90_000;
+// Kept tight (45s) so a slow OpenRouter backend is aborted fast instead of
+// holding the whole turn hostage.
+const AI_REQUEST_TIMEOUT_MS = 45_000;
 
 // Ceiling for a single non-test_command tool call. test_command is exempt: it
 // self-limits with its own 10-minute race designed for long-running commands
 // (network-heavy image/media fetches). Every other tool (browser, get_user,
 // get_group, help, …) must not hang the agent loop past this bound.
-const TOOL_TIMEOUT_MS = 60_000;
+const TOOL_TIMEOUT_MS = 30_000;
+
+// Cap on tokens generated per model step. Agent turns produce short replies and
+// tool-call JSON; bounding output keeps the completion (and therefore the whole
+// turn) fast instead of letting a model ramble.
+const AI_MAX_TOKENS = 2048;
+
+// Tool results are fed straight back into the next model call — a huge result
+// (browser dump, help wall) bloats input tokens and slows the next completion.
+// Truncate aggressively so the model still gets the essential payload quickly.
+const MAX_TOOL_RESULT_CHARS = 4000;
+
+function truncateToolResult(value: string): string {
+  if (value.length <= MAX_TOOL_RESULT_CHARS) return value;
+  return (
+    value.slice(0, MAX_TOOL_RESULT_CHARS) +
+    `\n…[truncated ${value.length - MAX_TOOL_RESULT_CHARS} chars]`
+  );
+}
 
 /**
  * Races a promise against a hard timeout, resolving/rejecting with the winner.
@@ -126,6 +159,75 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       },
     );
   });
+}
+
+// ============================================================================
+// STREAMING COMPLETION
+// ============================================================================
+// Every model call streams (`stream: true`): the first tokens arrive the moment
+// OpenRouter emits them instead of after the full completion, and the stream is
+// fully supported by both providers. Deltas are accumulated into the same
+// assistant-message shape the non-streaming API returns, so the agent loop
+// below is provider-agnostic.
+
+interface AgentAssistantMessage {
+  role: 'assistant';
+  content: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
+}
+
+/**
+ * Runs a streaming chat completion and folds every delta (content + tool_calls)
+ * into a single assistant message. Throws the same SDK errors as the
+ * non-streaming API (rate limit, tool_use_failed, …) so callers keep their
+ * existing recovery logic.
+ */
+async function completeChatStreaming(
+  client: Groq,
+  params: {
+    model: string;
+    messages: Groq.Chat.Completions.ChatCompletionMessageParam[];
+    tools: Groq.Chat.Completions.ChatCompletionTool[];
+    tool_choice: Groq.Chat.Completions.ChatCompletionToolChoiceOption;
+    max_tokens?: number;
+    stream: true;
+  },
+  timeoutMs: number,
+): Promise<AgentAssistantMessage> {
+  const stream = await client.chat.completions.create(params, {
+    timeout: timeoutMs,
+  });
+
+  let content = '';
+  const toolCallBuf: AgentAssistantMessage['tool_calls'] = [];
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta;
+    if (delta?.content) content += delta.content;
+    if (delta?.tool_calls) {
+      for (const tc of delta.tool_calls) {
+        const idx = tc.index ?? 0;
+        let entry = toolCallBuf[idx];
+        if (!entry) {
+          entry = { id: '', type: 'function', function: { name: '', arguments: '' } };
+          toolCallBuf[idx] = entry;
+        }
+        if (tc.id) entry.id = tc.id;
+        if (tc.function?.name) entry.function.name += tc.function.name;
+        if (tc.function?.arguments) entry.function.arguments += tc.function.arguments;
+      }
+    }
+  }
+
+  const toolCalls = toolCallBuf.filter((tc) => tc.function.name.length > 0);
+  return {
+    role: 'assistant',
+    content: content || null,
+    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+  };
 }
 
 // ============================================================================
@@ -209,9 +311,10 @@ export class AgentRateLimitError extends Error {
 
 /**
  * Detects the SDK's rate-limit error type — or any APIError with HTTP 429,
- * so detection stays robust even if a duplicate copy of the SDK ends up bundled.
+ * so detection stays robust across providers and even if a duplicate copy of
+ * the SDK ends up bundled.
  */
-function isGroqRateLimitError(err: unknown): boolean {
+function isAiRateLimitError(err: unknown): boolean {
   if (err instanceof RateLimitError) return true;
   return err instanceof APIError && err.status === 429;
 }
@@ -221,12 +324,12 @@ function isGroqRateLimitError(err: unknown): boolean {
 // ============================================================================
 
 // Use the SDK's own type for the cached descriptor array so assignment to
-// groq.chat.completions.create({ tools }) satisfies TypeScript without casting.
-type GroqTool = Groq.Chat.Completions.ChatCompletionTool;
+// chat.completions.create({ tools }) satisfies TypeScript without casting.
+type ChatTool = Groq.Chat.Completions.ChatCompletionTool;
 
 let cachedTools: AgentTool[] | null = null;
-/** Pre-built Groq-API-shaped tool descriptors — derived once from cachedTools. */
-let cachedGroqTools: GroqTool[] | null = null;
+/** Pre-built OpenAI-compatible tool descriptors — derived once from cachedTools. */
+let cachedChatTools: ChatTool[] | null = null;
 /** O(1) name→tool lookup — replaces the O(n) Array.find() on every tool call. */
 let cachedToolsMap: Map<string, AgentTool> | null = null;
 
@@ -253,7 +356,7 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
 
   if (!fs.existsSync(dir)) {
     cachedTools = [];
-    cachedGroqTools = [];
+    cachedChatTools = [];
     cachedToolsMap = new Map();
     return cachedTools;
   }
@@ -279,9 +382,10 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
   }
 
   cachedTools = tools;
-  // Derive O(1) lookup map and pre-built Groq descriptors once, reuse forever.
+  // Derive O(1) lookup map and pre-built OpenAI-compatible descriptors once,
+  // reuse forever.
   cachedToolsMap = new Map(tools.map((t) => [t.config.name, t]));
-  cachedGroqTools = tools.map((t) => ({
+  cachedChatTools = tools.map((t) => ({
     type: 'function' as const,
     function: {
       name: t.config.name,
@@ -327,10 +431,10 @@ export async function runAgent(
   if (!ai) {
     throw new Error(
       'AI is disabled — no AI provider key is configured for this account. ' +
-        'Add your Groq or OpenRouter key in Dashboard → Settings → AI Integration to enable AI.',
+        'Add your OpenRouter or Groq key in Dashboard → Settings → AI Integration to enable AI.',
     );
   }
-  const groq = createAiClient(ai.provider, ai.apiKey);
+  const aiClient = createAiClient(ai.provider, ai.apiKey);
 
   // Live status ref, read by withThinkingIndicator's refresh loop so the
   // "bot is typing/thinking" signal reflects the agent's actual current
@@ -346,14 +450,19 @@ export async function runAgent(
   // once a command has sent its own reply; the loop short-circuits on it. Reset
   // defensively so a reused ctx can never carry a stale flag into a new turn.
   (ctx as unknown as Record<string, unknown>)['_agentDirectDelivered'] = false;
+  // Fresh per-turn "any reply already delivered" flag — set by send_result and
+  // deliverAgentMedia on success. Consolidated with _agentDirectDelivered, it is
+  // the single source of truth for "the user already got a reply this turn", so
+  // the bare-text fallback can never leak a second message.
+  (ctx as unknown as Record<string, unknown>)['_agentReplyDelivered'] = false;
 
   // loadAgentTools() is idempotent and returns the cached list after the first call.
-  // cachedGroqTools and cachedToolsMap are populated in the same call — safe to use directly.
+  // cachedChatTools and cachedToolsMap are populated in the same call — safe to use directly.
   await loadAgentTools();
-  if (!cachedGroqTools) {
+  if (!cachedChatTools) {
     throw new Error('Agent tools failed to load — AI is unavailable.');
   }
-  const groqTools = cachedGroqTools;
+  const chatTools = cachedChatTools;
 
   // ── Role + exemption checks (parallel) ─────────────────────────────────────
   // isBotAdmin (role label + command-limit exemption), isSystemAdmin (limit
@@ -481,11 +590,12 @@ export async function runAgent(
 
   let turns = 20; // Safety limit — prevents runaway tool-call loops
 
-  // Tracks whether send_result actually delivered a reply this turn. Bare-text
-  // final answers are suppressed ONLY when this is true — otherwise a model that
-  // answers conversationally without the tool workflow would be dropped entirely,
-  // leaving the user with total silence.
-  let delivered = false;
+  // Reply-delivery tracking is delegated to the delivery sites themselves:
+  // send_result and deliverAgentMedia set ctx._agentReplyDelivered on success,
+  // and test_command direct execution sets ctx._agentDirectDelivered. The
+  // bare-text final answer below is suppressed when EITHER flag is set — a model
+  // that answers conversationally without the tool workflow still gets its text
+  // through (nothing was delivered), never dropped.
 
   while (turns-- > 0) {
     // Reasoning phase — reset to the generic "thinking" phrase before each
@@ -493,30 +603,39 @@ export async function runAgent(
     // moment a tool call is actually dispatched.
     setAgentStatus(ctx, DEFAULT_AGENT_STATUS_TEXT);
 
-    let response: Awaited<ReturnType<typeof groq.chat.completions.create>>;
+    let message: AgentAssistantMessage;
     try {
-      response = await groq.chat.completions.create(
-        {
-          model: ai.model,
-          messages,
-          tools: groqTools,
-          tool_choice: 'auto',
-        },
-        { timeout: AI_REQUEST_TIMEOUT_MS },
+      // Stream the completion — tokens arrive as OpenRouter emits them, and the
+      // request is bounded by max_tokens so even a chatty model returns fast.
+      message = await withTimeout(
+        completeChatStreaming(
+          aiClient,
+          {
+            model: ai.model,
+            messages,
+            tools: chatTools,
+            tool_choice: 'auto',
+            max_tokens: AI_MAX_TOKENS,
+            stream: true,
+          },
+          AI_REQUEST_TIMEOUT_MS,
+        ),
+        AI_REQUEST_TIMEOUT_MS + 5_000,
+        'AI completion',
       );
     } catch (err) {
-      if (isGroqRateLimitError(err)) {
+      if (isAiRateLimitError(err)) {
         throw new AgentRateLimitError(
           'Your AI provider key has reached its rate limit. ' +
             'AI features are temporarily paused — wait a moment and try again.',
         );
       }
       const recovered = extractFailedToolGeneration(err);
-      // The recovered name is either a known alias (the Groq "json" quirk →
-      // send_result) or a REAL tool name whose arguments Groq's server-side
-      // validation rejected (e.g. get_user called with {"uid": null}). Resolve
-      // either way so a validation failure executes the tool directly instead
-      // of killing the whole agent turn.
+      // The recovered name is either a known alias (the "json" quirk →
+      // send_result) or a REAL tool name whose arguments the provider's
+      // server-side validation rejected (e.g. get_user called with {"uid":
+      // null}). Resolve either way so a validation failure executes the tool
+      // directly instead of killing the whole agent turn.
       const recoveredName = recovered
         ? (TOOL_NAME_ALIASES[recovered.name] ?? recovered.name)
         : undefined;
@@ -530,8 +649,8 @@ export async function runAgent(
         throw err;
       }
 
-      // Splice the recovered call back into the conversation as if Groq had
-      // returned it normally, then execute it through the real tool.
+      // Splice the recovered call back into the conversation as if the provider
+      // had returned it normally, then execute it through the real tool.
       const syntheticId = `recovered_${Date.now()}_${turns}`;
       messages.push({
         role: 'assistant',
@@ -563,16 +682,10 @@ export async function runAgent(
                 TOOL_TIMEOUT_MS,
                 recoveredName,
               );
-        if (recoveredName === 'send_result') {
-          // send_result returns 'Delivery failed: …' (not a throw) on error — only
-          // count genuine deliveries so a failed send followed by a text apology
-          // is still surfaced to the user.
-          delivered = !String(result).startsWith('Delivery failed:');
-        }
         messages.push({
           role: 'tool',
           tool_call_id: syntheticId,
-          content: String(result),
+          content: truncateToolResult(String(result)),
         });
       } catch (toolErr) {
         messages.push({
@@ -584,22 +697,40 @@ export async function runAgent(
         });
       }
 
+      // If the recovered tool already delivered a reply (direct test_command
+      // execution or a successful send_result), end the turn immediately — the
+      // plain `continue` below would bypass the direct-execution short-circuit
+      // and let the model's closing text leak as a duplicate reply.
+      const deliveryMap = ctx as unknown as Record<string, unknown>;
+      if (
+        deliveryMap['_agentReplyDelivered'] === true ||
+        deliveryMap['_agentDirectDelivered'] === true
+      ) {
+        return '';
+      }
       continue; // Proceed to the next turn with the recovered result in context.
     }
 
-    const message = response.choices[0]?.message;
     if (!message) break;
 
     messages.push(message);
 
     // ✅ FINAL ANSWER — agent should have called send_result for delivery.
-    // When the model finishes with bare text (no tool call): if send_result already
-    // delivered, return '' so ai.ts's `if (result)` guard skips a duplicate reply.
-    // If NOTHING was delivered, this text IS the answer — return it so ai.ts sends
-    // it. Dropping it unconditionally made the bot go silent whenever the model
-    // answered a simple conversational prompt without the tool workflow.
+    // When the model finishes with bare text (no tool call): if ANY tool already
+    // delivered a reply this turn (send_result, deliverAgentMedia, or direct
+    // test_command execution), return '' so ai.ts's `if (result)` guard skips a
+    // duplicate reply. If NOTHING was delivered, this text IS the answer — return
+    // it so ai.ts sends it. Dropping it unconditionally made the bot go silent
+    // whenever the model answered a simple conversational prompt without the tool
+    // workflow.
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      if (delivered) return '';
+      const deliveryMap = ctx as unknown as Record<string, unknown>;
+      if (
+        deliveryMap['_agentReplyDelivered'] === true ||
+        deliveryMap['_agentDirectDelivered'] === true
+      ) {
+        return '';
+      }
       // Unwrap the model's content down to the actual reply text — gpt-oss-120b
       // occasionally finishes with the Harmony "commentary/final json" envelope
       // (or a double-encoded JSON string) instead of plain text. extractHumanText
@@ -660,16 +791,13 @@ export async function runAgent(
                 TOOL_TIMEOUT_MS,
                 toolCall.function.name,
               );
-        if (toolCall.function.name === 'send_result') {
-          // send_result returns 'Delivery failed: …' (not a throw) on error — only
-          // count genuine deliveries so a failed send followed by a text apology
-          // is still surfaced to the user.
-          delivered = !String(result).startsWith('Delivery failed:');
-        }
+        // send_result marks ctx._agentReplyDelivered itself on success (and
+        // test_command sets _agentDirectDelivered for direct execution), so the
+        // delivery flags stay consistent regardless of which dispatch path ran.
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: String(result),
+          content: truncateToolResult(String(result)),
         });
       } catch (err) {
         messages.push({

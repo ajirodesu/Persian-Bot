@@ -11,7 +11,7 @@ import { getMongoDb } from '../client.js';
  * model choice is remembered independently so switching providers keeps the
  * user's preferred model for each.
  */
-export type AiProvider = 'groq' | 'openrouter';
+export type AiProvider = 'openrouter' | 'groq';
 
 export interface StoredAiConfig {
   encryptedKey: string;
@@ -60,7 +60,7 @@ export async function getUserAiConfig(
     keyHint: rec.keyHint ?? '',
     openrouterEncryptedKey: rec.openrouterEncryptedKey ?? '',
     openrouterKeyHint: rec.openrouterKeyHint ?? '',
-    provider: rec.provider === 'openrouter' ? 'openrouter' : 'groq',
+    provider: rec.provider === 'groq' ? 'groq' : 'openrouter',
     groqModel: rec.groqModel ?? '',
     openrouterModel: rec.openrouterModel ?? '',
   };

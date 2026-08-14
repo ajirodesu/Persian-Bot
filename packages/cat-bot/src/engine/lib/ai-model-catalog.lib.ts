@@ -4,10 +4,10 @@
  * (including all free ones), not just a curated subset.
  *
  * Caching: model lists change rarely (weekly at most), so each successful fetch
- * is cached for 6 hours. The Groq list can differ per API key (free vs paid
- * tier), so it's cached per user; OpenRouter's list is public and cached
- * globally. Failures are NOT cached — the caller falls back to the static
- * catalog and retries on the next request.
+ * is cached for 6 hours. OpenRouter (the PRIMARY provider) has a public list,
+ * so it's cached globally; Groq's list can differ per API key (free vs paid
+ * tier), so it's cached per user. Failures are NOT cached — the caller falls
+ * back to the static catalog and retries on the next request.
  *
  * Fail-open: any network/parse error returns null (caller decides the
  * fallback) and logs a warning — a models outage must never break the

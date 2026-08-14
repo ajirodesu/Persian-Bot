@@ -108,7 +108,7 @@ export async function initDb(): Promise<void> {
       key_hint                 TEXT NOT NULL DEFAULT '',
       openrouter_encrypted_key TEXT,
       openrouter_key_hint      TEXT,
-      provider                 TEXT DEFAULT 'groq',
+      provider                 TEXT DEFAULT 'openrouter',
       groq_model               TEXT,
       openrouter_model         TEXT,
       created_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -127,7 +127,7 @@ export async function initDb(): Promise<void> {
   const groqKeyNewCols: Array<[string, string]> = [
     ['openrouter_encrypted_key', 'TEXT'],
     ['openrouter_key_hint', 'TEXT'],
-    ['provider', "TEXT DEFAULT 'groq'"],
+    ['provider', "TEXT DEFAULT 'openrouter'"],
     ['groq_model', 'TEXT'],
     ['openrouter_model', 'TEXT'],
   ];

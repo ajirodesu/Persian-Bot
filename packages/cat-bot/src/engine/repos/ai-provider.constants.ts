@@ -1,12 +1,13 @@
 /**
  * AI Provider Catalog — single source of truth for every LLM provider the bot's
- * agent can run on (currently Groq and OpenRouter). Used by:
+ * agent can run on (OpenRouter is the PRIMARY provider; Groq is the secondary).
+ * Used by:
  *   • the settings API (dashboard model lists + provider labels),
  *   • key/model validation before anything reaches the database,
  *   • the agent's client factory (per-provider base URL + model selection).
  *
  * Both providers speak the OpenAI-compatible chat-completions API, so the same
- * SDK (groq-sdk) drives both — only the base URL and model id differ.
+ * OpenAI-compatible SDK drives both — only the base URL and model id differ.
  *
  * Model catalogs: the FULL model list is fetched live from each provider's
  * /models endpoint (see ai-model-catalog.lib.ts) so every model — including all
@@ -14,7 +15,7 @@
  * when the live fetch fails (offline resilience).
  */
 
-export type AiProviderId = 'groq' | 'openrouter';
+export type AiProviderId = 'openrouter' | 'groq';
 
 export interface AiProviderModel {
   /** The model id sent to the provider's API (e.g. "openai/gpt-oss-120b"). */
@@ -29,7 +30,7 @@ export interface AiProviderDefinition {
   id: AiProviderId;
   label: string;
   description: string;
-  /** OpenAI-compatible API root; undefined → use the SDK's default (Groq). */
+  /** OpenAI-compatible API root; undefined → use the SDK's default. */
   baseURL?: string;
   /** URL of the provider's OpenAI-compatible /models endpoint (live catalog). */
   modelsUrl: string;
@@ -41,7 +42,34 @@ export interface AiProviderDefinition {
   fallbackModels: AiProviderModel[];
 }
 
+// OpenRouter is the PRIMARY provider — it is listed first, supplies the default
+// model, and is the fallback whenever a stored/unknown provider value appears.
+// Groq remains available as the secondary provider.
 export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    description:
+      'One API for many models — GPT, Claude, Gemini, Llama and more, routed to the fastest available backend.',
+    baseURL: 'https://openrouter.ai/api/v1',
+    modelsUrl: 'https://openrouter.ai/api/v1/models',
+    keyPlaceholder: 'sk-or-v1-…',
+    // OpenRouter keys begin with "sk-or-v1-" followed by a base64url token.
+    keyPattern: /^sk-or-v1-[A-Za-z0-9_-]{20,}$/,
+    // Default model is picked for speed — low latency and strong tool calling.
+    defaultModel: 'openai/gpt-4o-mini',
+    fallbackModels: [
+      { id: 'openai/gpt-4o-mini', label: 'OpenAI GPT-4o Mini' },
+      { id: 'openai/gpt-4o', label: 'OpenAI GPT-4o' },
+      { id: 'google/gemini-2.0-flash-001', label: 'Google Gemini 2.0 Flash' },
+      { id: 'openai/gpt-4o:free', label: 'OpenAI GPT-4o — free', free: true },
+      { id: 'anthropic/claude-3.5-sonnet', label: 'Anthropic Claude 3.5 Sonnet' },
+      { id: 'anthropic/claude-3.7-sonnet', label: 'Anthropic Claude 3.7 Sonnet' },
+      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
+      { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
+      { id: 'mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B' },
+    ],
+  },
   groq: {
     id: 'groq',
     label: 'Groq',
@@ -58,28 +86,6 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
       { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant' },
       { id: 'qwen/qwen3-32b', label: 'Qwen 3 32B' },
       { id: 'qwen/qwen3-8b', label: 'Qwen 3 8B' },
-    ],
-  },
-  openrouter: {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    description:
-      'One API for many models — GPT, Claude, Gemini, Llama and more.',
-    baseURL: 'https://openrouter.ai/api/v1',
-    modelsUrl: 'https://openrouter.ai/api/v1/models',
-    keyPlaceholder: 'sk-or-v1-…',
-    // OpenRouter keys begin with "sk-or-v1-" followed by a base64url token.
-    keyPattern: /^sk-or-v1-[A-Za-z0-9_-]{20,}$/,
-    defaultModel: 'openai/gpt-4o',
-    fallbackModels: [
-      { id: 'openai/gpt-4o', label: 'OpenAI GPT-4o' },
-      { id: 'openai/gpt-4o-mini', label: 'OpenAI GPT-4o Mini' },
-      { id: 'anthropic/claude-3.7-sonnet', label: 'Anthropic Claude 3.7 Sonnet' },
-      { id: 'anthropic/claude-3.5-sonnet', label: 'Anthropic Claude 3.5 Sonnet' },
-      { id: 'google/gemini-2.0-flash-001', label: 'Google Gemini 2.0 Flash' },
-      { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
-      { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
-      { id: 'mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B' },
     ],
   },
 };
@@ -103,15 +109,16 @@ export function isValidAiProviderKey(
 }
 
 /**
- * Infers the provider from a complete key's format: `gsk_…` → Groq,
- * `sk-or-v1-…` → OpenRouter. Returns null for keys that match neither pattern
- * (e.g. a malformed key mid-typing). Used to auto-match the provider when a key
- * is added — the key's format wins over any pre-selected provider.
+ * Infers the provider from a complete key's format: `sk-or-v1-…` → OpenRouter
+ * (checked first — the primary provider), `gsk_…` → Groq. Returns null for keys
+ * that match neither pattern (e.g. a malformed key mid-typing). Used to
+ * auto-match the provider when a key is added — the key's format wins over any
+ * pre-selected provider.
  */
 export function detectAiProviderFromKey(apiKey: string): AiProviderId | null {
   const trimmed = apiKey.trim();
-  if (AI_PROVIDERS.groq.keyPattern.test(trimmed)) return 'groq';
   if (AI_PROVIDERS.openrouter.keyPattern.test(trimmed)) return 'openrouter';
+  if (AI_PROVIDERS.groq.keyPattern.test(trimmed)) return 'groq';
   return null;
 }
 
