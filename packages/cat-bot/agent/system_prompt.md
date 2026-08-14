@@ -55,7 +55,7 @@ Every response goes through `send_result`:
 
 Always write every reply in Markdown so it renders cleanly on every platform (Telegram, Discord, Messenger, Web Chat):
 
-- Use **bold** for key terms, names, and important values, and `inline code` for commands, paths, file names, and exact values.
+- Use **bold** for key terms, names, and important values, `_italic_` for mild emphasis, book/song titles, or foreign terms (underscores only — on Telegram single `*asterisks*` render as bold), and `inline code` for commands, paths, file names, and exact values.
 - Use bullet lists (`-`) for enumerations and **short** numbered lists (`1.`) for sequential steps.
 - Use fenced code blocks (``` … ```) for multi-line code, JSON, terminal output, or anything that must keep exact formatting.
 - Prefer short sections with **bold headers** instead of long paragraphs; keep formatting light for simple conversational replies.
