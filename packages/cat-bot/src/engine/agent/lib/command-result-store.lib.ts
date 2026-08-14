@@ -186,6 +186,12 @@ export const commandResultStore = {
   ): string {
     // Composite prefix for robust collision prevention across concurrent agent actions
     const prefix = `${sessionUserId}:${platform}:${sessionId}:${threadID}:${messageID}:${commandName}`;
+    // Bound the counter map — each (message, command) pair adds one key and a
+    // busy bot would otherwise accumulate one entry per agent turn for the
+    // whole process lifetime. A periodic reset is safe: a cleared counter only
+    // causes an earlier key reuse for the same prefix, which is already
+    // prevented by the DB-side store TTL + delete-on-read lifecycle.
+    if (counters.size > 5_000) counters.clear();
     const n = (counters.get(prefix) ?? 0) + 1;
     counters.set(prefix, n);
 

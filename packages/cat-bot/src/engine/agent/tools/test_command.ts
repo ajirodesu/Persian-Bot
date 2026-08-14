@@ -294,7 +294,10 @@ export const run = async (
     '_agentCommandBudget'
   ] as CommandBudget | undefined;
 
-  let cmdsToRun = payload.commands ?? [];
+  // The model can emit anything for `commands` (an object, a string, null…)
+  // despite the schema — normalize defensively so a malformed payload returns
+  // a clear error instead of a TypeError crashing the execution block.
+  let cmdsToRun = Array.isArray(payload.commands) ? payload.commands : [];
   if (cmdsToRun.length === 0) {
     return 'Error: You must provide a non-empty `commands` array.';
   }
@@ -377,8 +380,18 @@ export const run = async (
       const errors: string[] = [];
 
       for (const cmdObj of cmdsToRun) {
+        // Guard malformed entries — skip them with a visible error rather than
+        // throwing (which would abort every remaining command in the batch).
+        if (
+          cmdObj === null ||
+          typeof cmdObj !== 'object' ||
+          typeof cmdObj.command !== 'string'
+        ) {
+          errors.push('Skipped a malformed command entry (expected { command, args }).');
+          continue;
+        }
         const command = cmdObj.command;
-        const args = cmdObj.args || [];
+        const args = Array.isArray(cmdObj.args) ? cmdObj.args : [];
         currentRunningCommand = command;
 
         const mod = ctx.commands.get(command.toLowerCase());

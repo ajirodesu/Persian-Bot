@@ -55,6 +55,45 @@ function createGroq(apiKey: string): Groq {
   return new Groq({ apiKey });
 }
 
+// Hard ceiling for a single Groq completion — the SDK's own default is 10
+// minutes, far too long for the model step of an agent turn. A stalled network
+// request must not pin the turn (and the user's typing indicator) indefinitely.
+const GROQ_REQUEST_TIMEOUT_MS = 90_000;
+
+// Ceiling for a single non-test_command tool call. test_command is exempt: it
+// self-limits with its own 10-minute race designed for long-running commands
+// (network-heavy image/media fetches). Every other tool (browser, get_user,
+// get_group, help, …) must not hang the agent loop past this bound.
+const TOOL_TIMEOUT_MS = 60_000;
+
+/**
+ * Races a promise against a hard timeout, resolving/rejecting with the winner.
+ * The underlying promise keeps running in the background if it loses the race
+ * (its result is discarded) — same trade-off as test_command's internal timer.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} timed out after ${Math.round(ms / 1000)}s and was abandoned.`,
+        ),
+      );
+    }, ms);
+    (timer as NodeJS.Timeout).unref?.();
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 // ============================================================================
 // GROQ "json" TOOL-CALL QUIRK RECOVERY
 // ============================================================================
@@ -269,32 +308,35 @@ export async function runAgent(
   // loadAgentTools() is idempotent and returns the cached list after the first call.
   // cachedGroqTools and cachedToolsMap are populated in the same call — safe to use directly.
   await loadAgentTools();
-  const groqTools = cachedGroqTools!;
+  if (!cachedGroqTools) {
+    throw new Error('Agent tools failed to load — AI is unavailable.');
+  }
+  const groqTools = cachedGroqTools;
 
-  // Inject dynamic context variables into the structured system prompt template.
+  // ── Role + exemption checks (parallel) ─────────────────────────────────────
+  // isBotAdmin (role label + command-limit exemption), isSystemAdmin (limit
+  // exemption) and isThreadAdmin (role label fallback) are independent reads —
+  // resolving them concurrently collapses up to three sequential DB round-trips
+  // into one. Fail-open on every check: a DB error defaults to Regular User and
+  // the limit still applies.
   let userRoleLabel = 'Regular User';
-  // Hoisted out of the try block below (not just a local) — reused by the
-  // agent command limit exemption further down, since "Bot Administrator"
-  // (the owner/admin of this specific bot session) is also meant to bypass
-  // the per-message command cap, not only a global System Admin.
-  let _isBotAdmin = false;
-  if (senderID && sessionUserId && sessionId) {
-    try {
-      _isBotAdmin = await isBotAdmin(
-        sessionUserId,
-        platform,
-        sessionId,
-        senderID,
-      );
-      if (_isBotAdmin) {
-        userRoleLabel = 'Bot Administrator';
-      } else if (threadID) {
-        const isThreadAdm = await isThreadAdmin(threadID, senderID);
-        if (isThreadAdm) userRoleLabel = 'Thread Administrator';
-      }
-    } catch {
-      // Fail-open — a temporary DB outage defaults to Regular User
-    }
+  const [_isBotAdmin, threadAdmin, _isSysAdmin] = await Promise.all([
+    senderID && sessionUserId && sessionId
+      ? isBotAdmin(sessionUserId, platform, sessionId, senderID).catch(
+          () => false,
+        )
+      : Promise.resolve(false),
+    senderID && threadID
+      ? isThreadAdmin(threadID, senderID).catch(() => false)
+      : Promise.resolve(false),
+    senderID
+      ? isSystemAdmin(senderID).catch(() => false)
+      : Promise.resolve(false),
+  ]);
+  if (_isBotAdmin) {
+    userRoleLabel = 'Bot Administrator';
+  } else if (threadAdmin) {
+    userRoleLabel = 'Thread Administrator';
   }
 
   // ── Per-message agent command limit ──────────────────────────────────────────
@@ -306,14 +348,6 @@ export async function runAgent(
   // No budget is attached for either — unconditional exemption, not a higher limit.
   // Fail-open: if a check throws, treat that check as non-admin (limit still applies
   // unless the OTHER check independently grants the exemption).
-  let _isSysAdmin = false;
-  if (senderID) {
-    try {
-      _isSysAdmin = await isSystemAdmin(senderID);
-    } catch {
-      // Fail-open — apply limit on DB error
-    }
-  }
   const _isExemptFromCommandLimit = _isSysAdmin || _isBotAdmin;
   if (!_isExemptFromCommandLimit) {
     (ctx as unknown as Record<string, unknown>)['_agentCommandBudget'] = {
@@ -419,12 +453,15 @@ export async function runAgent(
 
     let response: Awaited<ReturnType<typeof groq.chat.completions.create>>;
     try {
-      response = await groq.chat.completions.create({
-        model: 'openai/gpt-oss-120b',
-        messages,
-        tools: groqTools,
-        tool_choice: 'auto',
-      });
+      response = await groq.chat.completions.create(
+        {
+          model: 'openai/gpt-oss-120b',
+          messages,
+          tools: groqTools,
+          tool_choice: 'auto',
+        },
+        { timeout: GROQ_REQUEST_TIMEOUT_MS },
+      );
     } catch (err) {
       if (isGroqRateLimitError(err)) {
         throw new AgentRateLimitError(
@@ -475,7 +512,15 @@ export async function runAgent(
 
       setAgentStatus(ctx, describeToolStatus(recoveredName, args));
       try {
-        const result = await recoveredTool.run(args, ctx);
+        // Same per-tool timeout as the normal dispatch path below.
+        const result =
+          recoveredName === 'test_command'
+            ? await recoveredTool.run(args, ctx)
+            : await withTimeout(
+                Promise.resolve(recoveredTool.run(args, ctx)),
+                TOOL_TIMEOUT_MS,
+                recoveredName,
+              );
         if (recoveredName === 'send_result') {
           // send_result returns 'Delivery failed: …' (not a throw) on error — only
           // count genuine deliveries so a failed send followed by a text apology
@@ -562,8 +607,17 @@ export async function runAgent(
       setAgentStatus(ctx, describeToolStatus(toolCall.function.name, args));
 
       try {
-        // Execute dynamic tool passing the requested args and the application context
-        const result = await tool.run(args, ctx);
+        // Execute dynamic tool passing the requested args and the application context.
+        // test_command self-limits with its own 10-minute race; every other tool is
+        // capped so a hung network/DB call can never pin the agent loop.
+        const result =
+          toolCall.function.name === 'test_command'
+            ? await tool.run(args, ctx)
+            : await withTimeout(
+                Promise.resolve(tool.run(args, ctx)),
+                TOOL_TIMEOUT_MS,
+                toolCall.function.name,
+              );
         if (toolCall.function.name === 'send_result') {
           // send_result returns 'Delivery failed: …' (not a throw) on error — only
           // count genuine deliveries so a failed send followed by a text apology
