@@ -36,10 +36,11 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 export const meta: EventMeta = {
   name: 'welcome',
   type: ['log:subscribe'],
+  platform: ['discord', 'telegram', 'fluxer'],
   version: '2.0.0',
   author: 'AjiroDesu',
   description:
-    'Welcomes new members to the group with a rich greeting (Discord & Telegram).',
+    'Welcomes new members to the group with a rich greeting (Discord, Telegram & Fluxer).',
 };
 
 export const onEvent = async ({
@@ -47,8 +48,8 @@ export const onEvent = async ({
   chat,
   bot,
   thread,
+  user,
   native,
-  api,
 }: AppCtx): Promise<void> => {
   try {
     const logMessageData = event['logMessageData'] as
@@ -120,11 +121,11 @@ export const onEvent = async ({
       const joinerId = String(joiner['userFbId'] ?? '');
 
       try {
-        const avatar = joinerId ? await api.getAvatarUrl(joinerId) : null;
+        const avatar = joinerId ? await user.getAvatarUrl(joinerId) : null;
 
         if (avatar) {
           const joinerName = getName(joiner);
-          const memberCount = await api.getMemberCount(threadID).catch(() => 0);
+          const memberCount = await thread.getMemberCount(threadID).catch(() => 0);
 
           const { buffer, ext } = await fetchGreetCanvas({
             type: 'Welcome',

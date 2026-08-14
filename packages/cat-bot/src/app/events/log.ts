@@ -47,10 +47,11 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 export const meta: EventMeta = {
   name: 'log',
   type: ['log:subscribe', 'log:unsubscribe'],
+  platform: ['discord', 'telegram', 'fluxer'],
   version: '1.1.0',
   author: 'AjiroDesu',
   description:
-    'Sends a bot membership update log to bot admins when the bot is added to or removed from a group, and deletes the chat/guild database record on removal.',
+    'Sends a bot membership update log to bot admins when the bot is added to or removed from a group (Discord, Telegram & Fluxer), and deletes the chat/guild database record on removal.',
 };
 
 // Discord audit log event type IDs (AuditLogEvent from discord-api-types):

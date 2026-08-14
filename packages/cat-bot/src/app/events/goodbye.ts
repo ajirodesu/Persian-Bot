@@ -34,10 +34,11 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 export const meta: EventMeta = {
   name: 'goodbye',
   type: ['log:unsubscribe'],
+  platform: ['discord', 'telegram', 'fluxer'],
   version: '2.0.0',
   author: 'AjiroDesu',
   description:
-    'Sends a farewell message when a member leaves the group (Discord & Telegram).',
+    'Sends a farewell message when a member leaves the group (Discord, Telegram & Fluxer).',
 };
 
 export const onEvent = async ({
@@ -45,8 +46,8 @@ export const onEvent = async ({
   chat,
   bot,
   thread,
+  user,
   native,
-  api,
 }: AppCtx): Promise<void> => {
   try {
     const logMessageData = event['logMessageData'] as
@@ -86,12 +87,12 @@ export const onEvent = async ({
 
     if (canvasPlatform) {
       try {
-        const avatar = await api.getAvatarUrl(leftId);
+        const avatar = await user.getAvatarUrl(leftId);
 
         if (avatar) {
           const [groupName, memberCount] = await Promise.all([
             thread.getName().catch(() => null),
-            threadID ? api.getMemberCount(threadID).catch(() => 0) : Promise.resolve(0),
+            threadID ? thread.getMemberCount(threadID).catch(() => 0) : Promise.resolve(0),
           ]);
 
           const { buffer, ext } = await fetchGreetCanvas({

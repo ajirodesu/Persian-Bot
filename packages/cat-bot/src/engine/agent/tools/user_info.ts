@@ -20,13 +20,24 @@
  * Profile data: live platform info preferred (name / username / first name /
  * avatar), stored DB fields fill in gaps (e.g. Telegram's live avatar is
  * always null). The result reports `source: 'live' | 'stored'` and how the
- * target was resolved (`lookupBy`). Never throws — every failure returns a
- * descriptive string.
+ * target was resolved (`lookupBy`).
+ *
+ * Bot-system stats (same data surface as /profile + /rank) are attached under
+ * `stats`: wallet balance, bank vault, daily-claim streak, raw EXP + level +
+ * leaderboard rank, role (System Admin / Bot Admin / Premium / Member) and
+ * ban status. Every stat section is fail-open — missing collections, absent
+ * session identity, or DB errors yield defaults instead of throwing.
+ *
+ * Never throws — every failure returns a descriptive string.
  */
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { resolveAgentContext } from '../agent.util.js';
 import { getUserById, getUserByUsername } from '@/engine/repos/users.repo.js';
+import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
+import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
+import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { isUserBanned } from '@/engine/repos/banned.repo.js';
 import type { StoredUserProfile } from '@/engine/models/users.model.js';
 
 // ============================================================================
@@ -41,7 +52,9 @@ export const config = {
     'up that specific person. When neither is passed, the user MENTIONED in the ' +
     'current message is looked up automatically (never the requester), and only ' +
     'as a last resort the sender of the message. Returns name, username, first ' +
-    'name and avatar URL from live platform data.',
+    'name and avatar URL from live platform data, plus bot-system stats: wallet ' +
+    'and bank balance, daily-claim streak, XP/level, leaderboard rank, role and ' +
+    'ban status.',
   parameters: {
     type: 'object',
     properties: {
@@ -158,6 +171,137 @@ async function resolveMentionedTargets(
 }
 
 // ============================================================================
+// BOT-SYSTEM STATS
+// ============================================================================
+
+/** Controls how quickly users level up — higher = slower progression (same as /rank). */
+const DELTA_NEXT = 5;
+
+/** Converts raw EXP to a level number (same formula as /rank and /profile). */
+function expToLevel(exp: number): number {
+  if (exp <= 0) return 0;
+  return Math.floor((1 + Math.sqrt(1 + (8 * exp) / DELTA_NEXT)) / 2);
+}
+
+/** Minimum EXP required to reach a specific level. */
+function levelToExp(level: number): number {
+  if (level <= 0) return 0;
+  return Math.floor(((level * level - level) * DELTA_NEXT) / 2);
+}
+
+/**
+ * Gathers every bot-system statistic the bot tracks for a user — the same
+ * data surface as /profile + /rank: wallet balance, bank vault, daily-claim
+ * streak + last claim, raw EXP + level + next-level progress, leaderboard
+ * rank, role, and ban status.
+ *
+ * Every section is fail-open — a missing collection, absent session identity,
+ * or DB error yields the field's default instead of throwing, so a stats
+ * failure can never kill the lookup.
+ */
+async function resolveBotStats(
+  uid: string,
+  ctx: AppCtx,
+): Promise<Record<string, unknown>> {
+  const { userId, platform, sessionId } = ctx.native;
+  const stats: Record<string, unknown> = {
+    balance: 0,
+    bankBalance: 0,
+    dailyStreak: 0,
+    lastDailyClaim: null,
+    xp: 0,
+    level: 0,
+    expToNextLevel: 0,
+    rank: 1,
+    totalRanked: 1,
+    role: 'Member',
+    banned: false,
+  };
+
+  // ── Wallet balance — shared currencies context (null-safe, /balance path) ──
+  try {
+    const currencies =
+      ctx.currencies ??
+      createCurrenciesContext(userId ?? '', platform, sessionId ?? '');
+    stats.balance = await currencies.getMoney(uid);
+  } catch {
+    /* fail-open */
+  }
+
+  // ── Per-user collections: daily claim, bank vault, XP + leaderboard ────────
+  try {
+    const userColl = ctx.db.users.collection(uid);
+
+    // Daily-claim streak + last claim live on the money collection (/daily).
+    if (await userColl.isCollectionExist('money')) {
+      const moneyColl = await userColl.getCollection('money');
+      const rawStreak = await moneyColl.get('streak');
+      const rawLastClaim = await moneyColl.get('lastClaim');
+      if (typeof rawStreak === 'number') stats.dailyStreak = rawStreak;
+      if (typeof rawLastClaim === 'number' && rawLastClaim > 0) {
+        stats.lastDailyClaim = new Date(rawLastClaim).toISOString();
+      }
+    }
+
+    // Bank vault balance (/bank).
+    if (await userColl.isCollectionExist('bank')) {
+      const bankColl = await userColl.getCollection('bank');
+      const rawBank = await bankColl.get('balance');
+      stats.bankBalance = typeof rawBank === 'number' ? rawBank : 0;
+    }
+
+    // XP → level → leaderboard rank (/rank).
+    let exp = 0;
+    if (await userColl.isCollectionExist('xp')) {
+      const xpColl = await userColl.getCollection('xp');
+      const rawExp = await xpColl.get('exp');
+      exp = typeof rawExp === 'number' ? rawExp : 0;
+    }
+    const level = expToLevel(exp);
+    stats.xp = exp;
+    stats.level = level;
+    stats.expToNextLevel = levelToExp(level + 1) - levelToExp(level);
+
+    const allSessions = await ctx.db.users.getAll();
+    const leaderboard = allSessions
+      .map(({ botUserId, data }) => {
+        const xpData = data?.['xp'] as Record<string, unknown> | undefined;
+        const userExp =
+          xpData && typeof xpData['exp'] === 'number'
+            ? (xpData['exp'] as number)
+            : 0;
+        return { botUserId, exp: userExp };
+      })
+      .sort((a, b) => b.exp - a.exp);
+    stats.totalRanked = Math.max(1, leaderboard.length);
+    const pos = leaderboard.findIndex((u) => u.botUserId === uid);
+    if (pos !== -1) stats.rank = pos + 1;
+  } catch {
+    /* fail-open */
+  }
+
+  // ── Role + ban status (/profile) ──────────────────────────────────────────
+  if (userId && platform && sessionId) {
+    try {
+      const [sysAdmin, botAdmin, premium, banned] = await Promise.all([
+        isSystemAdmin(uid),
+        isBotAdmin(userId, platform, sessionId, uid),
+        isBotPremium(userId, platform, sessionId, uid),
+        isUserBanned(userId, platform, sessionId, uid),
+      ]);
+      if (sysAdmin) stats.role = 'System Admin';
+      else if (botAdmin) stats.role = 'Bot Admin';
+      else if (premium) stats.role = 'Premium Member';
+      stats.banned = banned;
+    } catch {
+      /* fail-open */
+    }
+  }
+
+  return stats;
+}
+
+// ============================================================================
 // TOOL RUN
 // ============================================================================
 
@@ -196,6 +340,7 @@ export const run = async (
           lookupBy: 'username',
           source,
           currentThreadID: threadID || null,
+          stats: await resolveBotStats(profile.id, ctx),
         },
         null,
         2,
@@ -220,6 +365,7 @@ export const run = async (
           lookupBy: 'uid',
           source,
           currentThreadID: threadID || null,
+          stats: await resolveBotStats(profile.id, ctx),
         },
         null,
         2,
@@ -251,6 +397,7 @@ export const run = async (
           mention: target.label,
           source,
           currentThreadID: threadID || null,
+          stats: await resolveBotStats(profile.id, ctx),
         },
         null,
         2,
@@ -275,6 +422,7 @@ export const run = async (
           lookupBy: 'current-sender',
           source,
           currentThreadID: threadID || null,
+          stats: await resolveBotStats(profile.id, ctx),
         },
         null,
         2,

@@ -35,10 +35,11 @@ import { prefixManager } from '@/engine/modules/prefix/prefix-manager.lib.js';
 export const meta: EventMeta = {
   name: 'notice',
   type: ['log:subscribe'],
+  platform: ['discord', 'telegram', 'fluxer'],
   version: '1.0.0',
   author: 'AjiroDesu',
   description:
-    'Announces the bot when it is added to a group (Discord & Telegram).',
+    'Announces the bot when it is added to a group (Discord, Telegram & Fluxer).',
 };
 
 export const onEvent = async ({
