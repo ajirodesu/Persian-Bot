@@ -76,8 +76,9 @@ export function describeToolStatus(
             .map((c) => (typeof c?.command === 'string' ? c.command : null))
             .filter((c): c is string => Boolean(c))
         : [];
+      const direct = args['deliver'] === true ? ' (direct)' : '';
       return commands.length > 0
-        ? `⚙️ Running \`${commands.join('`, `')}\`…`
+        ? `⚙️ Running \`${commands.join('`, `')}\`${direct}…`
         : '⚙️ Running command…';
     }
     case 'send_result':

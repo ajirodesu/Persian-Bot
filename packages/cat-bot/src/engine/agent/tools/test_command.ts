@@ -56,11 +56,17 @@ const EXECUTION_TIMEOUT_MS = 10 * 60 * 1_000;
 export const config = {
   name: 'test_command',
   description:
-    'Execute commands silently to intercept and preview their output. Always use the ' +
-    '`commands` array — the legacy single-command shorthand has been removed. Returns ' +
-    'a `key` and a `calls` array. When the combined output across all commands contains ' +
-    'more than one attachment, `button_key` is automatically null because platforms ' +
-    'cannot deliver multiple file attachments alongside interactive button components.',
+    'Execute bot commands. Two modes: (1) default PREVIEW mode — commands run ' +
+    'silently and their output is intercepted and returned as `key`/`calls` so ' +
+    'you can inspect it, then deliver via `send_result`; (2) DIRECT mode — pass ' +
+    '`deliver: true` and each command runs against the real platform API and ' +
+    'sends its own reply immediately, exactly like a manually typed command ' +
+    '(fastest, one tool call, no preview or replay needed). Use DIRECT mode for ' +
+    'straightforward command requests; use PREVIEW mode when you need to see the ' +
+    'output first or combine multiple commands into one reply. Always use the ' +
+    '`commands` array. In PREVIEW mode, when the combined output contains more ' +
+    'than one attachment, `button_key` is automatically null because platforms ' +
+    'cannot deliver multiple file attachments alongside interactive buttons.',
   parameters: {
     type: 'object',
     properties: {
@@ -81,7 +87,15 @@ export const config = {
           },
           required: ['command', 'args'],
         },
-        description: 'List of commands to test in sequence.',
+        description: 'List of commands to execute in sequence.',
+      },
+      deliver: {
+        type: ['boolean', 'null'],
+        description:
+          'Optional. When true, commands execute against the real platform API ' +
+          'and send their own replies directly (manual-command speed, single ' +
+          'call). When false or omitted, outputs are intercepted for preview ' +
+          'and delivered later via send_result.',
       },
     },
     required: ['commands'],
@@ -280,7 +294,10 @@ function extractBinaryAttachments(
 // ============================================================================
 
 export const run = async (
-  payload: { commands: Array<{ command: string; args: string[] }> },
+  payload: {
+    commands: Array<{ command: string; args: string[] }>;
+    deliver?: unknown;
+  },
   ctx: AppCtx,
 ): Promise<string> => {
   const { senderID, threadID, sessionUserId, sessionId, platform } =
@@ -588,7 +605,120 @@ export const run = async (
     }
   })();
 
-  // Race the execution IIFE against a fixed-duration timer. Resolving (not rejecting)
+  // ── DIRECT EXECUTION MODE (deliver: true) ──────────────────────────────────
+  // Runs each command against the REAL platform API so it sends its own reply
+  // directly — identical to a manually typed command (same dispatcher, same
+  // typing indicator, same reaction, same cooldown consumption), in a single
+  // tool call with no preview round-trip and no send_result replay.
+  const directExecution = (async (): Promise<string> => {
+    try {
+      return await runDirect();
+    } catch (err) {
+      return `Error executing commands directly: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    }
+  })();
+
+  async function runDirect(): Promise<string> {
+    const executed: string[] = [];
+    const directErrors: string[] = [];
+    const trimNote = (ctx as unknown as Record<string, unknown>)[
+      '_agentCommandTrimNote'
+    ] as string | undefined;
+    if (trimNote) {
+      delete (ctx as unknown as Record<string, unknown>)[
+        '_agentCommandTrimNote'
+      ];
+      directErrors.push(trimNote);
+    }
+
+    for (const cmdObj of cmdsToRun) {
+      // Same malformed-entry guard as the preview path.
+      if (
+        cmdObj === null ||
+        typeof cmdObj !== 'object' ||
+        typeof cmdObj.command !== 'string'
+      ) {
+        directErrors.push(
+          'Skipped a malformed command entry (expected { command, args }).',
+        );
+        continue;
+      }
+      const command = cmdObj.command;
+      const args = Array.isArray(cmdObj.args) ? cmdObj.args : [];
+
+      const mod = ctx.commands.get(command.toLowerCase());
+      if (!mod || typeof mod['onCommand'] !== 'function') {
+        directErrors.push(`Command '${command}' not found.`);
+        continue;
+      }
+
+      // Mirror manual throttling: consume the cooldown so agent-driven
+      // execution is rate-limited exactly like a typed command.
+      const guard = await inspectCommandConstraints(
+        mod,
+        command.toLowerCase(),
+        senderID,
+        threadID,
+        sessionUserId,
+        platform,
+        sessionId,
+        true,
+      );
+      if (!guard.allowed) {
+        directErrors.push(`Command '${command}' blocked: ${guard.reason}`);
+        continue;
+      }
+
+      const simulatedMessage =
+        `${ctx.prefix || '/'}${command} ${args.join(' ')}`.trim();
+      const simulatedEvent = {
+        ...ctx.event,
+        message: simulatedMessage,
+        body: simulatedMessage,
+      };
+      const commandCtx: OnCommandCtx = {
+        ...ctx,
+        event: simulatedEvent,
+        parsed: { name: command, args },
+        prefix: ctx.prefix || '/',
+        mod,
+        options: OptionsMap.empty(),
+      };
+
+      // Real api — the command sends its own reply (text/attachments/buttons)
+      // straight to the thread, exactly like a manual invocation.
+      await dispatchCommand(
+        commandCtx.parsed!,
+        commandCtx,
+        ctx.api,
+        threadID,
+        commandCtx.prefix,
+      );
+      executed.push(command);
+    }
+
+    if (executed.length === 0) {
+      return `No commands executed. ${directErrors.join(' ')}`.trim();
+    }
+    return JSON.stringify(
+      {
+        delivered: true,
+        executed,
+        ...(directErrors.length > 0 ? { errors: directErrors } : {}),
+        note:
+          'Each command ran with the real platform API and sent its own reply ' +
+          'directly — same as a manual command. Send a brief closing message ' +
+          'via send_result.',
+      },
+      null,
+      2,
+    );
+  }
+
+
+  // Race the execution IIFEs against a fixed-duration timer. Resolving (not rejecting)
   // the timeout keeps the return type as Promise<string> without an extra try/catch.
   // Unref'd so the timer cannot prevent process exit when the bot is shutting down.
   const timeout = new Promise<string>((resolve) => {
@@ -603,5 +733,7 @@ export const run = async (
     (t as NodeJS.Timeout).unref();
   });
 
-  return Promise.race([execution, timeout]);
+  return payload.deliver === true
+    ? Promise.race([directExecution, timeout])
+    : Promise.race([execution, timeout]);
 };
