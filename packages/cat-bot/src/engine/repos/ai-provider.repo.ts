@@ -5,7 +5,6 @@ import {
   deleteUserAiKey as _deleteUserAiKey,
 } from 'database';
 import { encrypt, decrypt } from '@/engine/utils/crypto.util.js';
-import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { getProviderModelsCached } from '@/engine/lib/ai-model-catalog.lib.js';
 import {
   AI_PROVIDERS,
@@ -20,14 +19,6 @@ import {
 // ============================================================================
 // Types
 // ============================================================================
-
-/** What the agent actually needs per invocation: the active provider, its
- * model, and the decrypted API key for that provider. */
-export interface AiRuntimeConfig {
-  provider: AiProviderId;
-  model: string;
-  apiKey: string;
-}
 
 export interface AiProviderKeyStatus {
   hasKey: boolean;
@@ -99,16 +90,6 @@ function storedModelOf(
 }
 
 // ============================================================================
-// Cache
-// ============================================================================
-
-// The resolved runtime config is needed on EVERY AI invocation (runAgent +
-// ai.ts's gate) — caching it eliminates a DB round-trip from the pre-agent hot
-// path. Keys change rarely and save/remove invalidate explicitly, so the 15-min
-// TTL is only a fallback.
-const aiConfigCacheKey = (userId: string): string => `ai:cfg:${userId}`;
-
-// ============================================================================
 // Model-list helpers
 // ============================================================================
 
@@ -157,53 +138,6 @@ function normalizeFromList(
 // ============================================================================
 // Repo API
 // ============================================================================
-
-/**
- * Returns the user's ACTIVE AI configuration — provider, model, and the
- * decrypted key for that provider — or null when unset/undecryptable. No
- * cross-provider fallback: if the active provider's key is missing, AI is
- * disabled (the dashboard shows per-provider status so the user can switch).
- *
- * HOT PATH: runs on every AI message. Deliberately fetch-free — the stored
- * model was validated against the live catalog at save time, so it's trusted
- * as-is (empty/invalid → provider default).
- *
- * The config is scoped to a single user's account — callers must resolve the
- * account id from the bot session (`ctx.native.userId`) and never pass another
- * user's id.
- */
-export async function getAiProviderConfig(
-  userId: string,
-): Promise<AiRuntimeConfig | null> {
-  if (!userId) return null;
-  const cached = lruCache.get<AiRuntimeConfig | null>(aiConfigCacheKey(userId));
-  if (cached !== undefined) return cached;
-  const stored = await _getUserAiConfig(userId);
-  let result: AiRuntimeConfig | null = null;
-  if (stored) {
-    const provider = providerOf(stored.provider);
-    const encryptedKey = storedKeyOf(stored, provider);
-    if (encryptedKey) {
-      try {
-        const apiKey = decrypt(encryptedKey);
-        if (apiKey) {
-          const storedModel = storedModelOf(stored, provider).trim();
-          result = {
-            provider,
-            model: storedModel || AI_PROVIDERS[provider].defaultModel,
-            apiKey,
-          };
-        }
-      } catch {
-        // Corrupt/tampered ciphertext — treat as "no config" so AI stays
-        // disabled rather than leaking or failing with a cryptic error.
-        result = null;
-      }
-    }
-  }
-  lruCache.set(aiConfigCacheKey(userId), result);
-  return result;
-}
 
 /** Dashboard status payload — per-provider presence + hints, never keys. */
 export async function getAiSettingsStatus(
@@ -399,9 +333,6 @@ export async function saveUserAiConfig(
     await _updateUserAiModel(userId, provider, model);
   }
 
-  // Invalidate the cached runtime config so the next AI invocation sees the
-  // new provider/model/key immediately.
-  lruCache.del(aiConfigCacheKey(userId));
   return getAiSettingsStatus(userId);
 }
 
@@ -415,7 +346,6 @@ export async function removeUserAiKey(
     throw new AiConfigError('Invalid AI provider.');
   }
   await _deleteUserAiKey(userId, provider);
-  lruCache.del(aiConfigCacheKey(userId));
   return getAiSettingsStatus(userId);
 }
 

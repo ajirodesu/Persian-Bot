@@ -190,8 +190,8 @@ class TelegramApi extends UnifiedApi {
    * Streams a "Thinking…" RichBlockThinking draft (Bot API 10.1+
    * sendRichMessageDraft). Private chats only — the Bot API rejects
    * draft_id/rich_message payloads targeting groups/channels, so callers
-   * (thinking-indicator.lib.ts) are expected to gate on chat type before
-   * invoking this; a failure here is swallowed by the caller either way.
+   * are expected to gate on chat type before invoking this; a failure here
+   * is swallowed by the caller either way.
    */
   override sendThinkingDraft(
     threadID: string,

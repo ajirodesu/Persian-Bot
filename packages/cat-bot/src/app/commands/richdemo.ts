@@ -70,7 +70,7 @@ function buildMarkdownDemo(): string {
     '',
     '## Task list',
     '- [x] Ship `sendRichMessage`',
-    '- [x] Ship `sendRichMessageDraft` (used by the AI thinking indicator)',
+    '- [x] Ship `sendRichMessageDraft` (thinking/draft message support)',
     '- [ ] Convert every command to rich output',
     '',
     '## Code block',

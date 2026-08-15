@@ -4,13 +4,12 @@
  * Streams an ephemeral (~30s preview) partial rich message to a PRIVATE chat.
  * Per Bot API docs this is the only method allowed to carry an
  * InputRichBlockThinking block (`<tg-thinking>`), and is otherwise used for
- * ChatGPT-style incremental rendering of AI output. Cat-Bot currently only
- * uses this for the "thinking…" placeholder — see
- * `@/engine/lib/thinking-indicator.lib.ts`.
+ * ChatGPT-style incremental rendering of AI output. Cat-Bot uses this for
+ * "thinking…" placeholder drafts.
  *
  * Constraints enforced by the Bot API (not re-validated here beyond the
- * chat_id type, since the caller — thinking-indicator.lib.ts — already gates
- * on private-chat + Telegram before calling in):
+ * chat_id type, since callers are expected to gate on private-chat + Telegram
+ * before calling in):
  *   - chat_id must be an Integer (never @username / group / channel).
  *   - draft_id must be non-zero; repeated calls with the same draft_id are
  *     animated client-side rather than flashing a new message each time.
@@ -34,8 +33,8 @@ export interface SendThinkingDraftOptions {
 /**
  * Sends/updates a "Thinking…" placeholder draft. Fire-and-forget from the
  * caller's perspective — errors are the caller's responsibility to handle
- * (thinking-indicator.lib.ts swallows them, matching sendTypingIndicator's
- * "must never fail the underlying command" contract).
+ * (matching sendTypingIndicator's "must never fail the underlying command"
+ * contract).
  */
 export async function sendThinkingDraft(
   ctx: Context,

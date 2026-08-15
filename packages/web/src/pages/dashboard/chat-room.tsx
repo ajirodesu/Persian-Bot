@@ -2209,7 +2209,7 @@ function GetStartedScreen({
           Meet {botNickname}
         </h1>
         <p className="text-sm text-on-surface-variant leading-relaxed">
-          Your personal AI assistant — right inside the dashboard. Send commands, get rich responses, and explore everything the bot can do.
+          Your personal bot — right inside the dashboard. Send commands, get rich responses, and explore everything it can do.
         </p>
       </div>
 

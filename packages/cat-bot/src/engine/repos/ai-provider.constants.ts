@@ -1,13 +1,11 @@
 /**
- * AI Provider Catalog — single source of truth for every LLM provider the bot's
- * agent can run on (OpenRouter is the PRIMARY provider; Groq and NVIDIA are the
- * secondary providers). Used by:
+ * AI Provider Catalog — single source of truth for every LLM provider the
+ * dashboard's AI Integration settings support (OpenRouter is the PRIMARY
+ * provider; Groq and NVIDIA are the secondary providers). Used by:
  *   • the settings API (dashboard model lists + provider labels),
- *   • key/model validation before anything reaches the database,
- *   • the agent's client factory (per-provider base URL + model selection).
+ *   • key/model validation before anything reaches the database.
  *
- * Every provider speaks the OpenAI-compatible chat-completions API, so the same
- * OpenAI-compatible SDK drives them all — only the base URL and model id differ.
+ * Every provider speaks the OpenAI-compatible chat-completions API.
  *
  * Model catalogs: the FULL model list is fetched live from each provider's
  * /models endpoint (see ai-model-catalog.lib.ts) so every model — including all
@@ -94,8 +92,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
     description:
       'NVIDIA NIM — accelerated LLM inference on NVIDIA hardware (build.nvidia.com).',
     // NVIDIA serves the OpenAI-compatible API directly at /v1/… with NO
-    // /openai/v1 segment — the agent's client factory strips the SDK-injected
-    // segment for every provider with a custom baseURL.
+    // /openai/v1 segment.
     baseURL: 'https://integrate.api.nvidia.com/v1',
     modelsUrl: 'https://integrate.api.nvidia.com/v1/models',
     keyPlaceholder: 'nvapi-…',

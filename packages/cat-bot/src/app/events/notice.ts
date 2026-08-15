@@ -89,7 +89,7 @@ export const onEvent = async ({
     const lines = [
       `🎉 **Hello everyone in ${group}!**`,
       ``,
-      `I'm **${botName}** — your multipurpose AI assistant, and I've just joined the party! 👋`,
+      `I'm **${botName}** — your multipurpose assistant, and I've just joined the party! 👋`,
       ``,
       `🤖 Type \`${prefix}help\` to explore everything I can do.`,
       `💬 Just say my name — e.g. "Hi **${botName}**" — and I'll respond automatically!`,

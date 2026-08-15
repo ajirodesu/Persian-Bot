@@ -265,9 +265,6 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
       // how a Discord/Telegram bot session is scoped to (ownerUserId, sessionId).
       // This makes the web bot's database behave identically to Discord/Telegram:
       // real rows, in the same chosen DATABASE_TYPE adapter, surviving restarts.
-      //
-      // webchatNickname is forwarded to ai.ts onChat so the user's custom bot
-      // nickname triggers the AI assistant exactly like Discord/Telegram.
       const session = activeSessionId ? sessions.get(activeSessionId) : undefined;
       const hasRealAccount = !!session?.userId && session.userId !== 'web-user';
       return {
@@ -275,7 +272,6 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
         ...(hasRealAccount
           ? { userId: session!.userId, sessionId: WEBCHAT_SESSION_ID }
           : {}),
-        ...(session?.botNickname ? { webchatNickname: session.botNickname } : {}),
       };
     }
 
@@ -417,8 +413,8 @@ export function registerChatRoomHandlers(io: SocketIOServer): void {
           // Forward real attachments (image/video/audio/file with a usable url —
           // either a data: URL from an uploaded photo or an http(s) URL) to the
           // engine instead of hardcoding an empty array, so commands that read
-          // event.attachments (vision/AI commands, file-aware commands) can see
-          // what the user actually sent from the web chat room.
+          // event.attachments (file-aware commands) can see what the user
+          // actually sent from the web chat room.
           attachments: attachments ?? [],
           mentions: {},
           timestamp: Date.now(),

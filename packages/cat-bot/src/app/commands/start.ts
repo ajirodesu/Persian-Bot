@@ -29,10 +29,10 @@
  *    admin sees more than an anonymous user; a bot admin sees more still.
  *
  * 4. Live bot nickname — the bot's configured display name is read via
- *    getBotNickname() (same cached repo used by ai.ts) and used everywhere
- *    this command would otherwise say "Cat-Bot", so a renamed bot instance
- *    never shows a stale hardcoded name. Falls back to "Cat-Bot" only when no
- *    nickname has been configured for this session.
+ *    getBotNickname() and used everywhere this command would otherwise say
+ *    "Cat-Bot", so a renamed bot instance never shows a stale hardcoded name.
+ *    Falls back to "Cat-Bot" only when no nickname has been configured for
+ *    this session.
  *
  * 5. Quick-action buttons — on platforms with native buttons (Discord,
  *    Telegram, WebChat — see hasNativeButtons()), 📖 Help and 📜 Menu
@@ -51,14 +51,6 @@
  *    Prev/Next and menu.ts's category/Back buttons after navigating there
  *    from /start (every button they generated was mis-tagged "start:<id>",
  *    a key that doesn't exist in start.ts's own button map).
- *
- * ── The bot's AI features, both surfaced here ────────────────────────────
- * Cat-Bot ships a tool-using AI conversation surface, and /start calls it
- * out so new users do not miss it:
- *   • The AI agent (`/ai`, or just saying the bot's nickname in chat) — a
- *     tool-using assistant (see engine/agent/agent.ts) that can chat AND
- *     execute other bot commands on the user's behalf. It refers to itself
- *     by the session's configured nickname.
  *
  * ── How it fits the command system ───────────────────────────────────────
  * Standard CommandMeta + onCommand/button module shape, same as every other
@@ -113,14 +105,13 @@ export const meta: CommandMeta = {
 const HR = '─────────────────';
 
 /** Fallback display name used only when no nickname has been configured
- *  for this session — mirrors the same fallback agent.ts uses internally. */
+ *  for this session. */
 const DEFAULT_NICKNAME = 'Cat-Bot';
 
 /**
  * Feature groups shown in the welcome summary — kept high-level and
  * category-shaped rather than a full command dump, since /help and /menu
- * already own the exhaustive listing. The AI Chat entry is built separately
- * at render time since it needs the bot's live nickname.
+ * already own the exhaustive listing.
  */
 const STATIC_FEATURE_GROUPS = [
   {
@@ -136,7 +127,7 @@ const STATIC_FEATURE_GROUPS = [
   {
     emoji: '🎨',
     label: 'Image Tools',
-    blurb: 'AI image generation, filters, and random photo commands',
+    blurb: 'image filters, random photos, and canvas effects',
   },
   {
     emoji: '🛡️',
@@ -419,7 +410,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
   const introLines = isFirstTime
     ? [
-        `${botNickname} is a multi-platform assistant — it runs on Discord, Telegram, and WebChat, and packs AI chat, an economy system, media downloaders, games, and moderation tools into one bot.`,
+        `${botNickname} is a multi-platform assistant — it runs on Discord, Telegram, and WebChat, and packs an economy system, media downloaders, games, and moderation tools into one bot.`,
         `Here's what you get:`,
       ]
     : [
@@ -427,13 +418,9 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
         `Quick refresher on what's on offer:`,
       ];
 
-  // Built dynamically since it references the bot's own live nickname.
-  const aiFeatureLine = `🤖 **AI Chat** — talk to the AI agent via \`${prefix}ai\` or by saying "${botNickname}" in chat`;
-
-  const featureLines = [
-    aiFeatureLine,
-    ...STATIC_FEATURE_GROUPS.map((f) => `${f.emoji} **${f.label}** — ${f.blurb}`),
-  ];
+  const featureLines = STATIC_FEATURE_GROUPS.map(
+    (f) => `${f.emoji} **${f.label}** — ${f.blurb}`,
+  );
 
   const howItWorksLines = [
     `**How it works:**`,
@@ -441,7 +428,6 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     `• Based on your current access level, you can run ${commandCount} command(s) right now. Run \`${prefix}help\` to list them, or \`${prefix}help <command>\` for details on one.`,
     `• Run \`${prefix}menu\` to browse commands grouped by category instead.`,
     `• Some commands need group-admin, bot-admin, or premium access — you'll be told if one is out of reach.`,
-    `• Talk to the AI agent any time with \`${prefix}ai <message>\` or by saying "${botNickname}" — it can chat and even run other commands for you.`,
   ];
 
   const message = [

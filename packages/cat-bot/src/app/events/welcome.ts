@@ -104,7 +104,7 @@ export const onEvent = async ({
       ``,
       greeting,
       ``,
-      `🤖 **I'm ${botName}** — your multipurpose AI assistant.`,
+      `🤖 **I'm ${botName}** — your multipurpose assistant.`,
       `Type \`${prefix}help\` to explore everything I can do.`,
       ``,
       `Feel free to introduce yourself and enjoy your stay! 🌟`,

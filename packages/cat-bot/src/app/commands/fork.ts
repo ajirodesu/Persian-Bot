@@ -82,7 +82,7 @@ function timeAgo(iso: string): string {
 function buildLiveCard(repo: GitHubRepo): string {
   const description =
     repo.description?.trim() ||
-    'A multi-platform (Discord, Telegram, Webchat) bot engine with canvas-based image generation, an AI agent, and a full-stack dashboard.';
+    'A multi-platform (Discord, Telegram, Webchat) bot engine with canvas-based image generation and a full-stack dashboard.';
 
   return [
     `🍴 **Fork Cat-Bot**`,
@@ -117,7 +117,7 @@ function buildFallbackCard(): string {
   return [
     `🍴 **Fork Cat-Bot**`,
     ``,
-    `A multi-platform (Discord, Telegram, Webchat) bot engine with canvas-based image generation, an AI agent, and a full-stack dashboard.`,
+    `A multi-platform (Discord, Telegram, Webchat) bot engine with canvas-based image generation and a full-stack dashboard.`,
     ``,
     `**— How to Fork —**`,
     `1️⃣ Open the repository link below.`,

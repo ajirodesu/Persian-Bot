@@ -56,8 +56,7 @@ export async function runOnChat(
 ): Promise<void> {
   // Deduplicate by module reference before fan-out — loadCommands() registers one Map key
   // per command name AND one per alias, all pointing to the same module object. Without
-  // this guard, a module with N aliases fires onChat N+1 times per message (e.g. ai.ts
-  // with aliases ['chatgpt', 'bot'] would call onChat 3× and send 3 AI replies).
+  // this guard, a module with N aliases would fire onChat N+1 times per message.
   const seen = new Set<Record<string, unknown>>();
 
   // Resolve session identity once — shared across all module guards in this fan-out.
@@ -127,8 +126,7 @@ export async function runOnChat(
   // not the message is actually addressed to the bot — most onChat handlers are passive
   // observers that never reply. Starting an indicator at this level would show "bot is
   // typing…" for any message at all, including ones nobody is using the bot for. Handlers
-  // that DO decide to respond (e.g. ai.ts's onChat, which only proceeds once it confirms
-  // the message mentions/triggers the bot) are responsible for starting their own indicator
-  // at that point — see withThinkingIndicator in ai.ts, gated behind its own trigger check.
+  // that DO decide to respond are responsible for starting their own indicator at that
+  // point, gated behind their own trigger check.
   await Promise.allSettled(tasks);
 }

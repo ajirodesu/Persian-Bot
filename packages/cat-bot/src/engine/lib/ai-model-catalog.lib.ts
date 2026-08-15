@@ -11,7 +11,7 @@
  *
  * Fail-open: any network/parse error returns null (caller decides the
  * fallback) and logs a warning — a models outage must never break the
- * dashboard or the AI agent.
+ * dashboard.
  */
 import axios from 'axios';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
