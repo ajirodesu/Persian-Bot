@@ -9,6 +9,8 @@ import Dialog from '@/components/ui/overlay/Dialog'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
+import Select from '@/components/ui/forms/Select'
+import SearchableSelect from '@/components/ui/forms/SearchableSelect'
 import Alert from '@/components/ui/feedback/Alert'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
@@ -19,6 +21,75 @@ import { authUserClient } from '@/lib/better-auth-client.lib'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
 import { ROUTES } from '@/constants/routes.constants'
+
+// ============================================================================
+// AI Integration — provider + model types
+// ============================================================================
+
+type AiProviderId = 'groq' | 'openrouter' | 'nvidia'
+
+interface AiProviderKeyStatus {
+  hasKey: boolean
+  keyHint: string | null
+}
+
+interface AiSettingsStatus {
+  provider: AiProviderId
+  model: string
+  groqModel: string
+  openrouterModel: string
+  nvidiaModel: string
+  providers: Record<AiProviderId, AiProviderKeyStatus>
+  models: Record<
+    AiProviderId,
+    { id: string; label: string; free?: boolean }[]
+  >
+}
+
+const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
+  groq: 'Groq',
+  openrouter: 'OpenRouter',
+  nvidia: 'NVIDIA',
+}
+
+const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
+  groq: 'gsk_…',
+  openrouter: 'sk-or-v1-…',
+  nvidia: 'nvapi-…',
+}
+
+const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'groq', label: 'Groq' },
+  { value: 'nvidia', label: 'NVIDIA' },
+]
+
+// Infers the provider from a key's prefix as it's typed/pasted —
+// `sk-or-v1-` is an OpenRouter key (checked first — the primary provider),
+// `nvapi-` an NVIDIA key, `gsk_` a Groq key. Returns null while the key is too
+// short or doesn't match any format.
+const detectProviderFromKey = (key: string): AiProviderId | null => {
+  const trimmed = key.trim()
+  if (trimmed.startsWith('sk-or-v1')) return 'openrouter'
+  if (trimmed.startsWith('nvapi-')) return 'nvidia'
+  if (trimmed.startsWith('gsk_')) return 'groq'
+  return null
+}
+
+// Fallback shown if the status fetch fails — models are re-fetched on save.
+const EMPTY_AI_STATUS: AiSettingsStatus = {
+  provider: 'openrouter',
+  model: '',
+  groqModel: '',
+  openrouterModel: '',
+  nvidiaModel: '',
+  providers: {
+    groq: { hasKey: false, keyHint: null },
+    openrouter: { hasKey: false, keyHint: null },
+    nvidia: { hasKey: false, keyHint: null },
+  },
+  models: { groq: [], openrouter: [], nvidia: [] },
+}
 
 // ============================================================================
 // Page
@@ -79,6 +150,10 @@ function SettingsPageSkeleton() {
           </div>
         </Card.Header>
         <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Skeleton variant="input" height={44} className="w-full" />
+            <Skeleton variant="input" height={44} className="w-full" />
+          </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-outline-variant/50">
             <div className="flex flex-col gap-1.5">
               <Skeleton variant="text" textSize="label-lg" width="160px" />
@@ -275,59 +350,115 @@ export default function SettingsPage() {
     window.location.assign(ROUTES.LOGIN)
   }
 
-  // ── Groq API key state ───────────────────────────────────────────────────
-  const [groqStatus, setGroqStatus] = useState<{
-    hasKey: boolean
-    keyHint: string | null
-  } | null>(null)
-  const [groqLoading, setGroqLoading] = useState(true)
-  const [groqKeyInput, setGroqKeyInput] = useState('')
-  const [groqEditing, setGroqEditing] = useState(false)
-  const [groqRemoving, setGroqRemoving] = useState(false)
-  const [groqRemoveError, setGroqRemoveError] = useState<string | null>(null)
+  // ── AI Integration state (provider + model + key) ────────────────────────
+  const [aiStatus, setAiStatus] = useState<AiSettingsStatus | null>(null)
+  const [aiLoading, setAiLoading] = useState(true)
+  const [providerDraft, setProviderDraft] = useState<AiProviderId>('openrouter')
+  const [modelDraft, setModelDraft] = useState('')
+  const [aiKeyInput, setAiKeyInput] = useState('')
+  const [aiEditing, setAiEditing] = useState(false)
+  const [aiRemoving, setAiRemoving] = useState(false)
+  const [aiRemoveError, setAiRemoveError] = useState<string | null>(null)
 
-  // Fetch the current key status once on mount — the API never returns the key
-  // itself, only whether one exists and a 4-char hint.
+  // Fetch the current provider config once on mount — the API never returns the
+  // keys themselves, only whether one exists and a 4-char hint per provider.
   useEffect(() => {
     let cancelled = false
     apiClient
-      .get<{ hasKey: boolean; keyHint: string | null }>(
-        '/api/v1/settings/groq-key',
-      )
+      .get<AiSettingsStatus>('/api/v1/settings/ai')
       .then((res) => {
-        if (!cancelled) setGroqStatus(res.data)
+        if (cancelled) return
+        setAiStatus(res.data)
+        setProviderDraft(res.data.provider)
+        setModelDraft(res.data.model)
       })
       .catch(() => {
-        if (!cancelled) setGroqStatus({ hasKey: false, keyHint: null })
+        if (!cancelled) setAiStatus(EMPTY_AI_STATUS)
       })
       .finally(() => {
-        if (!cancelled) setGroqLoading(false)
+        if (!cancelled) setAiLoading(false)
       })
     return () => {
       cancelled = true
     }
   }, [])
 
-  const groqDirty =
-    (groqEditing || !groqStatus?.hasKey) && groqKeyInput.trim() !== ''
+  // The saved model for a given provider — used when switching providers so the
+  // model select reflects what was last saved for each one.
+  const savedModelFor = (provider: AiProviderId): string => {
+    if (provider === 'groq') return aiStatus?.groqModel ?? ''
+    if (provider === 'nvidia') return aiStatus?.nvidiaModel ?? ''
+    return aiStatus?.openrouterModel ?? ''
+  }
 
-  const handleRemoveGroqKey = async (): Promise<void> => {
-    setGroqRemoveError(null)
-    setGroqRemoving(true)
+  const providerStatus =
+    aiStatus?.providers[providerDraft] ?? { hasKey: false, keyHint: null }
+  // The first OTHER provider that already has a key connected — used for the
+  // "switch to X" hint when the current provider has none (any of the other
+  // providers may be configured, not just a hardcoded second one).
+  const otherConfiguredProvider = aiStatus
+    ? (Object.keys(aiStatus.providers) as AiProviderId[]).find(
+        (p) => p !== providerDraft && aiStatus.providers[p].hasKey,
+      ) ?? null
+    : null
+  const otherProviderStatus = otherConfiguredProvider
+    ? aiStatus?.providers[otherConfiguredProvider]
+    : undefined
+
+  const modelOptions = (aiStatus?.models[providerDraft] ?? []).map((m) => ({
+    value: m.id,
+    label: m.label,
+    hint: m.free ? 'Free' : undefined,
+  }))
+
+  const providerDirty = providerDraft !== (aiStatus?.provider ?? 'openrouter')
+  const modelDirty = modelDraft !== savedModelFor(providerDraft)
+  const aiKeyDirty = aiKeyInput.trim() !== ''
+  const aiDirty = providerDirty || modelDirty || aiKeyDirty
+
+  const handleSwitchProvider = (provider: AiProviderId): void => {
+    setProviderDraft(provider)
+    setModelDraft(savedModelFor(provider))
+    setAiRemoveError(null)
+  }
+
+  const handleRemoveAiKey = async (): Promise<void> => {
+    setAiRemoveError(null)
+    setAiRemoving(true)
     try {
-      await apiClient.delete('/api/v1/settings/groq-key')
-      setGroqStatus({ hasKey: false, keyHint: null })
-      setGroqEditing(false)
-      setGroqKeyInput('')
+      const res = await apiClient.delete<AiSettingsStatus>(
+        '/api/v1/settings/ai',
+        { body: { provider: providerDraft } },
+      )
+      setAiStatus(res.data)
+      setAiEditing(false)
+      setAiKeyInput('')
+      // If the removed provider was the active one but another provider still
+      // has a key, switch the drafts to it so AI stays usable.
+      if (!res.data.providers[providerDraft].hasKey) {
+        const fallback = (Object.keys(res.data.providers) as AiProviderId[]).find(
+          (p) => p !== providerDraft && res.data.providers[p].hasKey,
+        )
+        if (fallback) {
+          setProviderDraft(fallback)
+          setModelDraft(
+            fallback === 'groq'
+              ? res.data.groqModel
+              : fallback === 'nvidia'
+                ? res.data.nvidiaModel
+                : res.data.openrouterModel,
+          )
+        }
+      }
     } catch {
-      setGroqRemoveError('Failed to remove Groq API key')
+      setAiRemoveError(`Failed to remove ${AI_PROVIDER_LABELS[providerDraft]} API key`)
     } finally {
-      setGroqRemoving(false)
+      setAiRemoving(false)
     }
   }
 
-  // ── Unified save — Timezone + AI key + Profile ──────────────────────────────
-  const hasUnsavedChanges = timezoneDirty || profileDirty || groqDirty
+  // ── Unified save — Timezone + AI Integration + Profile ──────────────────────
+  const hasUnsavedChanges = timezoneDirty || profileDirty || aiDirty
   const [isSavingAll, setIsSavingAll] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -346,14 +477,21 @@ export default function SettingsPage() {
         })
         if (error) throw new Error(error.message ?? 'Failed to update profile')
       }
-      if (groqDirty) {
-        const res = await apiClient.put<{ hasKey: boolean; keyHint: string }>(
-          '/api/v1/settings/groq-key',
-          { apiKey: groqKeyInput.trim() },
+      if (aiDirty) {
+        const res = await apiClient.put<AiSettingsStatus>(
+          '/api/v1/settings/ai',
+          {
+            provider: providerDraft,
+            model: modelDraft,
+            ...(aiKeyInput.trim() ? { apiKey: aiKeyInput.trim() } : {}),
+          },
         )
-        setGroqStatus(res.data)
-        setGroqKeyInput('')
-        setGroqEditing(false)
+        setAiStatus(res.data)
+        setAiKeyInput('')
+        setAiEditing(false)
+        // Keep the drafts in sync with the saved state.
+        setProviderDraft(res.data.provider)
+        setModelDraft(res.data.model)
       }
       setTimezoneDraft(null)
       setSaveSuccess(true)
@@ -370,7 +508,7 @@ export default function SettingsPage() {
   }
 
   const isPageLoading =
-    sessionLoading || timezoneLoading || groqLoading
+    sessionLoading || timezoneLoading || aiLoading
 
   if (isPageLoading) {
     return <SettingsPageSkeleton />
@@ -470,11 +608,12 @@ export default function SettingsPage() {
             <div>
               <Card.Title as="h2">AI Integration</Card.Title>
               <Card.Description>
-                AI features run on your own Groq API key. The key is stored
-                encrypted and used only by your bots.
+                AI features run on your own provider API key (OpenRouter, Groq,
+                or NVIDIA). Pick a provider, choose a model, and store your key —
+                it's kept encrypted and used only by your bots.
               </Card.Description>
             </div>
-            {groqDirty && (
+            {aiDirty && (
               <Badge color="primary" size="sm" variant="tonal" pill>
                 Unsaved
               </Badge>
@@ -483,77 +622,127 @@ export default function SettingsPage() {
         </Card.Header>
 
         <div className="flex flex-col gap-4">
-          {groqLoading ? (
+          {aiLoading ? (
             <Skeleton textSize="body-sm" width="60%" />
-          ) : groqStatus?.hasKey ? (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
-              <div>
-                <p className="text-label-lg font-semibold text-on-surface">
-                  Groq API key connected
-                </p>
-                <p className="text-body-sm text-on-surface-variant">
-                  Ending in{' '}
-                  <span className="font-mono font-semibold text-on-surface">
-                    {groqStatus.keyHint ? `…${groqStatus.keyHint}` : '—'}
-                  </span>
-                </p>
+          ) : (
+            <>
+              {/* Provider + model selection — models follow the chosen provider. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field.Root>
+                  <Field.Label>Provider</Field.Label>
+                  <Select
+                    options={AI_PROVIDER_OPTIONS}
+                    value={providerDraft}
+                    onChange={(value) => {
+                      handleSwitchProvider(value as AiProviderId)
+                    }}
+                    placeholder="Select a provider"
+                  />
+                </Field.Root>
+
+                <Field.Root>
+                  <Field.Label>Model</Field.Label>
+                  <SearchableSelect
+                    options={modelOptions}
+                    value={modelDraft}
+                    onChange={setModelDraft}
+                    placeholder="Select a model"
+                    searchPlaceholder="Search models…"
+                    emptyMessage="No models match “{query}”"
+                    disabled={modelOptions.length === 0}
+                  />
+                </Field.Root>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <Button
+
+              {/* Connection status for the selected provider */}
+              {providerStatus.hasKey ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
+                  <div>
+                    <p className="text-label-lg font-semibold text-on-surface">
+                      {AI_PROVIDER_LABELS[providerDraft]} API key connected
+                    </p>
+                    <p className="text-body-sm text-on-surface-variant">
+                      Ending in{' '}
+                      <span className="font-mono font-semibold text-on-surface">
+                        {providerStatus.keyHint ? `…${providerStatus.keyHint}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button
+                      variant="tonal"
+                      color="primary"
+                      size="sm"
+                      onClick={() => setAiEditing(true)}
+                      disabled={aiRemoving}
+                    >
+                      Replace
+                    </Button>
+                    <Button
+                      variant="tonal"
+                      color="error"
+                      size="sm"
+                      onClick={() => {
+                        void handleRemoveAiKey()
+                      }}
+                      disabled={aiRemoving}
+                      isLoading={aiRemoving}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : otherProviderStatus?.hasKey && otherConfiguredProvider ? (
+                <Alert
                   variant="tonal"
-                  color="primary"
-                  size="sm"
-                  onClick={() => setGroqEditing(true)}
-                  disabled={groqRemoving}
-                >
-                  Replace
-                </Button>
-                <Button
+                  color="info"
+                  title={`No ${AI_PROVIDER_LABELS[providerDraft]} key configured`}
+                  message={`Add a ${AI_PROVIDER_LABELS[providerDraft]} key below to use it, or switch to ${AI_PROVIDER_LABELS[otherConfiguredProvider]} — it already has a key connected.`}
+                />
+              ) : (
+                <Alert
+                  variant="tonal"
+                  color="warning"
+                  title="AI features are disabled"
+                  message="No AI provider key is configured for your account. Add your own provider key below to enable AI features."
+                />
+              )}
+
+              {(aiEditing || !providerStatus.hasKey) && (
+                <Field.Root>
+                  <Field.Label>{AI_PROVIDER_LABELS[providerDraft]} API key</Field.Label>
+                  <PasswordInput
+                    value={aiKeyInput}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAiKeyInput(value)
+                      setAiRemoveError(null)
+                      // Auto-detect the provider from the key format — paste a
+                      // Groq (gsk_…) or OpenRouter (sk-or-v1-…) key and the
+                      // provider selector + model list follow automatically.
+                      const detected = detectProviderFromKey(value)
+                      if (detected) handleSwitchProvider(detected)
+                    }}
+                    placeholder={AI_KEY_PLACEHOLDERS[providerDraft]}
+                  />
+                  <p className="mt-1.5 text-body-sm text-on-surface-variant">
+                    Paste your{' '}
+                    {AI_PROVIDER_LABELS[providerDraft]} key — it's
+                    auto-detected from its format — then click Save Changes
+                    below.
+                  </p>
+                </Field.Root>
+              )}
+
+              {aiRemoveError && (
+                <Alert
                   variant="tonal"
                   color="error"
+                  title={aiRemoveError}
                   size="sm"
-                  onClick={() => {
-                    void handleRemoveGroqKey()
-                  }}
-                  disabled={groqRemoving}
-                  isLoading={groqRemoving}
-                >
-                  Remove
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Alert
-              variant="tonal"
-              color="warning"
-              title="AI features are disabled"
-              message="No Groq API key is configured for your account. AI features won't work until you add your own key below."
-            />
-          )}
-
-          {(groqEditing || !groqStatus?.hasKey) && (
-            <Field.Root>
-              <Field.Label>Groq API key</Field.Label>
-              <PasswordInput
-                value={groqKeyInput}
-                onChange={(e) => {
-                  setGroqKeyInput(e.target.value)
-                }}
-                placeholder="gsk_…"
-              />
-              <p className="mt-1.5 text-body-sm text-on-surface-variant">
-                Enter your key, then click Save Changes below.
-              </p>
-            </Field.Root>
-          )}
-
-          {groqRemoveError && (
-            <Alert
-              variant="tonal"
-              color="error"
-              title={groqRemoveError}
-              size="sm"
-            />
+                />
+              )}
+            </>
           )}
         </div>
       </Card.Root>

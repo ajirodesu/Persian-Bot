@@ -42,6 +42,7 @@ import {
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
 import { setCachedSessionAdminOnly } from '@/engine/lib/admin-only-state.lib.js';
+import { loadAgentTools } from '@/engine/agent/agent.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -328,6 +329,10 @@ async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
     await Promise.allSettled([
       // Prime the system-admin Set — called on every command dispatch.
       isSystemAdmin('__prewarm__'),
+      // Pre-load the AI agent's tool modules (dynamic imports + descriptor
+      // build) so the first AI message after boot skips the one-time load
+      // cost. Idempotent — subsequent runAgent calls reuse the cache.
+      loadAgentTools(),
       // Per-session hot-path data: admin list, premium list, bot session blob,
       // the command enable-list (isCommandEnabled) and the bot nickname
       // (read on every AI/passive message).

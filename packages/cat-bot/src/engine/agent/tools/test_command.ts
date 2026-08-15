@@ -56,17 +56,17 @@ const EXECUTION_TIMEOUT_MS = 10 * 60 * 1_000;
 export const config = {
   name: 'test_command',
   description:
-    'Execute bot commands. Two modes: (1) default PREVIEW mode — commands run ' +
-    'silently and their output is intercepted and returned as `key`/`calls` so ' +
-    'you can inspect it, then deliver via `send_result`; (2) DIRECT mode — pass ' +
-    '`deliver: true` and each command runs against the real platform API and ' +
-    'sends its own reply immediately, exactly like a manually typed command ' +
-    '(fastest, one tool call, no preview or replay needed). Use DIRECT mode for ' +
-    'straightforward command requests; use PREVIEW mode when you need to see the ' +
-    'output first or combine multiple commands into one reply. Always use the ' +
-    '`commands` array. In PREVIEW mode, when the combined output contains more ' +
-    'than one attachment, `button_key` is automatically null because platforms ' +
-    'cannot deliver multiple file attachments alongside interactive buttons.',
+    'Execute bot commands. PREVIEW mode (default): commands run silently and their ' +
+    'output is intercepted and returned as `key`/`calls` for inspection, then ' +
+    'delivered via `send_result`. DIRECT mode (`deliver: true`): commands run against ' +
+    'the real platform API and send their own reply immediately, like a manually ' +
+    'typed command — fastest, one call, no preview/replay; after success do NOT call ' +
+    '`send_result` or add a closing message, the command reply is the answer. ' +
+    'Use DIRECT for straightforward requests; PREVIEW to inspect output or combine ' +
+    'multiple commands into one reply. Always use the `commands` array. In PREVIEW ' +
+    'mode, `button_key` is null when the combined output has more than one attachment; ' +
+    'when combining multiple photo/image commands, return ALL their attachment keys so ' +
+    'they deliver together as one photo album.',
   parameters: {
     type: 'object',
     properties: {
@@ -92,10 +92,8 @@ export const config = {
       deliver: {
         type: ['boolean', 'null'],
         description:
-          'Optional. When true, commands execute against the real platform API ' +
-          'and send their own replies directly (manual-command speed, single ' +
-          'call). When false or omitted, outputs are intercepted for preview ' +
-          'and delivered later via send_result.',
+          'Optional. `true` = run commands directly (they send their own replies). ' +
+          '`false`/omitted = intercept output for preview, deliver via send_result.',
       },
     },
     required: ['commands'],
@@ -697,6 +695,12 @@ export const run = async (
         commandCtx.prefix,
       );
       executed.push(command);
+      // Flag for the agent loop: this command's own reply is already on the
+      // wire (identical to a manual command). runAgent ends the turn right
+      // after the tool batch instead of spending another LLM round trip on a
+      // closing message that would be suppressed anyway.
+      (ctx as unknown as Record<string, unknown>)['_agentDirectDelivered'] =
+        true;
     }
 
     if (executed.length === 0) {
@@ -709,8 +713,8 @@ export const run = async (
         ...(directErrors.length > 0 ? { errors: directErrors } : {}),
         note:
           'Each command ran with the real platform API and sent its own reply ' +
-          'directly — same as a manual command. Send a brief closing message ' +
-          'via send_result.',
+          'directly — same as a manual command. The reply is already delivered: ' +
+          'do NOT call send_result or send any additional message.',
       },
       null,
       2,

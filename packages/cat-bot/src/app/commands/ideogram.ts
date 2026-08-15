@@ -2,8 +2,8 @@
  * /ideogram — Ideogram Text-to-Image Generator
  *
  * Generates an image from a text prompt via the Nexray "ideogram" endpoint.
- * The endpoint returns the rendered image directly (binary), not JSON, so
- * the response body is downloaded and forwarded as an attachment.
+ * The endpoint renders the image and the result URL is forwarded directly via
+ * `attachment_url` — the bot never downloads the bytes.
  *
  * Flow:
  *   User: /ideogram anime girl with short blue hair
@@ -16,21 +16,6 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
-
-// ── Fetcher ───────────────────────────────────────────────────────────────────
-
-async function fetchIdeogramImage(prompt: string): Promise<Buffer> {
-  const url = createUrl('nexray', '/ai/ideogram', { prompt });
-  const response = await fetch(url);
-
-  if (!response.ok)
-    throw new Error(`Ideogram API responded with status ${response.status}`);
-
-  const arrayBuffer = await response.arrayBuffer();
-  if (!arrayBuffer.byteLength) throw new Error('Empty image returned');
-
-  return Buffer.from(arrayBuffer);
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,11 +83,11 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
     deliver({ style: MessageStyle.MARKDOWN, message: errorMessage });
 
   try {
-    const image = await fetchIdeogramImage(prompt);
+    const url = createUrl('nexray', '/ai/ideogram', { prompt });
     await finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **Prompt:** ${prompt}`,
-      attachment: [{ name: 'ideogram.png', stream: image }],
+      attachment_url: [{ name: 'ideogram.png', url }],
     });
   } catch (err) {
     const error = err as { message?: string };

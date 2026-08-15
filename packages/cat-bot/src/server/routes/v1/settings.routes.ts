@@ -1,22 +1,24 @@
 import { Router } from 'express';
-import { groqKeyController } from '@/server/controllers/v1/groq-key.controller.js';
+import { aiProviderController } from '@/server/controllers/v1/ai-provider.controller.js';
 import { timezoneController } from '@/server/controllers/v1/timezone.controller.js';
 
 const settingsRouter = Router();
 
-// GET /api/v1/settings/groq-key — per-user key status ({ hasKey, keyHint })
-settingsRouter.get('/groq-key', (req, res) => {
-  void groqKeyController.get(req, res);
+// GET /api/v1/settings/ai — per-user AI provider status
+// ({ provider, model, providers: { groq, openrouter }, models })
+settingsRouter.get('/ai', (req, res) => {
+  void aiProviderController.get(req, res);
 });
 
-// PUT /api/v1/settings/groq-key — store the authenticated user's key
-settingsRouter.put('/groq-key', (req, res) => {
-  void groqKeyController.save(req, res);
+// PUT /api/v1/settings/ai — validate + encrypt + store the provider key,
+// and/or switch the active provider + model
+settingsRouter.put('/ai', (req, res) => {
+  void aiProviderController.save(req, res);
 });
 
-// DELETE /api/v1/settings/groq-key — remove the authenticated user's key
-settingsRouter.delete('/groq-key', (req, res) => {
-  void groqKeyController.remove(req, res);
+// DELETE /api/v1/settings/ai — remove the authenticated user's key for one provider
+settingsRouter.delete('/ai', (req, res) => {
+  void aiProviderController.remove(req, res);
 });
 
 // GET /api/v1/settings/timezone — the authenticated account's saved timezone

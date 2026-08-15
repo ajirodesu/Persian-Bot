@@ -3,9 +3,9 @@
  *
  * Every entry sends the user's text to a api.popcat.xyz/v2/<effect>?text=
  * endpoint and returns the rendered result as an image attachment. Every
- * endpoint responds with the raw image bytes directly (no JSON envelope),
- * so the shared handler just downloads and verifies that response before
- * attaching it.
+ * endpoint serves the rendered image back via the result URL, which is
+ * forwarded directly through `attachment_url` — the bot never downloads the
+ * bytes.
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
  * exporting `commands: Array<{ meta, onCommand }>` and registers each entry
@@ -21,7 +21,6 @@
  */
 
 import type { ReplyOptions } from '@/engine/adapters/models/interfaces/index.js';
-import axios from 'axios';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
@@ -29,66 +28,6 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
-import { logger } from '@/engine/modules/logger/logger.lib.js';
-
-/** Best-effort decode of a non-2xx response body for diagnostics. */
-function describeErrorBody(data: ArrayBuffer): string {
-  try {
-    const text = Buffer.from(data).toString('utf8').trim().slice(0, 300);
-    if (!text) return '(empty body)';
-    try {
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      const reason = parsed['message'] ?? parsed['error'] ?? parsed['msg'];
-      if (typeof reason === 'string') return reason;
-    } catch {
-      // not JSON — fall through to raw text
-    }
-    return text;
-  } catch {
-    return '(unreadable body)';
-  }
-}
-
-/** Picks a sensible file extension from the response Content-Type header. */
-function extFromContentType(contentType: unknown): string {
-  const type = String(contentType ?? '').toLowerCase();
-  if (type.includes('gif')) return 'gif';
-  if (type.includes('webp')) return 'webp';
-  if (type.includes('jpeg') || type.includes('jpg')) return 'jpg';
-  return 'png';
-}
-
-/**
- * Downloads the rendered effect image ourselves (rather than handing a bare
- * URL to attachment_url) so a non-2xx response is caught and reported here
- * with a clear, per-command message.
- */
-async function fetchEffectImage(
-  requestUrl: string,
-  sourceText: string,
-  label: string,
-): Promise<{ buffer: Buffer; ext: string }> {
-  const response = await axios.get<ArrayBuffer>(requestUrl, {
-    responseType: 'arraybuffer',
-    timeout: 30_000,
-    validateStatus: () => true,
-  });
-
-  if (response.status < 200 || response.status >= 300) {
-    const reason = describeErrorBody(response.data);
-    logger.warn(
-      `[popcat-text] ${label} failed (status ${response.status}): ${reason} | request=${requestUrl} | text=${sourceText}`,
-    );
-    throw new Error(
-      `${label} API responded with status ${response.status}: ${reason}`,
-    );
-  }
-
-  const buffer = Buffer.from(response.data);
-  if (!buffer.length) throw new Error(`${label} API returned an empty image`);
-
-  return { buffer, ext: extFromContentType(response.headers['content-type']) };
-}
 
 // ── Config table ──────────────────────────────────────────────────────────────
 
@@ -201,12 +140,11 @@ async function runEffect(
 
   try {
     const requestUrl = createUrl('popcat', config.path, { text });
-    const { buffer, ext } = await fetchEffectImage(requestUrl, text, config.label);
 
     await finish({
       style: MessageStyle.MARKDOWN,
       message: `🖼️ **${config.label}**`,
-      attachment: [{ name: `${config.name}.${ext}`, stream: buffer }],
+      attachment_url: [{ name: `${config.name}.png`, url: requestUrl }],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

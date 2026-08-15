@@ -47,14 +47,11 @@ import type { StoredUserProfile } from '@/engine/models/users.model.js';
 export const config = {
   name: 'get_user',
   description:
-    'Look up a user and get their actual profile information. ' +
-    "Pass `username` (e.g. '@alice') or `uid` (the numeric platform ID) to look " +
-    'up that specific person. When neither is passed, the user MENTIONED in the ' +
-    'current message is looked up automatically (never the requester), and only ' +
-    'as a last resort the sender of the message. Returns name, username, first ' +
-    'name and avatar URL from live platform data, plus bot-system stats: wallet ' +
-    'and bank balance, daily-claim streak, XP/level, leaderboard rank, role and ' +
-    'ban status.',
+    "Look up a user's live profile. Pass `username` (e.g. '@alice') or `uid` for a " +
+    'specific person; with neither, look up the user MENTIONED in the message ' +
+    '(never the requester, unless nothing else identifies someone). Returns name, ' +
+    'username, first name, avatar URL, plus wallet/bank balance, daily streak, ' +
+    'XP/level, leaderboard rank, role and ban status.',
   parameters: {
     type: 'object',
     properties: {
