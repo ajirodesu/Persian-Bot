@@ -292,14 +292,17 @@ export async function getAiSettingsStatus(
   const groqKey = decryptKey(stored.encryptedKey);
   const nvidiaKey = decryptKey(stored.nvidiaEncryptedKey);
   const openaiKey = decryptKey(String(blob['openaiEncryptedKey'] ?? ''));
+  const geminiKey = decryptKey(String(blob['geminiEncryptedKey'] ?? ''));
 
   // Catalogs are cached (6h) — parallel fetch, sequential after warm-up.
-  const [openrouterList, groqList, nvidiaList, openaiList] = await Promise.all([
-    resolveModelList('openrouter'),
-    resolveModelList('groq', groqKey, userId),
-    resolveModelList('nvidia', nvidiaKey, userId),
-    resolveModelList('openai', openaiKey, userId),
-  ]);
+  const [openrouterList, groqList, nvidiaList, openaiList, geminiList] =
+    await Promise.all([
+      resolveModelList('openrouter'),
+      resolveModelList('groq', groqKey, userId),
+      resolveModelList('nvidia', nvidiaKey, userId),
+      resolveModelList('openai', openaiKey, userId),
+      resolveModelList('gemini', geminiKey, userId),
+    ]);
 
   const openrouterModel = normalizeFromList(
     openrouterList.models,
@@ -326,8 +329,8 @@ export async function getAiSettingsStatus(
     AI_PROVIDERS.openai.defaultModel,
   );
   const geminiModel = normalizeFromList(
-    AI_PROVIDERS.gemini.fallbackModels,
-    false,
+    geminiList.models,
+    geminiList.live,
     storedModelOf(stored, 'gemini'),
     AI_PROVIDERS.gemini.defaultModel,
   );
@@ -380,7 +383,7 @@ export async function getAiSettingsStatus(
       groq: groqList.models,
       nvidia: nvidiaList.models,
       openai: openaiList.models,
-      gemini: AI_PROVIDERS.gemini.fallbackModels,
+      gemini: geminiList.models,
     },
     agent: { ...AGENT_SETTINGS_DEFAULTS, ...agent },
   };
@@ -446,7 +449,7 @@ export async function saveUserAiConfig(
   // model is validated/normalized against what's actually available. When a
   // new key is being saved, prefer it for the fetch.
   const fetchKey =
-    provider === 'groq' || provider === 'nvidia' || provider === 'openai'
+    provider === 'groq' || provider === 'nvidia' || provider === 'openai' || provider === 'gemini'
       ? (apiKey || storedKey || undefined)
       : undefined;
   const { models: providerModels, live } = await resolveModelList(

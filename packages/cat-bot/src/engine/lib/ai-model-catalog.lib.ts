@@ -6,8 +6,8 @@
  * Caching: model lists change rarely (weekly at most), so each successful fetch
  * is cached for 6 hours. OpenRouter (the PRIMARY provider) has a public list,
  * so it's cached globally; Groq's list can differ per API key (free vs paid
- * tier), so it's cached per user. Failures are NOT cached — the caller falls
- * back to the static catalog and retries on the next request.
+ * tier), so it's cached per user. Failures are cached briefly and the caller
+ * falls back to the static catalog, retrying on later requests.
  *
  * Fail-open: any network/parse error returns null (caller decides the
  * fallback) and logs a warning — a models outage must never break the
@@ -31,6 +31,7 @@ const OPENROUTER_CACHE_KEY = 'ai:models:openrouter';
 const NVIDIA_CACHE_KEY = 'ai:models:nvidia';
 const groqCacheKey = (userId: string): string => `ai:models:groq:${userId}`;
 const openaiCacheKey = (userId: string): string => `ai:models:openai:${userId}`;
+const geminiCacheKey = (userId: string): string => `ai:models:gemini:${userId}`;
 
 // ── API response shapes ──────────────────────────────────────────────────────
 
@@ -45,6 +46,15 @@ interface OpenRouterModelEntry {
     prompt?: string | number | null;
     completion?: string | number | null;
   } | null;
+}
+
+/** Google AI Studio / Generative Language API model list response. */
+interface GeminiModelsResponse {
+  models?: Array<{
+    name?: string | null;
+    displayName?: string | null;
+    supportedGenerationMethods?: string[] | null;
+  }> | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,16 +188,44 @@ async function fetchNvidiaModels(
   return models.length > 0 ? sortModels(models) : null;
 }
 
+/**
+ * Fetches Google AI Studio's model list (Generative Language API). The endpoint
+ * returns names prefixed with "models/" (e.g. "models/gemini-2.0-flash-001");
+ * the prefix is stripped because the @google/genai SDK accepts the bare id.
+ * Only models that support generateContent are kept — image/embedding-only
+ * endpoints are excluded from the chat picker.
+ */
+async function fetchGeminiModels(apiKey: string): Promise<AiProviderModel[] | null> {
+  const { data } = await axios.get<GeminiModelsResponse>(
+    `${AI_PROVIDERS.gemini.modelsUrl}?key=${encodeURIComponent(apiKey)}`,
+    { timeout: MODELS_FETCH_TIMEOUT_MS },
+  );
+  const entries = data?.models;
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const models: AiProviderModel[] = [];
+  for (const e of entries) {
+    if (typeof e.name !== 'string' || e.name.length === 0) continue;
+    if (!e.supportedGenerationMethods?.includes('generateContent')) continue;
+    const id = e.name.replace(/^models\//, '');
+    models.push({
+      id,
+      label: (e.displayName && e.displayName.trim()) || formatModelLabel(id),
+    });
+  }
+  return models.length > 0 ? sortModels(models) : null;
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Returns the live model catalog for a provider, or null when the fetch failed
  * (callers fall back to the static catalog). Results are cached for 6h.
  *
- * @param apiKey  Required for groq (the endpoint authenticates per key); unused
- *                for openrouter (public endpoint), optional for nvidia.
- * @param cacheKey User id for groq — the catalog is cached per user because
- *                Groq's model list can differ between keys.
+ * @param apiKey  Required for groq/openai/gemini (their endpoints authenticate
+ *                per key); unused for openrouter (public endpoint), optional
+ *                for nvidia.
+ * @param cacheKey User id for groq/openai/gemini — those catalogs are cached
+ *                per user because the list can differ between keys.
  */
 export async function getProviderModelsCached(
   provider: AiProviderId,
@@ -205,16 +243,19 @@ export async function getProviderModelsCached(
   } else if (provider === 'openai') {
     cacheKeyId = openaiCacheKey(cacheKey || 'default');
     fetcher = () => fetchOpenAiModels(apiKey ?? '');
+  } else if (provider === 'gemini') {
+    cacheKeyId = geminiCacheKey(cacheKey || 'default');
+    fetcher = () => fetchGeminiModels(apiKey ?? '');
   } else {
     cacheKeyId = groqCacheKey(cacheKey || 'default');
     fetcher = () => fetchGroqModels(apiKey ?? '');
   }
 
-  // Key-required providers (openai/groq) reject an empty Authorization header
-  // with a 401. Without a key there is nothing to fetch — fall back to the
-  // static catalog instead of burning a rejected request on every status load.
+  // Key-required providers (openai/groq/gemini) reject an empty Authorization
+  // header with a 401. Without a key there is nothing to fetch — fall back to
+  // the static catalog instead of burning a rejected request on every status load.
   if (
-    (provider === 'openai' || provider === 'groq') &&
+    (provider === 'openai' || provider === 'groq' || provider === 'gemini') &&
     (typeof apiKey !== 'string' || apiKey.length === 0)
   ) {
     return null;

@@ -13,7 +13,7 @@
  * Model catalogs: the FULL model list is fetched live from a provider's
  * /models endpoint where available (see ai-model-catalog.lib.ts) so every model
  * is selectable. `fallbackModels` is a small curated list used when the live
- * fetch fails (offline resilience) or there is no live endpoint (gemini).
+ * fetch fails (offline resilience).
  */
 
 export type AiProviderId =
@@ -140,10 +140,10 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
   gemini: {
     id: 'gemini',
     label: 'Gemini',
-    description: 'Google Gemini — the Google GenAI SDK (gemini-2.x flash/pro models).',
-    // Gemini uses its own native SDK, not OpenAI-compatible chat-completions,
-    // so there is no live /models catalog endpoint here.
-    modelsUrl: '',
+    description: 'Google Gemini via AI Studio — the Google GenAI SDK (gemini-2.x flash/pro models).',
+    // Gemini uses its native SDK for chat; the LIVE model catalog comes from
+    // Google AI Studio's Generative Language API (REST, key in query string).
+    modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
     keyPlaceholder: 'AIza…',
     // Gemini API keys always begin with "AIza".
     keyPattern: /^AIza[A-Za-z0-9_-]{20,}$/,
@@ -151,6 +151,7 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
     fallbackModels: [
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
       { id: 'gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
       { id: 'gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
       { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash (preview)' },
