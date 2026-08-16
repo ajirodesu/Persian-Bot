@@ -139,14 +139,17 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
   },
   gemini: {
     id: 'gemini',
-    label: 'Gemini',
-    description: 'Google Gemini via AI Studio — the Google GenAI SDK (gemini-2.x flash/pro models).',
+    label: 'AI Studio',
+    description:
+      'Google AI Studio — Gemini models via the Generative Language API. New keys start with "AQ…" (legacy "AIza…" traffic keys still accepted).',
     // Gemini uses its native SDK for chat; the LIVE model catalog comes from
     // Google AI Studio's Generative Language API (REST, key in query string).
     modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
-    keyPlaceholder: 'AIza…',
-    // Gemini API keys always begin with "AIza".
-    keyPattern: /^AIza[A-Za-z0-9_-]{20,}$/,
+    keyPlaceholder: 'AIza… / AQ…',
+    // Legacy Gemini "traffic" keys begin with "AIza"; Google AI Studio now
+    // only issues "auth" keys, which begin with "AQ." (optionally with the
+    // dot). Both are accepted.
+    keyPattern: /^(?:AIza[A-Za-z0-9_-]{20,}|AQ\.?[A-Za-z0-9_-]{15,})$/,
     defaultModel: 'gemini-2.0-flash-001',
     fallbackModels: [
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
@@ -182,12 +185,12 @@ export function isValidAiProviderKey(
 /**
  * Infers the provider from a complete key's format: `sk-or-v1-…` → OpenRouter
  * (checked first — the primary provider), `nvapi-…` → NVIDIA, `gsk_…` → Groq,
- * `AIza…` → Gemini, `sk-proj-…` → OpenAI. Returns null for keys that match
- * neither pattern (e.g. a malformed key mid-typing). Used to auto-match the
- * provider when a key is added — the key's format wins over any pre-selected
- * provider. Legacy bare `sk-…` OpenAI keys are intentionally NOT detected here
- * because the prefix overlaps OpenRouter keys; clients submitting them send the
- * provider explicitly.
+ * `AIza…`/`AQ…` → Gemini (AI Studio), `sk-proj-…` → OpenAI. Returns null for
+ * keys that match neither pattern (e.g. a malformed key mid-typing). Used to
+ * auto-match the provider when a key is added — the key's format wins over any
+ * pre-selected provider. Legacy bare `sk-…` OpenAI keys are intentionally NOT
+ * detected here because the prefix overlaps OpenRouter keys; clients submitting
+ * them send the provider explicitly.
  */
 export function detectAiProviderFromKey(apiKey: string): AiProviderId | null {
   const trimmed = apiKey.trim();

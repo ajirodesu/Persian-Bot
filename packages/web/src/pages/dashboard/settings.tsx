@@ -66,7 +66,7 @@ const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
   groq: 'Groq',
   nvidia: 'NVIDIA',
   openai: 'OpenAI',
-  gemini: 'Gemini',
+  gemini: 'AI Studio',
 }
 
 const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
@@ -74,7 +74,7 @@ const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
   groq: 'gsk_…',
   nvidia: 'nvapi-…',
   openai: 'sk-…',
-  gemini: 'AIza…',
+  gemini: 'AIza… / AQ…',
 }
 
 const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
@@ -82,13 +82,14 @@ const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: 'groq', label: 'Groq' },
   { value: 'nvidia', label: 'NVIDIA' },
   { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
+  { value: 'gemini', label: 'AI Studio' },
 ]
 
 // Infers the provider from a key's prefix as it's typed/pasted —
 // `sk-or-v1-` is an OpenRouter key (checked first — the primary provider),
-// `nvapi-` an NVIDIA key, `gsk_` a Groq key, `sk-proj-`/`sk-` OpenAI, `AIza`
-// Gemini. Returns null while the key is too short or doesn't match any format.
+// `nvapi-` an NVIDIA key, `gsk_` a Groq key, `sk-proj-`/`sk-` OpenAI,
+// `AIza`/`AQ` Google AI Studio. Returns null while the key is too short or
+// doesn't match any format.
 const detectProviderFromKey = (key: string): AiProviderId | null => {
   const trimmed = key.trim()
   if (trimmed.startsWith('sk-or-v1')) return 'openrouter'
@@ -97,7 +98,7 @@ const detectProviderFromKey = (key: string): AiProviderId | null => {
   if (trimmed.startsWith('sk-proj-') || trimmed.startsWith('sk-')) {
     return 'openai'
   }
-  if (trimmed.startsWith('AIza')) return 'gemini'
+  if (trimmed.startsWith('AIza') || trimmed.startsWith('AQ')) return 'gemini'
   return null
 }
 
@@ -693,9 +694,9 @@ export default function SettingsPage() {
               <Card.Title as="h2">AI Integration</Card.Title>
               <Card.Description>
                 Your bots' AI runs on your own provider key (OpenRouter, Groq,
-                NVIDIA, OpenAI, or Gemini). Pick a provider, choose a model,
-                store your key — it's kept encrypted and used only by your
-                bots. Configure the agent's name and behavior below.
+                NVIDIA, OpenAI, or Google AI Studio). Pick a provider, choose a
+                model, store your key — it's kept encrypted and used only by
+                your bots. Configure the agent's name and behavior below.
               </Card.Description>
             </div>
             {(aiDirty || agentDirty) && (
@@ -804,8 +805,8 @@ export default function SettingsPage() {
                       setAiRemoveError(null)
                       // Auto-detect the provider from the key format — paste a
                       // Groq (gsk_…), OpenRouter (sk-or-v1-…), NVIDIA (nvapi-…),
-                      // OpenAI (sk-…) or Gemini (AIza…) key and the provider
-                      // selector + model list follow automatically.
+                      // OpenAI (sk-…) or Google AI Studio (AIza…/AQ…) key and the
+                      // provider selector + model list follow automatically.
                       const detected = detectProviderFromKey(value)
                       if (detected) handleSwitchProvider(detected)
                     }}

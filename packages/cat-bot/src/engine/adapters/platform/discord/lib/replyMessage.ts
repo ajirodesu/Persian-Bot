@@ -24,7 +24,15 @@ import { streamToBuffer, urlToBuffer } from '../utils/helper.util.js';
 
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
 const extOf = (nameOrUrl: string): string =>
-  nameOrUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ?? '';
+  nameOrUrl.split(/[?#]/)[0]?.split('.').pop()?.toLowerCase() ?? '';
+
+// Route by the URL's own extension when the name doesn't carry a known image
+// extension — a .gif URL with a generic/empty name must still render as an
+// (animated) image embed, never as a downloaded file.
+const isImageUrl = (a: { name?: string; url: string }): boolean =>
+  IMAGE_EXTS.includes(
+    extOf(a.name && IMAGE_EXTS.includes(extOf(a.name)) ? a.name : a.url),
+  );
 
 type SendFn = (
   content: string,
@@ -81,8 +89,8 @@ export async function replyMessage(
   const files: AttachmentBuilder[] = [];
   const embeds: EmbedBuilder[] = [];
 
-  const imageUrls = attachment_url.filter((a) => IMAGE_EXTS.includes(extOf(a.name || a.url)));
-  const nonImageUrls = attachment_url.filter((a) => !IMAGE_EXTS.includes(extOf(a.name || a.url)));
+  const imageUrls = attachment_url.filter(isImageUrl);
+  const nonImageUrls = attachment_url.filter((a) => !isImageUrl(a));
 
   // Image URLs → embeds, sent directly with zero bot-side download
   for (const { url } of imageUrls) embeds.push(new EmbedBuilder().setImage(url));

@@ -29,6 +29,28 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { sendRichMessage } from './sendRichMessage.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
+// Normalize a filename or URL into its media extension. Query strings and
+// fragments are stripped so "image.gif?size=100" routes as a GIF, not a file.
+const extOf = (filenameOrUrl: string): string => {
+  const clean = filenameOrUrl.split(/[?#]/)[0] ?? '';
+  return clean.split('.').pop()?.toLowerCase() ?? '';
+};
+
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp'];
+const GIF_EXT = 'gif';
+const AUDIO_EXTS = ['mp3', 'ogg', 'wav', 'aac', 'opus', 'm4a'];
+const VIDEO_EXTS = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
+const MEDIA_EXTS = new Set([...IMAGE_EXTS, GIF_EXT, ...AUDIO_EXTS, ...VIDEO_EXTS]);
+
+// GIF magic bytes ("GIF87a" / "GIF89a") — used to classify a stream attachment
+// whose filename carries no media extension so it still sends as an animation.
+const isGifBuffer = (buffer: Buffer): boolean =>
+  buffer.length >= 6 &&
+  buffer[0] === 0x47 &&
+  buffer[1] === 0x49 &&
+  buffer[2] === 0x46 &&
+  buffer[3] === 0x38;
+
 export async function replyMessage(
   ctx: Context,
   _threadID: string,
@@ -174,20 +196,29 @@ export async function replyMessage(
   // sendAnimation/sendAudio/sendDocument and for each item in sendMediaGroup —
   // Telegram's own servers fetch it, so the bot process never touches the bytes.
   // Only attachment[] (already-in-hand streams/buffers) need local buffering.
-  type MediaItem = { filename: string; input: InputFile | string };
+  type MediaItem = {
+    filename: string;
+    input: InputFile | string;
+    /** Present for stream attachments so GIF magic-byte sniffing can route. */
+    buffer?: Buffer;
+  };
 
   const streamItems: MediaItem[] = await Promise.all(
     attachment.map(async ({ name, stream }): Promise<MediaItem> => {
       const buffer = Buffer.isBuffer(stream)
         ? stream
         : await streamToBuffer(stream as import('stream').Readable);
-      return { filename: name, input: new InputFile(buffer, name) };
+      return { filename: name, input: new InputFile(buffer, name), buffer };
     }),
   );
-  const urlItems: MediaItem[] = attachment_url.map(({ name, url }) => ({
-    filename: name,
-    input: url,
-  }));
+  const urlItems: MediaItem[] = attachment_url.map(({ name, url }) => {
+    // Route by the URL's own extension when the name lacks a known media
+    // extension — a .gif URL delivered with a generic/empty name must still
+    // send as an animation, never as a file.
+    const nameExt = extOf(name ?? '');
+    const routeName = MEDIA_EXTS.has(nameExt) ? name : url;
+    return { filename: routeName, input: url };
+  });
 
   // stream attachments first (preserves caller ordering), URL attachments after
   const allAttachments: MediaItem[] = [...streamItems, ...urlItems];
@@ -200,20 +231,19 @@ export async function replyMessage(
     return String(sent.message_id);
   }
 
-  // Extension-based media-type routing — operates on the filename, not the (possibly absent) buffer
-  const extOf = ({ filename }: MediaItem): string =>
-    filename.split('.').pop()?.toLowerCase() ?? '';
+  // Media-type routing — filename extension first, then GIF magic-byte
+  // sniffing for streams whose filename carries no media extension.
+  const extOfItem = ({ filename, buffer }: MediaItem): string => {
+    const ext = extOf(filename);
+    if (ext) return ext;
+    if (buffer && isGifBuffer(buffer)) return GIF_EXT;
+    return '';
+  };
 
-  const photos = allAttachments.filter((a) =>
-    ['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(extOf(a)),
-  );
-  const gifs    = allAttachments.filter((a) => extOf(a) === 'gif');
-  const audios  = allAttachments.filter((a) =>
-    ['mp3', 'ogg', 'wav', 'aac', 'opus', 'm4a'].includes(extOf(a)),
-  );
-  const videos  = allAttachments.filter((a) =>
-    ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extOf(a)),
-  );
+  const photos = allAttachments.filter((a) => IMAGE_EXTS.includes(extOfItem(a)));
+  const gifs    = allAttachments.filter((a) => extOfItem(a) === GIF_EXT);
+  const audios  = allAttachments.filter((a) => AUDIO_EXTS.includes(extOfItem(a)));
+  const videos  = allAttachments.filter((a) => VIDEO_EXTS.includes(extOfItem(a)));
   const others  = allAttachments.filter(
     (a) =>
       !photos.includes(a) &&
