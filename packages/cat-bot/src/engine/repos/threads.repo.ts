@@ -42,7 +42,10 @@ import {
   discordServerSessionExists as _discordServerSessionExists,
 } from 'database';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import {
+  Platforms,
+  isServerHierarchyPlatform,
+} from '@/engine/modules/platform/platform.constants.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 
 // ── Cache key builders ────────────────────────────────────────────────────────
@@ -141,7 +144,7 @@ export async function threadExists(
   platform: string,
   threadId: string,
 ): Promise<boolean> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(threadId);
     if (serverId) {
       const key = threadExistsKey(serverId);
@@ -166,7 +169,7 @@ export async function threadSessionExists(
   sessionId: string,
   threadId: string,
 ): Promise<boolean> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(threadId);
     if (serverId) {
       // Use serverId as the suffix to avoid caching the same value under N different channel IDs
@@ -201,8 +204,8 @@ export async function upsertThreadSession(
   sessionId: string,
   threadId: string,
 ): Promise<void> {
-  // Intercept Discord channels to update the underlying Server Session timestamp instead
-  if (platform === Platforms.Discord) {
+  // Intercept Discord/Fluxer channels to update the underlying Server Session timestamp instead
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(threadId);
     if (serverId) {
       await _upsertDiscordServerSession(userId, sessionId, serverId);
@@ -300,7 +303,7 @@ export async function getThreadSessionData(
   botThreadId: string,
 ): Promise<Record<string, unknown>> {
   // Intercept to store feature settings at the Server level rather than individual Channel level
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
     if (serverId) {
       const skey = threadSessionDataKey(userId, platform, sessionId, serverId);
@@ -336,7 +339,7 @@ export async function setThreadSessionData(
   botThreadId: string,
   data: Record<string, unknown>,
 ): Promise<void> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
     if (serverId) {
       await _setDiscordServerSessionData(userId, sessionId, serverId, data);
@@ -367,8 +370,8 @@ export async function getAllGroupThreadIds(
   if (cached !== undefined) return cached;
 
   let result = await _getAllGroupThreadIds(userId, platform, sessionId);
-  // Map Discord servers as broadcastable "groups" as well
-  if (platform === Platforms.Discord) {
+  // Map Discord/Fluxer servers as broadcastable "groups" as well
+  if (isServerHierarchyPlatform(platform)) {
     const discordServers = await _getAllDiscordServerIds(userId, sessionId);
     result = [...result, ...discordServers];
   }
@@ -383,7 +386,7 @@ export async function getThreadSessionUpdatedAt(
   sessionId: string,
   threadId: string,
 ): Promise<Date | null> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(threadId);
     if (serverId) {
       const skey = threadSessionUpdatedAtKey(
@@ -443,36 +446,40 @@ export function invalidateThreadSessionCache(
 // ── Deletion (bot removed from chat/guild) ─────────────────────────────────
 
 /**
- * Deletes a Discord server record (and this session's link to it) for a guild the
- * bot has left. Evicts every server-scoped cache entry so subsequent reads see the
- * record as gone instead of serving stale in-memory data.
+ * Deletes a server record (and this session's link to it) for a guild the
+ * bot has left. Evicts every server-scoped cache entry so subsequent reads see
+ * the record as gone instead of serving stale in-memory data.
+ *
+ * `platform` is the requesting platform (Discord or Fluxer) so the eviction
+ * keys and the real-time change event are scoped to the correct session key.
  */
 export async function deleteDiscordServer(
   userId: string,
   sessionId: string,
   serverId: string,
+  platform: string = Platforms.Discord,
 ): Promise<void> {
   await _deleteDiscordServer(userId, sessionId, serverId);
   lruCache.del(threadExistsKey(serverId));
   lruCache.del(threadNameKey(serverId));
   lruCache.del(threadAdminsSetKey(serverId));
   lruCache.del(
-    threadSessionExistsKey(userId, Platforms.Discord, sessionId, serverId),
+    threadSessionExistsKey(userId, platform, sessionId, serverId),
   );
   lruCache.del(
-    threadSessionDataKey(userId, Platforms.Discord, sessionId, serverId),
+    threadSessionDataKey(userId, platform, sessionId, serverId),
   );
   lruCache.del(
     threadSessionUpdatedAtKey(
       userId,
-      Platforms.Discord,
+      platform,
       sessionId,
       serverId,
     ),
   );
-  lruCache.del(threadGroupsKey(userId, Platforms.Discord, sessionId));
+  lruCache.del(threadGroupsKey(userId, platform, sessionId));
   dbChangeEmitter.publish({
-    key: `${userId}:${Platforms.Discord}:${sessionId}`,
+    key: `${userId}:${platform}:${sessionId}`,
     type: 'group',
     action: 'delete',
     id: serverId,
@@ -494,10 +501,10 @@ export async function deleteThread(
   sessionId: string,
   threadId: string,
 ): Promise<void> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = (await getDiscordServerIdByChannel(threadId)) ?? threadId;
     if (await _discordServerExists(serverId)) {
-      await deleteDiscordServer(userId, sessionId, serverId);
+      await deleteDiscordServer(userId, sessionId, serverId, platform);
       lruCache.del(`discord:channel:${threadId}`);
       return;
     }

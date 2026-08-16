@@ -104,8 +104,9 @@ export async function saveUserAgentSettings(
     ...settings,
   };
   await pool.query(
-    `INSERT INTO bot_user_groq_key (user_id, agent_settings, updated_at)
-     VALUES ($1, $2, NOW())
+    `INSERT INTO bot_user_groq_key
+       (user_id, encrypted_key, key_hint, agent_settings, updated_at)
+     VALUES ($1, '', '', $2, NOW())
      ON CONFLICT (user_id) DO UPDATE SET
        agent_settings = EXCLUDED.agent_settings,
        updated_at     = NOW()`,

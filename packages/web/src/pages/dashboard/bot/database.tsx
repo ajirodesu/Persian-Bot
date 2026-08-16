@@ -42,14 +42,13 @@ import { useTimezone } from '@/contexts/TimezoneContext'
 import { useBotContext } from '@/features/users/components/DashboardBotLayout'
 import {
   useBotDatabaseUsers,
-  useBotDatabaseGroups,
   useBotDatabaseServers,
   useBotDatabaseChannels,
+  useBotDatabaseGroupSelector,
 } from '@/features/users/hooks/useBotDatabase'
 import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
-  BotDatabaseGroup,
   BotDatabaseStatusFilter,
   BotDatabaseTypeFilter,
   BotDatabaseSortBy,
@@ -102,11 +101,6 @@ const telegramTypeLabels: Record<string, string> = {
   supergroup: 'Supergroup',
   channel: 'Channel',
   private: 'Private',
-}
-
-function telegramTypeLabel(type: string | null): string {
-  if (!type) return '—'
-  return telegramTypeLabels[type] ?? type
 }
 
 /** Best-effort Type column value: the persisted chat type, else fall back to the is_group flag. */
@@ -719,31 +713,24 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
   )
 }
 
-// ── Groups tab (Telegram / webchat) ───────────────────────────────────────────
+// ── Groups tab (Telegram / webchat) ──────────────────────────────────────────
+//
+// Mirrors the Discord Groups tab's structure for platforms without a server →
+// channel hierarchy. A group dropdown (fed by useBotDatabaseGroupSelector, the
+// flat-list analogue of the Discord server dropdown) picks the focused group;
+// selecting one reveals a header card with its badges + ban/unban/delete actions
+// and a scoped details table below. Groups are flat entities, so the details
+// table shows that one group's own record instead of child channels.
 
 function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
   const {
     groups,
     total,
-    page,
     isLoading,
     error,
-    search,
-    setSearch,
-    status,
-    setStatus,
-    type,
-    setType,
-    sortBy,
-    sortDir,
-    toggleSort,
-    setPage,
-    pending,
     refetch,
-    deleteGroup,
-    banGroup,
-    unbanGroup,
-  } = useBotDatabaseGroups(sessionId, sessionKey)
+  } = useBotDatabaseGroupSelector(sessionId, sessionKey)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const { snackbar, setPosition } = useSnackbar()
   const { timezone } = useTimezone()
 
@@ -752,31 +739,33 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
     snackbar({ message, color, duration: 4000 })
   }
 
-  // ── Ban dialog state ──
-  const [banTarget, setBanTarget] = useState<BotDatabaseGroup | null>(null)
-  const [banReason, setBanReason] = useState('')
+  // Default to the first group once the list loads.
+  useEffect(() => {
+    if (selectedGroupId === null && groups.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- select the first group once the list arrives
+      setSelectedGroupId(groups[0].id)
+    }
+  }, [groups, selectedGroupId])
+
+  const selectedGroup =
+    groups.find((g) => g.id === selectedGroupId) ?? null
+
+  // ── Ban dialog state (targets the selected group) ──
   const [isBanning, setIsBanning] = useState(false)
   const [banError, setBanError] = useState<string | null>(null)
+  const [banOpen, setBanOpen] = useState(false)
+  const [banReason, setBanReason] = useState('')
 
-  const openBanDialog = (group: BotDatabaseGroup) => {
-    setBanTarget(group)
-    setBanReason('')
-    setBanError(null)
-  }
-  const closeBanDialog = () => {
-    if (isBanning) return
-    setBanTarget(null)
-    setBanError(null)
-  }
   const handleBanGroup = async () => {
-    if (!banTarget) return
+    if (!selectedGroup) return
     setIsBanning(true)
     setBanError(null)
     try {
-      await banGroup(banTarget.id, banReason.trim() || undefined)
-      notify(`"${banTarget.name}" has been banned.`, 'warning')
-      setBanTarget(null)
+      await botService.banDatabaseGroup(sessionId, selectedGroup.id, banReason.trim() || undefined)
+      notify(`"${selectedGroup.name}" has been banned.`, 'warning')
+      setBanOpen(false)
       setBanReason('')
+      refetch()
     } catch (err) {
       setBanError(err instanceof Error ? err.message : 'Failed to ban group')
     } finally {
@@ -785,27 +774,19 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
   }
 
   // ── Unban dialog state ──
-  const [unbanTarget, setUnbanTarget] = useState<BotDatabaseGroup | null>(null)
   const [isUnbanning, setIsUnbanning] = useState(false)
   const [unbanError, setUnbanError] = useState<string | null>(null)
+  const [unbanOpen, setUnbanOpen] = useState(false)
 
-  const openUnbanDialog = (group: BotDatabaseGroup) => {
-    setUnbanTarget(group)
-    setUnbanError(null)
-  }
-  const closeUnbanDialog = () => {
-    if (isUnbanning) return
-    setUnbanTarget(null)
-    setUnbanError(null)
-  }
   const handleUnbanGroup = async () => {
-    if (!unbanTarget) return
+    if (!selectedGroup) return
     setIsUnbanning(true)
     setUnbanError(null)
     try {
-      await unbanGroup(unbanTarget.id)
-      notify(`"${unbanTarget.name}" has been unbanned.`, 'success')
-      setUnbanTarget(null)
+      await botService.unbanDatabaseGroup(sessionId, selectedGroup.id)
+      notify(`"${selectedGroup.name}" has been unbanned.`, 'success')
+      setUnbanOpen(false)
+      refetch()
     } catch (err) {
       setUnbanError(err instanceof Error ? err.message : 'Failed to unban group')
     } finally {
@@ -814,27 +795,20 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
   }
 
   // ── Delete dialog state ──
-  const [deleteTarget, setDeleteTarget] = useState<BotDatabaseGroup | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const openDeleteDialog = (group: BotDatabaseGroup) => {
-    setDeleteTarget(group)
-    setDeleteError(null)
-  }
-  const closeDeleteDialog = () => {
-    if (isDeleting) return
-    setDeleteTarget(null)
-    setDeleteError(null)
-  }
   const handleDeleteGroup = async () => {
-    if (!deleteTarget) return
+    if (!selectedGroup) return
     setIsDeleting(true)
     setDeleteError(null)
     try {
-      await deleteGroup(deleteTarget.id)
-      notify(`"${deleteTarget.name}" was removed from this session.`, 'success')
-      setDeleteTarget(null)
+      await botService.deleteDatabaseGroup(sessionId, selectedGroup.id)
+      notify(`"${selectedGroup.name}" was removed from this session.`, 'success')
+      setDeleteOpen(false)
+      setSelectedGroupId(null)
+      refetch()
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete group')
     } finally {
@@ -842,25 +816,42 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
     }
   }
 
-  const [detailGroup, setDetailGroup] = useState<BotDatabaseGroup | null>(null)
-
-  const sortDirFor = (column: BotDatabaseSortBy) => (sortBy === column ? sortDir : null)
+  const groupOptions = groups.map((g) => ({
+    value: g.id,
+    label: g.name,
+  }))
 
   return (
     <div className="flex flex-col gap-4">
-      <DatabaseToolbar
-        search={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search groups, supergroups, or channels by name or ID…"
-        status={status}
-        onStatusChange={setStatus}
-        type={type}
-        onTypeChange={setType}
-        total={total}
-        matchedLabel={`${total} total`}
-        isLoading={isLoading}
-        onRefresh={refetch}
-      />
+      {/* Group selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
+          <Select
+            options={groupOptions}
+            value={selectedGroupId ?? ''}
+            onChange={(v) => setSelectedGroupId(v as string)}
+            placeholder={
+              groups.length > 0 ? 'Select a group…' : 'No groups found'
+            }
+            pill
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="tonal"
+            color="secondary"
+            size="sm"
+            iconOnly
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+            aria-label="Refresh"
+            onClick={refetch}
+            isLoading={isLoading}
+          />
+          <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
+            {total} total
+          </Badge>
+        </div>
+      </div>
 
       {error !== null && (
         <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
@@ -868,148 +859,135 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
         </div>
       )}
 
-      <Table.ScrollArea className="bg-surface">
-        <Table.Root variant="glass" fullWidth>
-          <Table.Header>
-            <Table.Row>
-              <Table.Head
-                sortable
-                sortDirection={sortDirFor('name')}
-                onClick={() => toggleSort('name')}
+      {/* Selected group header + actions */}
+      {selectedGroup !== null && (
+        <div className="bg-surface rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-body-lg font-semibold text-on-surface truncate">
+                  {selectedGroup.name}
+                </p>
+                <Badge
+                  variant="tonal"
+                  color={groupTypeColor(selectedGroup.type)}
+                  size="sm"
+                  pill
+                >
+                  {groupTypeLabel(selectedGroup)}
+                </Badge>
+                <Badge
+                  variant="tonal"
+                  color={selectedGroup.is_banned ? 'error' : 'success'}
+                  size="sm"
+                  pill
+                >
+                  {selectedGroup.is_banned ? 'Banned' : 'Active'}
+                </Badge>
+              </div>
+              <p className="mt-1 text-body-sm text-on-surface-variant">
+                {selectedGroup.member_count != null
+                  ? `${selectedGroup.member_count.toLocaleString()} members`
+                  : 'Member count unknown'}
+                {' · '}
+                {formatDate(selectedGroup.last_seen, timezone)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {selectedGroup.is_banned ? (
+              <Button
+                variant="tonal"
+                color="success"
+                size="sm"
+                onClick={() => {
+                  setUnbanError(null)
+                  setUnbanOpen(true)
+                }}
               >
-                Name
-              </Table.Head>
-              <Table.Head>Type</Table.Head>
-              <Table.Head>ID</Table.Head>
-              <Table.Head>Members</Table.Head>
-              <Table.Head>Status</Table.Head>
-              <Table.Head
-                sortable
-                sortDirection={sortDirFor('last_seen')}
-                onClick={() => toggleSort('last_seen')}
+                Unban
+              </Button>
+            ) : (
+              <Button
+                variant="tonal"
+                color="error"
+                size="sm"
+                onClick={() => {
+                  setBanReason('')
+                  setBanError(null)
+                  setBanOpen(true)
+                }}
               >
-                Last Seen
-              </Table.Head>
-              <Table.Head align="right">Actions</Table.Head>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {isLoading && <Table.Loading colSpan={7} rows={5} />}
-            {!isLoading &&
-              groups.map((group) => (
-                <Table.Row key={group.id}>
-                  <Table.Cell className="font-medium">
-                    <span>{group.name}</span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      variant="tonal"
-                      color={groupTypeColor(group.type)}
-                      size="sm"
-                      pill
-                    >
-                      {groupTypeLabel(group)}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
-                      {group.id}
-                    </code>
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    {group.member_count != null
-                      ? group.member_count.toLocaleString()
-                      : '—'}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      variant="tonal"
-                      color={group.is_banned ? 'error' : 'success'}
-                      size="sm"
-                      pill
-                    >
-                      {group.is_banned ? 'Banned' : 'Active'}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    {formatDate(group.last_seen, timezone)}
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="tonal"
-                        color="secondary"
-                        size="xs"
-                        iconOnly
-                        leftIcon={<Eye className="h-3.5 w-3.5" />}
-                        aria-label={`View details for ${group.name}`}
-                        onClick={() => setDetailGroup(group)}
-                      />
-                      {group.is_banned ? (
-                        <Button
-                          variant="tonal"
-                          color="success"
-                          size="xs"
-                          isLoading={pending.has(group.id)}
-                          onClick={() => openUnbanDialog(group)}
-                        >
-                          Unban
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="tonal"
-                          color="error"
-                          size="xs"
-                          onClick={() => openBanDialog(group)}
-                        >
-                          Ban
-                        </Button>
-                      )}
-                      <Button
-                        variant="tonal"
-                        color="error"
-                        size="xs"
-                        onClick={() => openDeleteDialog(group)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            {!isLoading && groups.length === 0 && (
-              <Table.Empty
-                colSpan={7}
-                icon={<MessageSquare className="h-8 w-8" />}
-                message={
-                  search.trim()
-                    ? `No groups match "${search.trim()}"`
-                    : status !== 'all'
-                      ? `No ${status} groups found`
-                      : type !== 'all'
-                        ? `No ${telegramTypeLabel(type).toLowerCase()}s found`
-                        : 'No groups, supergroups, or channels found yet.'
-                }
-              />
+                Ban
+              </Button>
             )}
-          </Table.Body>
-        </Table.Root>
-      </Table.ScrollArea>
+            <Button
+              variant="tonal"
+              color="error"
+              size="sm"
+              onClick={() => {
+                setDeleteError(null)
+                setDeleteOpen(true)
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {total > 0 && (
-        <Table.Pagination
-          currentPage={page}
-          totalItems={total}
-          itemsPerPage={20}
-          onPageChange={setPage}
-        />
+      {/* Group details table — scoped to the selected group, mirroring
+          Discord's server → channels layout for a flat group entity */}
+      {selectedGroup !== null && (
+        <Table.ScrollArea className="bg-surface">
+          <Table.Root variant="glass" fullWidth>
+            <Table.Header>
+              <Table.Row>
+                <Table.Head>Group ID</Table.Head>
+                <Table.Head>Members</Table.Head>
+                <Table.Head>Last Seen</Table.Head>
+                <Table.Head>Ban Reason</Table.Head>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              <Table.Row>
+                <Table.Cell>
+                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
+                    {selectedGroup.id}
+                  </code>
+                </Table.Cell>
+                <Table.Cell className="text-on-surface-variant">
+                  {selectedGroup.member_count != null
+                    ? selectedGroup.member_count.toLocaleString()
+                    : '—'}
+                </Table.Cell>
+                <Table.Cell className="text-on-surface-variant">
+                  {formatDate(selectedGroup.last_seen, timezone)}
+                </Table.Cell>
+                <Table.Cell className="text-on-surface-variant">
+                  {selectedGroup.ban_reason ?? '—'}
+                </Table.Cell>
+              </Table.Row>
+            </Table.Body>
+          </Table.Root>
+        </Table.ScrollArea>
+      )}
+
+      {selectedGroup === null && !isLoading && groups.length === 0 && (
+        <div className="bg-surface rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
+          <MessageSquare className="h-8 w-8 text-on-surface-variant" />
+          <p className="text-body-md text-on-surface-variant">
+            No groups recorded yet. Send a message in a group, supergroup, or
+            channel where this bot is present, then reload this page.
+          </p>
+        </div>
       )}
 
       {/* Ban dialog */}
       <Dialog.Root
-        open={banTarget !== null}
+        open={banOpen}
         onOpenChange={(open) => {
-          if (!open) closeBanDialog()
+          if (!open && !isBanning) setBanOpen(false)
         }}
         closeOnEsc={!isBanning}
         closeOnOverlayClick={!isBanning}
@@ -1025,7 +1003,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
               <p className="text-body-md text-on-surface-variant mb-4">
                 Banning{' '}
                 <span className="font-semibold text-on-surface">
-                  {banTarget?.name ?? ''}
+                  {selectedGroup?.name ?? ''}
                 </span>{' '}
                 will stop the bot from responding in that chat.
               </p>
@@ -1076,9 +1054,9 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
 
       {/* Unban dialog */}
       <Dialog.Root
-        open={unbanTarget !== null}
+        open={unbanOpen}
         onOpenChange={(open) => {
-          if (!open) closeUnbanDialog()
+          if (!open && !isUnbanning) setUnbanOpen(false)
         }}
         closeOnEsc={!isUnbanning}
         closeOnOverlayClick={!isUnbanning}
@@ -1094,7 +1072,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
               <p className="text-body-md text-on-surface-variant mb-4">
                 Are you sure you want to unban{' '}
                 <span className="font-semibold text-on-surface">
-                  {unbanTarget?.name ?? ''}
+                  {selectedGroup?.name ?? ''}
                 </span>
                 ? The bot will respond in that chat again.
               </p>
@@ -1127,9 +1105,9 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
 
       {/* Delete dialog */}
       <Dialog.Root
-        open={deleteTarget !== null}
+        open={deleteOpen}
         onOpenChange={(open) => {
-          if (!open) closeDeleteDialog()
+          if (!open && !isDeleting) setDeleteOpen(false)
         }}
         closeOnEsc={!isDeleting}
         closeOnOverlayClick={!isDeleting}
@@ -1145,7 +1123,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
               <p className="text-body-md text-on-surface-variant mb-2">
                 This will remove{' '}
                 <span className="font-semibold text-on-surface">
-                  {deleteTarget?.name ?? ''}
+                  {selectedGroup?.name ?? ''}
                 </span>{' '}
                 from this bot session&apos;s database. This action cannot be
                 undone.
@@ -1176,48 +1154,17 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
           </Dialog.Content>
         </Dialog.Positioner>
       </Dialog.Root>
-
-      <DetailDialog
-        open={!!detailGroup}
-        onClose={() => setDetailGroup(null)}
-        title={detailGroup?.name ?? 'Group details'}
-        isBanned={!!detailGroup?.is_banned}
-        fields={
-          detailGroup
-            ? [
-                { label: 'Group ID', value: <code className="text-xs">{detailGroup.id}</code> },
-                {
-                  label: 'Type',
-                  value: detailGroup.type
-                    ? telegramTypeLabel(detailGroup.type)
-                    : detailGroup.is_group
-                      ? 'Group'
-                      : 'Direct / channel',
-                },
-                {
-                  label: 'Members',
-                  value:
-                    detailGroup.member_count != null
-                      ? detailGroup.member_count.toLocaleString()
-                      : '—',
-                },
-                { label: 'Last seen', value: formatDate(detailGroup.last_seen, timezone) },
-                { label: 'Ban reason', value: detailGroup.ban_reason ?? '—' },
-              ]
-            : []
-        }
-      />
     </div>
   )
 }
 
-// ── Discord Groups tab ────────────────────────────────────────────────────────
+// ── Server-hierarchy Groups tab (Discord + Fluxer) ───────────────────────────
 //
-// Discord sessions have a server → channel hierarchy. The tab shows a server
-// dropdown fed by GET /database/servers; selecting a server loads ONLY that
-// server's channels (GET /database/channels?serverId=...) below it. Channels can
-// never appear outside their parent server's context because both the dropdown
-// and the channel query are scoped by server id and the owning session.
+// Discord and Fluxer sessions share a server → channel hierarchy. The tab shows
+// a server dropdown fed by GET /database/servers; selecting a server loads ONLY
+// that server's channels (GET /database/channels?serverId=...) below it. Channels
+// can never appear outside their parent server's context because both the
+// dropdown and the channel query are scoped by server id and the owning session.
 // Server-level actions (ban/unban/delete) apply to the selected server.
 
 function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
@@ -1723,7 +1670,9 @@ export default function BotDatabasePage() {
   // Full session key for the real-time Socket.IO room — matches the server's
   // `${userId}:${platform}:${sessionId}` convention (banned.repo.ts / bot-database.socket.ts).
   const sessionKey = bot ? `${bot.userId}:${bot.platform}:${bot.sessionId}` : undefined
-  const isDiscord = bot?.platform === 'discord'
+  // Discord and Fluxer both model groups as a server → channel hierarchy, so
+  // they share the exact same group panel (server dropdown + scoped channels).
+  const isServerHierarchy = bot?.platform === 'discord' || bot?.platform === 'fluxer'
 
   return (
     <div className="flex flex-col gap-6">
@@ -1758,7 +1707,7 @@ export default function BotDatabasePage() {
 
       {activeTab === 'users' ? (
         <UsersTab sessionId={sessionId} sessionKey={sessionKey} />
-      ) : isDiscord ? (
+      ) : isServerHierarchy ? (
         <DiscordGroupsTab sessionId={sessionId} sessionKey={sessionKey} />
       ) : (
         <PlatformGroupsTab sessionId={sessionId} sessionKey={sessionKey} />

@@ -24,7 +24,10 @@ import {
 } from '@/engine/repos/threads.repo.js';
 import { syncUsers } from '@/engine/services/users.service.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import {
+  Platforms,
+  isServerHierarchyPlatform,
+} from '@/engine/modules/platform/platform.constants.js';
 
 /**
  * Fetches full thread metadata, explicitly hydrates participants via
@@ -63,8 +66,10 @@ export async function syncThreadAndParticipants(
       await syncUsers(ctx, allUsersToSync, sessionUserId, sessionId);
     }
 
-    // Intercept Discord channels to store them hierarchically by server to avoid duplicating server state per-channel.
-    if (ctx.native.platform === Platforms.Discord && info.serverID) {
+    // Intercept Discord + Fluxer channels to store them hierarchically by server
+    // (bot_discord_server / bot_discord_channel) to avoid duplicating server state
+    // per-channel — both platforms expose a guild → channel containment model.
+    if (isServerHierarchyPlatform(ctx.native.platform) && info.serverID) {
       await upsertDiscordServer({
         id: info.serverID,
         name: info.name,
@@ -79,7 +84,8 @@ export async function syncThreadAndParticipants(
         info.channelName,
         info.channelType,
       );
-      // Call the existing method, threads.repo.ts intercepts Discord internally to write bot_discord_server_session
+      // Call the existing method, threads.repo.ts intercepts server-hierarchy
+      // platforms (Discord/Fluxer) internally to write bot_discord_server_session
       await upsertThreadSession(
         sessionUserId,
         ctx.native.platform,

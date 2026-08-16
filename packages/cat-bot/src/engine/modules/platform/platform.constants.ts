@@ -43,6 +43,25 @@ export const ID_TO_PLATFORM = {
   4: Platforms.Fluxer,
 } as const;
 
+/**
+ * Platforms whose groups are modelled as a server → channel hierarchy
+ * (guild + channels), exactly like Discord guilds.
+ *
+ * Discord and Fluxer both expose server/guild + channel containment, so the
+ * engine's server-scoped persistence (bot_discord_server / bot_discord_channel),
+ * server-scoped ban enforcement, and the dashboard's server → channels group
+ * panel apply to both. Change here to add/remove platforms from that model.
+ */
+export const SERVER_HIERARCHY_PLATFORMS: readonly string[] = [
+  Platforms.Discord,
+  Platforms.Fluxer,
+];
+
+/** True when `platform` stores groups as a server → channel hierarchy. */
+export function isServerHierarchyPlatform(platform: string): boolean {
+  return SERVER_HIERARCHY_PLATFORMS.includes(platform);
+}
+
 /** Union of all recognised platform name strings. */
 export type PlatformName = keyof typeof PLATFORM_TO_ID;
 

@@ -652,6 +652,26 @@ export async function runAgent(
   ctx: BaseCtx,
   queryOverride?: string,
 ): Promise<void> {
+  try {
+    await runAgentUnsafe(ctx, queryOverride);
+  } catch (err) {
+    // The command dispatcher and the natural-language path BOTH swallow thrown
+    // errors silently (command.dispatcher.ts logs and returns) — if anything
+    // unexpected fails mid-turn the user would see NOTHING. Reply with a
+    // fallback so the agent can never go silent on an internal error.
+    logger.error('[Agent] runAgent failed', { error: err });
+    try {
+      await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
+    } catch {
+      // Even the fallback failed — nothing more we can do.
+    }
+  }
+}
+
+async function runAgentUnsafe(
+  ctx: BaseCtx,
+  queryOverride?: string,
+): Promise<void> {
   const key = buildAgentKey(ctx);
   const { threadID, senderID } = key;
   if (!senderID || !threadID) return;
@@ -835,11 +855,23 @@ export async function runAgent(
   // Auto-markdown: the model is prompted to format with bold/lists/code blocks,
   // but only text that actually contains supported Markdown syntax is delivered
   // as MARKDOWN. Plain conversational replies go out as TEXT so Telegram's
-  // MarkdownV2 parser never rejects stray special characters.
-  await ctx.chat.replyMessage({
-    style: containsMarkdown(replyText) ? MessageStyle.MARKDOWN : MessageStyle.TEXT,
-    message: replyText,
-  });
+  // MarkdownV2 parser never rejects stray special characters. If a styled send
+  // is rejected anyway (strict parsers, unbalanced model syntax), retry once as
+  // plain text so the content still reaches the user instead of going silent.
+  const finalStyle = containsMarkdown(replyText)
+    ? MessageStyle.MARKDOWN
+    : MessageStyle.TEXT;
+  try {
+    await ctx.chat.replyMessage({ style: finalStyle, message: replyText });
+  } catch (sendErr) {
+    logger.debug('[Agent] styled reply rejected — retrying as plain text', {
+      error: sendErr,
+    });
+    await ctx.chat.replyMessage({
+      style: MessageStyle.TEXT,
+      message: replyText,
+    });
+  }
   appendThread(key, threadQuery, threadAssistant, threadLimits);
 }
 

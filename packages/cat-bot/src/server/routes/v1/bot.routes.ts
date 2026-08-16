@@ -145,12 +145,12 @@ botRouter.delete('/:id/database/groups/:groupId/ban', (req, res) => {
   void botDatabaseController.unbanGroup(req, res);
 });
 
-// GET /api/v1/bots/:id/database/servers — all Discord servers for the session (dropdown source)
+// GET /api/v1/bots/:id/database/servers — all servers (guilds) for the session (dropdown source)
 botRouter.get('/:id/database/servers', (req, res) => {
   void botDatabaseController.listServers(req, res);
 });
 
-// GET /api/v1/bots/:id/database/channels — channels scoped to one Discord server
+// GET /api/v1/bots/:id/database/channels — channels scoped to one server (guild)
 botRouter.get('/:id/database/channels', (req, res) => {
   void botDatabaseController.listChannels(req, res);
 });

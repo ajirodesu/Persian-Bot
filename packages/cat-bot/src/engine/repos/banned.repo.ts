@@ -24,7 +24,10 @@ import {
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 import { getDiscordServerIdByChannel } from '@/engine/repos/threads.repo.js';
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import {
+  Platforms,
+  isServerHierarchyPlatform,
+} from '@/engine/modules/platform/platform.constants.js';
 
 // ── Cache key builders ─────────────────────────────────────────────────────────
 // Colon-separated segments make prefix scanning unambiguous and human-readable in
@@ -60,16 +63,18 @@ const threadBanReasonKey = (
 
 const discordServerBanKey = (
   userId: string,
+  platform: string,
   sessionId: string,
   botServerId: string,
-): string => `${userId}:discord:${sessionId}:banned:server:${botServerId}`;
+): string => `${userId}:${platform}:${sessionId}:banned:server:${botServerId}`;
 
 const discordServerBanReasonKey = (
   userId: string,
+  platform: string,
   sessionId: string,
   botServerId: string,
 ): string =>
-  `${userId}:discord:${sessionId}:banned:server:reason:${botServerId}`;
+  `${userId}:${platform}:${sessionId}:banned:server:reason:${botServerId}`;
 
 /** Session key used to scope real-time change events — matches sessionManager's convention. */
 const sessionKey = (userId: string, platform: string, sessionId: string): string =>
@@ -165,12 +170,12 @@ export async function banThread(
   botThreadId: string,
   reason?: string,
 ): Promise<void> {
-  // Discord: /thread ban <tid> may pass a channel id — resolve it to the server so
-  // the ban blocks the whole guild (matches dashboard semantics for Discord groups).
-  if (platform === Platforms.Discord) {
+  // Discord/Fluxer: /thread ban <tid> may pass a channel id — resolve it to the
+  // server so the ban blocks the whole guild (matches dashboard semantics).
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
     if (serverId) {
-      await banDiscordServer(userId, sessionId, serverId, reason);
+      await banDiscordServer(userId, sessionId, serverId, reason, platform);
       return;
     }
   }
@@ -195,10 +200,10 @@ export async function unbanThread(
   sessionId: string,
   botThreadId: string,
 ): Promise<void> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
     if (serverId) {
-      await unbanDiscordServer(userId, sessionId, serverId);
+      await unbanDiscordServer(userId, sessionId, serverId, platform);
       return;
     }
   }
@@ -223,12 +228,14 @@ export async function isThreadBanned(
   sessionId: string,
   botThreadId: string,
 ): Promise<boolean> {
-  // Discord: the dashboard bans groups by server id, and enforcement keys the
-  // incoming message's threadID (a channel id). Resolve the channel to its server
-  // so a server-level ban blocks every channel in the guild.
-  if (platform === Platforms.Discord) {
+  // Discord/Fluxer: the dashboard bans groups by server id, and enforcement keys
+  // the incoming message's threadID (a channel id). Resolve the channel to its
+  // server so a server-level ban blocks every channel in the guild.
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
-    if (serverId) return isDiscordServerBanned(userId, sessionId, serverId);
+    if (serverId) {
+      return isDiscordServerBanned(userId, sessionId, serverId, platform);
+    }
   }
   const key = threadBanKey(userId, platform, sessionId, botThreadId);
   const cached = lruCache.get<boolean>(key);
@@ -245,7 +252,8 @@ export async function isThreadBanned(
 
 /**
  * Returns the stored ban reason for a thread (null when unbanned or no reason given).
- * For Discord the thread is resolved to its server so the server-scoped reason shows.
+ * For server-hierarchy platforms (Discord/Fluxer) the thread is resolved to its
+ * server so the server-scoped reason shows.
  * Cache is populated on ban/unban; falls back to the DB on a cold cache (e.g. after
  * a process restart) so the ban notice always reflects the true reason.
  */
@@ -255,10 +263,10 @@ export async function getThreadBanReason(
   sessionId: string,
   botThreadId: string,
 ): Promise<string | null> {
-  if (platform === Platforms.Discord) {
+  if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
     if (serverId) {
-      return getDiscordServerBanReason(userId, sessionId, serverId);
+      return getDiscordServerBanReason(userId, sessionId, serverId, platform);
     }
   }
   const key = threadBanReasonKey(userId, platform, sessionId, botThreadId);
@@ -274,22 +282,29 @@ export async function getThreadBanReason(
   return result;
 }
 
-// ── Discord Server Bans ───────────────────────────────────────────────────────
+// ── Server Bans (Discord + Fluxer guilds) ─────────────────────────────────────
+// `platform` is threaded through so the LRU keys and the real-time change event
+// are scoped to the requesting platform's `${userId}:${platform}:${sessionId}`
+// session key — the dashboard subscribes with the exact bot platform.
 
 export async function banDiscordServer(
   userId: string,
   sessionId: string,
   botServerId: string,
   reason?: string,
+  platform: string = Platforms.Discord,
 ): Promise<void> {
   await _banDiscordServer(userId, sessionId, botServerId, reason);
-  lruCache.set(discordServerBanKey(userId, sessionId, botServerId), true);
   lruCache.set(
-    discordServerBanReasonKey(userId, sessionId, botServerId),
+    discordServerBanKey(userId, platform, sessionId, botServerId),
+    true,
+  );
+  lruCache.set(
+    discordServerBanReasonKey(userId, platform, sessionId, botServerId),
     reason ?? null,
   );
   dbChangeEmitter.publish({
-    key: sessionKey(userId, Platforms.Discord, sessionId),
+    key: sessionKey(userId, platform, sessionId),
     type: 'group',
     action: 'ban',
     id: botServerId,
@@ -301,12 +316,19 @@ export async function unbanDiscordServer(
   userId: string,
   sessionId: string,
   botServerId: string,
+  platform: string = Platforms.Discord,
 ): Promise<void> {
   await _unbanDiscordServer(userId, sessionId, botServerId);
-  lruCache.set(discordServerBanKey(userId, sessionId, botServerId), false);
-  lruCache.set(discordServerBanReasonKey(userId, sessionId, botServerId), null);
+  lruCache.set(
+    discordServerBanKey(userId, platform, sessionId, botServerId),
+    false,
+  );
+  lruCache.set(
+    discordServerBanReasonKey(userId, platform, sessionId, botServerId),
+    null,
+  );
   dbChangeEmitter.publish({
-    key: sessionKey(userId, Platforms.Discord, sessionId),
+    key: sessionKey(userId, platform, sessionId),
     type: 'group',
     action: 'unban',
     id: botServerId,
@@ -318,8 +340,9 @@ export async function isDiscordServerBanned(
   userId: string,
   sessionId: string,
   botServerId: string,
+  platform: string = Platforms.Discord,
 ): Promise<boolean> {
-  const key = discordServerBanKey(userId, sessionId, botServerId);
+  const key = discordServerBanKey(userId, platform, sessionId, botServerId);
   const cached = lruCache.get<boolean>(key);
   if (cached !== undefined) return cached;
   const result = await _isDiscordServerBanned(userId, sessionId, botServerId);
@@ -335,8 +358,14 @@ export async function getDiscordServerBanReason(
   userId: string,
   sessionId: string,
   botServerId: string,
+  platform: string = Platforms.Discord,
 ): Promise<string | null> {
-  const key = discordServerBanReasonKey(userId, sessionId, botServerId);
+  const key = discordServerBanReasonKey(
+    userId,
+    platform,
+    sessionId,
+    botServerId,
+  );
   const cached = lruCache.get<string | null>(key);
   if (cached !== undefined) return cached;
   const result = await _getDiscordServerBanReason(

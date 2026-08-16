@@ -588,6 +588,80 @@ export function useBotDatabaseServers(
   return { servers, total, isLoading, error, refetch: fetch }
 }
 
+// ── Groups selector hook ────────────────────────────────────────────────────
+//
+// Feeds the Platform (Telegram / webchat) Groups tab's group dropdown — the
+// flat-list analogue of the Discord server dropdown. Pulls the most recent
+// groups (server caps LIMIT at 50) as the dropdown source; the total badge
+// reflects the full count so the header card's context is never misread.
+
+export interface UseBotDatabaseGroupSelectorReturn {
+  groups: BotDatabaseGroup[]
+  total: number
+  isLoading: boolean
+  error: string | null
+  refetch: () => void
+}
+
+export function useBotDatabaseGroupSelector(
+  sessionId: string,
+  sessionKey?: string,
+): UseBotDatabaseGroupSelectorReturn {
+  const [groups, setGroups] = useState<BotDatabaseGroup[]>([])
+  const [total, setTotal] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchRef = useRef(0)
+
+  const fetch = useCallback(() => {
+    if (!sessionId) return
+    const id = ++fetchRef.current
+    setIsLoading(true)
+    setError(null)
+    botService
+      .getDatabaseGroups(sessionId, 1, 50, '', {
+        sortBy: 'last_seen',
+        sortDir: 'desc',
+      })
+      .then((data) => {
+        if (id !== fetchRef.current) return
+        setGroups(data.groups)
+        setTotal(data.total)
+      })
+      .catch((err: unknown) => {
+        if (id !== fetchRef.current) return
+        setError(err instanceof Error ? err.message : 'Failed to load groups')
+      })
+      .finally(() => {
+        if (id === fetchRef.current) setIsLoading(false)
+      })
+  }, [sessionId])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching
+    fetch()
+  }, [fetch])
+
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const timer = refetchTimer.current
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
+
+  useDbChangeSubscription(sessionKey, 'group', () => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current)
+    refetchTimer.current = setTimeout(() => {
+      refetchTimer.current = null
+      fetch()
+    }, 600)
+  })
+
+  return { groups, total, isLoading, error, refetch: fetch }
+}
+
 // ── Discord channels hook ────────────────────────────────────────────────────
 
 export interface UseBotDatabaseChannelsReturn {

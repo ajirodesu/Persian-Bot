@@ -33,7 +33,10 @@ import {
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 import { invalidateUserSessionCache } from '@/engine/repos/users.repo.js';
 import { invalidateThreadSessionCache } from '@/engine/repos/threads.repo.js';
-import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import {
+  Platforms,
+  isServerHierarchyPlatform,
+} from '@/engine/modules/platform/platform.constants.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -349,15 +352,16 @@ export class BotDatabaseController {
 
   /**
    * GET /api/v1/bots/:id/database/servers
-   * Returns every Discord server (guild) this bot session has recorded — the
-   * source for the Groups tab's server dropdown. Discord only.
+   * Returns every server (guild) this bot session has recorded — the source for
+   * the Groups tab's server dropdown. Server-hierarchy platforms only (Discord
+   * and Fluxer both expose a guild → channel model).
    */
   async listServers(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
     if (!ctx) return;
 
-    if (ctx.platform !== Platforms.Discord) {
-      res.status(400).json({ error: 'Only Discord sessions support servers' });
+    if (!isServerHierarchyPlatform(ctx.platform)) {
+      res.status(400).json({ error: 'Only server-based sessions support servers' });
       return;
     }
 
@@ -396,17 +400,18 @@ export class BotDatabaseController {
 
   /**
    * GET /api/v1/bots/:id/database/channels
-   * Returns the channels belonging to ONE Discord server. The server must be
+   * Returns the channels belonging to ONE server. The server must be
    * recorded against this bot session (bot_discord_server_session join), and
    * channels are filtered by their parent server_id — so a channel can never
-   * appear outside its associated server context. Discord only.
+   * appear outside its associated server context. Server-hierarchy platforms
+   * only (Discord and Fluxer).
    */
   async listChannels(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
     if (!ctx) return;
 
-    if (ctx.platform !== Platforms.Discord) {
-      res.status(400).json({ error: 'Only Discord sessions support channels' });
+    if (!isServerHierarchyPlatform(ctx.platform)) {
+      res.status(400).json({ error: 'Only server-based sessions support channels' });
       return;
     }
 
@@ -566,8 +571,9 @@ export class BotDatabaseController {
    * DELETE /api/v1/bots/:id/database/groups/:groupId
    * Removes a group's session association with this bot.
    *
-   * For Discord the group id is a server (guild) id, so the session link is removed
-   * from bot_discord_server_session instead of bot_threads_session.
+   * For server-hierarchy platforms (Discord, Fluxer) the group id is a server
+   * (guild) id, so the session link is removed from bot_discord_server_session
+   * instead of bot_threads_session.
    */
   async deleteGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -580,7 +586,7 @@ export class BotDatabaseController {
     }
 
     try {
-      if (ctx.platform === Platforms.Discord) {
+      if (isServerHierarchyPlatform(ctx.platform)) {
         await dbQuery(
           `DELETE FROM bot_discord_server_session
            WHERE user_id = $1 AND session_id = $2 AND bot_server_id = $3`,
@@ -618,7 +624,8 @@ export class BotDatabaseController {
 
   /**
    * POST /api/v1/bots/:id/database/groups/:groupId/ban
-   * Bans a group from this bot session. Discord groups are keyed by server id.
+   * Bans a group from this bot session. Server-hierarchy platforms (Discord,
+   * Fluxer) are keyed by server id.
    */
   async banGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -634,8 +641,14 @@ export class BotDatabaseController {
     const reason = typeof req.body?.reason === 'string' ? (req.body.reason as string) : undefined;
 
     try {
-      if (ctx.platform === Platforms.Discord) {
-        await banDiscordServer(ctx.userId, ctx.sessionId, botThreadId, reason);
+      if (isServerHierarchyPlatform(ctx.platform)) {
+        await banDiscordServer(
+          ctx.userId,
+          ctx.sessionId,
+          botThreadId,
+          reason,
+          ctx.platform,
+        );
       } else {
         await banThread(ctx.userId, ctx.platform, ctx.sessionId, botThreadId, reason);
       }
@@ -648,7 +661,8 @@ export class BotDatabaseController {
 
   /**
    * DELETE /api/v1/bots/:id/database/groups/:groupId/ban
-   * Lifts a group ban for this bot session. Discord groups are keyed by server id.
+   * Lifts a group ban for this bot session. Server-hierarchy platforms (Discord,
+   * Fluxer) are keyed by server id.
    */
   async unbanGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -661,8 +675,13 @@ export class BotDatabaseController {
     }
 
     try {
-      if (ctx.platform === Platforms.Discord) {
-        await unbanDiscordServer(ctx.userId, ctx.sessionId, botThreadId);
+      if (isServerHierarchyPlatform(ctx.platform)) {
+        await unbanDiscordServer(
+          ctx.userId,
+          ctx.sessionId,
+          botThreadId,
+          ctx.platform,
+        );
       } else {
         await unbanThread(ctx.userId, ctx.platform, ctx.sessionId, botThreadId);
       }

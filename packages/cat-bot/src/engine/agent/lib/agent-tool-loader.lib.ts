@@ -17,10 +17,11 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import type { AgentTool } from '../agent-tool.types.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
-// The loader lives one level above the tools, so resolve the sibling
-// directory rather than scanning the agent/ folder itself.
+// Tools live in agent/tools/, a sibling of this loader's agent/lib/ directory —
+// resolve one level up so the path is correct in both src/ and dist/.
 const TOOLS_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
+  '..',
   'tools',
 );
 
