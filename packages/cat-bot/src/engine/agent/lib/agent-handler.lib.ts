@@ -48,12 +48,14 @@ import { getMaintenanceModeEnabled } from '@/engine/repos/maintenance-mode.repo.
 import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { AttachmentType } from '@/engine/adapters/models/enums/attachment-type.enum.js';
 import { createMcpToolSet } from './mcp-tools.lib.js';
-import type { ToolContext } from './agent-tool.types.js';
+import type { ToolContext } from '../agent-tool.types.js';
 import {
   runAgentTurn,
   type ImageData,
   type ToolLogEntry,
 } from './agent-runner.lib.js';
+import { deliverCombinedResult } from '../tools/send_results.js';
+import { containsMarkdown } from './markdown.util.js';
 import { resolveAgentConfig } from './agent-config.lib.js';
 import {
   type AgentThreadKey,
@@ -347,6 +349,90 @@ function buildToolSummary(toolLog: ToolLogEntry[]): string {
     return `• ${t.name}(${argsStr}) → ${t.result.slice(0, 200)}`;
   });
   return `[Tools used this turn:\n${lines.join('\n')}]\n\n`;
+}
+
+/** Captured media keys from every test_command run in a turn's tool log. */
+interface CapturedMediaKeys {
+  attachmentUrlKeys: string[];
+  binaryKeys: string[];
+  buttonKeys: string[];
+  /** True when any captured media key is non-empty (media must be delivered). */
+  hasMedia: boolean;
+}
+
+/**
+ * Scans the turn's tool log for test_command results and collects every
+ * non-null attachment / binary / button key. The runner keeps test_command
+ * results in full (see execFn in agent-runner.lib.ts) precisely so this
+ * fallback can find the keys the model may have failed to pass to send_result.
+ */
+function collectCapturedMediaKeys(toolLog: ToolLogEntry[]): CapturedMediaKeys {
+  const keys: CapturedMediaKeys = {
+    attachmentUrlKeys: [],
+    binaryKeys: [],
+    buttonKeys: [],
+    hasMedia: false,
+  };
+  for (const entry of toolLog) {
+    if (entry.name !== 'test_command') continue;
+    try {
+      const parsed = JSON.parse(entry.result) as Record<string, unknown>;
+      const aKey = parsed['attachment_key'];
+      const bKey = parsed['binary_attachment_key'];
+      const btnKey = parsed['button_key'];
+      if (typeof aKey === 'string' && aKey) keys.attachmentUrlKeys.push(aKey);
+      if (typeof bKey === 'string' && bKey) keys.binaryKeys.push(bKey);
+      if (typeof btnKey === 'string' && btnKey) keys.buttonKeys.push(btnKey);
+    } catch {
+      // Not JSON (e.g. an error string) — nothing to collect.
+    }
+  }
+  keys.hasMedia =
+    keys.attachmentUrlKeys.length > 0 ||
+    keys.binaryKeys.length > 0 ||
+    keys.buttonKeys.length > 0;
+  return keys;
+}
+
+/**
+ * True when the model's reply text looks like the raw test_command JSON output
+ * (a "calls"/"attachment_key" dump) rather than a synthesized caption. Such
+ * dumps must never be shown to the user — media should be delivered instead.
+ */
+function looksLikeRawToolDump(text: string | null): boolean {
+  if (!text) return false;
+  const t = text.trim();
+  if (!t.startsWith('{')) return false;
+  return (
+    t.includes('"callCount"') ||
+    t.includes('"attachment_key"') ||
+    t.includes('"calls"')
+  );
+}
+
+/**
+ * Pulls a human-readable caption from the captured test_command calls — the
+ * first replyMessage `message` the tested command itself would have sent. Used
+ * as the fallback caption when the model only returned a raw JSON dump.
+ */
+function extractCapturedCaption(toolLog: ToolLogEntry[]): string | null {
+  for (const entry of toolLog) {
+    if (entry.name !== 'test_command') continue;
+    try {
+      const parsed = JSON.parse(entry.result) as {
+        calls?: Array<{ message?: unknown }>;
+      };
+      const calls = parsed.calls ?? [];
+      for (const call of calls) {
+        if (typeof call?.message === 'string' && call.message.trim()) {
+          return call.message.trim();
+        }
+      }
+    } catch {
+      // Not JSON — skip.
+    }
+  }
+  return null;
 }
 
 function looksLikeImage(att: RawAttachment): boolean {
@@ -706,20 +792,53 @@ export async function runAgent(
     return;
   }
 
+  // Priority 2: media fallback — the model ran test_command (capturing
+  // attachments/buttons) but never delivered via send_result or run_command,
+  // often because it returned the raw tool JSON as its reply text. Auto-deliver
+  // the captured media so a media command always sends the actual attachment
+  // instead of a JSON dump. Keys are single-use and consumed here.
+  const capturedMedia = collectCapturedMediaKeys(result.toolLog);
+  if (capturedMedia.hasMedia) {
+    const caption = looksLikeRawToolDump(result.text)
+      ? extractCapturedCaption(result.toolLog)
+      : result.text;
+    const status = await deliverCombinedResult(toolContext, {
+      message: caption ?? 'Here you go! 🎉',
+      attachment_url: capturedMedia.attachmentUrlKeys,
+      button: capturedMedia.buttonKeys,
+      attachment: capturedMedia.binaryKeys,
+    });
+    const threadAssistant =
+      buildToolSummary(result.toolLog) +
+      (caption && !looksLikeRawToolDump(caption) ? caption : '');
+    appendThread(key, threadQuery, threadAssistant, threadLimits);
+    // Only short-circuit when delivery actually succeeded — a failed delivery
+    // falls through to the plain-text path so the user still gets a reply.
+    if (!status.startsWith('Delivery failed')) return;
+  }
+
   if (!result.text) {
     await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
     return;
   }
 
-  // Prepend tool summary to the assistant thread entry so the next turn has full context.
-  const threadAssistant = buildToolSummary(result.toolLog) + result.text;
+  // Never surface a raw test_command JSON dump as the reply (e.g. when the model
+  // tested a text-only command but failed to deliver). Replace it with the
+  // command's own caption or a neutral fallback.
+  const replyText = looksLikeRawToolDump(result.text)
+    ? (extractCapturedCaption(result.toolLog) ?? 'Here you go! 🎉')
+    : result.text;
 
-  // AI replies are always delivered as markdown — the model is prompted to
-  // format with bold/lists/code blocks, and every platform renders them
-  // (webchat + Discord native, Telegram MarkdownV2, Fluxer native markdown).
+  // Prepend tool summary to the assistant thread entry so the next turn has full context.
+  const threadAssistant = buildToolSummary(result.toolLog) + replyText;
+
+  // Auto-markdown: the model is prompted to format with bold/lists/code blocks,
+  // but only text that actually contains supported Markdown syntax is delivered
+  // as MARKDOWN. Plain conversational replies go out as TEXT so Telegram's
+  // MarkdownV2 parser never rejects stray special characters.
   await ctx.chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: result.text,
+    style: containsMarkdown(replyText) ? MessageStyle.MARKDOWN : MessageStyle.TEXT,
+    message: replyText,
   });
   appendThread(key, threadQuery, threadAssistant, threadLimits);
 }

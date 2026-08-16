@@ -18,8 +18,8 @@ import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import {
   runAgent,
   maybeRunAgentOnChat,
-} from '@/engine/lib/ai-agent/agent-handler.lib.js';
-import { AGENT_NAME } from '@/engine/lib/ai-agent/agent-personalities.lib.js';
+} from '@/engine/agent/lib/agent-handler.lib.js';
+import { AGENT_NAME } from '@/engine/agent/lib/agent-personalities.lib.js';
 
 export const meta: CommandMeta = {
   name: 'ai',

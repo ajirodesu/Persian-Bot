@@ -26,7 +26,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolContext } from './agent-tool.types.js';
+import type { ToolContext } from '../agent-tool.types.js';
 import { loadAgentTools } from './agent-tool-loader.lib.js';
 
 /** The LLM-facing schema for one MCP tool (OpenAI-compatible shape). */
@@ -42,6 +42,14 @@ export interface McpToolSet {
   callTool: (name: string, args: Record<string, unknown>) => Promise<string>;
 }
 
+// The tool roster + schemas are static (loaded once at boot and cached by
+// loadAgentTools), so the schema list is built once and reused for every turn.
+// Building it requires an MCP listTools round trip — caching skips that entirely
+// on the hot path, which keeps per-turn tool-set setup to just the in-process
+// server/client pair (no IPC anyway). Worst case the cached list is never stale:
+// the tools directory does not change at runtime.
+let cachedSchemas: McpToolSchema[] | null = null;
+
 /**
  * Builds a live MCP server + client pair bound to this turn's ToolContext.
  * The server is created fresh per turn so each tool call runs against the
@@ -54,6 +62,14 @@ export async function createMcpToolSet(
   const toolModules = await loadAgentTools();
   const enabled = toolModules;
   const byName = new Map(enabled.map((t) => [t.meta.name, t]));
+
+  if (!cachedSchemas) {
+    cachedSchemas = enabled.map((t) => ({
+      name: t.meta.name,
+      description: t.meta.description,
+      parameters: t.meta.parameters as Record<string, unknown>,
+    }));
+  }
 
   const server = new Server(
     { name: 'cat-bot-agent', version: '1.0.0' },
@@ -105,18 +121,8 @@ export async function createMcpToolSet(
     server.connect(serverTransport),
   ]);
 
-  const listed = await client.listTools();
-  const schemas: McpToolSchema[] = listed.tools.map((t) => ({
-    name: t.name,
-    description: t.description ?? '',
-    parameters: (t.inputSchema ?? { type: 'object', properties: {} }) as Record<
-      string,
-      unknown
-    >,
-  }));
-
   return {
-    schemas,
+    schemas: cachedSchemas,
     callTool: async (name, args) => {
       try {
         const res = (await client.callTool({

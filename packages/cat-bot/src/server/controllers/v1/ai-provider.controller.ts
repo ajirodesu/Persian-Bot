@@ -25,7 +25,7 @@ import {
   type SaveAiConfigPayload,
 } from '@/engine/repos/ai-provider.repo.js';
 import { isAiProviderId } from '@/engine/repos/ai-provider.constants.js';
-import { invalidateAgentConfig } from '@/engine/lib/ai-agent/agent-config.lib.js';
+import { invalidateAgentConfig } from '@/engine/agent/lib/agent-config.lib.js';
 
 /** Numeric agent-setting fields validated against sane bounds. */
 const NUMERIC_SETTING_KEYS = [

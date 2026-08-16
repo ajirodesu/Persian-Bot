@@ -575,6 +575,22 @@ export default function SettingsPage() {
     }
   }
 
+  const handleCancelChanges = (): void => {
+    setTimezoneDraft(null)
+    setProfileName(session?.user?.name ?? '')
+    setProviderDraft(aiStatus?.provider ?? 'openrouter')
+    setModelDraft(savedModelFor(aiStatus?.provider ?? 'openrouter'))
+    setAiKeyInput('')
+    setAiEditing(false)
+    const a = aiStatus?.agent
+    setAgentNameDraft(a?.agentName ?? '')
+    setMaxIterationsDraft(String(a?.maxToolIterations ?? 5))
+    setMaxHistoryDraft(String(a?.maxHistory ?? 20))
+    setThreadTtlDraft(String(a?.threadTtl ?? 3600))
+    setSaveError(null)
+    setSaveSuccess(false)
+  }
+
   const isPageLoading =
     sessionLoading || timezoneLoading || aiLoading
 
@@ -953,6 +969,14 @@ export default function SettingsPage() {
             </p>
           )}
         </div>
+        <Button
+          variant="outline"
+          color="neutral"
+          onClick={handleCancelChanges}
+          disabled={!hasUnsavedChanges || isSavingAll}
+        >
+          Cancel
+        </Button>
         <Button
           variant="filled"
           color="primary"

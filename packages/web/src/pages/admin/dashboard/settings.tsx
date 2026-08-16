@@ -443,6 +443,16 @@ export default function AdminSettingsPage() {
     }
   }
 
+  const handleCancelChanges = (): void => {
+    setTimezoneDraft(null)
+    setProfileName(session?.user?.name ?? '')
+    setAdminIds(
+      systemAdmins.length > 0 ? systemAdmins.map((a) => a.adminId) : [''],
+    )
+    setSaveError(null)
+    setSaveSuccess(false)
+  }
+
   // Collect every mount-time data fetch the page depends on — session, timezone,
   // system admins, and maintenance mode — and keep the page-level skeleton up
   // until they've all settled (better-auth caches the session, so sessionLoading
@@ -740,6 +750,14 @@ export default function AdminSettingsPage() {
             </p>
           )}
         </div>
+        <Button
+          variant="outline"
+          color="neutral"
+          onClick={handleCancelChanges}
+          disabled={!hasUnsavedChanges || isSavingAll || adminLoading}
+        >
+          Cancel
+        </Button>
         <Button
           variant="filled"
           color="primary"

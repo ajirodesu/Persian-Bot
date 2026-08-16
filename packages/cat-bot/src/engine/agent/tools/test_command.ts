@@ -27,7 +27,7 @@
 
 import type { Readable } from 'node:stream';
 import { resolveAgentContext } from '../agent.util.js';
-import { inspectCommandConstraints } from '../agent-command-guard.lib.js';
+import { inspectCommandConstraints } from '../lib/agent-command-guard.lib.js';
 import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
 import { dispatchCommand } from '@/engine/controllers/dispatchers/command.dispatcher.js';
 import { OptionsMap } from '@/engine/modules/options/options-map.lib.js';

@@ -9,7 +9,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
-import { forgetAgent } from '@/engine/lib/ai-agent/agent-handler.lib.js';
+import { forgetAgent } from '@/engine/agent/lib/agent-handler.lib.js';
 
 export const meta: CommandMeta = {
   name: 'forget',

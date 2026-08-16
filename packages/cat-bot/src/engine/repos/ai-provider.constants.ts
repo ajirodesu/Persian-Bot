@@ -149,6 +149,8 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
     keyPattern: /^AIza[A-Za-z0-9_-]{20,}$/,
     defaultModel: 'gemini-2.0-flash-001',
     fallbackModels: [
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
       { id: 'gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
       { id: 'gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
       { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash (preview)' },
@@ -178,16 +180,26 @@ export function isValidAiProviderKey(
 
 /**
  * Infers the provider from a complete key's format: `sk-or-v1-…` → OpenRouter
- * (checked first — the primary provider), `gsk_…` → Groq, `nvapi-…` → NVIDIA.
- * Returns null for keys that match neither pattern (e.g. a malformed key
- * mid-typing). Used to auto-match the provider when a key is added — the key's
- * format wins over any pre-selected provider.
+ * (checked first — the primary provider), `nvapi-…` → NVIDIA, `gsk_…` → Groq,
+ * `AIza…` → Gemini, `sk-proj-…` → OpenAI. Returns null for keys that match
+ * neither pattern (e.g. a malformed key mid-typing). Used to auto-match the
+ * provider when a key is added — the key's format wins over any pre-selected
+ * provider. Legacy bare `sk-…` OpenAI keys are intentionally NOT detected here
+ * because the prefix overlaps OpenRouter keys; clients submitting them send the
+ * provider explicitly.
  */
 export function detectAiProviderFromKey(apiKey: string): AiProviderId | null {
   const trimmed = apiKey.trim();
   if (AI_PROVIDERS.openrouter.keyPattern.test(trimmed)) return 'openrouter';
   if (AI_PROVIDERS.nvidia.keyPattern.test(trimmed)) return 'nvidia';
   if (AI_PROVIDERS.groq.keyPattern.test(trimmed)) return 'groq';
+  if (AI_PROVIDERS.gemini.keyPattern.test(trimmed)) return 'gemini';
+  if (
+    trimmed.startsWith('sk-proj-') &&
+    AI_PROVIDERS.openai.keyPattern.test(trimmed)
+  ) {
+    return 'openai';
+  }
   return null;
 }
 

@@ -13,8 +13,8 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
-import { getGeminiClient } from '@/engine/lib/ai-agent/agent-providers.lib.js';
-import { resolveStoredApiKey } from '@/engine/lib/ai-agent/agent-config.lib.js';
+import { getGeminiClient } from '@/engine/agent/lib/agent-providers.lib.js';
+import { resolveStoredApiKey } from '@/engine/agent/lib/agent-config.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 const NANO_MODEL = 'gemini-2.5-flash-image-preview';

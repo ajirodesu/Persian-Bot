@@ -17,8 +17,13 @@
  *
  * Attachment replay fidelity:
  *   - attachment_url (URL strings)  → replayed; platform wrapper downloads fresh
- *   - attachment (stream / Buffer)  → NOT included; consumed during mock proxy capture
+ *   - attachment (stream / Buffer)  → replayed from rawBinaryAttachments captured
+ *                                     BEFORE the mock proxy's normalizeToJson pass
  *   - button (ButtonItem[][])        → replayed; JSON-safe plain objects survive storage
+ *
+ * The delivery core is exported as `deliverCombinedResult` so the agent handler
+ * can auto-deliver captured media as a fallback when the model forgets to call
+ * this tool — media commands must send the actual attachment, never raw JSON.
  */
 
 import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
@@ -30,6 +35,7 @@ import type {
   ReplyMessageOptions,
 } from '@/engine/adapters/models/interfaces/api.interfaces.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
+import { containsMarkdown } from '../lib/markdown.util.js';
 import type { BinaryAttachment } from '../lib/command-result-store.lib.js';
 
 // ============================================================================
@@ -89,32 +95,37 @@ export const meta: ToolMeta = {
 };
 
 // ============================================================================
-// TOOL RUN
+// SHARED DELIVERY CORE
 // ============================================================================
 
-export const initialize = async (
-  {
-    message,
-    attachment_url,
-    button,
-    attachment,
-  }: {
-    message: string;
-    attachment_url?: string[];
-    button?: string[];
-    attachment?: string[];
-  },
+/** Arguments for deliverCombinedResult — mirrors the tool's JSON-schema args. */
+export interface DeliverCombinedArgs {
+  message: string;
+  attachment_url?: string[];
+  button?: string[];
+  attachment?: string[];
+}
+
+/**
+ * Delivers one unified platform reply from a synthesized message plus captured
+ * URL attachments, binary attachments and button grids. Shared by the
+ * send_result tool AND the agent handler's fallback (when the model forgets to
+ * call send_result after a media-producing test_command, the handler calls this
+ * directly so the user always gets the actual attachment — never raw JSON).
+ */
+export async function deliverCombinedResult(
   ctx: ToolContext,
-): Promise<string> => {
+  { message, attachment_url, button, attachment }: DeliverCombinedArgs,
+): Promise<string> {
   const threadID = (ctx.event['threadID'] as string) || '';
   // Thread the agent reply to the user's triggering message for visual conversation anchoring.
   const replyToID = (ctx.event['messageID'] as string) || '';
 
-  // Idempotency guard: a turn must deliver exactly ONE reply. If the model
-  // calls send_result again (common after "Message delivered." is fed back as
-  // a tool result), skip the duplicate post entirely — posting again would
-  // send the user two messages and silently drop the single-use attachment
-  // keys, which were already consumed by the first delivery.
+  // Idempotency guard: a turn must deliver exactly ONE reply. If a previous
+  // delivery already happened this turn (send_result or the handler fallback),
+  // skip the duplicate post entirely — posting again would send the user two
+  // messages and silently drop the single-use attachment keys, which were
+  // already consumed by the first delivery.
   if (ctx.agentReplyDelivered) {
     return (
       'The reply was already delivered once this turn (send_result was called ' +
@@ -158,12 +169,13 @@ export const initialize = async (
     }
   }
 
-  // Always deliver as markdown — the LLM composes formatted text (bold, lists, code) and it
-  // must render correctly on all platforms. Thread to the user's triggering message (replyToID)
-  // so the agent's response is visually anchored to the conversation turn that initiated it.
+  // Auto-markdown: only treat the reply as formatted when it actually contains
+  // supported Markdown syntax. Plain text goes out as TEXT so Telegram's
+  // MarkdownV2 parser never chokes on stray special characters (unescaped `!`,
+  // `-`, `*`, ...) in conversational replies.
   const replyOptions: ReplyMessageOptions = {
     message,
-    style: MessageStyle.MARKDOWN,
+    style: containsMarkdown(message) ? MessageStyle.MARKDOWN : MessageStyle.TEXT,
     ...(replyToID ? { reply_to_message_id: replyToID } : {}),
   };
   if (allAttachmentUrls.length > 0)
@@ -175,7 +187,7 @@ export const initialize = async (
       replyOptions.attachment = allBinaryAttachments as NamedStreamAttachment[];
     await ctx.api.replyMessage(threadID, replyOptions);
     // Mark the turn as delivered so any further send_result call is a no-op
-    // (see the idempotency guard at the top of initialize).
+    // (see the idempotency guard at the top of this function).
     ctx.agentReplyDelivered = { message, deliveredAt: Date.now() };
 
     const parts: string[] = ['Message delivered.'];
@@ -191,4 +203,25 @@ export const initialize = async (
   } catch (err) {
     return `Delivery failed: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+// ============================================================================
+// TOOL RUN
+// ============================================================================
+
+export const initialize = async (
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<string> => {
+  const { message, attachment_url, button, attachment } = args as {
+    message: string;
+    attachment_url?: string[];
+    button?: string[];
+    attachment?: string[];
+  };
+  const delivery: DeliverCombinedArgs = { message };
+  if (attachment_url) delivery.attachment_url = attachment_url;
+  if (button) delivery.button = button;
+  if (attachment) delivery.attachment = attachment;
+  return deliverCombinedResult(ctx, delivery);
 };

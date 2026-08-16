@@ -105,11 +105,56 @@ function blobOf(stored: StoredAiConfigLike): Record<string, unknown> {
 }
 
 /** Active provider: the blob's activeProvider (openai/gemini) wins, then the
- * legacy provider column, then the env-level default. */
+ * legacy provider column, then the env-level default. A pointer to a provider
+ * with no stored key is ignored (stale) so reads never silently land on a
+ * keyless provider. */
 function activeProviderOf(stored: StoredAiConfigLike): AiProviderId {
   const blob = blobOf(stored);
-  if (isAiProviderId(blob['activeProvider'])) return blob['activeProvider'];
-  return isAiProviderId(stored.provider) ? stored.provider : 'openrouter';
+  if (
+    isAiProviderId(blob['activeProvider']) &&
+    storedKeyOf(stored, blob['activeProvider'] as AiProviderId).length > 0
+  ) {
+    return blob['activeProvider'] as AiProviderId;
+  }
+  if (
+    isAiProviderId(stored.provider) &&
+    storedKeyOf(stored, stored.provider).length > 0
+  ) {
+    return stored.provider;
+  }
+  return 'openrouter';
+}
+
+/** Picks the best provider to remain active after one provider's key is
+ * removed: keep the current pointer if it still has a key, otherwise prefer
+ * OpenRouter, then any other configured provider. Returns null when no
+ * provider key remains. */
+function pickActiveProviderAfterRemoval(
+  stored: StoredAiConfigLike,
+  removed: AiProviderId,
+): AiProviderId | null {
+  const blob = blobOf(stored);
+  const hasKey = (p: AiProviderId): boolean => {
+    if (p === 'openrouter') return stored.openrouterEncryptedKey.length > 0;
+    if (p === 'groq') return stored.encryptedKey.length > 0;
+    if (p === 'nvidia') return stored.nvidiaEncryptedKey.length > 0;
+    return String(blob[`${p}EncryptedKey`] ?? '').length > 0;
+  };
+
+  const current = activeProviderOf(stored);
+  if (current !== removed && hasKey(current)) return current;
+
+  const order: AiProviderId[] = [
+    'openrouter',
+    'groq',
+    'nvidia',
+    'openai',
+    'gemini',
+  ];
+  for (const p of order) {
+    if (p !== removed && hasKey(p)) return p;
+  }
+  return null;
 }
 
 function storedKeyOf(
@@ -458,6 +503,11 @@ export async function saveUserAiConfig(
         getAiProviderKeyHint(apiKey),
         model,
       );
+      // The blob's activeProvider (openai/gemini) wins over the legacy
+      // `provider` column on read — clear it so this legacy-provider save
+      // actually takes effect instead of silently keeping the old blob
+      // provider active.
+      await _saveUserAgentSettings(userId, { activeProvider: '' });
     }
   } else {
     // No new key — require the provider to already have one before we persist
@@ -470,6 +520,9 @@ export async function saveUserAiConfig(
       );
     }
     await _updateUserAiModel(userId, legacyProvider, model);
+    // Same as above — a stale blob activeProvider must not override the
+    // freshly-switched legacy provider.
+    await _saveUserAgentSettings(userId, { activeProvider: '' });
   }
 
   // Agent behavior settings (trigger name, shell toggle, limits).
@@ -505,6 +558,10 @@ export async function removeUserAiKey(
   if (!isAiProviderId(provider)) {
     throw new AiConfigError('Invalid AI provider.');
   }
+
+  const stored = (await _getUserAiConfig(userId)) as StoredAiConfigLike | null;
+  const wasActive = stored !== null && activeProviderOf(stored) === provider;
+
   if (provider === 'openai' || provider === 'gemini') {
     await _saveUserAgentSettings(userId, {
       [`${provider}EncryptedKey`]: '',
@@ -516,6 +573,32 @@ export async function removeUserAiKey(
       provider as 'openrouter' | 'groq' | 'nvidia',
     );
   }
+
+  // If the removed provider was the active one, repoint the active provider to
+  // another configured provider so the account never silently stays on a
+  // keyless provider.
+  if (wasActive) {
+    const after = (await _getUserAiConfig(userId)) as StoredAiConfigLike | null;
+    const fallback = after
+      ? pickActiveProviderAfterRemoval(after, provider)
+      : null;
+    if (fallback) {
+      if (fallback === 'openai' || fallback === 'gemini') {
+        await _saveUserAgentSettings(userId, { activeProvider: fallback });
+      } else {
+        await _updateUserAiModel(
+          userId,
+          fallback,
+          storedModelOf(after as StoredAiConfigLike, fallback),
+        );
+      }
+    } else {
+      // No provider key left — clear the blob pointer so reads fall back to the
+      // legacy column / defaults instead of a keyless provider.
+      await _saveUserAgentSettings(userId, { activeProvider: '' });
+    }
+  }
+
   return getAiSettingsStatus(userId);
 }
 

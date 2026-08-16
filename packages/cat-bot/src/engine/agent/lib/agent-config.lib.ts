@@ -129,14 +129,24 @@ export async function resolveAgentConfig(
         // The blob's activeProvider (openai/gemini) wins over the legacy
         // provider column.
         const blob = stored.agentSettings ?? {};
-        const rawProvider = isAgentProviderId(blob['activeProvider'])
+        let provider: AgentProviderId = isAgentProviderId(
+          blob['activeProvider'],
+        )
           ? (blob['activeProvider'] as AgentProviderId)
-          : stored.provider;
-        const provider = isAgentProviderId(rawProvider)
-          ? rawProvider
           : DEFAULT_AI_PROVIDER;
+        let storedKey = storedKeyOf(stored, provider);
+        // The blob pointer can be stale (that provider's key was removed) —
+        // fall back to the legacy provider column so a configured key still
+        // powers the agent instead of silently degrading to the defaults.
+        if (
+          !storedKey &&
+          isAgentProviderId(stored.provider) &&
+          stored.provider !== provider
+        ) {
+          provider = stored.provider;
+          storedKey = storedKeyOf(stored, provider);
+        }
         const storedModel = storedModelOf(stored, provider).trim();
-        const storedKey = storedKeyOf(stored, provider);
         if (storedKey) {
           let apiKey: string | undefined;
           try {

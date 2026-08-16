@@ -29,7 +29,7 @@ import {
 } from './agent-providers.lib.js';
 import type { ThreadMessage } from './agent-thread.lib.js';
 import type { McpToolSet } from './mcp-tools.lib.js';
-import type { ToolContext } from './agent-tool.types.js';
+import type { ToolContext } from '../agent-tool.types.js';
 
 export interface ToolLogEntry {
   name: string;
@@ -307,7 +307,14 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
     // Execution goes through the MCP client — the tool's initialize runs
     // inside the in-process MCP server, bound to this turn's ToolContext.
     const result = await cfg.tools.callTool(name, args);
-    toolLog.push({ name, args, result: result.slice(0, 400) });
+    // test_command results carry the `attachment_key` / `binary_attachment_key` /
+    // `button_key` values the handler's media fallback parses — keep those in
+    // full. Every other tool result stays truncated for the thread summary.
+    toolLog.push({
+      name,
+      args,
+      result: name === 'test_command' ? result : result.slice(0, 400),
+    });
     return result;
   };
 

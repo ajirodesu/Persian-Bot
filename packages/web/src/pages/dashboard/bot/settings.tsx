@@ -88,7 +88,7 @@ export default function BotSettingsPage() {
   } = useBotValidation()
   const { snackbar, setPosition } = useSnackbar()
 
-  const [form, setForm] = useState<FormState>({
+  const buildInitialForm = (): FormState => ({
     botNickname: bot.nickname,
     botPrefix: bot.prefix,
     botAdmins: bot.admins?.length > 0 ? bot.admins : [''],
@@ -113,6 +113,8 @@ export default function BotSettingsPage() {
           : '',
     },
   })
+
+  const [form, setForm] = useState<FormState>(buildInitialForm)
 
   // ── Field handlers ────────────────────────────────────────────────────────
 
@@ -344,6 +346,12 @@ export default function BotSettingsPage() {
     } finally {
       setSavePhase('idle')
     }
+  }
+
+  const handleCancel = (): void => {
+    setForm(buildInitialForm())
+    setReactionPending(null)
+    resetVerification()
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
@@ -663,6 +671,14 @@ export default function BotSettingsPage() {
         <div className="flex-1">
           {error && <p className="text-body-sm text-error">{error}</p>}
         </div>
+        <Button
+          variant="outline"
+          color="neutral"
+          onClick={handleCancel}
+          disabled={savePhase !== 'idle' || isLoading || reactionSaving}
+        >
+          Cancel
+        </Button>
         <Button
           variant="filled"
           color="primary"

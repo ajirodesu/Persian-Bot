@@ -1,7 +1,7 @@
 /**
  * AI Agent — Dynamic Tool Loader
  *
- * Scans the agent-tools/ directory at runtime and imports every module that
+ * Scans the tools/ directory at runtime and imports every module that
  * implements the unified `{ meta, initialize }` shape — the same modular
  * architecture upstream Cat-Bot uses for its agent tools. A new tool is a new
  * file in this directory; no registry edits required.
@@ -14,14 +14,14 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import type { AgentTool } from './agent-tool.types.js';
+import type { AgentTool } from '../agent-tool.types.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 // The loader lives one level above the tools, so resolve the sibling
-// directory rather than scanning the ai-agent/ folder itself.
+// directory rather than scanning the agent/ folder itself.
 const TOOLS_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  'agent-tools',
+  'tools',
 );
 
 // Defensive guard for anything in the tools directory that isn't a tool
