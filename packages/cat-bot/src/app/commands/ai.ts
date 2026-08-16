@@ -26,7 +26,7 @@ export const meta: CommandMeta = {
   aliases: [AGENT_NAME] as string[],
   version: '1.0.0',
   role: Role.ANYONE,
-  author: 'AjiroDesu (ported from mrepol742/project-canis)',
+  author: 'AjiroDesu',
   description: `Talk to the AI assistant (also triggers on "${AGENT_NAME}" or @mention).`,
   category: 'ai',
   usage: '<query>',

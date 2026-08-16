@@ -26,12 +26,10 @@ export interface AiProviderKeyStatus {
   keyHint: string | null;
 }
 
-/** Per-user agent behavior settings (web-configurable — env vars are the fallback). */
+/** Per-user agent behavior settings (web-configurable). */
 export interface AgentSettingsPayload {
   /** Trigger word that activates the agent in plain chat (default: Cat-Bot). */
   agentName?: string;
-  /** Whether the shell tool is exposed to the agent. */
-  shellEnabled?: boolean;
   /** Max tool-call iterations per agent turn. */
   maxToolIterations?: number;
   /** Max messages kept per agent thread. */
@@ -42,7 +40,6 @@ export interface AgentSettingsPayload {
 
 export const AGENT_SETTINGS_DEFAULTS: Required<AgentSettingsPayload> = {
   agentName: '',
-  shellEnabled: true,
   maxToolIterations: 5,
   maxHistory: 20,
   threadTtl: 3600,
@@ -201,18 +198,12 @@ export async function getUserAgentSettings(
     const v = blob[key];
     return typeof v === 'string' ? v : undefined;
   };
-  const pickBool = (key: string): boolean | undefined => {
-    const v = blob[key];
-    return typeof v === 'boolean' ? v : undefined;
-  };
   const pickNum = (key: string): number | undefined => {
     const v = blob[key];
     return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
   };
   const agentName = pick('agentName');
   if (agentName) out.agentName = agentName;
-  const shellEnabled = pickBool('shellEnabled');
-  if (shellEnabled !== undefined) out.shellEnabled = shellEnabled;
   const maxToolIterations = pickNum('maxToolIterations');
   if (maxToolIterations !== undefined) {
     out.maxToolIterations = maxToolIterations;
@@ -487,9 +478,6 @@ export async function saveUserAiConfig(
     const s = payload.settings;
     if (typeof s.agentName === 'string' && s.agentName.trim()) {
       patch['agentName'] = s.agentName.trim().slice(0, 32);
-    }
-    if (typeof s.shellEnabled === 'boolean') {
-      patch['shellEnabled'] = s.shellEnabled;
     }
     if (typeof s.maxToolIterations === 'number' && s.maxToolIterations > 0) {
       patch['maxToolIterations'] = Math.min(Math.floor(s.maxToolIterations), 20);

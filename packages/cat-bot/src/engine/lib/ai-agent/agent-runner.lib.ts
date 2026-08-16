@@ -28,8 +28,8 @@ import {
   getGeminiClient,
 } from './agent-providers.lib.js';
 import type { ThreadMessage } from './agent-thread.lib.js';
-import { type AgentTool, executeTool } from './agent-tools/index.js';
-import type { ToolContext } from './agent-tools/types.js';
+import type { McpToolSet } from './mcp-tools.lib.js';
+import type { ToolContext } from './agent-tool.types.js';
 
 export interface ToolLogEntry {
   name: string;
@@ -52,7 +52,8 @@ export interface AgentTurnConfig {
   systemPrompt: string;
   history: ThreadMessage[];
   userQuery: string;
-  tools: AgentTool[];
+  /** The MCP-exposed tool set: LLM-facing schemas + a callTool executor. */
+  tools: McpToolSet;
   context: ToolContext;
   provider: AgentProviderId;
   apiKey?: string | undefined;
@@ -104,7 +105,7 @@ async function runOpenAILike(
   systemPrompt: string,
   history: ThreadMessage[],
   userQuery: string,
-  tools: AgentTool[],
+  tools: McpToolSet,
   execFn: ExecFn,
   imageData: ImageData | undefined,
   maxToolIterations: number,
@@ -130,13 +131,13 @@ async function runOpenAILike(
   ];
 
   const oaTools =
-    tools.length > 0
-      ? tools.map((t) => ({
+    tools.schemas.length > 0
+      ? tools.schemas.map((t) => ({
           type: 'function' as const,
           function: {
-            name: t.meta.name,
-            description: t.meta.description,
-            parameters: t.meta.parameters,
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
           },
         }))
       : undefined;
@@ -205,16 +206,16 @@ async function runGemini(
   systemPrompt: string,
   history: ThreadMessage[],
   userQuery: string,
-  tools: AgentTool[],
+  tools: McpToolSet,
   execFn: ExecFn,
   imageData: ImageData | undefined,
   maxToolIterations: number,
 ): Promise<string | null> {
   const client = getGeminiClient(apiKey);
-  const functionDeclarations = tools.map((t) => ({
-    name: t.meta.name,
-    description: t.meta.description,
-    parameters: t.meta.parameters,
+  const functionDeclarations = tools.schemas.map((t) => ({
+    name: t.name,
+    description: t.description,
+    parameters: t.parameters,
   }));
 
   const userParts: any[] = [{ text: userQuery }];
@@ -303,7 +304,9 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
       return RUN_CMD_SENTINEL;
     }
 
-    const result = await executeTool(name, args, cfg.context);
+    // Execution goes through the MCP client — the tool's initialize runs
+    // inside the in-process MCP server, bound to this turn's ToolContext.
+    const result = await cfg.tools.callTool(name, args);
     toolLog.push({ name, args, result: result.slice(0, 400) });
     return result;
   };

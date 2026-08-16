@@ -10,7 +10,7 @@
  * (unified delivery) so the agent can inspect output before committing.
  */
 
-import type { ToolMeta, ToolContext } from './types.js';
+import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
 
 // ============================================================================
 // TOOL DEFINITION

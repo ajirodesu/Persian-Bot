@@ -102,16 +102,6 @@ class AiProviderController {
       if (s['agentName'] !== undefined) {
         settings.agentName = s['agentName'] as string;
       }
-      if (
-        s['shellEnabled'] !== undefined &&
-        typeof s['shellEnabled'] !== 'boolean'
-      ) {
-        res.status(400).json({ error: 'shellEnabled must be a boolean' });
-        return;
-      }
-      if (s['shellEnabled'] !== undefined) {
-        settings.shellEnabled = s['shellEnabled'];
-      }
       for (const key of NUMERIC_SETTING_KEYS) {
         const v = s[key];
         if (v === undefined) continue;

@@ -6,7 +6,7 @@
  * handler binds to the live command map so the LLM always sees current data.
  */
 
-import type { ToolMeta, ToolContext } from './types.js';
+import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
 
 // ============================================================================
 // TOOL DEFINITION

@@ -36,6 +36,7 @@
     "@getbrevo/brevo": "^6.0.2",
     "@google/genai": "^1.30.0",
     "@grammyjs/runner": "^2.0.3",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "axios": "^1.13.6",

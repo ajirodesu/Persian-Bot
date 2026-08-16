@@ -11,7 +11,6 @@ import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Select from '@/components/ui/forms/Select'
 import SearchableSelect from '@/components/ui/forms/SearchableSelect'
-import Switch from '@/components/ui/forms/Switch'
 import Alert from '@/components/ui/feedback/Alert'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
@@ -41,7 +40,6 @@ interface AiProviderKeyStatus {
 
 interface AgentSettings {
   agentName: string
-  shellEnabled: boolean
   maxToolIterations: number
   maxHistory: number
   threadTtl: number
@@ -128,7 +126,6 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
   },
   agent: {
     agentName: '',
-    shellEnabled: true,
     maxToolIterations: 5,
     maxHistory: 20,
     threadTtl: 3600,
@@ -406,7 +403,6 @@ export default function SettingsPage() {
 
   // ── Agent behavior drafts (web-based AI configuration) ────────────────────
   const [agentNameDraft, setAgentNameDraft] = useState('')
-  const [shellDraft, setShellDraft] = useState(true)
   const [maxIterationsDraft, setMaxIterationsDraft] = useState('5')
   const [maxHistoryDraft, setMaxHistoryDraft] = useState('20')
   const [threadTtlDraft, setThreadTtlDraft] = useState('3600')
@@ -426,7 +422,6 @@ export default function SettingsPage() {
         setModelDraft(res.data.model)
         const a = res.data.agent
         setAgentNameDraft(a.agentName ?? '')
-        setShellDraft(a.shellEnabled)
         setMaxIterationsDraft(String(a.maxToolIterations))
         setMaxHistoryDraft(String(a.maxHistory))
         setThreadTtlDraft(String(a.threadTtl))
@@ -454,10 +449,8 @@ export default function SettingsPage() {
 
   // Agent-setting drafts differ from the saved status → dirty (unsaved).
   const agentDirty =
-    aiStatus !== null &&
-    (agentNameDraft.trim().toLowerCase() !==
-      (aiStatus.agent.agentName ?? '').trim().toLowerCase() ||
-      shellDraft !== aiStatus.agent.shellEnabled ||
+    aiStatus !== null &&      (agentNameDraft.trim().toLowerCase() !==
+        (aiStatus.agent.agentName ?? '').trim().toLowerCase() ||
       Number(maxIterationsDraft) !== aiStatus.agent.maxToolIterations ||
       Number(maxHistoryDraft) !== aiStatus.agent.maxHistory ||
       Number(threadTtlDraft) !== aiStatus.agent.threadTtl)
@@ -545,7 +538,6 @@ export default function SettingsPage() {
       if (aiDirty || agentDirty) {
         const settings: Record<string, unknown> = {}
         if (agentNameDraft.trim()) settings.agentName = agentNameDraft.trim()
-        settings.shellEnabled = shellDraft
         settings.maxToolIterations = Number(maxIterationsDraft)
         settings.maxHistory = Number(maxHistoryDraft)
         settings.threadTtl = Number(threadTtlDraft)
@@ -565,7 +557,6 @@ export default function SettingsPage() {
         setProviderDraft(res.data.provider)
         setModelDraft(res.data.model)
         setAgentNameDraft(res.data.agent.agentName ?? '')
-        setShellDraft(res.data.agent.shellEnabled)
         setMaxIterationsDraft(String(res.data.agent.maxToolIterations))
         setMaxHistoryDraft(String(res.data.agent.maxHistory))
         setThreadTtlDraft(String(res.data.agent.threadTtl))
@@ -853,23 +844,6 @@ export default function SettingsPage() {
                     “Cat-Bot”).
                   </Field.HelperText>
                 </Field.Root>
-
-                <div className="flex items-center justify-between gap-4 py-3 border-b border-outline-variant/50">
-                  <div>
-                    <p className="text-label-lg font-medium text-on-surface">
-                      Shell access
-                    </p>
-                    <p className="text-body-sm text-on-surface-variant">
-                      Let the agent run shell commands (write code, install
-                      packages) in its sandboxed workspace.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={shellDraft}
-                    onChange={setShellDraft}
-                    aria-label="Enable shell access"
-                  />
-                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
                   <Field.Root>

@@ -21,7 +21,7 @@
  *   - button (ButtonItem[][])        → replayed; JSON-safe plain objects survive storage
  */
 
-import type { ToolMeta, ToolContext } from './types.js';
+import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
 import { commandResultStore } from '../lib/command-result-store.lib.js';
 import type {
   NamedStreamAttachment,

@@ -6,11 +6,10 @@
  *   export const meta: ToolMeta = { name, description, parameters };
  *   export const initialize = async (args, ctx: ToolContext) => Promise<string>;
  *
- * The `meta` object is the OpenAI function-calling JSON contract shared by
- * every provider (OpenAI-compatible, Gemini functionDeclarations).
- * `initialize` runs the tool against the live bot context. The registry in
- * index.ts collects `{ meta, initialize }` pairs into the tool list exposed to
- * the LLM, and executeTool() dispatches calls to the matching initialize.
+ * The `meta` object is the JSON-schema contract exposed to the LLM through an
+ * in-process MCP server (see mcp-tools.lib.ts): the runner lists tools via
+ * listTools and dispatches calls via callTool. `initialize` runs the tool
+ * against the live bot context.
  *
  * ToolContext extends BaseCtx so tools have both the narrowed helper surface
  * (sendFile, getUserInfo, ...) AND the full live bot context (api, event,
@@ -56,10 +55,6 @@ export interface AgentTool {
 
 /** Context passed into every tool — helpers plus the live bot context. */
 export interface ToolContext extends BaseCtx {
-  /** Per-session host workspace directory for the shell/send_file tools. */
-  workspaceDir: string;
-  /** Send a file from the local filesystem to the current chat. */
-  sendFile: (path: string, caption?: string) => Promise<string>;
   /** Resolve a user's info by platform user ID (null when unknown). */
   getUserInfo: (userID: string) => Promise<UnifiedUserInfo | null>;
   /** Resolve a thread/group's info by thread ID (null when unknown). */

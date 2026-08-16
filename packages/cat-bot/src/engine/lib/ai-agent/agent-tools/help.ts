@@ -6,7 +6,7 @@ import { isBotAdmin, isBotPremium } from '@/engine/repos/credentials.repo.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 import { Role } from '@/engine/constants/role.constants.js';
-import type { ToolMeta, ToolContext } from './types.js';
+import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
 
 // ============================================================================
 // HELP TOOL UTILITIES

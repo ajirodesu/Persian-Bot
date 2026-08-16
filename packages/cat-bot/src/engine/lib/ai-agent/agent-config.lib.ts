@@ -47,8 +47,6 @@ export interface ResolvedAgentConfig {
   // ── Agent behavior (hardcoded defaults when the user hasn't set a value) ───
   /** Trigger word that activates the agent in plain chat. */
   agentName: string;
-  /** Whether the shell tool is exposed to the agent. */
-  shellEnabled: boolean;
   /** Max tool-call iterations per agent turn. */
   maxToolIterations: number;
   /** Max messages kept per agent thread. */
@@ -103,7 +101,6 @@ export function resolveAgentBehavior(): Omit<
 > {
   return {
     agentName: DEFAULT_AGENT_NAME,
-    shellEnabled: true,
     maxToolIterations: 5,
     maxHistory: 20,
     threadTtl: 3600,
@@ -187,7 +184,6 @@ function resolveBehaviorWithBlob(
 ): Omit<ResolvedAgentConfig, 'provider' | 'apiKey' | 'model'> {
   const defaults = resolveAgentBehavior();
   const name = blob['agentName'];
-  const shell = blob['shellEnabled'];
   const maxIter = blob['maxToolIterations'];
   const maxHist = blob['maxHistory'];
   const ttl = blob['threadTtl'];
@@ -196,8 +192,6 @@ function resolveBehaviorWithBlob(
       typeof name === 'string' && name.trim()
         ? name.trim().toLowerCase()
         : defaults.agentName,
-    shellEnabled:
-      typeof shell === 'boolean' ? shell : defaults.shellEnabled,
     maxToolIterations:
       typeof maxIter === 'number' && maxIter > 0
         ? Math.min(Math.floor(maxIter), 20)

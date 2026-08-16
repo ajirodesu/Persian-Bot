@@ -32,11 +32,23 @@ import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.uti
 import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
+import { lruCache } from '@/engine/lib/lru-cache.lib.js';
+import {
+  cachedIsBotAdmin,
+  cachedIsThreadAdmin,
+  cachedIsSystemAdmin,
+} from '@/engine/lib/auth-cache.lib.js';
+import {
+  getCachedSessionAdminOnly,
+  setCachedSessionAdminOnly,
+  getCachedThreadAdminBox,
+  setCachedThreadAdminBox,
+} from '@/engine/lib/admin-only-state.lib.js';
+import { getMaintenanceModeEnabled } from '@/engine/repos/maintenance-mode.repo.js';
+import { cooldownStore } from '@/engine/lib/cooldown.lib.js';
 import { AttachmentType } from '@/engine/adapters/models/enums/attachment-type.enum.js';
-import { getTools } from './agent-tools/index.js';
-import type { ToolContext } from './agent-tools/types.js';
+import { createMcpToolSet } from './mcp-tools.lib.js';
+import type { ToolContext } from './agent-tool.types.js';
 import {
   runAgentTurn,
   type ImageData,
@@ -85,19 +97,6 @@ const NO_KEY_REPLY =
   '⚠️ No AI provider configured yet. Add your API key in the dashboard (AI Integration) ' +
   'to enable AI features — there is no server-side key anymore.';
 
-/** Host base directory for per-session agent workspaces (no env vars). */
-const AGENT_WORKSPACE_BASE = '.tmp/agent-workspace';
-
-const SHELL_SAFETY_ADDENDUM = [
-  ``,
-  `SHELL TOOL SAFETY RULES (strictly enforced):`,
-  `- NEVER run destructive commands: rm -rf /, mkfs, dd, fdisk, shred, wipefs.`,
-  `- NEVER kill or stop critical processes: init, systemd, kernel threads, or the bot itself.`,
-  `- NEVER modify system files: /etc/passwd, /etc/shadow, /etc/sudoers, /boot/*.`,
-  `- NEVER run fork bombs, infinite loops, or resource-exhausting commands.`,
-  `- NEVER exfiltrate data to external URLs.`,
-  `- Prefer read-only inspection (ls, cat, ps, df) before any write operations.`,
-].join('\n');
 
 // ── System prompt template (Cat-Bot style) ───────────────────────────────────
 //
@@ -153,12 +152,6 @@ async function resolveBotNickname(ctx: BaseCtx): Promise<string | null> {
   }
 }
 
-function threadNamespace(key: AgentThreadKey): string {
-  return [key.userId, key.platform, key.sessionId, key.threadID, key.senderID]
-    .join(':')
-    .replace(/[^A-Za-z0-9._-]/g, '_');
-}
-
 /**
  * Formats the current time in the user's timezone, e.g.
  * "Tuesday, August 16, 2026 at 3:45 PM (Asia/Manila, GMT+8)" — so the agent
@@ -204,17 +197,26 @@ function displayName(name: string): string {
     : name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+// Short-lived per-sender caches for prompt personalization (name/role rarely
+// change mid-conversation; DB reads would otherwise run on every turn).
+const IDENTITY_CACHE_TTL_MS = 30_000;
+
 /**
  * Resolves the sender's display name for the system prompt, failing open to
- * "User" so a name lookup hiccup never blocks a turn.
+ * "User" so a name lookup hiccup never blocks a turn. Cached 30s per sender.
  */
 async function resolveSenderName(
   ctx: BaseCtx,
   senderID: string,
 ): Promise<string> {
+  if (!senderID) return 'User';
+  const cacheKey = `agent:uname:${senderID}`;
+  const cached = lruCache.get<string>(cacheKey);
+  if (cached) return cached;
   try {
-    const name = await ctx.user.getName(senderID);
-    return name?.trim() || 'User';
+    const name = (await ctx.user.getName(senderID))?.trim() || 'User';
+    lruCache.set(cacheKey, name, IDENTITY_CACHE_TTL_MS);
+    return name;
   } catch {
     return 'User';
   }
@@ -223,7 +225,8 @@ async function resolveSenderName(
 /**
  * Resolves the sender's role label for the system prompt — the same checks
  * the upstream Cat-Bot uses: Bot Administrator > Thread Administrator >
- * Regular User. Fail-open to Regular User on DB errors.
+ * Regular User. Fail-open to Regular User on DB errors. The auth checks are
+ * memoized per request (auth-cache) and LRU-cached at the repo layer.
  */
 async function resolveUserRoleLabel(
   ctx: BaseCtx,
@@ -231,35 +234,55 @@ async function resolveUserRoleLabel(
 ): Promise<string> {
   const { senderID, userId, sessionId, platform, threadID } = key;
   if (!senderID) return 'Regular User';
+  const cacheKey = `agent:urole:${senderID}`;
+  const cached = lruCache.get<string>(cacheKey);
+  if (cached) return cached;
   try {
+    let role = 'Regular User';
     if (userId && sessionId) {
-      const isAdmin = await isBotAdmin(
+      const isAdmin = await cachedIsBotAdmin(
+        ctx,
         userId,
         platform,
         sessionId,
         senderID,
       );
-      if (isAdmin) return 'Bot Administrator';
+      if (isAdmin) role = 'Bot Administrator';
     }
-    if (threadID) {
-      const isThreadAdm = await isThreadAdmin(threadID, senderID);
-      if (isThreadAdm) return 'Thread Administrator';
+    if (role === 'Regular User' && threadID) {
+      const isThreadAdm = await cachedIsThreadAdmin(ctx, threadID, senderID);
+      if (isThreadAdm) role = 'Thread Administrator';
     }
+    lruCache.set(cacheKey, role, IDENTITY_CACHE_TTL_MS);
+    return role;
   } catch {
     // Fail-open — a temporary DB outage defaults to Regular User.
+    return 'Regular User';
   }
-  return 'Regular User';
 }
+
+// The command roster is fixed at boot (loadCommands runs once), so the
+// category-grouped list only needs building once per (map, platform) pair.
+let commandsListCache: { map: unknown; platform: string; list: string } | null =
+  null;
 
 /**
  * Builds the `<available_commands>` list — commands grouped by category and
  * sorted, so the LLM sees domain structure (the same approach as upstream
- * Cat-Bot) instead of a flat alphabetical list.
+ * Cat-Bot) instead of a flat alphabetical list. Memoized per command map.
  */
 function buildAvailableCommandsList(
   commands: Map<string, CommandModule>,
   platform: string,
 ): string {
+  if (
+    commandsListCache &&
+    commandsListCache.map === commands &&
+    commandsListCache.platform === platform
+  ) {
+    return commandsListCache.list;
+  }
+
   const byCategory = new Map<string, string[]>();
   const seen = new Set<CommandModule>();
   for (const [name, mod] of commands) {
@@ -277,21 +300,22 @@ function buildAvailableCommandsList(
     if (!byCategory.has(category)) byCategory.set(category, []);
     byCategory.get(category)!.push(cmdName);
   }
-  return [...byCategory.entries()]
+  const list = [...byCategory.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([cat, cmds]) => `${cat}: ${[...cmds].sort().join(', ')}`)
     .join('\n');
+  commandsListCache = { map: commands, platform, list };
+  return list;
 }
 
 /**
  * Fills the Cat-Bot system-prompt template (agent/system_prompt.md) with the
  * per-turn context: the bot's name, the sender's name/role, the command
  * prefix, the available commands, and the current time in the user's
- * timezone. Mention and shell-safety hints are appended on top.
+ * timezone. A mention hint is appended on top.
  */
 function buildSystemPrompt(params: {
   mentioned: boolean;
-  shellEnabled: boolean;
   timeZone: string;
   botName: string;
   userName: string;
@@ -309,9 +333,6 @@ function buildSystemPrompt(params: {
   if (params.mentioned) {
     prompt +=
       '\n\nThe user has mentioned people in this message — you can @mention them in your reply.';
-  }
-  if (params.shellEnabled) {
-    prompt += '\n' + SHELL_SAFETY_ADDENDUM;
   }
   return prompt;
 }
@@ -426,43 +447,15 @@ function roleMatchesFilter(
   return label === 'user'; // 'user' filter → ANYONE commands only
 }
 
-function buildToolContext(ctx: BaseCtx, workspaceDir: string): ToolContext {
+function buildToolContext(ctx: BaseCtx): ToolContext {
   const threadID = (ctx.event['threadID'] as string) ?? '';
 
   // Spread the live bot context into the tool context — ToolContext extends
   // BaseCtx so command-aware tools (help, test_command, send_result) can reach
   // api, event, commands, prefix and native directly, while the helper surface
-  // below stays available to the file/browser/shell tools.
+  // below stays available to the browser/command tools.
   return {
     ...ctx,
-    workspaceDir,
-
-    sendFile: async (filePath: string, caption?: string): Promise<string> => {
-      try {
-        // Relative paths resolve inside the per-session workspace (the shell
-        // tool's CWD); absolute paths are used as-is.
-        const hostPath = path.isAbsolute(filePath)
-          ? filePath
-          : path.join(workspaceDir, filePath);
-        if (!fs.existsSync(hostPath)) {
-          return (
-            `Error: file not found at ${hostPath}. ` +
-            'Use the shell tool to create it in the workspace first, then call send_file again.'
-          );
-        }
-        const name = path.basename(hostPath);
-        await ctx.chat.replyMessage({
-          message: caption ? `📎 *${caption}*` : '',
-          attachment: [{ name, stream: fs.createReadStream(hostPath) }],
-        });
-        logger.info('[Agent]', `send_file → ${hostPath}`);
-        return 'File sent successfully.';
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        logger.error('[Agent] send_file failed', err);
-        return `Error sending file: ${errMsg}. Fix the issue and try send_file again.`;
-      }
-    },
 
     getUserInfo: async (userID: string) => {
       try {
@@ -565,9 +558,9 @@ function buildToolContext(ctx: BaseCtx, workspaceDir: string): ToolContext {
 
 /**
  * Main entry point for the agent. Handles text replies, bot command execution,
- * file sending, and vision input. Commands pass an explicit query override
- * (the event body still carries the command prefix + name); plain-chat
- * activation reads the raw body, stripping a leading "<agent-name> " prefix.
+ * and vision input. Commands pass an explicit query override (the event body
+ * still carries the command prefix + name); plain-chat activation reads the
+ * raw body, stripping a leading "<agent-name> " prefix.
  */
 export async function runAgent(
   ctx: BaseCtx,
@@ -577,12 +570,17 @@ export async function runAgent(
   const { threadID, senderID } = key;
   if (!senderID || !threadID) return;
 
-  const workspaceDir = path.join(AGENT_WORKSPACE_BASE, threadNamespace(key));
-
-  // Resolve the per-user config up front (LRU-cached 30s) — it feeds the
-  // trigger-name strip, the system prompt, tool gating and turn limits below.
-  const config = await resolveAgentConfig(key.userId || undefined);
-  const botNickname = await resolveBotNickname(ctx);
+  // Resolve everything the turn needs up front, in parallel: the per-user
+  // config (LRU-cached 30s) plus the identity context for the system prompt
+  // (nickname, sender name, sender role — all cached too). Nothing here
+  // depends on anything else, so a single Promise.all avoids four sequential
+  // round-trips before the first LLM call.
+  const [config, botNickname, userName, userRole] = await Promise.all([
+    resolveAgentConfig(key.userId || undefined),
+    resolveBotNickname(ctx),
+    resolveSenderName(ctx, senderID),
+    resolveUserRoleLabel(ctx, key),
+  ]);
 
   let query = (queryOverride ?? '').trim();
   if (!query) {
@@ -622,17 +620,15 @@ export async function runAgent(
     return;
   }
 
-  const tools = getTools(config.shellEnabled);
   // Cat-Bot style personalization: fill the system-prompt template with the
   // bot's name (session nickname or trigger word), the sender's name + role,
   // the command prefix, and the available commands grouped by category.
   const systemPrompt = buildSystemPrompt({
     mentioned,
-    shellEnabled: config.shellEnabled,
     timeZone: config.timezone,
     botName: botNickname ?? displayName(config.agentName),
-    userName: await resolveSenderName(ctx, senderID),
-    userRole: await resolveUserRoleLabel(ctx, key),
+    userName,
+    userRole,
     prefix: ctx.prefix ?? '/',
     availableCommands: buildAvailableCommandsList(
       ctx.commands,
@@ -640,9 +636,10 @@ export async function runAgent(
     ),
   });
 
-  fs.mkdirSync(workspaceDir, { recursive: true });
-
-  const toolContext = buildToolContext(ctx, workspaceDir);
+  const toolContext = buildToolContext(ctx);
+  // Spin up the in-process MCP server bound to this turn's context — the
+  // runner lists schemas and executes tool calls through the MCP protocol.
+  const tools = await createMcpToolSet(toolContext);
   const threadQuery = imageData
     ? query
       ? `[Image] ${query}`
@@ -735,12 +732,207 @@ async function runAgentWithIndicator(ctx: BaseCtx): Promise<void> {
   await withTypingIndicator(ctx.api, threadID, () => runAgent(ctx));
 }
 
+// ── Access guard (maintenance / admin-only modes) ─────────────────────────────
+
+/**
+ * Enforces the same restriction modes the command middleware applies, for the
+ * natural-language agent path (which never passes through the dispatcher):
+ *
+ *   1. Maintenance Mode   (global)      → System Admins only
+ *   2. Bot Admin Only     (session-wide) → bot admins only
+ *   3. Group Admin Only   (per-thread)   → group / bot / system admins only
+ *
+ * Mirrors enforceMaintenanceMode + enforceAdminOnly in on-command.middleware.ts
+ * (same messages, same LRU fast-path caches, same 15s notification dedup) so
+ * the AI respects these modes exactly like every command does. The per-command
+ * ignore lists do NOT apply here — the natural-language agent is not a command,
+ * so when a mode is on, non-privileged users get no AI. Fail-open on DB errors.
+ *
+ * Returns true when the turn may proceed, false when it was blocked (a notice
+ * was already sent, throttled to one per 15s per user/thread).
+ */
+export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
+  const sessionUserId = ctx.native.userId ?? '';
+  const sessionId = ctx.native.sessionId ?? '';
+  const platform = ctx.native.platform;
+  const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
+  const threadID = (ctx.event['threadID'] ?? '') as string;
+  const now = Date.now();
+
+  // ── 1. Maintenance Mode — global, System Admins only ───────────────────────
+  try {
+    const maintenance = await getMaintenanceModeEnabled();
+    if (maintenance) {
+      const isSysAdmin = senderID
+        ? await cachedIsSystemAdmin(ctx, senderID)
+        : false;
+      if (!isSysAdmin) {
+        const key = `maintenance_noti:${senderID || 'unknown'}`;
+        if (cooldownStore.check(key, now) === null) {
+          await ctx.chat.replyMessage({
+            message:
+              '🚫 The bot is under maintenance — only System Admins may use commands right now.',
+            attachment_url: [
+              {
+                name: 'maintenance-mode.png',
+                url: 'https://i.postimg.cc/rF1Y5ky9/maintenance-mode.png',
+              },
+            ],
+          });
+          cooldownStore.record(key, now, 15000);
+        }
+        return false;
+      }
+    }
+  } catch {
+    /* fail-open */
+  }
+
+  // Fast-path: skip all async DB reads when both admin-only modes are
+  // known-off (populated on the first check per session/thread) — the common
+  // case, and this guard runs on every non-command message.
+  if (sessionUserId && sessionId) {
+    const sessOff =
+      getCachedSessionAdminOnly(sessionUserId, platform, sessionId) === false;
+    const threadOff =
+      !threadID ||
+      getCachedThreadAdminBox(
+        sessionUserId,
+        platform,
+        sessionId,
+        threadID,
+      ) === false;
+    if (sessOff && threadOff) return true;
+  }
+
+  // ── 2. Session-wide Bot Admin Only (db.bot → session_settings) ─────────────
+  if (sessionUserId && sessionId) {
+    try {
+      const botColl = ctx.db.bot;
+      if (await botColl.isCollectionExist('session_settings')) {
+        const h = await botColl.getCollection('session_settings');
+        const settings = await h.getAll();
+        const enabled = settings['adminOnlyEnabled'] as boolean | null;
+        if (enabled !== null && enabled !== undefined) {
+          setCachedSessionAdminOnly(
+            sessionUserId,
+            platform,
+            sessionId,
+            enabled === true,
+          );
+        }
+        if (enabled === true) {
+          const isSysAdmin = senderID
+            ? await cachedIsSystemAdmin(ctx, senderID)
+            : false;
+          const isAdmin =
+            !isSysAdmin &&
+            senderID &&
+            sessionUserId &&
+            sessionId
+              ? await cachedIsBotAdmin(
+                  ctx,
+                  sessionUserId,
+                  platform,
+                  sessionId,
+                  senderID,
+                )
+              : isSysAdmin;
+          if (!isAdmin) {
+            const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
+            if (hideNoti !== true) {
+              const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+              if (cooldownStore.check(key, now) === null) {
+                await ctx.chat.replyMessage({
+                  message:
+                    '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
+                });
+                cooldownStore.record(key, now, 15000);
+              }
+            }
+            return false;
+          }
+        }
+      } else {
+        setCachedSessionAdminOnly(sessionUserId, platform, sessionId, false);
+      }
+    } catch {
+      /* fail-open */
+    }
+  }
+
+  // ── 3. Per-thread Group Admin Only (db.threads → adminbox_settings) ────────
+  if (threadID) {
+    try {
+      const threadColl = ctx.db.threads.collection(threadID);
+      if (await threadColl.isCollectionExist('adminbox_settings')) {
+        const h = await threadColl.getCollection('adminbox_settings');
+        const settings = await h.getAll();
+        const enabled = settings['enabled'] as boolean | null;
+        if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+          setCachedThreadAdminBox(
+            sessionUserId,
+            platform,
+            sessionId,
+            threadID,
+            enabled === true,
+          );
+        }
+        if (enabled === true) {
+          const isSysAdmin = senderID
+            ? await cachedIsSystemAdmin(ctx, senderID)
+            : false;
+          let allowed = isSysAdmin;
+          if (!allowed && senderID && sessionUserId && sessionId) {
+            allowed = await cachedIsBotAdmin(
+              ctx,
+              sessionUserId,
+              platform,
+              sessionId,
+              senderID,
+            );
+          }
+          if (!allowed && senderID) {
+            allowed = await cachedIsThreadAdmin(ctx, threadID, senderID);
+          }
+          if (!allowed) {
+            const hideNoti = settings['hideNoti'] as boolean | null;
+            if (hideNoti !== true) {
+              const key = `adminbox_noti:${sessionUserId}:${platform}:${sessionId}:${threadID}:${senderID}`;
+              if (cooldownStore.check(key, now) === null) {
+                await ctx.chat.replyMessage({
+                  message: '🚫 Only group admins can use the bot in this thread.',
+                });
+                cooldownStore.record(key, now, 15000);
+              }
+            }
+            return false;
+          }
+        }
+      } else if (sessionUserId && sessionId) {
+        setCachedThreadAdminBox(
+          sessionUserId,
+          platform,
+          sessionId,
+          threadID,
+          false,
+        );
+      }
+    } catch {
+      /* fail-open */
+    }
+  }
+
+  return true;
+}
+
 // ── Natural-language activation (canis message.ts) ────────────────────────────
 
 /**
  * Runs on every non-command message (onChat). Continues an active session,
  * then triggers on the agent name word or a bot @mention — mirroring canis's
- * message.ts AI routing.
+ * message.ts AI routing. The maintenance / admin-only guards run first, so a
+ * restricted bot never answers natural-language messages.
  */
 export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
   const body = (ctx.event['message'] ?? ctx.event['body'] ?? '') as string;
@@ -753,6 +945,11 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
 
   const key = buildAgentKey(ctx);
   if (!key.senderID || !key.threadID) return;
+
+  // Maintenance / Bot Admin Only / Group Admin Only gates — when any is on,
+  // non-privileged senders are blocked (with a throttled notice) before the
+  // session continuation, trigger word, or @mention can fire.
+  if (!(await enforceAgentAccess(ctx))) return;
 
   // 1. Active session → continue the conversation without a trigger word.
   if (isSessionActive(key)) {
@@ -847,12 +1044,15 @@ export async function generateSimpleText(
       ),
       history: [],
       userQuery: prompt,
-      tools: [],
+      // No tools — an empty MCP tool set (schemas: [] means the LLM gets no
+      // function declarations, and callTool is never reached).
+      tools: {
+        schemas: [],
+        callTool: async () => '(no tools available)',
+      },
       // No tools are passed to this completion, so the context is never used
       // for tool execution — only the helper surface matters here.
       context: {
-        workspaceDir: path.join(AGENT_WORKSPACE_BASE, 'simple'),
-        sendFile: async () => 'File sending is not available.',
         getUserInfo: async () => null,
         getThreadInfo: async () => null,
         listCommands: async () => '{}',

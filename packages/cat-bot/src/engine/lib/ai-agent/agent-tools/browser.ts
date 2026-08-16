@@ -13,7 +13,7 @@
  */
 
 import axios from 'axios';
-import type { ToolMeta, ToolContext } from './types.js';
+import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
 
 const CONTENT_LIMIT = 4000;
 const MAX_RESULTS = 6;
