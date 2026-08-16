@@ -669,10 +669,14 @@ export async function runAgent(
 
   // The send_result tool already delivered the reply (synthesized text +
   // attachments/buttons) via its own platform call — never double-post the
-  // turn's final text on top of it.
-  const deliveredViaSendResult = result.toolLog.some(
-    (t) => t.name === 'send_result',
-  );
+  // turn's final text on top of it. Only count calls that actually delivered:
+  // a failed delivery (or a repeat call that was skipped by the idempotency
+  // guard) must not suppress the fallback reply below.
+  const lastSendResult = [...result.toolLog]
+    .reverse()
+    .find((t) => t.name === 'send_result');
+  const deliveredViaSendResult =
+    !!lastSendResult && !lastSendResult.result.startsWith('Delivery failed');
   if (deliveredViaSendResult) {
     appendThread(
       key,

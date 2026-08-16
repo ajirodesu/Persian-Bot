@@ -70,4 +70,11 @@ export interface ToolContext extends BaseCtx {
   ) => Promise<{ ok: boolean; output?: string; error?: string }>;
   /** Called before each tool executes. isFirst=true on the first tool of the turn. */
   onToolCall?: (toolName: string, isFirst: boolean) => Promise<void>;
+  /**
+   * Set by send_result after a successful delivery. Guards against the model
+   * calling send_result more than once in a single turn, which would post
+   * duplicate replies (and silently lose single-use attachment keys on the
+   * second call). Reset per turn — the ToolContext is built fresh every turn.
+   */
+  agentReplyDelivered?: { message: string; deliveredAt: number };
 }

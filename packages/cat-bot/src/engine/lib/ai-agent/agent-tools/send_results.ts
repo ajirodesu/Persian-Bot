@@ -110,6 +110,19 @@ export const initialize = async (
   // Thread the agent reply to the user's triggering message for visual conversation anchoring.
   const replyToID = (ctx.event['messageID'] as string) || '';
 
+  // Idempotency guard: a turn must deliver exactly ONE reply. If the model
+  // calls send_result again (common after "Message delivered." is fed back as
+  // a tool result), skip the duplicate post entirely — posting again would
+  // send the user two messages and silently drop the single-use attachment
+  // keys, which were already consumed by the first delivery.
+  if (ctx.agentReplyDelivered) {
+    return (
+      'The reply was already delivered once this turn (send_result was called ' +
+      'before). Do NOT call send_result again — your turn is complete. ' +
+      'If you still want to add anything, end your turn with plain text only.'
+    );
+  }
+
   // Collect and flatten all URL-based attachments from provided attachment keys.
   // Each key may hold multiple attachment entries from a single test_command run;
   // concatenating them preserves the order in which commands were tested.
@@ -161,6 +174,9 @@ export const initialize = async (
     if (allBinaryAttachments.length > 0)
       replyOptions.attachment = allBinaryAttachments as NamedStreamAttachment[];
     await ctx.api.replyMessage(threadID, replyOptions);
+    // Mark the turn as delivered so any further send_result call is a no-op
+    // (see the idempotency guard at the top of initialize).
+    ctx.agentReplyDelivered = { message, deliveredAt: Date.now() };
 
     const parts: string[] = ['Message delivered.'];
     if (allAttachmentUrls.length > 0)
