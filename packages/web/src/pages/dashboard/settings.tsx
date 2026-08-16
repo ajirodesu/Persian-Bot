@@ -11,6 +11,7 @@ import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Select from '@/components/ui/forms/Select'
 import SearchableSelect from '@/components/ui/forms/SearchableSelect'
+import Switch from '@/components/ui/forms/Switch'
 import Alert from '@/components/ui/feedback/Alert'
 import DataList from '@/components/ui/data-display/DataList'
 import Divider from '@/components/ui/layout/Divider'
@@ -26,11 +27,24 @@ import { ROUTES } from '@/constants/routes.constants'
 // AI Integration — provider + model types
 // ============================================================================
 
-type AiProviderId = 'groq' | 'openrouter' | 'nvidia'
+type AiProviderId =
+  | 'openrouter'
+  | 'groq'
+  | 'nvidia'
+  | 'openai'
+  | 'gemini'
 
 interface AiProviderKeyStatus {
   hasKey: boolean
   keyHint: string | null
+}
+
+interface AgentSettings {
+  agentName: string
+  shellEnabled: boolean
+  maxToolIterations: number
+  maxHistory: number
+  threadTtl: number
 }
 
 interface AiSettingsStatus {
@@ -39,40 +53,53 @@ interface AiSettingsStatus {
   groqModel: string
   openrouterModel: string
   nvidiaModel: string
+  openaiModel: string
+  geminiModel: string
   providers: Record<AiProviderId, AiProviderKeyStatus>
   models: Record<
     AiProviderId,
     { id: string; label: string; free?: boolean }[]
   >
+  agent: AgentSettings
 }
 
 const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
-  groq: 'Groq',
   openrouter: 'OpenRouter',
+  groq: 'Groq',
   nvidia: 'NVIDIA',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
 }
 
 const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
-  groq: 'gsk_…',
   openrouter: 'sk-or-v1-…',
+  groq: 'gsk_…',
   nvidia: 'nvapi-…',
+  openai: 'sk-…',
+  gemini: 'AIza…',
 }
 
 const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: 'openrouter', label: 'OpenRouter' },
   { value: 'groq', label: 'Groq' },
   { value: 'nvidia', label: 'NVIDIA' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'gemini', label: 'Gemini' },
 ]
 
 // Infers the provider from a key's prefix as it's typed/pasted —
 // `sk-or-v1-` is an OpenRouter key (checked first — the primary provider),
-// `nvapi-` an NVIDIA key, `gsk_` a Groq key. Returns null while the key is too
-// short or doesn't match any format.
+// `nvapi-` an NVIDIA key, `gsk_` a Groq key, `sk-proj-`/`sk-` OpenAI, `AIza`
+// Gemini. Returns null while the key is too short or doesn't match any format.
 const detectProviderFromKey = (key: string): AiProviderId | null => {
   const trimmed = key.trim()
   if (trimmed.startsWith('sk-or-v1')) return 'openrouter'
   if (trimmed.startsWith('nvapi-')) return 'nvidia'
   if (trimmed.startsWith('gsk_')) return 'groq'
+  if (trimmed.startsWith('sk-proj-') || trimmed.startsWith('sk-')) {
+    return 'openai'
+  }
+  if (trimmed.startsWith('AIza')) return 'gemini'
   return null
 }
 
@@ -83,12 +110,29 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
   groqModel: '',
   openrouterModel: '',
   nvidiaModel: '',
+  openaiModel: '',
+  geminiModel: '',
   providers: {
-    groq: { hasKey: false, keyHint: null },
     openrouter: { hasKey: false, keyHint: null },
+    groq: { hasKey: false, keyHint: null },
     nvidia: { hasKey: false, keyHint: null },
+    openai: { hasKey: false, keyHint: null },
+    gemini: { hasKey: false, keyHint: null },
   },
-  models: { groq: [], openrouter: [], nvidia: [] },
+  models: {
+    openrouter: [],
+    groq: [],
+    nvidia: [],
+    openai: [],
+    gemini: [],
+  },
+  agent: {
+    agentName: '',
+    shellEnabled: true,
+    maxToolIterations: 5,
+    maxHistory: 20,
+    threadTtl: 3600,
+  },
 }
 
 // ============================================================================
@@ -360,8 +404,17 @@ export default function SettingsPage() {
   const [aiRemoving, setAiRemoving] = useState(false)
   const [aiRemoveError, setAiRemoveError] = useState<string | null>(null)
 
+  // ── Agent behavior drafts (web-based AI configuration) ────────────────────
+  const [agentNameDraft, setAgentNameDraft] = useState('')
+  const [shellDraft, setShellDraft] = useState(true)
+  const [maxIterationsDraft, setMaxIterationsDraft] = useState('5')
+  const [maxHistoryDraft, setMaxHistoryDraft] = useState('20')
+  const [threadTtlDraft, setThreadTtlDraft] = useState('3600')
+
   // Fetch the current provider config once on mount — the API never returns the
   // keys themselves, only whether one exists and a 4-char hint per provider.
+  // The agent-setting drafts are seeded from the same response (empty agentName
+  // means the server's env default is in effect).
   useEffect(() => {
     let cancelled = false
     apiClient
@@ -371,6 +424,12 @@ export default function SettingsPage() {
         setAiStatus(res.data)
         setProviderDraft(res.data.provider)
         setModelDraft(res.data.model)
+        const a = res.data.agent
+        setAgentNameDraft(a.agentName ?? '')
+        setShellDraft(a.shellEnabled)
+        setMaxIterationsDraft(String(a.maxToolIterations))
+        setMaxHistoryDraft(String(a.maxHistory))
+        setThreadTtlDraft(String(a.threadTtl))
       })
       .catch(() => {
         if (!cancelled) setAiStatus(EMPTY_AI_STATUS)
@@ -386,10 +445,22 @@ export default function SettingsPage() {
   // The saved model for a given provider — used when switching providers so the
   // model select reflects what was last saved for each one.
   const savedModelFor = (provider: AiProviderId): string => {
+    if (provider === 'openrouter') return aiStatus?.openrouterModel ?? ''
     if (provider === 'groq') return aiStatus?.groqModel ?? ''
     if (provider === 'nvidia') return aiStatus?.nvidiaModel ?? ''
-    return aiStatus?.openrouterModel ?? ''
+    if (provider === 'openai') return aiStatus?.openaiModel ?? ''
+    return aiStatus?.geminiModel ?? ''
   }
+
+  // Agent-setting drafts differ from the saved status → dirty (unsaved).
+  const agentDirty =
+    aiStatus !== null &&
+    (agentNameDraft.trim().toLowerCase() !==
+      (aiStatus.agent.agentName ?? '').trim().toLowerCase() ||
+      shellDraft !== aiStatus.agent.shellEnabled ||
+      Number(maxIterationsDraft) !== aiStatus.agent.maxToolIterations ||
+      Number(maxHistoryDraft) !== aiStatus.agent.maxHistory ||
+      Number(threadTtlDraft) !== aiStatus.agent.threadTtl)
 
   const providerStatus =
     aiStatus?.providers[providerDraft] ?? { hasKey: false, keyHint: null }
@@ -441,13 +512,7 @@ export default function SettingsPage() {
         )
         if (fallback) {
           setProviderDraft(fallback)
-          setModelDraft(
-            fallback === 'groq'
-              ? res.data.groqModel
-              : fallback === 'nvidia'
-                ? res.data.nvidiaModel
-                : res.data.openrouterModel,
-          )
+          setModelDraft(savedModelFor(fallback))
         }
       }
     } catch {
@@ -457,8 +522,8 @@ export default function SettingsPage() {
     }
   }
 
-  // ── Unified save — Timezone + AI Integration + Profile ──────────────────────
-  const hasUnsavedChanges = timezoneDirty || profileDirty || aiDirty
+  // ── Unified save — Timezone + AI Integration + Agent behavior + Profile ────
+  const hasUnsavedChanges = timezoneDirty || profileDirty || aiDirty || agentDirty
   const [isSavingAll, setIsSavingAll] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -477,13 +542,20 @@ export default function SettingsPage() {
         })
         if (error) throw new Error(error.message ?? 'Failed to update profile')
       }
-      if (aiDirty) {
+      if (aiDirty || agentDirty) {
+        const settings: Record<string, unknown> = {}
+        if (agentNameDraft.trim()) settings.agentName = agentNameDraft.trim()
+        settings.shellEnabled = shellDraft
+        settings.maxToolIterations = Number(maxIterationsDraft)
+        settings.maxHistory = Number(maxHistoryDraft)
+        settings.threadTtl = Number(threadTtlDraft)
         const res = await apiClient.put<AiSettingsStatus>(
           '/api/v1/settings/ai',
           {
             provider: providerDraft,
             model: modelDraft,
             ...(aiKeyInput.trim() ? { apiKey: aiKeyInput.trim() } : {}),
+            settings,
           },
         )
         setAiStatus(res.data)
@@ -492,6 +564,11 @@ export default function SettingsPage() {
         // Keep the drafts in sync with the saved state.
         setProviderDraft(res.data.provider)
         setModelDraft(res.data.model)
+        setAgentNameDraft(res.data.agent.agentName ?? '')
+        setShellDraft(res.data.agent.shellEnabled)
+        setMaxIterationsDraft(String(res.data.agent.maxToolIterations))
+        setMaxHistoryDraft(String(res.data.agent.maxHistory))
+        setThreadTtlDraft(String(res.data.agent.threadTtl))
       }
       setTimezoneDraft(null)
       setSaveSuccess(true)
@@ -608,12 +685,13 @@ export default function SettingsPage() {
             <div>
               <Card.Title as="h2">AI Integration</Card.Title>
               <Card.Description>
-                AI features run on your own provider API key (OpenRouter, Groq,
-                or NVIDIA). Pick a provider, choose a model, and store your key —
-                it's kept encrypted and used only by your bots.
+                Your bots' AI runs on your own provider key (OpenRouter, Groq,
+                NVIDIA, OpenAI, or Gemini). Pick a provider, choose a model,
+                store your key — it's kept encrypted and used only by your
+                bots. Configure the agent's name and behavior below.
               </Card.Description>
             </div>
-            {aiDirty && (
+            {(aiDirty || agentDirty) && (
               <Badge color="primary" size="sm" variant="tonal" pill>
                 Unsaved
               </Badge>
@@ -718,8 +796,9 @@ export default function SettingsPage() {
                       setAiKeyInput(value)
                       setAiRemoveError(null)
                       // Auto-detect the provider from the key format — paste a
-                      // Groq (gsk_…) or OpenRouter (sk-or-v1-…) key and the
-                      // provider selector + model list follow automatically.
+                      // Groq (gsk_…), OpenRouter (sk-or-v1-…), NVIDIA (nvapi-…),
+                      // OpenAI (sk-…) or Gemini (AIza…) key and the provider
+                      // selector + model list follow automatically.
                       const detected = detectProviderFromKey(value)
                       if (detected) handleSwitchProvider(detected)
                     }}
@@ -742,6 +821,94 @@ export default function SettingsPage() {
                   size="sm"
                 />
               )}
+
+              {/* ── Agent behavior — web-based AI configuration ── */}
+              <div className="mt-2 pt-4 border-t border-outline-variant/50">
+                <div className="flex items-start justify-between w-full mb-4">
+                  <div>
+                    <p className="text-title-md font-semibold text-on-surface">
+                      Agent behavior
+                    </p>
+                    <p className="text-body-sm text-on-surface-variant">
+                      The word that wakes your bot, and how the agent runs.
+                      Leave a field empty to keep the server's default.
+                    </p>
+                  </div>
+                  {agentDirty && (
+                    <Badge color="primary" size="sm" variant="tonal" pill>
+                      Unsaved
+                    </Badge>
+                  )}
+                </div>
+
+                <Field.Root className="max-w-sm">
+                  <Field.Label>Agent name (trigger word)</Field.Label>
+                  <Input
+                    value={agentNameDraft}
+                    onChange={(e) => setAgentNameDraft(e.target.value)}
+                    placeholder="e.g. miko"
+                  />
+                  <Field.HelperText>
+                    Say this word in chat to activate the agent (defaults to
+                    “Cat-Bot”).
+                  </Field.HelperText>
+                </Field.Root>
+
+                <div className="flex items-center justify-between gap-4 py-3 border-b border-outline-variant/50">
+                  <div>
+                    <p className="text-label-lg font-medium text-on-surface">
+                      Shell access
+                    </p>
+                    <p className="text-body-sm text-on-surface-variant">
+                      Let the agent run shell commands (write code, install
+                      packages) in its sandboxed workspace.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={shellDraft}
+                    onChange={setShellDraft}
+                    aria-label="Enable shell access"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                  <Field.Root>
+                    <Field.Label>Tool iterations</Field.Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={maxIterationsDraft}
+                      onChange={(e) => setMaxIterationsDraft(e.target.value)}
+                    />
+                    <Field.HelperText>Max tool calls per turn</Field.HelperText>
+                  </Field.Root>
+
+                  <Field.Root>
+                    <Field.Label>Thread history</Field.Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={maxHistoryDraft}
+                      onChange={(e) => setMaxHistoryDraft(e.target.value)}
+                    />
+                    <Field.HelperText>Messages remembered</Field.HelperText>
+                  </Field.Root>
+
+                  <Field.Root>
+                    <Field.Label>Thread TTL (sec)</Field.Label>
+                    <Input
+                      type="number"
+                      min={60}
+                      max={86400}
+                      value={threadTtlDraft}
+                      onChange={(e) => setThreadTtlDraft(e.target.value)}
+                    />
+                    <Field.HelperText>Conversation timeout</Field.HelperText>
+                  </Field.Root>
+                </div>
+              </div>
             </>
           )}
         </div>

@@ -115,6 +115,7 @@ export const tablesDef = [
       groqModel: 'groq_model',
       openrouterModel: 'openrouter_model',
       nvidiaModel: 'nvidia_model',
+      agentSettings: 'agent_settings',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     },

@@ -1,19 +1,27 @@
 /**
  * AI Provider Catalog — single source of truth for every LLM provider the
  * dashboard's AI Integration settings support (OpenRouter is the PRIMARY
- * provider; Groq and NVIDIA are the secondary providers). Used by:
+ * provider; Groq, NVIDIA, OpenAI and Gemini are the additional providers).
+ * Used by:
  *   • the settings API (dashboard model lists + provider labels),
  *   • key/model validation before anything reaches the database.
  *
- * Every provider speaks the OpenAI-compatible chat-completions API.
+ * Providers that speak the OpenAI-compatible chat-completions API:
+ *   openrouter, groq, nvidia, openai
+ * Native SDK: gemini (@google/genai).
  *
- * Model catalogs: the FULL model list is fetched live from each provider's
- * /models endpoint (see ai-model-catalog.lib.ts) so every model — including all
- * free ones — is selectable. `fallbackModels` is a small curated list used only
- * when the live fetch fails (offline resilience).
+ * Model catalogs: the FULL model list is fetched live from a provider's
+ * /models endpoint where available (see ai-model-catalog.lib.ts) so every model
+ * is selectable. `fallbackModels` is a small curated list used when the live
+ * fetch fails (offline resilience) or there is no live endpoint (gemini).
  */
 
-export type AiProviderId = 'openrouter' | 'groq' | 'nvidia';
+export type AiProviderId =
+  | 'openrouter'
+  | 'groq'
+  | 'nvidia'
+  | 'openai'
+  | 'gemini';
 
 export interface AiProviderModel {
   /** The model id sent to the provider's API (e.g. "openai/gpt-oss-120b"). */
@@ -107,6 +115,45 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
       { id: 'microsoft/phi-4', label: 'Microsoft Phi-4' },
       { id: 'deepseek-ai/deepseek-r1', label: 'DeepSeek R1' },
       { id: 'qwen/qwen2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder 32B' },
+    ],
+  },
+  openai: {
+    id: 'openai',
+    label: 'OpenAI',
+    description:
+      "OpenAI's native platform — GPT-5, GPT-4o and the o-series reasoning models.",
+    baseURL: 'https://api.openai.com/v1',
+    modelsUrl: 'https://api.openai.com/v1/models',
+    keyPlaceholder: 'sk-…',
+    // OpenAI keys: legacy "sk-…" or project-scoped "sk-proj-…".
+    keyPattern: /^sk-(?:proj-)?[A-Za-z0-9_-]{20,}$/,
+    defaultModel: 'gpt-4o-mini',
+    fallbackModels: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+      { id: 'gpt-4o', label: 'GPT-4o' },
+      { id: 'gpt-4.1', label: 'GPT-4.1' },
+      { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+      { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
+      { id: 'o4-mini', label: 'o4 Mini' },
+    ],
+  },
+  gemini: {
+    id: 'gemini',
+    label: 'Gemini',
+    description: 'Google Gemini — the Google GenAI SDK (gemini-2.x flash/pro models).',
+    // Gemini uses its own native SDK, not OpenAI-compatible chat-completions,
+    // so there is no live /models catalog endpoint here.
+    modelsUrl: '',
+    keyPlaceholder: 'AIza…',
+    // Gemini API keys always begin with "AIza".
+    keyPattern: /^AIza[A-Za-z0-9_-]{20,}$/,
+    defaultModel: 'gemini-2.0-flash-001',
+    fallbackModels: [
+      { id: 'gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
+      { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash (preview)' },
+      { id: 'gemini-2.5-pro-preview-05-20', label: 'Gemini 2.5 Pro (preview)' },
+      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
     ],
   },
 };

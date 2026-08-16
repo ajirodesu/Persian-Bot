@@ -141,6 +141,7 @@ export {
   saveUserAiKey,
   updateUserAiModel,
   deleteUserAiKey,
+  saveUserAgentSettings,
 } from '../adapters/turso/src/server/provider-key.repo.js';
 
 // --- USER TIMEZONE ---

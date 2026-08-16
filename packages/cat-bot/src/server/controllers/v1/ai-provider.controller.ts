@@ -25,6 +25,14 @@ import {
   type SaveAiConfigPayload,
 } from '@/engine/repos/ai-provider.repo.js';
 import { isAiProviderId } from '@/engine/repos/ai-provider.constants.js';
+import { invalidateAgentConfig } from '@/engine/lib/ai-agent/agent-config.lib.js';
+
+/** Numeric agent-setting fields validated against sane bounds. */
+const NUMERIC_SETTING_KEYS = [
+  'maxToolIterations',
+  'maxHistory',
+  'threadTtl',
+] as const;
 
 class AiProviderController {
   // GET /api/v1/settings/ai
@@ -73,8 +81,55 @@ class AiProviderController {
       payload.apiKey = body['apiKey'] as string;
     }
 
+    // Agent behavior settings — validated field-by-field so a malformed body
+    // returns a clear 400 instead of silently saving garbage.
+    const rawSettings = body['settings'];
+    if (rawSettings !== undefined) {
+      if (rawSettings === null || typeof rawSettings !== 'object') {
+        res.status(400).json({ error: 'settings must be an object' });
+        return;
+      }
+      const s = rawSettings as Record<string, unknown>;
+      const settings: NonNullable<SaveAiConfigPayload['settings']> = {};
+      if (
+        s['agentName'] !== undefined &&
+        (typeof s['agentName'] !== 'string' ||
+          s['agentName'].trim().length === 0)
+      ) {
+        res.status(400).json({ error: 'agentName must be a non-empty string' });
+        return;
+      }
+      if (s['agentName'] !== undefined) {
+        settings.agentName = s['agentName'] as string;
+      }
+      if (
+        s['shellEnabled'] !== undefined &&
+        typeof s['shellEnabled'] !== 'boolean'
+      ) {
+        res.status(400).json({ error: 'shellEnabled must be a boolean' });
+        return;
+      }
+      if (s['shellEnabled'] !== undefined) {
+        settings.shellEnabled = s['shellEnabled'];
+      }
+      for (const key of NUMERIC_SETTING_KEYS) {
+        const v = s[key];
+        if (v === undefined) continue;
+        if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+          res.status(400).json({ error: `${key} must be a positive number` });
+          return;
+        }
+        settings[key] = v;
+      }
+      payload.settings = settings;
+    }
+
     try {
-      res.json(await saveUserAiConfig(userId, payload));
+      const status = await saveUserAiConfig(userId, payload);
+      // Drop the engine's per-user config cache so the change applies on the
+      // next agent turn (not up to 30s later).
+      invalidateAgentConfig(userId);
+      res.json(status);
     } catch (err) {
       if (err instanceof AiConfigError) {
         res.status(400).json({ error: err.message });
@@ -97,7 +152,9 @@ class AiProviderController {
     }
 
     try {
-      res.json(await removeUserAiKey(userId, provider));
+      const status = await removeUserAiKey(userId, provider);
+      invalidateAgentConfig(userId);
+      res.json(status);
     } catch (err) {
       if (err instanceof AiConfigError) {
         res.status(400).json({ error: err.message });

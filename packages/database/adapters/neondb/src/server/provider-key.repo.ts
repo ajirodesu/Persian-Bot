@@ -24,6 +24,13 @@ export interface StoredAiConfig {
   groqModel: string;
   openrouterModel: string;
   nvidiaModel: string;
+  /**
+   * Free-form per-user agent settings blob (JSON). Holds everything that isn't
+   * one of the provider key/model columns: the trigger word, agent behavior
+   * toggles/limits, and the OpenAI/Gemini key+model slots. Always an object;
+   * missing/unparseable → {}.
+   */
+  agentSettings: Record<string, unknown>;
 }
 
 export async function getUserAiConfig(
@@ -40,10 +47,11 @@ export async function getUserAiConfig(
     groq_model: string | null;
     openrouter_model: string | null;
     nvidia_model: string | null;
+    agent_settings: string | null;
   }>(
     `SELECT encrypted_key, key_hint, openrouter_encrypted_key, openrouter_key_hint,
             nvidia_encrypted_key, nvidia_key_hint, provider, groq_model,
-            openrouter_model, nvidia_model
+            openrouter_model, nvidia_model, agent_settings
      FROM bot_user_groq_key WHERE user_id = $1`,
     [userId],
   );
@@ -60,7 +68,49 @@ export async function getUserAiConfig(
     groqModel: row.groq_model ?? '',
     openrouterModel: row.openrouter_model ?? '',
     nvidiaModel: row.nvidia_model ?? '',
+    agentSettings: parseAgentSettings(row.agent_settings),
   };
+}
+
+/** Parses the agent_settings JSON column — never throws, always an object. */
+function parseAgentSettings(raw: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Fall through to {}.
+  }
+  return {};
+}
+
+/**
+ * Merges the given agent settings into the user's stored blob (JSON column)
+ * and upserts the row when it doesn't exist yet. Existing provider key/model
+ * columns are untouched.
+ */
+export async function saveUserAgentSettings(
+  userId: string,
+  settings: Record<string, unknown>,
+): Promise<void> {
+  const current = await pool.query<{ agent_settings: string | null }>(
+    `SELECT agent_settings FROM bot_user_groq_key WHERE user_id = $1`,
+    [userId],
+  );
+  const merged = {
+    ...parseAgentSettings(current.rows[0]?.agent_settings ?? null),
+    ...settings,
+  };
+  await pool.query(
+    `INSERT INTO bot_user_groq_key (user_id, agent_settings, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       agent_settings = EXCLUDED.agent_settings,
+       updated_at     = NOW()`,
+    [userId, JSON.stringify(merged)],
+  );
 }
 
 function providerOf(value: string | null): AiProvider {

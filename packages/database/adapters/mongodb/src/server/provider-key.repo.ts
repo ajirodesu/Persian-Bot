@@ -24,6 +24,12 @@ export interface StoredAiConfig {
   groqModel: string;
   openrouterModel: string;
   nvidiaModel: string;
+  /**
+   * Free-form per-user agent settings blob. Holds everything that isn't one of
+   * the provider key/model fields: the trigger word, agent behavior
+   * toggles/limits, and the OpenAI/Gemini key+model slots. Always an object.
+   */
+  agentSettings: Record<string, unknown>;
 }
 
 interface StoredAiConfigDoc {
@@ -37,6 +43,7 @@ interface StoredAiConfigDoc {
   groqModel?: string;
   openrouterModel?: string;
   nvidiaModel?: string;
+  agentSettings?: Record<string, unknown>;
 }
 
 export async function getUserAiConfig(
@@ -60,6 +67,7 @@ export async function getUserAiConfig(
           groqModel: 1,
           openrouterModel: 1,
           nvidiaModel: 1,
+          agentSettings: 1,
         },
       },
     );
@@ -75,7 +83,38 @@ export async function getUserAiConfig(
     groqModel: rec.groqModel ?? '',
     openrouterModel: rec.openrouterModel ?? '',
     nvidiaModel: rec.nvidiaModel ?? '',
+    agentSettings:
+      rec.agentSettings !== null && typeof rec.agentSettings === 'object'
+        ? rec.agentSettings
+        : {},
   };
+}
+
+/**
+ * Merges the given agent settings into the user's stored blob and upserts the
+ * doc when it doesn't exist yet. Existing provider key/model fields are
+ * untouched.
+ */
+export async function saveUserAgentSettings(
+  userId: string,
+  settings: Record<string, unknown>,
+): Promise<void> {
+  const db = getMongoDb();
+  const rec = await db
+    .collection<{ agentSettings?: Record<string, unknown> }>('botUserGroqKeys')
+    .findOne({ userId }, { projection: { _id: 0, agentSettings: 1 } });
+  const merged: Record<string, unknown> = {
+    ...(rec?.agentSettings ?? {}),
+    ...settings,
+  };
+  await db.collection('botUserGroqKeys').updateOne(
+    { userId },
+    {
+      $set: { agentSettings: merged, updatedAt: new Date() },
+      $setOnInsert: { userId, createdAt: new Date() },
+    },
+    { upsert: true },
+  );
 }
 
 function providerOf(value: string | undefined): AiProvider {

@@ -3076,6 +3076,10 @@ export default function ChatRoomPage() {
   // True from the moment the user sends a message until the bot's reply
   // (or an edit/delete/error/disconnect) arrives — drives the "typing" bubble.
   const [awaitingReply, setAwaitingReply] = useState(false)
+  // Bot's live "working" signal from chatroom:typing events (the server
+  // refreshes it every ~4s for the whole duration of a turn). Rendered as the
+  // animated typing bubble and cleared the moment any bot output lands.
+  const [botTyping, setBotTyping] = useState(false)
 
   const handleImageOpen = useCallback((images: ChatAttachment[], index: number) => {
     setLightbox({ images, index })
@@ -3134,6 +3138,7 @@ export default function ChatRoomPage() {
     const onDisconnect = () => {
       setIsConnected(false)
       setAwaitingReply(false)
+      setBotTyping(false)
     }
 
     const onHistory = (data: { messages: ChatMessage[]; prefix: string }) => {
@@ -3150,6 +3155,7 @@ export default function ChatRoomPage() {
 
     const onBotMessage = (msg: ChatMessage) => {
       setAwaitingReply(false)
+      setBotTyping(false)
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
     }
 
@@ -3161,6 +3167,7 @@ export default function ChatRoomPage() {
       attachments?: ChatAttachment[]
     }) => {
       setAwaitingReply(false)
+      setBotTyping(false)
       setMessages((prev) =>
         prev.map((m) =>
           m.id === data.id
@@ -3178,15 +3185,19 @@ export default function ChatRoomPage() {
 
     const onBotDelete = (data: { id: string }) => {
       setAwaitingReply(false)
+      setBotTyping(false)
       setMessages((prev) => prev.filter((m) => m.id !== data.id))
     }
 
-    const onMsgDeleted = (data: { id: string }) =>
+    const onMsgDeleted = (data: { id: string }) => {
+      setBotTyping(false)
       setMessages((prev) => prev.filter((m) => m.id !== data.id))
+    }
 
     const onCleared = () => {
       setMessages([])
       setAwaitingReply(false)
+      setBotTyping(false)
       localStorage.removeItem(MESSAGES_KEY)
     }
 
@@ -3195,7 +3206,8 @@ export default function ChatRoomPage() {
       localStorage.setItem(PREFIX_KEY, data.prefix)
     }
 
-    const onError = () => { setAwaitingReply(false) }
+    const onError = () => { setAwaitingReply(false); setBotTyping(false) }
+    const onBotTyping = () => { setBotTyping(true) }
 
     socket.on('connect', onConnect)
     socket.on('disconnect', onDisconnect)
@@ -3207,6 +3219,7 @@ export default function ChatRoomPage() {
     socket.on('chatroom:cleared', onCleared)
     socket.on('chatroom:prefix_updated', onPrefixUpdated)
     socket.on('chatroom:error', onError)
+    socket.on('chatroom:typing', onBotTyping)
 
     if (socket.connected) {
       setIsConnected(true)
@@ -3224,6 +3237,7 @@ export default function ChatRoomPage() {
       socket.off('chatroom:cleared', onCleared)
       socket.off('chatroom:prefix_updated', onPrefixUpdated)
       socket.off('chatroom:error', onError)
+      socket.off('chatroom:typing', onBotTyping)
     }
   }, [socket, sessionId])
 
@@ -3246,7 +3260,7 @@ export default function ChatRoomPage() {
       scrollToBottom(hasLoadedHistoryRef.current)
     }
     if (messages.length > 0) hasLoadedHistoryRef.current = true
-  }, [messages, awaitingReply, scrollToBottom])
+  }, [messages, awaitingReply, botTyping, scrollToBottom])
 
   // A message with an image/video attachment mounts before the media
   // itself has loaded, so its true height (and therefore the real
@@ -3402,6 +3416,15 @@ export default function ChatRoomPage() {
     const timer = setTimeout(() => setAwaitingReply(false), 45_000)
     return () => clearTimeout(timer)
   }, [awaitingReply])
+
+  // Safety net: the server stops emitting chatroom:typing the moment a turn
+  // ends, and bot output clears the bubble — but if a turn ends silently
+  // (error before any output), don't leave the bubble stuck on screen.
+  useEffect(() => {
+    if (!botTyping) return
+    const timer = setTimeout(() => setBotTyping(false), 20_000)
+    return () => clearTimeout(timer)
+  }, [botTyping])
 
   const handleButtonClick = useCallback(
     (buttonId: string, messageId: string) => {
@@ -3603,6 +3626,21 @@ export default function ChatRoomPage() {
                     </div>
                   )
                 })}
+
+                {/* Typing bubble — shown while the bot is working (server
+                    chatroom:typing refresh every ~4s, or the local
+                    awaitingReply right after the user sends). It is a
+                    client-side bubble only — never persisted, cleared the
+                    moment the bot's real reply lands. */}
+                {(awaitingReply || botTyping) && (
+                  <div className="flex w-full px-3 pt-3 justify-start" aria-label="Bot is typing">
+                    <div className="flex items-center gap-1.5 bg-[var(--bubble-bot)] text-[var(--bubble-bot-text)] rounded-[var(--radius-card)] shadow-md px-4 py-3.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                )}
 
                 <div ref={messagesEndRef} className="h-2" />
               </div>

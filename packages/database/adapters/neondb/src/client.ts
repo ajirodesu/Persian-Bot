@@ -426,6 +426,7 @@ export async function initDb(): Promise<void> {
       provider                 TEXT DEFAULT 'openrouter',
       groq_model               TEXT,
       openrouter_model         TEXT,
+      agent_settings           JSONB,
       created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -437,6 +438,9 @@ export async function initDb(): Promise<void> {
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'openrouter';
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS groq_model TEXT;
     ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_model TEXT;
+    -- Per-user AI agent settings blob (trigger word, behavior toggles/limits,
+    -- OpenAI/Gemini key+model slots). JSONB so existing rows get it too.
+    ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS agent_settings JSONB;
 
     -- Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
     CREATE TABLE IF NOT EXISTS bot_user_timezone (

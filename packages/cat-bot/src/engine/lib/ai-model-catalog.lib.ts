@@ -27,6 +27,7 @@ const MODELS_FETCH_TIMEOUT_MS = 10_000;
 const OPENROUTER_CACHE_KEY = 'ai:models:openrouter';
 const NVIDIA_CACHE_KEY = 'ai:models:nvidia';
 const groqCacheKey = (userId: string): string => `ai:models:groq:${userId}`;
+const openaiCacheKey = (userId: string): string => `ai:models:openai:${userId}`;
 
 // ── API response shapes ──────────────────────────────────────────────────────
 
@@ -130,6 +131,24 @@ async function fetchGroqModels(apiKey: string): Promise<AiProviderModel[] | null
   return models.length > 0 ? sortModels(models) : null;
 }
 
+async function fetchOpenAiModels(apiKey: string): Promise<AiProviderModel[] | null> {
+  const { data } = await axios.get<GroqModelsResponse>(
+    AI_PROVIDERS.openai.modelsUrl,
+    {
+      timeout: MODELS_FETCH_TIMEOUT_MS,
+      headers: { Authorization: `Bearer ${apiKey}` },
+    },
+  );
+  const entries = data?.data;
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const models: AiProviderModel[] = [];
+  for (const e of entries) {
+    if (typeof e.id !== 'string' || e.id.length === 0) continue;
+    models.push({ id: e.id, label: formatModelLabel(e.id) });
+  }
+  return models.length > 0 ? sortModels(models) : null;
+}
+
 /**
  * Fetches NVIDIA NIM's OpenAI-shaped /models list. The endpoint is public, but
  * an API key is sent when available (some accounts/tiers require it).
@@ -180,6 +199,9 @@ export async function getProviderModelsCached(
   } else if (provider === 'nvidia') {
     cacheKeyId = NVIDIA_CACHE_KEY;
     fetcher = () => fetchNvidiaModels(apiKey);
+  } else if (provider === 'openai') {
+    cacheKeyId = openaiCacheKey(cacheKey || 'default');
+    fetcher = () => fetchOpenAiModels(apiKey ?? '');
   } else {
     cacheKeyId = groqCacheKey(cacheKey || 'default');
     fetcher = () => fetchGroqModels(apiKey ?? '');

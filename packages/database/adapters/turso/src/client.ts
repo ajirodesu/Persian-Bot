@@ -115,6 +115,7 @@ export async function initDb(): Promise<void> {
       groq_model               TEXT,
       openrouter_model         TEXT,
       nvidia_model             TEXT,
+      agent_settings           TEXT,
       created_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
@@ -137,6 +138,9 @@ export async function initDb(): Promise<void> {
     ['groq_model', 'TEXT'],
     ['openrouter_model', 'TEXT'],
     ['nvidia_model', 'TEXT'],
+    // Per-user AI agent settings blob (JSON text): trigger word, behavior
+    // toggles/limits, OpenAI/Gemini key+model slots.
+    ['agent_settings', 'TEXT'],
   ];
   for (const [colName, colDef] of groqKeyNewCols) {
     if (!groqKeyColNames.has(colName)) {

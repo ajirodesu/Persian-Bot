@@ -133,6 +133,7 @@ export {
   saveUserAiKey,
   updateUserAiModel,
   deleteUserAiKey,
+  saveUserAgentSettings,
 } from '../adapters/mongodb/src/server/provider-key.repo.js';
 
 // --- USER TIMEZONE ---

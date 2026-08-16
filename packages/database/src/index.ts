@@ -244,6 +244,8 @@ export const saveUserAiKey = m.saveUserAiKey;
 export const updateUserAiModel = m.updateUserAiModel;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const deleteUserAiKey = m.deleteUserAiKey;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const saveUserAgentSettings = m.saveUserAgentSettings;
 
 // --- USER TIMEZONE ---
 // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").

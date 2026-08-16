@@ -304,6 +304,7 @@ CREATE TABLE IF NOT EXISTS bot_user_groq_key (
   groq_model               TEXT,
   openrouter_model         TEXT,
   nvidia_model             TEXT,
+  agent_settings           JSONB,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -318,6 +319,9 @@ ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'op
 ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS groq_model TEXT;
 ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_model TEXT;
 ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS nvidia_model TEXT;
+-- Per-user AI agent settings blob (trigger word, behavior toggles/limits,
+-- OpenAI/Gemini key+model slots).
+ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS agent_settings JSONB;
 
 -- Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
 -- Applied across the dashboard's time-based displays, logs, and bot-facing

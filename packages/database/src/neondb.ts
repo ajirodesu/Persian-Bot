@@ -137,6 +137,7 @@ export {
   saveUserAiKey,
   updateUserAiModel,
   deleteUserAiKey,
+  saveUserAgentSettings,
 } from '../adapters/neondb/src/server/provider-key.repo.js';
 
 // --- USER TIMEZONE ---
