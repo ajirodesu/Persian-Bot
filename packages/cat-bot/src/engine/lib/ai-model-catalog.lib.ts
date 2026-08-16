@@ -22,6 +22,9 @@ import {
 } from '@/engine/repos/ai-provider.constants.js';
 
 const MODELS_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// Retry a rejected key at most every 5 minutes — a dead key must not hammer
+// the provider (and the log) on every dashboard status load.
+const MODELS_FAILURE_TTL_MS = 5 * 60 * 1000;
 const MODELS_FETCH_TIMEOUT_MS = 10_000;
 
 const OPENROUTER_CACHE_KEY = 'ai:models:openrouter';
@@ -207,6 +210,16 @@ export async function getProviderModelsCached(
     fetcher = () => fetchGroqModels(apiKey ?? '');
   }
 
+  // Key-required providers (openai/groq) reject an empty Authorization header
+  // with a 401. Without a key there is nothing to fetch — fall back to the
+  // static catalog instead of burning a rejected request on every status load.
+  if (
+    (provider === 'openai' || provider === 'groq') &&
+    (typeof apiKey !== 'string' || apiKey.length === 0)
+  ) {
+    return null;
+  }
+
   const cached = lruCache.get<AiProviderModel[]>(cacheKeyId);
   if (cached !== undefined) return cached;
 
@@ -215,8 +228,9 @@ export async function getProviderModelsCached(
     if (models) lruCache.set(cacheKeyId, models, MODELS_CACHE_TTL_MS);
     return models;
   } catch (err) {
-    // Fail-open — never cache a failure; the caller uses the fallback catalog
-    // and a later request will retry.
+    // Fail-open — never cache a success-shaped failure for long; the caller
+    // uses the fallback catalog and a later request will retry.
+    lruCache.set(cacheKeyId, null, MODELS_FAILURE_TTL_MS);
     console.warn(
       `[ai-model-catalog] Failed to fetch ${provider} models:`,
       err instanceof Error ? err.message : err,
