@@ -33,6 +33,7 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 const GETINFO_TTL_MS: Record<string, number> = {
   [Platforms.Discord]: 30 * 60 * 1000,
   [Platforms.Telegram]: 30 * 60 * 1000,
+  [Platforms.Fluxer]: 30 * 60 * 1000,
 };
 function getInfoCacheTTL(platform: string): number {
   return GETINFO_TTL_MS[platform] ?? 5 * 60 * 1000;
@@ -167,8 +168,11 @@ export function createChatContext(
   const defaultMessageID = event['messageID'] as string;
   logger.debug('[context.model] createChatContext called', { threadID: defaultThreadID, messageID: defaultMessageID });
 
-  // In DM/PM chats (Discord/Telegram), send as plain new messages instead of reply threads.
-  const isDmOrPm = (platform === 'discord' || platform === 'telegram') &&
+  // In DM/PM chats (Discord/Telegram/Fluxer), send as plain new messages instead of reply threads.
+  const isDmOrPm =
+    (platform === 'discord' ||
+      platform === 'telegram' ||
+      platform === 'fluxer') &&
     (event['isGroup'] as boolean | undefined) === false;
 
   function getThreadID(opts: unknown): string {

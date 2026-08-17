@@ -1,7 +1,7 @@
 /**
  * Platform brand icons — shared by Bot Manager's bot cards and the
  * dashboard sidebar's "currently open bot" nav item, so both surfaces
- * render the exact same Discord/Telegram identity instead of drifting
+ * render the exact same Discord/Telegram/Fluxer identity instead of drifting
  * out of sync with two separate copies.
  */
 

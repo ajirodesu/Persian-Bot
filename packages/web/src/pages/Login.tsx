@@ -101,7 +101,7 @@ export default function LoginPage() {
               Welcome back
             </h1>
             <p className="text-body-sm text-on-surface-variant">
-              Sign in to manage your bots across Discord and Telegram.
+              Sign in to manage your bots across Discord, Telegram, and Fluxer.
             </p>
           </div>
         </div>

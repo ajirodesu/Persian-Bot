@@ -26,7 +26,7 @@ export interface BotDatabaseGroup {
   id: string
   name: string
   is_group: boolean
-  /** Platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel'). Null when unknown or Discord. */
+  /** Platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel'). Null when unknown or a server-hierarchy platform (Discord/Fluxer). */
   type: string | null
   member_count: number | null
   avatar_url: string | null

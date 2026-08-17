@@ -715,9 +715,9 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
 
 // ── Groups tab (Telegram / webchat) ──────────────────────────────────────────
 //
-// Mirrors the Discord Groups tab's structure for platforms without a server →
-// channel hierarchy. A group dropdown (fed by useBotDatabaseGroupSelector, the
-// flat-list analogue of the Discord server dropdown) picks the focused group;
+// Mirrors the server-hierarchy Groups tab's structure for platforms without a
+// server → channel hierarchy. A group dropdown (fed by useBotDatabaseGroupSelector,
+// the flat-list analogue of the server dropdown) picks the focused group;
 // selecting one reveals a header card with its badges + ban/unban/delete actions
 // and a scoped details table below. Groups are flat entities, so the details
 // table shows that one group's own record instead of child channels.
@@ -937,7 +937,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
       )}
 
       {/* Group details table — scoped to the selected group, mirroring
-          Discord's server → channels layout for a flat group entity */}
+          the server → channels layout for a flat group entity */}
       {selectedGroup !== null && (
         <Table.ScrollArea className="bg-surface">
           <Table.Root variant="glass" fullWidth>
@@ -1166,8 +1166,19 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
 // can never appear outside their parent server's context because both the
 // dropdown and the channel query are scoped by server id and the owning session.
 // Server-level actions (ban/unban/delete) apply to the selected server.
+// Platform-specific copy (e.g. "Fluxer server" vs "Discord server") is derived
+// from the bot's platform so the panel reads correctly on either one.
 
-function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
+function ServerHierarchyGroupsTab({
+  platform,
+  sessionId,
+  sessionKey,
+}: {
+  platform: string
+  sessionId: string
+  sessionKey?: string
+}) {
+  const isFluxer = platform === 'fluxer'
   const {
     servers,
     total,
@@ -1480,7 +1491,9 @@ function DiscordGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessio
         <div className="bg-surface rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
           <MessageSquare className="h-8 w-8 text-on-surface-variant" />
           <p className="text-body-md text-on-surface-variant">
-            No Discord servers recorded yet. Send a message in a Discord server
+            {isFluxer
+              ? 'No Fluxer servers recorded yet. Send a message in a Fluxer server'
+              : 'No Discord servers recorded yet. Send a message in a Discord server'}{' '}
             where this bot is present, then reload this page.
           </p>
         </div>
@@ -1708,7 +1721,11 @@ export default function BotDatabasePage() {
       {activeTab === 'users' ? (
         <UsersTab sessionId={sessionId} sessionKey={sessionKey} />
       ) : isServerHierarchy ? (
-        <DiscordGroupsTab sessionId={sessionId} sessionKey={sessionKey} />
+        <ServerHierarchyGroupsTab
+          platform={bot.platform}
+          sessionId={sessionId}
+          sessionKey={sessionKey}
+        />
       ) : (
         <PlatformGroupsTab sessionId={sessionId} sessionKey={sessionKey} />
       )}

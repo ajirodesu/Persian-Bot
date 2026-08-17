@@ -34,7 +34,6 @@ import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
 import { invalidateUserSessionCache } from '@/engine/repos/users.repo.js';
 import { invalidateThreadSessionCache } from '@/engine/repos/threads.repo.js';
 import {
-  Platforms,
   isServerHierarchyPlatform,
 } from '@/engine/modules/platform/platform.constants.js';
 
@@ -199,11 +198,12 @@ export class BotDatabaseController {
    * GET /api/v1/bots/:id/database/groups
    * Returns paginated list of groups/threads seen by this bot session.
    *
-   * Discord guilds are recorded in bot_discord_server_session (keyed by server id),
-   * not bot_threads_session — so the query branches per platform. All other platforms
-   * (Telegram, webchat) keep using the thread-session tables.
+   * Server-hierarchy platforms (Discord, Fluxer) record guilds in
+   * bot_discord_server_session (keyed by server id), not bot_threads_session — so
+   * the query branches per platform. All other platforms (Telegram, webchat) keep
+   * using the thread-session tables.
    *
-   * Non-Discord sessions accept an optional `type` query param that filters by the
+   * Non-server-hierarchy sessions accept an optional `type` query param that filters by the
    * persisted platform chat type (e.g. Telegram 'group' | 'supergroup' | 'channel')
    * so the dashboard can show every entity type the bot lives in side by side.
    */
@@ -218,11 +218,11 @@ export class BotDatabaseController {
     const offset = (page - 1) * limit;
     const searchParam = search ? `%${search}%` : '%';
 
-    const isDiscord = ctx.platform === Platforms.Discord;
+    const isServerHierarchy = isServerHierarchyPlatform(ctx.platform);
 
     // Discord server sessions carry no platform_id column — the session id itself
     // uniquely identifies the guild scope, so the ban key omits it.
-    const banExpr = isDiscord
+    const banExpr = isServerHierarchy
       ? 'COALESCE(bdsb.is_banned, FALSE)'
       : 'COALESCE(btsb.is_banned, FALSE)';
     const extraClause = statusClause(banExpr, status);
@@ -237,23 +237,23 @@ export class BotDatabaseController {
     // individual users whose DMs happened before threads.service added its guard.
     // DM/PM rows carry is_group=FALSE but were recorded by earlier versions — filtering
     // here guarantees they can never appear as "groups" in the dashboard.
-    const typeFilter = isDiscord ? null : parseTypeFilter(req.query.type);
-    const typeSql = isDiscord
+    const typeFilter = isServerHierarchy ? null : parseTypeFilter(req.query.type);
+    const typeSql = isServerHierarchy
       ? ''
       : ' AND bt.is_group = TRUE AND ($5 IS NULL OR bt.type = $5)';
 
     const sortColumn = resolveSortColumn(
       req.query.sortBy,
-      isDiscord
+      isServerHierarchy
         ? { name: 'bds.name', last_seen: 'bdss.last_updated_at' }
         : { name: 'bt.name', last_seen: 'bts.last_updated_at' },
-      isDiscord ? 'bdss.last_updated_at' : 'bts.last_updated_at',
+      isServerHierarchy ? 'bdss.last_updated_at' : 'bts.last_updated_at',
     );
     const sortDir = parseSortDir(req.query.sortDir);
 
     try {
       const [rowsResult, countResult] = await Promise.all([
-        isDiscord
+        isServerHierarchy
           ? dbQuery(
               `SELECT
                  bds.id,
@@ -304,7 +304,7 @@ export class BotDatabaseController {
                LIMIT $6 OFFSET $7`,
               [ctx.userId, ctx.platformId, ctx.sessionId, searchParam, typeFilter, limit, offset],
             ),
-        isDiscord
+        isServerHierarchy
           ? dbQuery(
               `SELECT COUNT(*) AS count
                FROM bot_discord_server_session bdss

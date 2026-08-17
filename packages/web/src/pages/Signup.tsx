@@ -164,7 +164,7 @@ export default function SignupPage() {
               Create your account
             </h1>
             <p className="text-body-sm text-on-surface-variant">
-              Deploy bots across Discord and Telegram in minutes.
+              Deploy bots across Discord, Telegram, and Fluxer in minutes.
             </p>
           </div>
         </div>

@@ -27,7 +27,8 @@ interface ReactionEmojiSettingsProps {
  * Reaction Emoji Settings — lets the bot owner pick the emoji the bot reacts
  * with on the user's message after a successful command. Platform-aware:
  * Telegram restricts to its documented supported set, Discord accepts unicode
- * or custom-emoji references.
+ * or custom-emoji references, Fluxer accepts unicode or `name:id` custom
+ * emoji references.
  *
  * Controlled component: selection lives in the parent's form state and is
  * persisted together with the rest of the page via the single page-level
@@ -43,6 +44,7 @@ export default function ReactionEmojiSettings({
 }: ReactionEmojiSettingsProps) {
   const isDiscord = platform === 'discord'
   const isTelegram = platform === 'telegram'
+  const isFluxer = platform === 'fluxer'
   const effective = pending ?? emoji
   const draftInvalid =
     isDiscord && effective !== '' && !isDiscordReactionEmoji(effective)
@@ -125,19 +127,41 @@ export default function ReactionEmojiSettings({
         ) : (
           <div className="flex flex-col gap-4">
             <Field.Root>
-              <Field.Label>Custom emoji reference</Field.Label>
+              <Field.Label>
+                {isDiscord ? 'Custom emoji reference' : 'Reaction emoji'}
+              </Field.Label>
               <Input
                 value={effective}
                 onChange={(e) => onPick(e.target.value)}
-                placeholder="e.g. <:cat:123456789012345678> or <a:party:123456789012345678>"
+                placeholder={
+                  isDiscord
+                    ? 'e.g. <:cat:123456789012345678> or <a:party:123456789012345678>'
+                    : isFluxer
+                      ? 'e.g. cat:123456789012345678 or a unicode emoji'
+                      : 'Type a unicode emoji…'
+                }
                 leftIcon={<Smile className="h-4 w-4" />}
               />
               <p className="mt-1.5 text-body-sm text-on-surface-variant">
-                Paste a custom Discord emoji reference (e.g.{' '}
-                <code className="font-mono text-label-sm bg-surface-container px-1 py-0.5 rounded">
-                  &lt;:cat:123456789012345678&gt;
-                </code>
-                ) or type any unicode emoji.
+                {isDiscord ? (
+                  <>
+                    Paste a custom Discord emoji reference (e.g.{' '}
+                    <code className="font-mono text-label-sm bg-surface-container px-1 py-0.5 rounded">
+                      &lt;:cat:123456789012345678&gt;
+                    </code>
+                    ) or type any unicode emoji.
+                  </>
+                ) : isFluxer ? (
+                  <>
+                    Type any unicode emoji or a custom emoji reference (e.g.{' '}
+                    <code className="font-mono text-label-sm bg-surface-container px-1 py-0.5 rounded">
+                      cat:123456789012345678
+                    </code>
+                    ).
+                  </>
+                ) : (
+                  <>Type any unicode emoji.</>
+                )}
               </p>
               {draftInvalid && (
                 <p className="mt-1.5 text-body-sm text-error">

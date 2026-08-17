@@ -1,5 +1,5 @@
 /**
- * Validation Service — REST credential checks for Discord and Telegram.
+ * Validation Service — REST credential checks for Discord, Telegram, and Fluxer.
  *
  * Responses follow { valid: boolean, error?: string, botName?: string } contract.
  */

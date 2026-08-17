@@ -265,15 +265,19 @@ async function resolveActor(
 
 /**
  * Resolves the database record to delete when the bot leaves a chat/guild.
- * Discord events carry a channel id in threadID, but the record lives under the
- * guild (server) id — prefer native.member.guild.id when present.
+ * Server-hierarchy events (Discord/Fluxer) carry a channel id in threadID, but
+ * the record lives under the guild (server) id — prefer native.member.guild.id
+ * when present.
  */
 function resolveRemovalTarget(
   event: Record<string, unknown>,
   native: NativeContext,
   threadID: string,
 ): string {
-  if (native.platform === Platforms.Discord) {
+  if (
+    native.platform === Platforms.Discord ||
+    native.platform === Platforms.Fluxer
+  ) {
     const guildId = (native['member'] as NativeDiscordMember | undefined)?.guild
       ?.id;
     if (guildId) return guildId;

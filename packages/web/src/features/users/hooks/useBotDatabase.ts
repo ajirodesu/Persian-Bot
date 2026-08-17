@@ -522,7 +522,7 @@ export function useBotDatabaseGroups(
   }
 }
 
-// ── Discord servers hook ─────────────────────────────────────────────────────
+// ── Server-hierarchy servers hook (Discord + Fluxer) ─────────────────────────
 
 export interface UseBotDatabaseServersReturn {
   servers: BotDatabaseGroup[]
@@ -591,7 +591,7 @@ export function useBotDatabaseServers(
 // ── Groups selector hook ────────────────────────────────────────────────────
 //
 // Feeds the Platform (Telegram / webchat) Groups tab's group dropdown — the
-// flat-list analogue of the Discord server dropdown. Pulls the most recent
+// flat-list analogue of the server-hierarchy server dropdown. Pulls the most recent
 // groups (server caps LIMIT at 50) as the dropdown source; the total badge
 // reflects the full count so the header card's context is never misread.
 
@@ -662,7 +662,7 @@ export function useBotDatabaseGroupSelector(
   return { groups, total, isLoading, error, refetch: fetch }
 }
 
-// ── Discord channels hook ────────────────────────────────────────────────────
+// ── Server-hierarchy channels hook (Discord + Fluxer) ────────────────────────
 
 export interface UseBotDatabaseChannelsReturn {
   channels: BotDatabaseChannel[]

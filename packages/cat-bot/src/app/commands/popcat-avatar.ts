@@ -73,7 +73,7 @@ function isImageAttachment(att: RawAttachment): boolean {
  *      final fallback, so the command basically never comes up empty
  *
  * Avatar lookups (steps 3-4) only run on platforms whose UnifiedApi actually
- * implements getAvatarUrl() (Discord/Telegram) — on platforms that don't
+ * implements getAvatarUrl() (Discord/Telegram/Fluxer) — on platforms that don't
  * (e.g. Webchat), getAvatarUrl() throws rather than returning null, so those
  * are skipped and the command simply asks for an image instead.
  */
@@ -95,7 +95,11 @@ async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
   if (fromReply?.url) return fromReply.url;
 
   const platform = ctx.native.platform;
-  if (platform !== Platforms.Discord && platform !== Platforms.Telegram) {
+  if (
+    platform !== Platforms.Discord &&
+    platform !== Platforms.Telegram &&
+    platform !== Platforms.Fluxer
+  ) {
     // No image was attached/replied, and avatar lookups aren't supported on
     // this platform — nothing left to fall back to.
     return null;

@@ -1,7 +1,7 @@
 /**
  * useBotValidation — Platform credential validation state machine.
  *
- * Abstracts REST validation transports for Discord and Telegram.
+ * Abstracts REST validation transports for Discord, Telegram, and Fluxer.
  *
  * Responses follow { valid: boolean, error?: string, botName?: string } contract.
  */
