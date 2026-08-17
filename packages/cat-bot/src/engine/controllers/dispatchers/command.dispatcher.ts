@@ -33,6 +33,8 @@ import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 // Per-session reaction emoji — reads the dashboard-configured value (LRU-cached
 // via session.repo.ts) so edits apply live without a restart or env reload.
 import { reactOnSuccess } from '@/engine/lib/react-on-success.lib.js';
+// Platform names — Discord-scoped success-reaction opt-out (see noReactOnSuccess)
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 
 /**
@@ -121,5 +123,14 @@ export async function dispatchCommand(
   // transport's update handler from resolving (per-chat serialisation under load,
   // and the webhook HTTP response in webhook mode), which directly inflates the
   // perceived response time. The reply the user cares about is already sent by now.
-  void reactOnSuccess(ctx, ctx.event);
+  //
+  // Commands opting out via meta.noReactOnSuccess skip the reaction on Discord —
+  // /help sets this because its reaction round-trip errors on Discord.
+  const modMeta = mod['meta'] as Record<string, unknown> | undefined;
+  const suppressReactOnSuccess =
+    modMeta?.['noReactOnSuccess'] === true &&
+    ctx.native?.platform === Platforms.Discord;
+  if (!suppressReactOnSuccess) {
+    void reactOnSuccess(ctx, ctx.event);
+  }
 }

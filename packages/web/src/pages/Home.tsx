@@ -17,14 +17,14 @@ const PLATFORMS = [
     bg: getPlatformColors(Platforms.Discord),
   },
   {
-    name: 'Telegram',
-    Icon: TelegramIcon,
-    bg: getPlatformColors(Platforms.Telegram),
-  },
-  {
     name: 'Fluxer',
     Icon: FluxerIcon,
     bg: getPlatformColors(Platforms.Fluxer),
+  },
+  {
+    name: 'Telegram',
+    Icon: TelegramIcon,
+    bg: getPlatformColors(Platforms.Telegram),
   },
   {
     name: 'Chat Room',

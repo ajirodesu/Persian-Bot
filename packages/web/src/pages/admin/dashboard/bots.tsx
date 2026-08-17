@@ -115,8 +115,8 @@ export default function AdminBotsPage() {
         {(
           [
             'discord',
-            'telegram',
             'fluxer',
+            'telegram',
           ] as const
         ).map((platform) => {
           // Stat derived from server's global knowledge

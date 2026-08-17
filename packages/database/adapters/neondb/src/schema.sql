@@ -288,40 +288,95 @@ CREATE TABLE IF NOT EXISTS system_admin (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Per-user AI provider config: groq keys in encrypted_key/key_hint, openrouter
--- keys in openrouter_encrypted_key/openrouter_key_hint, nvidia keys in
--- nvidia_encrypted_key/nvidia_key_hint, the active provider, and each
--- provider's remembered model.
-CREATE TABLE IF NOT EXISTS bot_user_groq_key (
+-- Per-user AI provider config: a key/hint/model column pair per provider
+-- (openrouter, groq, nvidia, openai, gemini), the active provider, and the
+-- per-user agent behavior blob. Renamed from bot_user_groq_key so no provider
+-- is implied to be primary.
+CREATE TABLE IF NOT EXISTS bot_user_ai_config (
   user_id                  TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
-  encrypted_key            TEXT NOT NULL DEFAULT '',
-  key_hint                 TEXT NOT NULL DEFAULT '',
   openrouter_encrypted_key TEXT,
   openrouter_key_hint      TEXT,
+  openrouter_model         TEXT,
+  groq_encrypted_key       TEXT,
+  groq_key_hint            TEXT,
+  groq_model               TEXT,
   nvidia_encrypted_key     TEXT,
   nvidia_key_hint          TEXT,
-  provider                 TEXT DEFAULT 'openrouter',
-  groq_model               TEXT,
-  openrouter_model         TEXT,
   nvidia_model             TEXT,
+  openai_encrypted_key     TEXT,
+  openai_key_hint          TEXT,
+  openai_model             TEXT,
+  gemini_encrypted_key     TEXT,
+  gemini_key_hint          TEXT,
+  gemini_model             TEXT,
+  provider                 TEXT DEFAULT 'openrouter',
   agent_settings           JSONB,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Idempotent column migration for pre-existing databases that predate the
--- multi-provider feature.
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_encrypted_key TEXT;
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_key_hint TEXT;
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS nvidia_encrypted_key TEXT;
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS nvidia_key_hint TEXT;
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'openrouter';
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS groq_model TEXT;
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS openrouter_model TEXT;
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS nvidia_model TEXT;
--- Per-user AI agent settings blob (trigger word, behavior toggles/limits,
--- OpenAI/Gemini key+model slots).
-ALTER TABLE bot_user_groq_key ADD COLUMN IF NOT EXISTS agent_settings JSONB;
+-- unified multi-provider schema.
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS openrouter_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS openrouter_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS groq_encrypted_key TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS groq_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS groq_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS nvidia_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS nvidia_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS openai_encrypted_key TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS openai_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS openai_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS gemini_encrypted_key TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS gemini_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS gemini_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'openrouter';
+-- Per-user AI agent settings blob (trigger word, behavior toggles/limits).
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS agent_settings JSONB;
+
+-- One-time migration from the legacy bot_user_groq_key table (predates the
+-- multi-provider feature). Copies groq/openrouter/nvidia columns verbatim,
+-- promotes the openai/gemini key+model slots out of the agent_settings blob
+-- into their own columns, and folds the blob's activeProvider into the
+-- provider column. Safe to run on every boot: ON CONFLICT DO NOTHING makes it
+-- idempotent, and the legacy table is only dropped once every row is copied.
+INSERT INTO bot_user_ai_config
+  (user_id, openrouter_encrypted_key, openrouter_key_hint, openrouter_model,
+   groq_encrypted_key, groq_key_hint, groq_model, nvidia_encrypted_key,
+   nvidia_key_hint, nvidia_model, openai_encrypted_key, openai_key_hint,
+   openai_model, gemini_encrypted_key, gemini_key_hint, gemini_model,
+   provider, agent_settings, created_at, updated_at)
+SELECT
+  user_id,
+  COALESCE(openrouter_encrypted_key, ''),
+  COALESCE(openrouter_key_hint, ''),
+  COALESCE(openrouter_model, ''),
+  COALESCE(encrypted_key, ''),
+  COALESCE(key_hint, ''),
+  COALESCE(groq_model, ''),
+  COALESCE(nvidia_encrypted_key, ''),
+  COALESCE(nvidia_key_hint, ''),
+  COALESCE(nvidia_model, ''),
+  COALESCE(agent_settings->>'openaiEncryptedKey', ''),
+  COALESCE(agent_settings->>'openaiKeyHint', ''),
+  COALESCE(agent_settings->>'openaiModel', ''),
+  COALESCE(agent_settings->>'geminiEncryptedKey', ''),
+  COALESCE(agent_settings->>'geminiKeyHint', ''),
+  COALESCE(agent_settings->>'geminiModel', ''),
+  CASE
+    WHEN agent_settings->>'activeProvider' IN ('openai', 'gemini')
+      THEN agent_settings->>'activeProvider'
+    WHEN provider IN ('openrouter', 'groq', 'nvidia') THEN provider
+    ELSE 'openrouter'
+  END,
+  agent_settings - 'activeProvider' - 'openaiEncryptedKey' - 'openaiKeyHint'
+    - 'openaiModel' - 'geminiEncryptedKey' - 'geminiKeyHint' - 'geminiModel',
+  created_at,
+  updated_at
+FROM bot_user_groq_key
+ON CONFLICT (user_id) DO NOTHING;
+
+DROP TABLE IF EXISTS bot_user_groq_key;
 
 -- Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
 -- Applied across the dashboard's time-based displays, logs, and bot-facing

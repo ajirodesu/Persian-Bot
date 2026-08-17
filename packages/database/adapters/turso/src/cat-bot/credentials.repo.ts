@@ -1,4 +1,4 @@
-import { tursoClient, intToBool } from '../client.js';
+import { tursoClient, intToBool, dbReady } from '../client.js';
 import {
   Platforms,
   PLATFORM_TO_ID,
@@ -55,6 +55,7 @@ export async function updateDiscordCredentialCommandHash(
 export async function findAllDiscordCredentials(): Promise<
   Record<string, unknown>[]
 > {
+  await dbReady;
   const res = await tursoClient.execute(
     `SELECT user_id, platform_id, session_id, discord_token, discord_client_id,
             is_command_register, command_hash
@@ -129,6 +130,7 @@ export async function updateTelegramCredentialCommandHash(
 export async function findAllTelegramCredentials(): Promise<
   Record<string, unknown>[]
 > {
+  await dbReady;
   const res = await tursoClient.execute(
     `SELECT user_id, platform_id, session_id, telegram_token, is_command_register, command_hash
      FROM bot_credential_telegram`,
@@ -157,6 +159,7 @@ export async function findAllTelegramCredentials(): Promise<
 export async function findAllFluxerCredentials(): Promise<
   Record<string, unknown>[]
 > {
+  await dbReady;
   const res = await tursoClient.execute(
     `SELECT user_id, platform_id, session_id, fluxer_token
      FROM bot_credential_fluxer`,
@@ -179,6 +182,7 @@ export async function findAllFluxerCredentials(): Promise<
 // ── Bot Sessions ──────────────────────────────────────────────────────────────
 
 export async function findAllBotSessions(): Promise<Record<string, unknown>[]> {
+  await dbReady;
   const res = await tursoClient.execute(
     `SELECT user_id, platform_id, session_id, nickname, prefix, is_running
      FROM bot_session`,

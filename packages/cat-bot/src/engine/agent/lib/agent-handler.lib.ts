@@ -57,6 +57,7 @@ import {
 import { deliverCombinedResult } from '../tools/send_results.js';
 import { containsMarkdown } from './markdown.util.js';
 import { resolveAgentConfig } from './agent-config.lib.js';
+import { AI_PROVIDERS } from '@/engine/repos/ai-provider.constants.js';
 import {
   type AgentThreadKey,
   getThread,
@@ -314,7 +315,9 @@ function buildAvailableCommandsList(
  * Fills the Cat-Bot system-prompt template (agent/system_prompt.md) with the
  * per-turn context: the bot's name, the sender's name/role, the command
  * prefix, the available commands, and the current time in the user's
- * timezone. A mention hint is appended on top.
+ * timezone. The resolved model + provider names are injected so the agent
+ * knows (and can truthfully report) which language model it runs on. A
+ * mention hint is appended on top.
  */
 function buildSystemPrompt(params: {
   mentioned: boolean;
@@ -324,6 +327,8 @@ function buildSystemPrompt(params: {
   userRole: string;
   prefix: string;
   availableCommands: string;
+  modelName: string;
+  providerName: string;
 }): string {
   let prompt = SYSTEM_PROMPT_TEMPLATE
     .replaceAll('{{BOT_NAME}}', params.botName)
@@ -331,7 +336,9 @@ function buildSystemPrompt(params: {
     .replaceAll('{{USER_ROLE}}', params.userRole)
     .replaceAll('{{COMMAND_PREFIX}}', params.prefix)
     .replaceAll('{{AVAILABLE_COMMANDS}}', params.availableCommands || '(none)')
-    .replaceAll('{{CURRENT_DATETIME}}', formatLocalNow(params.timeZone));
+    .replaceAll('{{CURRENT_DATETIME}}', formatLocalNow(params.timeZone))
+    .replaceAll('{{AI_MODEL_NAME}}', params.modelName || 'unknown')
+    .replaceAll('{{AI_PROVIDER_NAME}}', params.providerName || 'unknown');
   if (params.mentioned) {
     prompt +=
       '\n\nThe user has mentioned people in this message — you can @mention them in your reply.';
@@ -740,6 +747,8 @@ async function runAgentUnsafe(
       ctx.commands,
       key.platform,
     ),
+    modelName: config.model,
+    providerName: AI_PROVIDERS[config.provider]?.label ?? config.provider,
   });
 
   const toolContext = buildToolContext(ctx);

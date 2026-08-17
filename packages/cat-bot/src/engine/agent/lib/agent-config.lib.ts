@@ -59,13 +59,17 @@ export interface ResolvedAgentConfig {
 }
 
 interface StoredAiConfigLike {
-  encryptedKey: string;
-  openrouterEncryptedKey: string;
-  nvidiaEncryptedKey: string;
   provider: string;
-  groqModel: string;
+  openrouterEncryptedKey: string;
   openrouterModel: string;
+  groqEncryptedKey: string;
+  groqModel: string;
+  nvidiaEncryptedKey: string;
   nvidiaModel: string;
+  openaiEncryptedKey: string;
+  openaiModel: string;
+  geminiEncryptedKey: string;
+  geminiModel: string;
   agentSettings: Record<string, unknown>;
 }
 
@@ -73,19 +77,13 @@ const CACHE_TTL_MS = 30_000; // 30s — dashboard saves appear quickly, hot path
 const cacheKey = (userId: string): string => `agent:config:${userId}`;
 
 function storedKeyOf(stored: StoredAiConfigLike, provider: string): string {
-  if (provider === 'openrouter') return stored.openrouterEncryptedKey;
-  if (provider === 'nvidia') return stored.nvidiaEncryptedKey;
-  if (provider === 'groq') return stored.encryptedKey;
-  const blob = stored.agentSettings ?? {};
-  return String(blob[`${provider}EncryptedKey`] ?? '');
+  const record = stored as unknown as Record<string, string>;
+  return record[`${provider}EncryptedKey`] ?? '';
 }
 
 function storedModelOf(stored: StoredAiConfigLike, provider: string): string {
-  if (provider === 'openrouter') return stored.openrouterModel;
-  if (provider === 'nvidia') return stored.nvidiaModel;
-  if (provider === 'groq') return stored.groqModel;
-  const blob = stored.agentSettings ?? {};
-  return String(blob[`${provider}Model`] ?? '');
+  const record = stored as unknown as Record<string, string>;
+  return record[`${provider}Model`] ?? '';
 }
 
 /** Default model for a provider — from the dashboard catalog (no env). */
@@ -126,24 +124,16 @@ export async function resolveAgentConfig(
         userId,
       )) as StoredAiConfigLike | null;
       if (stored) {
-        // The blob's activeProvider (openai/gemini) wins over the legacy
-        // provider column.
+        // The stored provider column is the single source of truth; a stale
+        // pointer to a keyless provider falls back to the default so a
+        // configured key still powers the agent.
         const blob = stored.agentSettings ?? {};
-        let provider: AgentProviderId = isAgentProviderId(
-          blob['activeProvider'],
-        )
-          ? (blob['activeProvider'] as AgentProviderId)
+        let provider: AgentProviderId = isAgentProviderId(stored.provider)
+          ? (stored.provider as AgentProviderId)
           : DEFAULT_AI_PROVIDER;
         let storedKey = storedKeyOf(stored, provider);
-        // The blob pointer can be stale (that provider's key was removed) —
-        // fall back to the legacy provider column so a configured key still
-        // powers the agent instead of silently degrading to the defaults.
-        if (
-          !storedKey &&
-          isAgentProviderId(stored.provider) &&
-          stored.provider !== provider
-        ) {
-          provider = stored.provider;
+        if (!storedKey && provider !== DEFAULT_AI_PROVIDER) {
+          provider = DEFAULT_AI_PROVIDER;
           storedKey = storedKeyOf(stored, provider);
         }
         const storedModel = storedModelOf(stored, provider).trim();

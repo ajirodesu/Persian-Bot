@@ -5,7 +5,7 @@ import { timezoneController } from '@/server/controllers/v1/timezone.controller.
 const settingsRouter = Router();
 
 // GET /api/v1/settings/ai — per-user AI provider status
-// ({ provider, model, providers: { groq, openrouter }, models })
+// ({ provider, model, providers: { openrouter, groq, nvidia, openai, gemini }, models })
 settingsRouter.get('/ai', (req, res) => {
   void aiProviderController.get(req, res);
 });

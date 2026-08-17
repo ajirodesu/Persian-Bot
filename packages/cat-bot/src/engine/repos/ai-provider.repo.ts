@@ -80,42 +80,35 @@ export interface SaveAiConfigPayload {
 // ============================================================================
 // Stored-config helpers
 // ============================================================================
-// The database stores one key+model slot per provider. The three original
-// providers (groq/openrouter/nvidia) keep their dedicated columns; the newer
-// ones (openai/gemini) live in the JSON agent_settings blob along with the
-// agent behavior settings. `provider` picks the active one; for the newer
-// providers the blob's activeProvider field wins over the legacy column.
+// The database stores one key+model slot per provider in bot_user_ai_config —
+// a uniform column pair for every provider (openrouter, groq, nvidia, openai,
+// gemini), plus the per-user agent behavior blob. `provider` picks the active
+// one; the agent_settings blob holds only agent behavior settings now.
 
 interface StoredAiConfigLike {
-  encryptedKey: string;
-  keyHint: string;
+  provider: string;
   openrouterEncryptedKey: string;
   openrouterKeyHint: string;
+  openrouterModel: string;
+  groqEncryptedKey: string;
+  groqKeyHint: string;
+  groqModel: string;
   nvidiaEncryptedKey: string;
   nvidiaKeyHint: string;
-  provider: string;
-  groqModel: string;
-  openrouterModel: string;
   nvidiaModel: string;
+  openaiEncryptedKey: string;
+  openaiKeyHint: string;
+  openaiModel: string;
+  geminiEncryptedKey: string;
+  geminiKeyHint: string;
+  geminiModel: string;
   agentSettings: Record<string, unknown>;
 }
 
-function blobOf(stored: StoredAiConfigLike): Record<string, unknown> {
-  return stored.agentSettings ?? {};
-}
-
-/** Active provider: the blob's activeProvider (openai/gemini) wins, then the
- * legacy provider column, then the env-level default. A pointer to a provider
- * with no stored key is ignored (stale) so reads never silently land on a
- * keyless provider. */
+/** Active provider: the stored provider column with a key present, else the
+ * env-level default. A pointer to a provider with no stored key is ignored
+ * (stale) so reads never silently land on a keyless provider. */
 function activeProviderOf(stored: StoredAiConfigLike): AiProviderId {
-  const blob = blobOf(stored);
-  if (
-    isAiProviderId(blob['activeProvider']) &&
-    storedKeyOf(stored, blob['activeProvider'] as AiProviderId).length > 0
-  ) {
-    return blob['activeProvider'] as AiProviderId;
-  }
   if (
     isAiProviderId(stored.provider) &&
     storedKeyOf(stored, stored.provider).length > 0
@@ -133,13 +126,8 @@ function pickActiveProviderAfterRemoval(
   stored: StoredAiConfigLike,
   removed: AiProviderId,
 ): AiProviderId | null {
-  const blob = blobOf(stored);
-  const hasKey = (p: AiProviderId): boolean => {
-    if (p === 'openrouter') return stored.openrouterEncryptedKey.length > 0;
-    if (p === 'groq') return stored.encryptedKey.length > 0;
-    if (p === 'nvidia') return stored.nvidiaEncryptedKey.length > 0;
-    return String(blob[`${p}EncryptedKey`] ?? '').length > 0;
-  };
+  const hasKey = (p: AiProviderId): boolean =>
+    storedKeyOf(stored, p).length > 0;
 
   const current = activeProviderOf(stored);
   if (current !== removed && hasKey(current)) return current;
@@ -161,24 +149,14 @@ function storedKeyOf(
   stored: StoredAiConfigLike,
   provider: AiProviderId,
 ): string {
-  if (provider === 'openrouter') return stored.openrouterEncryptedKey;
-  if (provider === 'nvidia') return stored.nvidiaEncryptedKey;
-  if (provider === 'groq') return stored.encryptedKey;
-  const blob = blobOf(stored);
-  const key = String(blob[`${provider}EncryptedKey`] ?? '');
-  return key;
+  return stored[`${provider}EncryptedKey`] ?? '';
 }
 
 function storedModelOf(
   stored: StoredAiConfigLike,
   provider: AiProviderId,
 ): string {
-  if (provider === 'openrouter') return stored.openrouterModel;
-  if (provider === 'nvidia') return stored.nvidiaModel;
-  if (provider === 'groq') return stored.groqModel;
-  const blob = blobOf(stored);
-  const model = String(blob[`${provider}Model`] ?? '');
-  return model;
+  return stored[`${provider}Model`] ?? '';
 }
 
 // ============================================================================
@@ -275,7 +253,6 @@ export async function getAiSettingsStatus(
   if (!stored) return buildEmptyStatus();
 
   const provider = activeProviderOf(stored);
-  const blob = blobOf(stored);
 
   // Decrypt keys so live catalogs can be fetched where per-key (groq/nvidia/
   // openai). Fail-open: no key / decrypt error just falls back to the static
@@ -288,11 +265,13 @@ export async function getAiSettingsStatus(
       return null;
     }
   };
+  const decryptStoredKey = (p: AiProviderId): string | null =>
+    decryptKey(storedKeyOf(stored, p));
 
-  const groqKey = decryptKey(stored.encryptedKey);
-  const nvidiaKey = decryptKey(stored.nvidiaEncryptedKey);
-  const openaiKey = decryptKey(String(blob['openaiEncryptedKey'] ?? ''));
-  const geminiKey = decryptKey(String(blob['geminiEncryptedKey'] ?? ''));
+  const groqKey = decryptStoredKey('groq');
+  const nvidiaKey = decryptStoredKey('nvidia');
+  const openaiKey = decryptStoredKey('openai');
+  const geminiKey = decryptStoredKey('gemini');
 
   // Catalogs are cached (6h) — parallel fetch, sequential after warm-up.
   const [openrouterList, groqList, nvidiaList, openaiList, geminiList] =
@@ -362,20 +341,20 @@ export async function getAiSettingsStatus(
         keyHint: stored.openrouterKeyHint || null,
       },
       groq: {
-        hasKey: stored.encryptedKey.length > 0,
-        keyHint: stored.keyHint || null,
+        hasKey: stored.groqEncryptedKey.length > 0,
+        keyHint: stored.groqKeyHint || null,
       },
       nvidia: {
         hasKey: stored.nvidiaEncryptedKey.length > 0,
         keyHint: stored.nvidiaKeyHint || null,
       },
       openai: {
-        hasKey: String(blob['openaiEncryptedKey'] ?? '').length > 0,
-        keyHint: (blob['openaiKeyHint'] as string | undefined) ?? null,
+        hasKey: stored.openaiEncryptedKey.length > 0,
+        keyHint: stored.openaiKeyHint || null,
       },
       gemini: {
-        hasKey: String(blob['geminiEncryptedKey'] ?? '').length > 0,
-        keyHint: (blob['geminiKeyHint'] as string | undefined) ?? null,
+        hasKey: stored.geminiEncryptedKey.length > 0,
+        keyHint: stored.geminiKeyHint || null,
       },
     },
     models: {
@@ -427,7 +406,6 @@ export async function saveUserAiConfig(
   }
 
   const stored = (await _getUserAiConfig(userId)) as StoredAiConfigLike | null;
-  const blob = stored ? blobOf(stored) : {};
   const decryptKey = (enc: string): string | null => {
     if (!enc) return null;
     try {
@@ -436,14 +414,9 @@ export async function saveUserAiConfig(
       return null;
     }
   };
-  const storedKey =
-    provider === 'groq'
-      ? decryptKey(stored?.encryptedKey ?? '')
-      : provider === 'nvidia'
-        ? decryptKey(stored?.nvidiaEncryptedKey ?? '')
-        : provider === 'openai' || provider === 'gemini'
-          ? decryptKey(String(blob[`${provider}EncryptedKey`] ?? ''))
-          : null;
+  const storedKey = stored
+    ? decryptKey(storedKeyOf(stored, provider))
+    : null;
 
   // Resolve the live (or fallback) catalog for this provider so the picked
   // model is validated/normalized against what's actually available. When a
@@ -469,49 +442,16 @@ export async function saveUserAiConfig(
       ? providerDef.defaultModel
       : (providerModels[0]?.id ?? providerDef.defaultModel);
 
-  // The newer providers (openai/gemini) store their key/model and the
-  // active-provider pointer in the agent_settings blob, since the legacy
-  // columns only cover groq/openrouter/nvidia.
-  const isBlobProvider = provider === 'openai' || provider === 'gemini';
-  // Legacy DB columns (the DB-layer AiProvider union).
-  const legacyProvider = provider as 'openrouter' | 'groq' | 'nvidia';
-
-  if (apiKey || isBlobProvider) {
-    if (isBlobProvider && apiKey) {
-      const blobPatch: Record<string, unknown> = {
-        [`${provider}EncryptedKey`]: encrypt(apiKey),
-        [`${provider}KeyHint`]: getAiProviderKeyHint(apiKey),
-        [`${provider}Model`]: model,
-        activeProvider: provider,
-      };
-      await _saveUserAgentSettings(userId, blobPatch);
-    } else if (isBlobProvider) {
-      // No new key for a blob provider — require one to already exist before
-      // persisting a provider/model switch.
-      const hasKey = String(blob[`${provider}EncryptedKey`] ?? '').length > 0;
-      if (!hasKey) {
-        throw new AiConfigError(
-          `An ${providerDef.label} API key is required before saving.`,
-        );
-      }
-      await _saveUserAgentSettings(userId, {
-        [`${provider}Model`]: model,
-        activeProvider: provider,
-      });
-    } else {
-      await _saveUserAiKey(
-        userId,
-        legacyProvider,
-        encrypt(apiKey),
-        getAiProviderKeyHint(apiKey),
-        model,
-      );
-      // The blob's activeProvider (openai/gemini) wins over the legacy
-      // `provider` column on read — clear it so this legacy-provider save
-      // actually takes effect instead of silently keeping the old blob
-      // provider active.
-      await _saveUserAgentSettings(userId, { activeProvider: '' });
-    }
+  if (apiKey) {
+    // Save the key and switch the active provider to it. All providers store
+    // their own uniform column pair in bot_user_ai_config.
+    await _saveUserAiKey(
+      userId,
+      provider,
+      encrypt(apiKey),
+      getAiProviderKeyHint(apiKey),
+      model,
+    );
   } else {
     // No new key — require the provider to already have one before we persist
     // a provider/model switch (a model-only save on a keyless provider would
@@ -522,10 +462,7 @@ export async function saveUserAiConfig(
         `An ${providerDef.label} API key is required before saving.`,
       );
     }
-    await _updateUserAiModel(userId, legacyProvider, model);
-    // Same as above — a stale blob activeProvider must not override the
-    // freshly-switched legacy provider.
-    await _saveUserAgentSettings(userId, { activeProvider: '' });
+    await _updateUserAiModel(userId, provider, model);
   }
 
   // Agent behavior settings (trigger name, shell toggle, limits).
@@ -565,17 +502,7 @@ export async function removeUserAiKey(
   const stored = (await _getUserAiConfig(userId)) as StoredAiConfigLike | null;
   const wasActive = stored !== null && activeProviderOf(stored) === provider;
 
-  if (provider === 'openai' || provider === 'gemini') {
-    await _saveUserAgentSettings(userId, {
-      [`${provider}EncryptedKey`]: '',
-      [`${provider}KeyHint`]: '',
-    });
-  } else {
-    await _deleteUserAiKey(
-      userId,
-      provider as 'openrouter' | 'groq' | 'nvidia',
-    );
-  }
+  await _deleteUserAiKey(userId, provider);
 
   // If the removed provider was the active one, repoint the active provider to
   // another configured provider so the account never silently stays on a
@@ -586,19 +513,11 @@ export async function removeUserAiKey(
       ? pickActiveProviderAfterRemoval(after, provider)
       : null;
     if (fallback) {
-      if (fallback === 'openai' || fallback === 'gemini') {
-        await _saveUserAgentSettings(userId, { activeProvider: fallback });
-      } else {
-        await _updateUserAiModel(
-          userId,
-          fallback,
-          storedModelOf(after as StoredAiConfigLike, fallback),
-        );
-      }
-    } else {
-      // No provider key left — clear the blob pointer so reads fall back to the
-      // legacy column / defaults instead of a keyless provider.
-      await _saveUserAgentSettings(userId, { activeProvider: '' });
+      await _updateUserAiModel(
+        userId,
+        fallback,
+        storedModelOf(after as StoredAiConfigLike, fallback),
+      );
     }
   }
 

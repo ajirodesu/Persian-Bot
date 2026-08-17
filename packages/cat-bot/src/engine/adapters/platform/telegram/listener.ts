@@ -140,6 +140,10 @@ export function createTelegramListener(config: TelegramConfig): TelegramEmitter 
           `[telegram] Webhook mode active — Telegram will POST to https://${domain}${webhookPath}`,
         );
       } else {
+        // Polling mode — clear any leftover webhook (e.g. from a prior webhook-mode
+        // deployment or a manual setWebhook) so getUpdates long-polling never hits a
+        // 409 Conflict ("can't use getUpdates while webhook is active").
+        await activeBot.api.deleteWebhook();
         // @grammyjs/runner dispatches fetched updates concurrently, preserving per-chat order.
         activeRunner = run(activeBot, {
           runner: {

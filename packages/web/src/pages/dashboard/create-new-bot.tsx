@@ -42,8 +42,8 @@ interface FormState {
 
 const PLATFORM_OPTIONS: SelectOption[] = [
   { value: Platforms.Discord, label: 'Discord' },
-  { value: Platforms.Telegram, label: 'Telegram' },
   { value: Platforms.Fluxer, label: 'Fluxer' },
+  { value: Platforms.Telegram, label: 'Telegram' },
 ]
 
 const INITIAL_FORM: FormState = {

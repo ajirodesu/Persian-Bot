@@ -68,6 +68,10 @@ export const meta: CommandMeta = {
   usage: '[command | page]',
   cooldown: 5,
   hasPrefix: true,
+  // Discord's help must not react to the triggering message on success — the
+  // reaction round-trip errors on Discord for this command. The dispatcher
+  // honors this flag (scoped to the Discord platform).
+  noReactOnSuccess: true,
   options: [
     {
       type: OptionType.string,

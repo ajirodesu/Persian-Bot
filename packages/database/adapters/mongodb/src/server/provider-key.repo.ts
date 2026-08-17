@@ -1,57 +1,123 @@
 import { getMongoDb } from '../client.js';
 
 /**
- * Per-user AI provider configuration stored in botUserGroqKeys (the collection
- * name predates the multi-provider feature and is kept for migration
- * compatibility).
- *
- * Each user may configure a key for ANY provider (or several) — groq keys live
- * in encryptedKey/keyHint, openrouter keys in openrouterEncryptedKey/
- * openrouterKeyHint, nvidia keys in nvidiaEncryptedKey/nvidiaKeyHint. `provider`
- * selects the active one, and each provider's model choice is remembered
- * independently so switching providers keeps the user's preferred model each.
+ * Per-user AI provider configuration stored in botUserAiConfigs — one
+ * key/hint/model field per provider (openrouter, groq, nvidia, openai, gemini).
+ * `provider` selects the active one, and each provider's model choice is
+ * remembered independently so switching providers keeps the user's preferred
+ * model each. The legacy botUserGroqKeys collection (predates the
+ * multi-provider feature) is lazily migrated to this collection on first read.
  */
-export type AiProvider = 'openrouter' | 'groq' | 'nvidia';
+export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini';
 
 export interface StoredAiConfig {
-  encryptedKey: string;
-  keyHint: string;
+  provider: AiProvider;
   openrouterEncryptedKey: string;
   openrouterKeyHint: string;
+  openrouterModel: string;
+  groqEncryptedKey: string;
+  groqKeyHint: string;
+  groqModel: string;
   nvidiaEncryptedKey: string;
   nvidiaKeyHint: string;
-  provider: AiProvider;
-  groqModel: string;
-  openrouterModel: string;
   nvidiaModel: string;
+  openaiEncryptedKey: string;
+  openaiKeyHint: string;
+  openaiModel: string;
+  geminiEncryptedKey: string;
+  geminiKeyHint: string;
+  geminiModel: string;
   /**
-   * Free-form per-user agent settings blob. Holds everything that isn't one of
-   * the provider key/model fields: the trigger word, agent behavior
-   * toggles/limits, and the OpenAI/Gemini key+model slots. Always an object.
+   * Free-form per-user agent settings blob. Holds the agent behavior settings:
+   * trigger word, behavior toggles/limits. Provider keys/models all live in
+   * their own fields. Always an object.
    */
   agentSettings: Record<string, unknown>;
 }
 
 interface StoredAiConfigDoc {
-  encryptedKey?: string;
-  keyHint?: string;
+  provider?: string;
   openrouterEncryptedKey?: string;
   openrouterKeyHint?: string;
+  openrouterModel?: string;
+  groqEncryptedKey?: string;
+  groqKeyHint?: string;
+  groqModel?: string;
   nvidiaEncryptedKey?: string;
   nvidiaKeyHint?: string;
-  provider?: string;
-  groqModel?: string;
-  openrouterModel?: string;
   nvidiaModel?: string;
+  openaiEncryptedKey?: string;
+  openaiKeyHint?: string;
+  openaiModel?: string;
+  geminiEncryptedKey?: string;
+  geminiKeyHint?: string;
+  geminiModel?: string;
   agentSettings?: Record<string, unknown>;
 }
 
-export async function getUserAiConfig(
+const COLLECTION = 'botUserAiConfigs';
+const LEGACY_COLLECTION = 'botUserGroqKeys';
+
+const FIELD_PREFIXES = [
+  'openrouter',
+  'groq',
+  'nvidia',
+  'openai',
+  'gemini',
+] as const;
+
+function providerOf(value: string | undefined): AiProvider {
+  return value === 'groq' ||
+    value === 'nvidia' ||
+    value === 'openai' ||
+    value === 'gemini'
+    ? value
+    : 'openrouter';
+}
+
+function providerField(
+  provider: AiProvider,
+  suffix: 'EncryptedKey' | 'KeyHint' | 'Model',
+): string {
+  return `${provider}${suffix}`;
+}
+
+function mapStoredConfig(doc: StoredAiConfigDoc): StoredAiConfig {
+  const out: StoredAiConfig = {
+    provider: providerOf(doc.provider),
+    agentSettings:
+      doc.agentSettings !== null && typeof doc.agentSettings === 'object'
+        ? doc.agentSettings
+        : {},
+  } as StoredAiConfig;
+  for (const provider of FIELD_PREFIXES) {
+    const record = doc as unknown as Record<string, unknown>;
+    (out as unknown as Record<string, unknown>)[`${provider}EncryptedKey`] =
+      String(record[`${provider}EncryptedKey`] ?? '');
+    (out as unknown as Record<string, unknown>)[`${provider}KeyHint`] = String(
+      record[`${provider}KeyHint`] ?? '',
+    );
+    (out as unknown as Record<string, unknown>)[`${provider}Model`] = String(
+      record[`${provider}Model`] ?? '',
+    );
+  }
+  return out;
+}
+
+/**
+ * Lazily migrates a legacy botUserGroqKeys doc into the unified
+ * botUserAiConfigs shape (openai/gemini promoted out of the blob, blob
+ * activeProvider folded into provider) and persists it. No-op when the legacy
+ * doc is absent. The legacy collection is kept — reads prefer the new one.
+ */
+async function migrateLegacyDocIfAny(
   userId: string,
-): Promise<StoredAiConfig | null> {
+): Promise<StoredAiConfigDoc | null> {
   const db = getMongoDb();
-  const rec = await db
-    .collection<StoredAiConfigDoc>('botUserGroqKeys')
+  const legacy = await db
+    .collection<StoredAiConfigDoc & { agentSettings?: Record<string, unknown> }>(
+      LEGACY_COLLECTION,
+    )
     .findOne(
       { userId },
       {
@@ -71,23 +137,89 @@ export async function getUserAiConfig(
         },
       },
     );
-  if (!rec) return null;
-  return {
-    encryptedKey: rec.encryptedKey ?? '',
-    keyHint: rec.keyHint ?? '',
-    openrouterEncryptedKey: rec.openrouterEncryptedKey ?? '',
-    openrouterKeyHint: rec.openrouterKeyHint ?? '',
-    nvidiaEncryptedKey: rec.nvidiaEncryptedKey ?? '',
-    nvidiaKeyHint: rec.nvidiaKeyHint ?? '',
-    provider: providerOf(rec.provider),
-    groqModel: rec.groqModel ?? '',
-    openrouterModel: rec.openrouterModel ?? '',
-    nvidiaModel: rec.nvidiaModel ?? '',
-    agentSettings:
-      rec.agentSettings !== null && typeof rec.agentSettings === 'object'
-        ? rec.agentSettings
-        : {},
+  if (!legacy) return null;
+
+  const blob =
+    legacy.agentSettings !== null && typeof legacy.agentSettings === 'object'
+      ? legacy.agentSettings
+      : {};
+  const record = legacy as unknown as Record<string, unknown>;
+  const blobProvider = blob['activeProvider'];
+  const provider =
+    typeof blobProvider === 'string' &&
+    isSupportedAiProvider(blobProvider) &&
+    String(blob[`${blobProvider}EncryptedKey`] ?? '').length > 0
+      ? blobProvider
+      : typeof record['provider'] === 'string' &&
+          isSupportedAiProvider(record['provider'] as string)
+        ? (record['provider'] as string)
+        : 'openrouter';
+
+  const cleanBlob: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(blob)) {
+    if (
+      k === 'activeProvider' ||
+      /^(openai|gemini)(EncryptedKey|KeyHint|Model)$/.test(k)
+    ) {
+      continue;
+    }
+    cleanBlob[k] = v;
+  }
+
+  const migrated: Record<string, unknown> = {
+    openrouterEncryptedKey: String(record['openrouterEncryptedKey'] ?? ''),
+    openrouterKeyHint: String(record['openrouterKeyHint'] ?? ''),
+    openrouterModel: String(record['openrouterModel'] ?? ''),
+    groqEncryptedKey: String(record['encryptedKey'] ?? ''),
+    groqKeyHint: String(record['keyHint'] ?? ''),
+    groqModel: String(record['groqModel'] ?? ''),
+    nvidiaEncryptedKey: String(record['nvidiaEncryptedKey'] ?? ''),
+    nvidiaKeyHint: String(record['nvidiaKeyHint'] ?? ''),
+    nvidiaModel: String(record['nvidiaModel'] ?? ''),
+    openaiEncryptedKey: String(blob['openaiEncryptedKey'] ?? ''),
+    openaiKeyHint: String(blob['openaiKeyHint'] ?? ''),
+    openaiModel: String(blob['openaiModel'] ?? ''),
+    geminiEncryptedKey: String(blob['geminiEncryptedKey'] ?? ''),
+    geminiKeyHint: String(blob['geminiKeyHint'] ?? ''),
+    geminiModel: String(blob['geminiModel'] ?? ''),
+    provider,
+    agentSettings: cleanBlob,
   };
+
+  await db.collection(COLLECTION).updateOne(
+    { userId },
+    {
+      $set: { ...migrated, updatedAt: new Date() },
+      $setOnInsert: { userId, createdAt: new Date() },
+    },
+    { upsert: true },
+  );
+  return migrated as StoredAiConfigDoc;
+}
+
+function isSupportedAiProvider(value: string): boolean {
+  return (
+    value === 'openrouter' ||
+    value === 'groq' ||
+    value === 'nvidia' ||
+    value === 'openai' ||
+    value === 'gemini'
+  );
+}
+
+export async function getUserAiConfig(
+  userId: string,
+): Promise<StoredAiConfig | null> {
+  const db = getMongoDb();
+  let rec: StoredAiConfigDoc | null = await db
+    .collection<StoredAiConfigDoc>(COLLECTION)
+    .findOne({ userId }, { projection: { _id: 0 } });
+  if (!rec) {
+    const migrated = await migrateLegacyDocIfAny(userId);
+    if (!migrated) return null;
+    rec = migrated;
+  }
+  return mapStoredConfig(rec);
 }
 
 /**
@@ -101,13 +233,13 @@ export async function saveUserAgentSettings(
 ): Promise<void> {
   const db = getMongoDb();
   const rec = await db
-    .collection<{ agentSettings?: Record<string, unknown> }>('botUserGroqKeys')
+    .collection<{ agentSettings?: Record<string, unknown> }>(COLLECTION)
     .findOne({ userId }, { projection: { _id: 0, agentSettings: 1 } });
   const merged: Record<string, unknown> = {
     ...(rec?.agentSettings ?? {}),
     ...settings,
   };
-  await db.collection('botUserGroqKeys').updateOne(
+  await db.collection(COLLECTION).updateOne(
     { userId },
     {
       $set: { agentSettings: merged, updatedAt: new Date() },
@@ -115,12 +247,6 @@ export async function saveUserAgentSettings(
     },
     { upsert: true },
   );
-}
-
-function providerOf(value: string | undefined): AiProvider {
-  if (value === 'groq') return 'groq';
-  if (value === 'nvidia') return 'nvidia';
-  return 'openrouter';
 }
 
 /**
@@ -136,29 +262,14 @@ export async function saveUserAiKey(
   model: string,
 ): Promise<void> {
   const db = getMongoDb();
-  const set: Record<string, unknown> =
-    provider === 'openrouter'
-      ? {
-          openrouterEncryptedKey: encryptedKey,
-          openrouterKeyHint: keyHint,
-          provider,
-          openrouterModel: model,
-        }
-      : provider === 'nvidia'
-        ? {
-            nvidiaEncryptedKey: encryptedKey,
-            nvidiaKeyHint: keyHint,
-            provider,
-            nvidiaModel: model,
-          }
-        : {
-            encryptedKey,
-            keyHint,
-            provider,
-            groqModel: model,
-          };
-  set.updatedAt = new Date();
-  await db.collection('botUserGroqKeys').updateOne(
+  const set: Record<string, unknown> = {
+    [providerField(provider, 'EncryptedKey')]: encryptedKey,
+    [providerField(provider, 'KeyHint')]: keyHint,
+    [providerField(provider, 'Model')]: model,
+    provider,
+    updatedAt: new Date(),
+  };
+  await db.collection(COLLECTION).updateOne(
     { userId },
     {
       $set: set,
@@ -175,14 +286,12 @@ export async function updateUserAiModel(
   model: string,
 ): Promise<void> {
   const db = getMongoDb();
-  const set: Record<string, unknown> =
-    provider === 'openrouter'
-      ? { provider, openrouterModel: model }
-      : provider === 'nvidia'
-        ? { provider, nvidiaModel: model }
-        : { provider, groqModel: model };
-  set.updatedAt = new Date();
-  await db.collection('botUserGroqKeys').updateOne({ userId }, { $set: set });
+  const set: Record<string, unknown> = {
+    [providerField(provider, 'Model')]: model,
+    provider,
+    updatedAt: new Date(),
+  };
+  await db.collection(COLLECTION).updateOne({ userId }, { $set: set });
 }
 
 /** Clears the key fields for ONE provider ('' = not configured). */
@@ -191,12 +300,10 @@ export async function deleteUserAiKey(
   provider: AiProvider,
 ): Promise<void> {
   const db = getMongoDb();
-  const set: Record<string, unknown> =
-    provider === 'openrouter'
-      ? { openrouterEncryptedKey: '', openrouterKeyHint: '' }
-      : provider === 'nvidia'
-        ? { nvidiaEncryptedKey: '', nvidiaKeyHint: '' }
-        : { encryptedKey: '', keyHint: '' };
-  set.updatedAt = new Date();
-  await db.collection('botUserGroqKeys').updateOne({ userId }, { $set: set });
+  const set: Record<string, unknown> = {
+    [providerField(provider, 'EncryptedKey')]: '',
+    [providerField(provider, 'KeyHint')]: '',
+    updatedAt: new Date(),
+  };
+  await db.collection(COLLECTION).updateOne({ userId }, { $set: set });
 }

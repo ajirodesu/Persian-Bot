@@ -167,6 +167,13 @@ export interface CommandMeta {
    * Enforced by the payment middleware in on-command.middleware.ts.
    */
   payment?: PaymentValue;
+
+  /**
+   * When true, the command dispatcher skips the success-reaction (reactOnSuccess)
+   * after a successful invocation on Discord. Used by commands whose reaction
+   * round-trip errors on Discord (e.g. /help). Absent/false → default behaviour.
+   */
+  noReactOnSuccess?: boolean;
 }
 
 // ── EventMeta ─────────────────────────────────────────────────────────────────
