@@ -1,15 +1,19 @@
 /**
  * AI Agent — browser tool (DuckDuckGo-based, Bing fallback)
  *
- * Searches the web via DuckDuckGo's HTML endpoint (no API key, no browser
- * required) or fetches a page's readable text directly. Replaces the old
- * puppeteer/Chrome implementation — the agent no longer needs a local browser
- * or any environment configuration to browse.
+ * Searches the web via DuckDuckGo or fetches a page's readable text directly.
+ * Replaces the old puppeteer/Chrome implementation — the agent no longer needs
+ * a local browser or any environment configuration to browse.
  *
+ * Search order:
+ *   1. DuckDuckGo Instant Answer API (api.duckduckgo.com — the same endpoint
+ *      the /duckduckgo command uses) for a clean, structured answer;
+ *   2. DuckDuckGo's HTML endpoint;
+ *   3. Bing's HTML search.
  * DuckDuckGo sometimes serves a CAPTCHA/anomaly page to automated clients
- * (IP-based, status 202). When that happens the tool automatically falls back
- * to Bing's HTML search, so the agent still gets results. Each response is
- * labeled with the engine that produced it.
+ * (IP-based, status 202) — then the tool falls back to Bing so the agent
+ * still gets results. Each response is labeled with the engine that produced
+ * it.
  */
 
 import axios from 'axios';
@@ -37,7 +41,8 @@ const CHALLENGE_RE =
 export const meta: ToolMeta = {
   name: 'browser',
   description:
-    'Search the web (DuckDuckGo, with Bing fallback) or fetch a page’s text. ' +
+    'Search the web (DuckDuckGo instant answers + HTML, Bing fallback) or ' +
+    "fetch a page's text. " +
     "Pass a plain search query to search the web (e.g. 'latest AI news'), " +
     "or pass a full URL to read the page directly (e.g. 'https://example.com'). " +
     'Returns search results (title, link, snippet) or the page text content.',
@@ -173,7 +178,66 @@ function resolveBingUrl(href: string): string {
 }
 
 // ============================================================================
-// DuckDuckGo search
+// DuckDuckGo Instant Answer (fast path — same API as the /duckduckgo command)
+// ============================================================================
+
+interface DuckDuckGoInstantTopic {
+  Text?: string;
+  FirstURL?: string;
+}
+
+interface DuckDuckGoInstantResponse {
+  AbstractText?: string;
+  AbstractURL?: string;
+  RelatedTopics?: Array<
+    | DuckDuckGoInstantTopic
+    | { Topics?: DuckDuckGoInstantTopic[] }
+  >;
+}
+
+/**
+ * Queries DuckDuckGo's Instant Answer API (api.duckduckgo.com) — the same
+ * endpoint the /duckduckgo command uses. Returns a formatted answer when the
+ * API has one (abstract summary, else the first related topic), or null so
+ * the caller can fall back to the HTML search engines.
+ */
+async function searchInstantAnswer(query: string): Promise<string | null> {
+  const url =
+    `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}` +
+    `&format=json&no_html=1&no_redirect=1&pretty=1`;
+  const { data } = await axios.get<DuckDuckGoInstantResponse>(url, {
+    timeout: FETCH_TIMEOUT_MS,
+    maxContentLength: MAX_RESPONSE_BYTES,
+    headers: { 'User-Agent': USER_AGENT },
+  });
+
+  if (data.AbstractText) {
+    return (
+      `DuckDuckGo instant answer for "${query}":\n${data.AbstractText}` +
+      (data.AbstractURL ? `\n\n${data.AbstractURL}` : '')
+    );
+  }
+
+  if (Array.isArray(data.RelatedTopics)) {
+    for (const topic of data.RelatedTopics) {
+      // Topic objects carry Text/FirstURL; category objects nest them under
+      // Topics[] — cast explicitly since the optional `Topics` key defeats
+      // `in`-narrowing on the union.
+      const t: DuckDuckGoInstantTopic | undefined =
+        'Topics' in topic
+          ? (topic as { Topics?: DuckDuckGoInstantTopic[] }).Topics?.[0]
+          : (topic as DuckDuckGoInstantTopic);
+      if (t?.Text && t.FirstURL) {
+        return `DuckDuckGo result for "${query}":\n${t.Text}\n${t.FirstURL}`;
+      }
+    }
+  }
+
+  return null;
+}
+
+// ============================================================================
+// DuckDuckGo HTML search
 // ============================================================================
 
 interface SearchResult {
@@ -315,8 +379,17 @@ async function searchBing(query: string): Promise<string> {
   );
 }
 
-/** Searches DuckDuckGo, falling back to Bing whenever DDG is blocked. */
+/**
+ * Searches in order: DuckDuckGo Instant Answer API (fast path) → DuckDuckGo
+ * HTML → Bing. Falls through whenever a step is blocked or has no answer.
+ */
 async function search(query: string): Promise<string> {
+  try {
+    const instant = await searchInstantAnswer(query);
+    if (instant !== null) return instant;
+  } catch {
+    // Any Instant Answer failure (timeout, block) → fall through.
+  }
   try {
     const ddg = await searchDuckDuckGo(query);
     if (ddg !== null) return ddg;
