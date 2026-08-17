@@ -25,6 +25,12 @@ import type { UnifiedThreadInfo } from '@/engine/adapters/models/thread.model.js
 export interface ToolMeta {
   name: string;
   description: string;
+  /**
+   * When true the tool is SYSTEM-ADMIN ONLY: it is filtered out of the tool
+   * list for non-admins (see mcp-tools.lib.ts) AND re-checks the caller's
+   * system-admin status inside initialize before doing anything.
+   */
+  adminOnly?: boolean;
   parameters: {
     type: 'object';
     // Value shape mirrors the provider SDKs' function parameters (type, items,

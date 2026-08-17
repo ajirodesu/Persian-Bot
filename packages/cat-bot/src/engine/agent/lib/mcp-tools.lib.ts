@@ -28,6 +28,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolContext } from '../agent-tool.types.js';
 import { loadAgentTools } from './agent-tool-loader.lib.js';
+import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 
 /** The LLM-facing schema for one MCP tool (OpenAI-compatible shape). */
 export interface McpToolSchema {
@@ -48,7 +49,25 @@ export interface McpToolSet {
 // on the hot path, which keeps per-turn tool-set setup to just the in-process
 // server/client pair (no IPC anyway). Worst case the cached list is never stale:
 // the tools directory does not change at runtime.
+//
+// Admin-only tools (meta.adminOnly) are filtered out per turn for senders who
+// are not system administrators — the schema cache holds the full roster and
+// the filtered view is derived per call, so admin status is never cached.
 let cachedSchemas: McpToolSchema[] | null = null;
+
+/**
+ * Resolves whether the turn's sender is a registered system administrator.
+ * Fail-closed: a missing sender ID or an auth-check error means "not admin".
+ */
+async function senderIsSystemAdmin(ctx: ToolContext): Promise<boolean> {
+  const senderID = (ctx.event['senderID'] as string) ?? '';
+  if (!senderID) return false;
+  try {
+    return await isSystemAdmin(senderID);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Builds a live MCP server + client pair bound to this turn's ToolContext.
@@ -60,16 +79,32 @@ export async function createMcpToolSet(
   ctx: ToolContext,
 ): Promise<McpToolSet> {
   const toolModules = await loadAgentTools();
-  const enabled = toolModules;
+
+  // Exclusive availability: admin-only tools are only exposed to system
+  // administrators. Non-admins never see them in listTools (and callTool
+  // would reject them as unknown) — plus each admin tool re-checks the
+  // caller's admin status inside initialize as defense in depth.
+  const adminOnlyNames = new Set(
+    toolModules
+      .filter((t) => t.meta.adminOnly === true)
+      .map((t) => t.meta.name),
+  );
+  const isAdmin = await senderIsSystemAdmin(ctx);
+  const enabled = isAdmin
+    ? toolModules
+    : toolModules.filter((t) => !adminOnlyNames.has(t.meta.name));
   const byName = new Map(enabled.map((t) => [t.meta.name, t]));
 
   if (!cachedSchemas) {
-    cachedSchemas = enabled.map((t) => ({
+    cachedSchemas = toolModules.map((t) => ({
       name: t.meta.name,
       description: t.meta.description,
       parameters: t.meta.parameters as Record<string, unknown>,
     }));
   }
+  const schemas = isAdmin
+    ? cachedSchemas
+    : cachedSchemas.filter((s) => !adminOnlyNames.has(s.name));
 
   const server = new Server(
     { name: 'cat-bot-agent', version: '1.0.0' },
@@ -122,7 +157,7 @@ export async function createMcpToolSet(
   ]);
 
   return {
-    schemas: cachedSchemas,
+    schemas,
     callTool: async (name, args) => {
       try {
         const res = (await client.callTool({
