@@ -758,6 +758,7 @@ const CommitBox = memo(function CommitBox({
   busy,
   changesLength,
   canPush,
+  canPull,
   onCommit,
   onCommitAndPush,
   onPush,
@@ -769,6 +770,7 @@ const CommitBox = memo(function CommitBox({
   busy: string | null
   changesLength: number
   canPush: boolean
+  canPull: boolean
   onCommit: (message: string) => Promise<boolean>
   onCommitAndPush: (message: string) => Promise<boolean>
   onPush: () => void
@@ -869,11 +871,9 @@ const CommitBox = memo(function CommitBox({
             disabled={!configured || busy !== null || !canPush}
             onClick={onPush}
             title={
-              !status?.upstream
-                ? 'Publish this branch and set its upstream'
-                : status.ahead === 0
-                  ? 'Nothing to push'
-                  : 'Push local commits to upstream'
+              status && status.ahead > 0
+                ? `Push ${status.ahead} commit${status.ahead === 1 ? '' : 's'} to GitHub`
+                : 'Nothing to push'
             }
           >
             Push
@@ -888,14 +888,12 @@ const CommitBox = memo(function CommitBox({
             className="flex-1 sm:flex-none"
             leftIcon={<Download className="h-4 w-4" />}
             isLoading={busy === 'Pulled'}
-            disabled={!configured || busy !== null || !status?.upstream}
+            disabled={!configured || busy !== null || !canPull}
             onClick={onPull}
             title={
-              !status?.upstream
-                ? 'No upstream set for this branch'
-                : status.behind > 0
-                  ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'}`
-                  : 'Pull latest from upstream'
+              status && status.behind > 0
+                ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'} from upstream`
+                : 'Nothing to pull'
             }
           >
             Pull
@@ -1031,16 +1029,15 @@ function GitPanel({
   const changes = useMemo(() => status?.changes ?? [], [status])
   const staged = useMemo(() => changes.filter((c) => c.staged), [changes])
   const unstaged = useMemo(() => changes.filter((c) => !c.staged), [changes])
-  // Push whenever the branch is ahead of its upstream, OR when it has no
-  // upstream yet (the backend publishes the branch and sets tracking with
-  // `git push -u`). Pull only requires an upstream — the backend runs `git
-  // pull` which fetches first, so a stale behind count (the local tracking
-  // ref updates only on fetch/pull) can never deadlock syncing.
-  const canPush = status
-    ? status.upstream !== null
-      ? status.ahead > 0
-      : true
-    : false
+  // Push only when there are actual unpushed commits (status.ahead counts the
+  // commits ahead of the tracked upstream; it is 0 when there is no upstream).
+  // The Push action goes through the GitHub REST API (like /installer and
+  // /push), so it needs a tracked branch to know where to push.
+  const canPush = status ? status.ahead > 0 : false
+
+  // Pull only when there are actual incoming commits to fetch + merge
+  // (status.behind counts the commits the tracked upstream is ahead of).
+  const canPull = status ? status.behind > 0 : false
 
   // Stable per-action handlers so memoized rows skip re-rendering on keystrokes
   // and while only the busy spinner animates.
@@ -1302,6 +1299,7 @@ function GitPanel({
           busy={busy}
           changesLength={changes.length}
           canPush={canPush}
+          canPull={canPull}
           onCommit={handleCommit}
           onCommitAndPush={handleCommitAndPush}
           onPush={handlePush}

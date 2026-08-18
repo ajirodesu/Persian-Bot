@@ -418,6 +418,178 @@ export async function pushFilesToGitHub(
 }
 
 /**
+ * A file entry to write inside a pushed commit (the Git tab's API push). The
+ * local git blob SHA is content-addressed, so re-uploading the raw content
+ * produces the SAME blob SHA on GitHub — which is what lets the recreation of
+ * local commits keep their exact SHAs when author/committer/parents match.
+ */
+export interface GitHubCommitFileInput {
+  /** Repository-relative path, e.g. `packages/cat-bot/src/app/commands/ping.ts`. */
+  path: string;
+  /** Raw file content (text or binary). */
+  content: Buffer;
+  /** Git blob mode — defaults to `100644` (a `100755` executable stays executable). */
+  mode?: string | undefined;
+}
+
+/**
+ * One commit to recreate on GitHub. Carries the author/committer from the local
+ * commit so the recreated object hashes to the SAME SHA when the history is
+ * linear — making the API push indistinguishable from a real `git push`.
+ */
+export interface GitHubCommitInput {
+  /** Full commit message (subject + body). */
+  message: string;
+  author?: { name: string; email: string; date: string } | undefined;
+  committer?: { name: string; email: string; date: string } | undefined;
+  /** Files to add or update relative to the parent commit. */
+  files: GitHubCommitFileInput[];
+  /** Paths present in the parent commit that must be removed. */
+  deletions: string[];
+}
+
+export interface GitHubPushResult {
+  commitSha: string;
+  commitUrl: string;
+  /** Number of commits pushed. */
+  pushedCount: number;
+}
+
+/**
+ * Pushes a linear series of commits onto `branch` via the Git Data API —
+ * the GitHub-API equivalent of a `git push`, used by the Admin Git tab so a
+ * managed host (Render/Railway, where git push credentials don't exist) can
+ * push its local commits exactly like /installer and /push do.
+ *
+ * Safety:
+ *   * `expectedTipSha` must match GitHub's current branch tip — otherwise the
+ *     push refuses up front (the remote moved since the last fetch). This is
+ *     the API analogue of git's non-fast-forward rejection, and it guarantees
+ *     the recreated commits are built on top of the REAL remote history.
+ *   * The branch ref fast-forwards only after every commit is created.
+ */
+export async function pushCommitsToGitHub(
+  config: GitHubConfig,
+  branch: string,
+  expectedTipSha: string,
+  commits: GitHubCommitInput[],
+): Promise<GitHubPushResult> {
+  if (commits.length === 0) {
+    throw new GitHubApiError(400, 'Nothing to push — no unpushed commits were provided.');
+  }
+  const api = createApi(config);
+  try {
+    // 0. The branch must still be exactly where we think it is.
+    const tipRes = await api.get(`/git/ref/heads/${encodeURIComponent(branch)}`);
+    const remoteTip: unknown = tipRes.data?.object?.sha;
+    if (typeof remoteTip !== 'string' || remoteTip === '') {
+      throw new GitHubApiError(502, `Could not resolve branch "${branch}" on GitHub.`);
+    }
+    if (remoteTip !== expectedTipSha) {
+      throw new GitHubApiError(
+        409,
+        `The branch \`${branch}\` moved on GitHub since the last fetch (remote is ` +
+          `\`${remoteTip.slice(0, 7)}\`, expected \`${expectedTipSha.slice(0, 7)}\`). ` +
+          'Fetch or pull first, then push again.',
+      );
+    }
+
+    let parentSha = remoteTip;
+    let baseTreeSha: string | null = null;
+    let lastSha = parentSha;
+
+    for (const commit of commits) {
+      // 1. One blob per changed file (parallel).
+      const blobShas = await Promise.all(
+        commit.files.map(async (file) => {
+          const blobRes = await api.post('/git/blobs', {
+            content: file.content.toString('base64'),
+            encoding: 'base64',
+          });
+          const sha: unknown = blobRes.data?.sha;
+          if (typeof sha !== 'string') {
+            throw new GitHubApiError(502, 'GitHub did not return a blob SHA.');
+          }
+          return sha;
+        }),
+      );
+
+      // 2. Base tree = the tree of the parent commit (fetched once).
+      if (baseTreeSha === null) {
+        const headRes = await api.get(`/git/commits/${encodeURIComponent(parentSha)}`);
+        const tree: unknown = headRes.data?.tree?.sha;
+        if (typeof tree !== 'string') {
+          throw new GitHubApiError(502, 'GitHub did not return the parent tree SHA.');
+        }
+        baseTreeSha = tree;
+      }
+
+      // 3. New tree layering the commit's changes (deletes use `sha: null`).
+      const entries: Array<Record<string, unknown>> = [
+        ...commit.files.map((file, i) => ({
+          path: file.path,
+          mode: file.mode ?? '100644',
+          type: 'blob',
+          sha: blobShas[i],
+        })),
+        ...commit.deletions.map((path) => ({
+          path,
+          mode: '100644',
+          type: 'blob',
+          sha: null,
+        })),
+      ];
+
+      let newTreeSha: string = baseTreeSha;
+      if (entries.length > 0) {
+        const treeRes = await api.post('/git/trees', {
+          base_tree: baseTreeSha,
+          tree: entries,
+        });
+        const treeSha: unknown = treeRes.data?.sha;
+        if (typeof treeSha !== 'string') {
+          throw new GitHubApiError(502, 'GitHub did not return the new tree SHA.');
+        }
+        newTreeSha = treeSha;
+      }
+
+      // 4. Recreate the commit with its original author/committer so the object
+      //    hashes to the same SHA as the local one (when history is linear).
+      const commitBody: Record<string, unknown> = {
+        message: commit.message,
+        tree: newTreeSha,
+        parents: [parentSha],
+      };
+      if (commit.author) commitBody['author'] = commit.author;
+      if (commit.committer) commitBody['committer'] = commit.committer;
+
+      const commitRes = await api.post('/git/commits', commitBody);
+      const newSha: unknown = commitRes.data?.sha;
+      if (typeof newSha !== 'string') {
+        throw new GitHubApiError(502, 'GitHub did not return the commit SHA.');
+      }
+      parentSha = newSha;
+      baseTreeSha = newTreeSha;
+      lastSha = newSha;
+    }
+
+    // 5. Fast-forward the branch ref once every commit exists.
+    await api.patch(`/git/refs/heads/${encodeURIComponent(branch)}`, {
+      sha: lastSha,
+      force: false,
+    });
+
+    return {
+      commitSha: lastSha,
+      commitUrl: `https://github.com/${config.owner}/${config.repo}/commit/${lastSha}`,
+      pushedCount: commits.length,
+    };
+  } catch (err) {
+    throw enrichWriteError(err, config);
+  }
+}
+
+/**
  * Single-file convenience wrapper matching the reference /ghp command's
  * `pushFileToGithub(buffer, repoPath, commitMessage)` API — lands one file on
  * the repo as a commit and returns its link. `branch` defaults to the repo's

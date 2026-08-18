@@ -14,6 +14,7 @@
 import type { Request, Response } from 'express';
 import { requireAdmin } from '@/server/validators/auth-session.validator.js';
 import { RepoFileManagerError } from '@/server/lib/local-git.lib.js';
+import { GitHubApiError } from '@/server/lib/github-contents.lib.js';
 import {
   createFile,
   createFolder,
@@ -307,7 +308,7 @@ class AdminFileManagerController {
 
   /** Central error mapping — repo errors keep their status; the rest become 500. */
   #handleError(res: Response, err: unknown, fallback: string): void {
-    if (err instanceof RepoFileManagerError) {
+    if (err instanceof RepoFileManagerError || err instanceof GitHubApiError) {
       res.status(err.status).json({ error: err.message });
       return;
     }

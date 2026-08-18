@@ -15,6 +15,12 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { env } from '@/engine/config/env.config.js';
+import {
+  getGitHubConfig,
+  pushCommitsToGitHub,
+  type GitHubCommitFileInput,
+  type GitHubCommitInput,
+} from './github-contents.lib.js';
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
@@ -512,38 +518,239 @@ export async function commitStaged(message: string): Promise<{ sha: string }> {
   }
 }
 
+// ── GitHub-API push (the Git tab's Push button) ───────────────────────────────
+
 /**
- * Pushes the current branch to its upstream. Returns git's output.
+ * The Git tab commits LOCALLY (git commit). The Push step used to run `git
+ * push`, which needs working git credentials on the host — the thing that
+ * breaks on Render/Railway (and that made the panel's Push silently fail). It
+ * now pushes through the GitHub REST API instead, exactly like /push and
+ * /installer (GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME), so a
+ * managed host can push without any git credentials.
  *
- * Pushes to the EXPLICIT upstream ref rather than a bare `git push`: under
- * git's default `push.default=simple`, a bare push refuses when the local
- * branch name differs from its upstream branch name (e.g. local `feature`
- * tracking `origin/main`), which made the panel's Push fail even though the
- * branch was ahead. When the branch has no upstream yet, publishes it and
- * sets the tracking ref (`git push -u`), so a newly-created branch can be
- * pushed from the panel instead of being stuck on "no upstream".
+ * The local unpushed commits are recreated on GitHub via the Git Data API —
+ * blobs are content-addressed, so re-uploading a local blob's content yields
+ * the SAME SHA on GitHub, and with the original author/committer carried over a
+ * linear history is recreated byte-identically (same commit SHAs).
  */
-export async function pushCurrent(): Promise<string> {
-  const upstream = await getUpstream();
-  if (upstream) {
-    const slash = upstream.indexOf('/');
-    const remote = slash === -1 ? 'origin' : upstream.slice(0, slash);
-    const branch = slash === -1 ? upstream : upstream.slice(slash + 1);
-    const out = await runGit(['push', remote, `HEAD:${branch}`]);
-    return out.trim();
+
+interface LsTreeEntry {
+  mode: string;
+  type: string;
+  sha: string;
+}
+
+/** Runs `git` and returns the raw output as a Buffer (for blob content). */
+function runGitBuffer(args: string[]): Promise<Buffer> {
+  const root = getRepoRootOrThrow();
+  return new Promise((resolvePromise, reject) => {
+    execFile(
+      'git',
+      args,
+      {
+        cwd: root,
+        env: { ...process.env },
+        maxBuffer: 128 * 1024 * 1024,
+        timeout: 180_000,
+        windowsHide: true,
+        encoding: 'buffer',
+      },
+      (err, stdout, stderr) => {
+        if (err && err.code !== 0) {
+          const detail = (stderr || stdout).toString().trim();
+          reject(
+            new RepoFileManagerError(
+              400,
+              detail || `git ${args[0] ?? ''} failed (${err.code})`,
+            ),
+          );
+          return;
+        }
+        resolvePromise(stdout);
+      },
+    );
+  });
+}
+
+/** Recursive path → entry map of a commit's TREE (the commit state, not the worktree). */
+async function lsTree(ref: string): Promise<Map<string, LsTreeEntry>> {
+  const out = await runGit(['ls-tree', '-r', '-z', ref]);
+  const map = new Map<string, LsTreeEntry>();
+  for (const part of out.split('\0')) {
+    if (!part) continue;
+    const tab = part.indexOf('\t');
+    if (tab === -1) continue;
+    const meta = part.slice(0, tab).split(' ');
+    const path = part.slice(tab + 1);
+    if (meta.length >= 3 && path) {
+      map.set(path, {
+        mode: meta[0] ?? '100644',
+        type: meta[1] ?? 'blob',
+        sha: meta[2] ?? '',
+      });
+    }
   }
-  // No upstream — publish the current branch and start tracking it so future
-  // pushes keep working without extra setup.
-  const res = await runGitProbe(['symbolic-ref', '--short', '-q', 'HEAD']);
-  if (res.code !== 0 || res.stdout.trim() === '') {
+  return map;
+}
+
+/** Raw content of a git blob object (binary-safe). */
+async function catBlob(sha: string): Promise<Buffer> {
+  return runGitBuffer(['cat-file', 'blob', sha]);
+}
+
+/**
+ * Files added/updated vs deleted when moving from `parentTree` to `commitTree`.
+ * Recreates exactly the commit's tree on GitHub: entries that changed get their
+ * new blob content, paths that vanished become deletions.
+ */
+async function changedBetween(
+  parentTree: Map<string, LsTreeEntry>,
+  commitTree: Map<string, LsTreeEntry>,
+): Promise<{ files: GitHubCommitFileInput[]; deletions: string[] }> {
+  const files: GitHubCommitFileInput[] = [];
+  for (const [path, entry] of commitTree) {
+    const parent = parentTree.get(path);
+    if (parent && parent.sha === entry.sha) continue;
+    // Submodules / non-blob entries can't be re-uploaded — leave them alone.
+    if (entry.type !== 'blob') continue;
+    files.push({ path, content: await catBlob(entry.sha), mode: entry.mode });
+  }
+  const deletions: string[] = [];
+  for (const path of parentTree.keys()) {
+    if (!commitTree.has(path)) deletions.push(path);
+  }
+  return { files, deletions };
+}
+
+/** Resolves a ref (e.g. `origin/main`) to its commit SHA, or throws. */
+async function resolveRefSha(ref: string): Promise<string> {
+  const res = await runGitProbe(['rev-parse', '--verify', `${ref}^{commit}`]);
+  if (res.code !== 0) {
     throw new RepoFileManagerError(
       400,
-      'Cannot push — HEAD is detached. Check out a branch first.',
+      `Cannot resolve \`${ref}\` to a commit — fetch the branch first.`,
     );
   }
-  const branch = res.stdout.trim();
-  const out = await runGit(['push', '-u', 'origin', branch]);
-  return out.trim();
+  const sha = res.stdout.trim();
+  if (!sha) {
+    throw new RepoFileManagerError(400, `Cannot resolve \`${ref}\` to a commit.`);
+  }
+  return sha;
+}
+
+interface CommitPushInfo {
+  message: string;
+  author: { name: string; email: string; date: string } | undefined;
+  committer: { name: string; email: string; date: string } | undefined;
+}
+
+/** Message + author/committer of one local commit (used to recreate it on GitHub). */
+async function commitPushInfo(sha: string): Promise<CommitPushInfo> {
+  const out = await runGit([
+    'show',
+    '-s',
+    '--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%B',
+    sha,
+  ]);
+  const parts = out.split('\x1f');
+  const authorName = parts.shift() ?? '';
+  const authorEmail = parts.shift() ?? '';
+  const authorDate = parts.shift() ?? '';
+  const committerName = parts.shift() ?? '';
+  const committerEmail = parts.shift() ?? '';
+  const committerDate = parts.shift() ?? '';
+  const message = parts.join('\x1f').trim();
+  return {
+    message: message === '' ? 'push' : message,
+    author:
+      authorName && authorEmail
+        ? { name: authorName, email: authorEmail, date: authorDate }
+        : undefined,
+    committer:
+      committerName && committerEmail
+        ? { name: committerName, email: committerEmail, date: committerDate }
+        : undefined,
+  };
+}
+
+/**
+ * Builds the API input for every commit in `upstreamRef..HEAD` (oldest first),
+ * reproducing each commit's tree by diffing consecutive local trees. Merge
+ * commits are linearized onto their first parent (the tree is still exact).
+ */
+async function collectPushCommits(upstreamRef: string): Promise<GitHubCommitInput[]> {
+  const shas = (await runGit(['rev-list', '--reverse', `${upstreamRef}..HEAD`]))
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+
+  const commits: GitHubCommitInput[] = [];
+  let parentTree = await lsTree(upstreamRef);
+  for (const sha of shas) {
+    const commitTree = await lsTree(sha);
+    const { files, deletions } = await changedBetween(parentTree, commitTree);
+    const info = await commitPushInfo(sha);
+    const input: GitHubCommitInput = {
+      message: info.message,
+      files,
+      deletions,
+    };
+    if (info.author) input.author = info.author;
+    if (info.committer) input.committer = info.committer;
+    commits.push(input);
+    parentTree = commitTree;
+  }
+  return commits;
+}
+
+/** CAS-updates the remote-tracking ref so the Git tab shows 0 ahead after a push. */
+async function tryUpdateTrackingRef(
+  remote: string,
+  branch: string,
+  oldSha: string,
+  newSha: string,
+): Promise<void> {
+  await runGitProbe([
+    'update-ref',
+    `refs/remotes/${remote}/${branch}`,
+    newSha,
+    oldSha,
+  ]);
+}
+
+/**
+ * Pushes the current branch's unpushed commits to GitHub via the REST API.
+ * Refuses when the branch has no upstream or the remote moved since the last
+ * fetch. On success the local remote-tracking ref is updated so the panel's
+ * ahead count returns to zero without needing a fetch.
+ */
+export async function pushCurrent(): Promise<string> {
+  const config = getGitHubConfig();
+
+  const upstream = await getUpstream();
+  if (!upstream) {
+    throw new RepoFileManagerError(
+      400,
+      'Cannot push — this branch has no upstream. Commit a change on a branch that tracks a remote branch, then push.',
+    );
+  }
+  const slash = upstream.indexOf('/');
+  const remote = slash === -1 ? 'origin' : upstream.slice(0, slash);
+  const branch = slash === -1 ? upstream : upstream.slice(slash + 1);
+
+  const upstreamSha = await resolveRefSha(upstream);
+  const commits = await collectPushCommits(upstream);
+  if (commits.length === 0) {
+    throw new RepoFileManagerError(
+      400,
+      'Nothing to push — there are no unpushed commits.',
+    );
+  }
+
+  const result = await pushCommitsToGitHub(config, branch, upstreamSha, commits);
+  await tryUpdateTrackingRef(remote, branch, upstreamSha, result.commitSha);
+
+  return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch} (${result.commitSha.slice(0, 7)})`;
 }
 
 /** Pulls the latest changes for the current branch from its upstream. */
