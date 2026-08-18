@@ -87,7 +87,6 @@ export interface UseAdminFileManagerReturn {
   stagePaths: (paths: string[]) => Promise<void>
   stageAll: () => Promise<void>
   unstagePaths: (paths: string[]) => Promise<void>
-  commitChanges: (message: string) => Promise<{ sha?: string } | null>
   commitAndPush: (message: string) => Promise<{ sha?: string } | null>
   pushChanges: () => Promise<{ message?: string } | null>
   pullChanges: () => Promise<{ message?: string } | null>
@@ -527,24 +526,17 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [refreshGit],
   )
 
-  /** Commits the staged changes, then refreshes status + history. */
-  const commitChanges = useCallback(
-    async (message: string): Promise<{ sha?: string } | null> => {
-      const data = await adminFileManagerService.gitCommit(message)
-      await refreshGit()
-      await loadHistory()
-      closeDiff()
-      return data
-    },
-    [refreshGit, loadHistory, closeDiff],
-  )
-
   /** Pushes the current branch to its upstream, then refreshes status. */
   const pushChanges = useCallback(
     async (): Promise<{ message?: string } | null> => {
-      const data = await adminFileManagerService.gitPush()
-      await refreshGit()
-      return data
+      try {
+        const data = await adminFileManagerService.gitPush()
+        return data
+      } finally {
+        // Always re-read status so a failed push leaves the panel in a state
+        // where the same action can be retried (e.g. unpushed commits shown).
+        await refreshGit()
+      }
     },
     [refreshGit],
   )
@@ -572,12 +564,17 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [refreshGit],
   )
 
-  /** Commits the staged changes, then pushes — Replit-style single action. */
+  /** Commits the staged changes, then pushes — one-click action. */
   const commitAndPush = useCallback(
     async (message: string): Promise<{ sha?: string } | null> => {
       const data = await adminFileManagerService.gitCommit(message)
-      await adminFileManagerService.gitPush()
-      await refreshGit()
+      try {
+        await adminFileManagerService.gitPush()
+      } finally {
+        // Even if the push fails after a successful commit, re-read status so
+        // the commit is visible and the push can be retried immediately.
+        await refreshGit()
+      }
       await loadHistory()
       closeDiff()
       return data
@@ -795,7 +792,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     stagePaths,
     stageAll,
     unstagePaths,
-    commitChanges,
     commitAndPush,
     pushChanges,
     pullChanges,

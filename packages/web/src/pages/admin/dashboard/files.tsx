@@ -759,9 +759,7 @@ const CommitBox = memo(function CommitBox({
   changesLength,
   canPush,
   canPull,
-  onCommit,
   onCommitAndPush,
-  onPush,
   onPull,
 }: {
   ref?: Ref<HTMLDivElement>
@@ -771,22 +769,34 @@ const CommitBox = memo(function CommitBox({
   changesLength: number
   canPush: boolean
   canPull: boolean
-  onCommit: (message: string) => Promise<boolean>
   onCommitAndPush: (message: string) => Promise<boolean>
-  onPush: () => void
   onPull: () => void
 }) {
   const [commitMsg, setCommitMsg] = useState('')
 
   // Keeps the whole GitPanel from re-rendering on every keystroke — only this
   // box re-renders while typing, so scrolling stays smooth on mobile.
-  const handleSubmit = async () => {
-    if (await onCommit(commitMsg)) setCommitMsg('')
-  }
-
   const handleCommitAndPushSubmit = async () => {
     if (await onCommitAndPush(commitMsg)) setCommitMsg('')
   }
+
+  // One button does both: commit the pending changes (with the message above)
+  // and push to GitHub. When there are no changes to commit it acts as a plain
+  // push of the unpushed commits — so a push that failed once can always be
+  // retried from this same button.
+  const canCommitAndPush =
+    !!status?.upstream &&
+    (changesLength > 0 ? commitMsg.trim() !== '' : canPush)
+
+  const commitAndPushTitle = !status?.upstream
+    ? 'No upstream set for this branch'
+    : changesLength > 0 && !commitMsg.trim()
+      ? 'Type a commit message to commit and push'
+      : changesLength > 0
+        ? 'Commit the changes and push to GitHub'
+        : canPush
+          ? `Push ${status.ahead} unpushed commit${status.ahead === 1 ? '' : 's'} to GitHub`
+          : 'Nothing to commit or push'
 
   return (
     <div
@@ -811,7 +821,7 @@ const CommitBox = memo(function CommitBox({
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault()
-            void handleSubmit()
+            void handleCommitAndPushSubmit()
           }
         }}
         placeholder="Commit message"
@@ -823,85 +833,42 @@ const CommitBox = memo(function CommitBox({
         className="w-full resize-none rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-3 py-2 font-mono text-[16px] leading-6 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:px-2 sm:py-1.5 sm:text-label-sm"
       />
       <div className="flex flex-col gap-1.5">
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-          <Button
-            variant="filled"
-            color="primary"
-            size="sm"
-            className="w-full sm:w-auto"
-            isLoading={busy === 'Committed'}
-            disabled={
-              !configured ||
-              busy !== null ||
-              changesLength === 0 ||
-              !commitMsg.trim()
-            }
-            onClick={() => void handleSubmit()}
-          >
-            Commit
-          </Button>
-          <Button
-            variant="filled"
-            color="secondary"
-            size="sm"
-            className="w-full sm:w-auto"
-            leftIcon={<GitBranchPlus className="h-4 w-4" />}
-            isLoading={busy === 'Committed & pushed'}
-            disabled={
-              !configured ||
-              busy !== null ||
-              changesLength === 0 ||
-              !commitMsg.trim() ||
-              !status?.upstream
-            }
-            title="Commit the staged changes and push to upstream"
-            onClick={() => void handleCommitAndPushSubmit()}
-          >
-            Commit &amp; push
-          </Button>
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Button
-            variant="tonal"
-            color="secondary"
-            size="sm"
-            className="flex-1 sm:flex-none"
-            leftIcon={<Upload className="h-4 w-4" />}
-            isLoading={busy === 'Pushed'}
-            disabled={!configured || busy !== null || !canPush}
-            onClick={onPush}
-            title={
-              status && status.ahead > 0
-                ? `Push ${status.ahead} commit${status.ahead === 1 ? '' : 's'} to GitHub`
-                : 'Nothing to push'
-            }
-          >
-            Push
-            {status?.upstream && status.ahead > 0
-              ? ` (${status.ahead} ahead)`
-              : ''}
-          </Button>
-          <Button
-            variant="tonal"
-            color="secondary"
-            size="sm"
-            className="flex-1 sm:flex-none"
-            leftIcon={<Download className="h-4 w-4" />}
-            isLoading={busy === 'Pulled'}
-            disabled={!configured || busy !== null || !canPull}
-            onClick={onPull}
-            title={
-              status && status.behind > 0
-                ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'} from upstream`
-                : 'Nothing to pull'
-            }
-          >
-            Pull
-            {status?.upstream && status.behind > 0
-              ? ` (${status.behind} behind)`
-              : ''}
-          </Button>
-        </div>
+        <Button
+          variant="filled"
+          color="secondary"
+          size="sm"
+          className="w-full"
+          leftIcon={<GitBranchPlus className="h-4 w-4" />}
+          isLoading={busy === 'Committed & pushed'}
+          disabled={!configured || busy !== null || !canCommitAndPush}
+          title={commitAndPushTitle}
+          onClick={() => void handleCommitAndPushSubmit()}
+        >
+          Commit &amp; push
+          {status?.upstream && status.ahead > 0 && changesLength === 0
+            ? ` (${status.ahead} ahead)`
+            : ''}
+        </Button>
+        <Button
+          variant="tonal"
+          color="secondary"
+          size="sm"
+          className="w-full"
+          leftIcon={<Download className="h-4 w-4" />}
+          isLoading={busy === 'Pulled'}
+          disabled={!configured || busy !== null || !canPull}
+          onClick={onPull}
+          title={
+            status && status.behind > 0
+              ? `Pull ${status.behind} incoming commit${status.behind === 1 ? '' : 's'} from upstream`
+              : 'Nothing to pull'
+          }
+        >
+          Pull
+          {status?.upstream && status.behind > 0
+            ? ` (${status.behind} behind)`
+            : ''}
+        </Button>
       </div>
     </div>
   )
@@ -1084,51 +1051,31 @@ function GitPanel({
     [run, files],
   )
 
-  const handleCommit = useCallback(
-    (message: string): Promise<boolean> => {
-      const msg = message.trim()
-      if (!msg || changes.length === 0 || busy !== null) {
-        return Promise.resolve(false)
-      }
-      return run('Committed', async () => {
-        if (staged.length === 0) await files.stageAll()
-        await files.commitChanges(msg)
-      })
-    },
-    [changes.length, staged.length, busy, run, files],
-  )
-
-  const handlePush = useCallback(
-    () => void run('Pushed', () => files.pushChanges()),
-    [run, files],
-  )
-
   const handlePull = useCallback(
     () => void run('Pulled', () => files.pullChanges()),
     [run, files],
   )
 
-  // VS Code-style single action: commit the staged changes, then push. Enabled
-  // when a commit is possible (changes + message) AND the branch tracks an
-  // upstream (so the push has somewhere to go) — unlike the bare Push button,
-  // it does NOT require existing unpushed commits.
+  // The single "Commit & push" action. With pending changes it stages them
+  // (if needed), commits, then pushes to GitHub via the REST API. With no
+  // changes to commit it acts as a plain push of the unpushed commits, so a
+  // push that failed once is always retryable from this same button.
   const handleCommitAndPush = useCallback(
     (message: string): Promise<boolean> => {
       const msg = message.trim()
-      if (
-        !msg ||
-        changes.length === 0 ||
-        busy !== null ||
-        !status?.upstream
-      ) {
-        return Promise.resolve(false)
-      }
+      if (busy !== null || !status?.upstream) return Promise.resolve(false)
+      if (changes.length > 0 && !msg) return Promise.resolve(false)
+      if (changes.length === 0 && !canPush) return Promise.resolve(false)
       return run('Committed & pushed', async () => {
-        if (staged.length === 0) await files.stageAll()
-        await files.commitAndPush(msg)
+        if (changes.length > 0) {
+          if (staged.length === 0) await files.stageAll()
+          await files.commitAndPush(msg)
+        } else {
+          await files.pushChanges()
+        }
       })
     },
-    [changes.length, staged.length, busy, status?.upstream, run, files],
+    [changes.length, staged.length, busy, status?.upstream, canPush, run, files],
   )
 
   const discardPath = useCallback(
@@ -1308,9 +1255,7 @@ function GitPanel({
           changesLength={changes.length}
           canPush={canPush}
           canPull={canPull}
-          onCommit={handleCommit}
           onCommitAndPush={handleCommitAndPush}
-          onPush={handlePush}
           onPull={handlePull}
         />
 
