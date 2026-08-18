@@ -142,15 +142,12 @@ export const meta: CommandMeta = {
 // ── Command Handler ───────────────────────────────────────────────────────
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args } = ctx;
+  const { chat, args, usage } = ctx;
 
   const query = args.join(' ').trim();
 
   if (!query) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: 'Please provide a search query.\n» `/npm <package-name>`\n_Example: `/npm express`_',
-    });
+    await usage();
     return;
   }
 

@@ -40,6 +40,7 @@ export const onCommand = async ({
   user,
   event,
   args,
+  usage,
 }: AppCtx): Promise<void> => {
   // 1. Guard: Ensure this is a group thread
   // Single-user DMs cannot have participants removed.
@@ -69,11 +70,7 @@ export const onCommand = async ({
   }
 
   if (!targetID) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message:
-        '❌ Please provide a user ID, @mention the user, or reply to their message to kick them.',
-    });
+    await usage();
     return;
   }
 

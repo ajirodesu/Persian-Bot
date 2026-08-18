@@ -153,10 +153,7 @@ export const onCommand = async ({
   if (sub === 'ban') {
     const tid = args[1];
     if (!tid) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: ${prefix}thread ban <tid> [reason]`,
-      });
+      await usage();
       return;
     }
     // Remaining args after tid are joined as the reason so multi-word reasons work
@@ -175,10 +172,7 @@ export const onCommand = async ({
   if (sub === 'unban') {
     const tid = args[1];
     if (!tid) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: ${prefix}thread unban <tid>`,
-      });
+      await usage();
       return;
     }
     await unbanThread(userId, platform, sessionId, tid);
@@ -277,10 +271,7 @@ export const onCommand = async ({
   if (sub === 'search') {
     const query = args.slice(1).join(' ').trim();
     if (!query) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: ${prefix}thread search <query|id>`,
-      });
+      await usage();
       return;
     }
 

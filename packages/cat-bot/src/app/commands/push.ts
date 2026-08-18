@@ -9,11 +9,13 @@
  * directly, it writes to the working tree and runs `git add/commit/push`,
  * exactly like a human using the Git tab would.
  *
- * Flow (onReply — see examples/commands/example_reply.ts):
- *   Admin: /push
- *   Bot:   📦 Reply with a .zip of the files to push.
- *   Admin: [quotes the bot's message, attaches a .zip file]
+ * Flow (single-step, no onReply state):
+ *   Admin: [quotes a message carrying a .zip, types] /push Fix the login bug
  *   Bot:   ✅ Pushed 7 file(s) — `a1b2c3d`
+ *
+ * The command ONLY runs when the user replies to a message that carries a
+ * .zip file — the zip is read off the replied-to message's attachments. The
+ * text after the command name is used verbatim as the commit message.
  *
  * Unwrap convention:
  *   Zips are expected to already use monorepo-relative paths (e.g.
@@ -70,10 +72,6 @@ interface RawAttachment {
   name?: string | null;
 }
 
-const STATE = {
-  awaiting_zip: 'awaiting_zip',
-} as const;
-
 const MAX_ZIP_BYTES = 25 * 1024 * 1024; // 25 MB — plenty for a file-diff drop
 const MAX_ENTRY_BYTES = 5 * 1024 * 1024; // guards a single runaway file
 
@@ -86,8 +84,8 @@ function looksLikeZipName(name: string | null | undefined): boolean {
 }
 
 /**
- * Finds the attachment on the triggering reply that is (or is most likely)
- * the .zip the admin meant to push.
+ * Finds the attachment that is (or is most likely) the .zip the admin meant
+ * to push.
  *
  * Discord/Fluxer attachments carry a real `filename`/`name`, so those are
  * matched directly. Telegram documents never carry a filename at all — only
@@ -98,8 +96,7 @@ function looksLikeZipName(name: string | null | undefined): boolean {
  * that runs right after download is the real gatekeeper for "is this
  * actually a zip", so this resolver is intentionally permissive.
  */
-function findZipAttachment(event: Record<string, unknown>): RawAttachment | null {
-  const attachments = (event['attachments'] as RawAttachment[] | undefined) ?? [];
+function findZipAttachment(attachments: RawAttachment[]): RawAttachment | null {
   if (attachments.length === 0) return null;
 
   const byName = attachments.find(
@@ -120,8 +117,7 @@ function findZipAttachment(event: Record<string, unknown>): RawAttachment | null
 }
 
 /** True when the reply has an attachment that never resolved a downloadable url. */
-function hasUnresolvedAttachment(event: Record<string, unknown>): boolean {
-  const attachments = (event['attachments'] as RawAttachment[] | undefined) ?? [];
+function hasUnresolvedAttachment(attachments: RawAttachment[]): boolean {
   return attachments.some((a) => a && !a.url);
 }
 
@@ -213,21 +209,22 @@ async function extractZipToRepo(buffer: Buffer): Promise<PushSummary> {
 export const meta: CommandMeta = {
   name: 'push',
   aliases: ['gitpush'] as string[],
-  version: '1.0.1',
+  version: '1.1.0',
   role: Role.SYSTEM_ADMIN,
   author: 'AjiroDesu',
-  description: 'Unzip a replied .zip straight into the repo and commit + push it.',
+  description:
+    'Reply to a .zip message and push it: unzips the replied .zip into the repo and commits + pushes with your message.',
   category: 'System Admin',
-  usage: '',
+  usage: '[message]',
   cooldown: 10,
   hasPrefix: true,
   // Real commits against the live repo — never expose this to the in-app Chat Room.
   platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
 };
 
-// ── Command Entry Point — step 1: ask for the zip ──────────────────────────────
+// ── Command Entry Point — single step: reply → unzip → commit → push ───────────
 
-export const onCommand = async ({ chat, state }: AppCtx): Promise<void> => {
+export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<void> => {
   // Fail fast if there's no git checkout configured — no point collecting a
   // zip the command can't do anything with.
   try {
@@ -241,122 +238,98 @@ export const onCommand = async ({ chat, state }: AppCtx): Promise<void> => {
     return;
   }
 
-  const messageID = await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: [
-      '📦 **Push files to GitHub**',
-      'Reply to this message with a **.zip** of the files to push.',
-      '',
-      '_Paths inside the zip should already be monorepo-relative (e.g._',
-      '_`packages/cat-bot/src/app/commands/foo.ts`). A single wrapper folder_',
-      '_around everything is stripped automatically._',
-    ].join('\n'),
-  });
+  const commitMessage = args.join(' ').trim();
+  if (!commitMessage) {
+    await usage();
+    return;
+  }
 
-  if (!messageID) {
+  // The command only works when the user replies to a message carrying a .zip.
+  const messageReply = event['messageReply'] as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const replyAttachments = (messageReply?.['attachments'] as RawAttachment[] | undefined) ?? [];
+  const zipAttachment = findZipAttachment(replyAttachments);
+  if (!zipAttachment?.url) {
+    const hint = hasUnresolvedAttachment(replyAttachments)
+      ? ' The file attached may be too large to download (Telegram bots can only fetch files up to 20 MB via the Bot API).'
+      : '';
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: '❌ Push unavailable: this platform did not return a message ID from replyMessage().',
+      message:
+        `❌ **No .zip found.** This command only works when you reply to a message ` +
+        `carrying a \`.zip\` file — reply to one with \`/push <commit message>\`.${hint}`,
     });
     return;
   }
 
-  state.create({
-    id: state.generateID({ id: String(messageID) }),
-    state: STATE.awaiting_zip,
-    context: {},
-  });
-};
+  try {
+    const download = await axios.get<ArrayBuffer>(zipAttachment.url, {
+      responseType: 'arraybuffer',
+      maxContentLength: MAX_ZIP_BYTES,
+      maxBodyLength: MAX_ZIP_BYTES,
+    });
+    const buffer = Buffer.from(download.data);
+    if (buffer.length < 4 || buffer.toString('ascii', 0, 2) !== 'PK') {
+      throw new RepoFileManagerError(400, 'That file is not a valid zip archive.');
+    }
 
-// ── Reply Handler — step 2: unzip, commit, push ─────────────────────────────────
-
-export const onReply = {
-  [STATE.awaiting_zip]: async ({ chat, session, state, event, db }: AppCtx): Promise<void> => {
-    state.delete(session.id);
-
-    const zipAttachment = findZipAttachment(event);
-    if (!zipAttachment?.url) {
-      const hint = hasUnresolvedAttachment(event)
-        ? ' The file attached may be too large to download (Telegram bots can only fetch files up to 20 MB via the Bot API).'
-        : '';
+    const { written, skipped } = await extractZipToRepo(buffer);
+    if (written.length === 0) {
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
-        message: `❌ No \`.zip\` file found on that reply — run \`/push\` again and attach one.${hint}`,
+        message: '❌ Nothing valid to write — every entry in the zip was skipped.',
       });
       return;
     }
 
-    try {
-      const download = await axios.get<ArrayBuffer>(zipAttachment.url, {
-        responseType: 'arraybuffer',
-        maxContentLength: MAX_ZIP_BYTES,
-        maxBodyLength: MAX_ZIP_BYTES,
-      });
-      const buffer = Buffer.from(download.data);
-      if (buffer.length < 4 || buffer.toString('ascii', 0, 2) !== 'PK') {
-        throw new RepoFileManagerError(400, 'That file is not a valid zip archive.');
-      }
+    await stagePaths(written);
 
-      const { written, skipped } = await extractZipToRepo(buffer);
-      if (written.length === 0) {
+    let sha: string;
+    try {
+      ({ sha } = await commitStaged(commitMessage));
+    } catch (err) {
+      if (err instanceof RepoFileManagerError && /nothing staged/i.test(err.message)) {
         await chat.replyMessage({
           style: MessageStyle.MARKDOWN,
-          message: '❌ Nothing valid to write — every entry in the zip was skipped.',
+          message: `ℹ️ Extracted ${written.length} file(s), but the content exactly matches what's already committed — nothing to push.`,
         });
         return;
       }
-
-      await stagePaths(written);
-
-      const senderID = event['senderID'] as string | undefined;
-      const adminName = senderID ? await db.users.getName(senderID).catch(() => senderID) : 'system admin';
-      const commitMessage = `push: ${written.length} file(s) via /push by ${adminName}`;
-
-      let sha: string;
-      try {
-        ({ sha } = await commitStaged(commitMessage));
-      } catch (err) {
-        if (err instanceof RepoFileManagerError && /nothing staged/i.test(err.message)) {
-          await chat.replyMessage({
-            style: MessageStyle.MARKDOWN,
-            message: `ℹ️ Extracted ${written.length} file(s), but the content exactly matches what's already committed — nothing to push.`,
-          });
-          return;
-        }
-        throw err;
-      }
-
-      let pushOutput = '';
-      let pushError: string | null = null;
-      try {
-        pushOutput = await pushCurrent();
-      } catch (err) {
-        pushError = (err as { message?: string }).message ?? 'push failed';
-      }
-
-      const lines = [
-        pushError ? '⚠️ **Committed, but push failed**' : '✅ **Pushed to GitHub**',
-        `📝 ${written.length} file(s) written${skipped.length ? `, ${skipped.length} skipped` : ''} · commit \`${sha || '(unknown)'}\``,
-        '```',
-        written.slice(0, 20).join('\n') + (written.length > 20 ? `\n… +${written.length - 20} more` : ''),
-        '```',
-      ];
-      if (skipped.length) {
-        lines.push(`⏭️ Skipped: ${skipped.slice(0, 10).join(', ')}${skipped.length > 10 ? ', …' : ''}`);
-      }
-      if (pushError) {
-        lines.push(`⚠️ \`${pushError}\` — the commit is local; push manually from the Git tab.`);
-      } else if (pushOutput) {
-        lines.push(`\n_${pushOutput}_`);
-      }
-
-      await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: lines.join('\n') });
-    } catch (err) {
-      const error = err as { message?: string };
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `⚠️ **Push failed:** \`${error.message ?? 'Unknown error'}\``,
-      });
+      throw err;
     }
-  },
+
+    let pushOutput = '';
+    let pushError: string | null = null;
+    try {
+      pushOutput = await pushCurrent();
+    } catch (err) {
+      pushError = (err as { message?: string }).message ?? 'push failed';
+    }
+
+    const lines = [
+      pushError ? '⚠️ **Committed, but push failed**' : '✅ **Pushed to GitHub**',
+      `📝 ${written.length} file(s) written${skipped.length ? `, ${skipped.length} skipped` : ''} · commit \`${sha || '(unknown)'}\``,
+      '```',
+      written.slice(0, 20).join('\n') + (written.length > 20 ? `\n… +${written.length - 20} more` : ''),
+      '```',
+    ];
+    if (skipped.length) {
+      lines.push(`⏭️ Skipped: ${skipped.slice(0, 10).join(', ')}${skipped.length > 10 ? ', …' : ''}`);
+    }
+    if (pushError) {
+      lines.push(`⚠️ \`${pushError}\` — the commit is local; push manually from the Git tab.`);
+    } else if (pushOutput) {
+      lines.push(`\n_${pushOutput}_`);
+    }
+
+    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: lines.join('\n') });
+  } catch (err) {
+    const error = err as { message?: string };
+    await chat.replyMessage({
+      style: MessageStyle.MARKDOWN,
+      message: `⚠️ **Push failed:** \`${error.message ?? 'Unknown error'}\``,
+    });
+  }
 };

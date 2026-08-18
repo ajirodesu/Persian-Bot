@@ -38,10 +38,10 @@ interface HfModel {
 }
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args } = ctx;
+  const { chat, args, usage } = ctx;
   const query = args.join(' ').trim();
   if (!query) {
-    await chat.replyMessage({ message: 'Please provide a search query.' });
+    await usage();
     return;
   }
 

@@ -275,7 +275,7 @@ async function runShotiV3Add(ctx: AppCtx, tiktokUrl: string): Promise<void> {
   if (!isValidHttpUrl(tiktokUrl)) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: '⚠️ That doesn\'t look like a valid URL. Usage: `shotiv3 add <tiktok url>`',
+      message: '⚠️ That doesn\'t look like a valid URL.',
     });
     return;
   }

@@ -59,14 +59,11 @@ export const onCommand = async ({
   args,
   event,
   db,
-  prefix = '',
+  usage,
 }: AppCtx): Promise<void> => {
   const text = args.join(' ').trim();
   if (!text) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `❌ Please provide a message to broadcast.\nUsage: ${prefix}sendnoti <message>`,
-    });
+    await usage();
     return;
   }
 

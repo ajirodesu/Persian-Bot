@@ -29,7 +29,7 @@ export const meta: CommandMeta = {
 };
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, event, args, prefix = '' } = ctx;
+  const { chat, event, args, usage } = ctx;
   const messageReply = event['messageReply'] as
     | Record<string, unknown>
     | undefined;
@@ -56,10 +56,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   } else {
     // Non-reply path: text is required on the left side of the pipe.
     if (!beforePipe) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: ${prefix}say <text> | <lang>\nExample: ${prefix}say Konnichiwa | ja`,
-      });
+      await usage();
       return;
     }
     text = beforePipe;
@@ -67,10 +64,7 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   }
 
   if (!text.trim()) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: '❌ No text provided to speak.',
-    });
+    await usage();
     return;
   }
 

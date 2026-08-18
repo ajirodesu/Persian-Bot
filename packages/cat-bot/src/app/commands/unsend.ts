@@ -30,13 +30,11 @@ export const onCommand = async ({
   event,
   bot,
   native,
+  usage,
 }: AppCtx): Promise<void> => {
   // Guard: command must be used as a reply to a message
   if (event['type'] !== 'message_reply') {
-    await chat.replyMessage({
-      style: MessageStyle.TEXT,
-      message: 'Reply to the message you want to unsend.',
-    });
+    await usage();
     return;
   }
 
@@ -44,10 +42,7 @@ export const onCommand = async ({
 
   // Guard: the nested reply payload must be present
   if (!messageReply) {
-    await chat.replyMessage({
-      style: MessageStyle.TEXT,
-      message: 'Reply to the message you want to unsend.',
-    });
+    await usage();
     return;
   }
 

@@ -226,7 +226,7 @@ export const onCommand = async ({
   db,
   user,
   native,
-  prefix = '',
+  usage,
   button,
 }: AppCtx): Promise<void> => {
   const sub = args[0]?.toLowerCase();
@@ -234,15 +234,7 @@ export const onCommand = async ({
   // No subcommand → show usage rather than defaulting silently; prevents confusing
   // empty-board responses when the user types /top without knowing the syntax.
   if (!sub) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: [
-        '**Usage:**',
-        `\`${prefix}top money [limit]\` — top richest users`,
-        `\`${prefix}top level [limit]\` — top highest level users`,
-        `Limit defaults to ${DEFAULT_LIMIT}, max ${MAX_LIMIT}.`,
-      ].join('\n'),
-    });
+    await usage();
     return;
   }
 
@@ -334,12 +326,7 @@ export const onCommand = async ({
   // ── Unknown subcommand fallthrough ────────────────────────────────────────
   await chat.replyMessage({
     style: MessageStyle.MARKDOWN,
-    message: [
-      `❌ Unknown leaderboard type: \`${sub}\``,
-      '',
-      '**Usage:**',
-      `\`${prefix}top money [limit]\` — top richest users`,
-      `\`${prefix}top level [limit]\` — top highest level users`,
-    ].join('\n'),
+    message: `❌ Unknown leaderboard type: \`${sub}\`.`,
   });
+  await usage();
 };

@@ -84,15 +84,12 @@ export const meta: CommandMeta = {
 export const onCommand = async ({
   chat,
   args,
-  prefix = '',
+  usage,
 }: AppCtx): Promise<void> => {
   const query = args.join(' ').trim();
 
   if (query.length === 0) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `Please provide a command.\n» \`${prefix}shell <command>\`\n_Example: \`${prefix}shell ls -la\`_`,
-    });
+    await usage();
     return;
   }
 

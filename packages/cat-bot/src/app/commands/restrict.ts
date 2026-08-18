@@ -103,7 +103,7 @@ const CONFIGS: RestrictionConfig[] = [
 // ── Shared handler ────────────────────────────────────────────────────────────
 
 async function runRestriction(ctx: AppCtx, config: RestrictionConfig): Promise<void> {
-  const { chat, api, bot, user, event, args } = ctx;
+  const { chat, api, bot, user, event, args, usage } = ctx;
 
   if (!event['isGroup']) {
     await chat.replyMessage({
@@ -117,10 +117,7 @@ async function runRestriction(ctx: AppCtx, config: RestrictionConfig): Promise<v
   const targetID = resolveTargetID(ctx);
 
   if (!targetID) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: '❌ Please provide a user ID, @mention the user, or reply to their message.',
-    });
+    await usage();
     return;
   }
 

@@ -188,10 +188,7 @@ export const onCommand = async ({
     }
 
     if (!uid) {
-      await chat.replyMessage({
-        message: `❌ Usage: ${prefix}user ban <uid> [reason]\nYou can also @mention (Discord/Messenger) or reply to the target user.`,
-        style: MessageStyle.MARKDOWN,
-      });
+      await usage();
       return;
     }
 
@@ -212,10 +209,7 @@ export const onCommand = async ({
       (isMentionPlatform && mentionIDs[0]) || repliedSenderID || args[1];
 
     if (!uid) {
-      await chat.replyMessage({
-        message: `❌ Usage: ${prefix}user unban <uid>\nYou can also @mention (Discord/Messenger) or reply to the target user.`,
-        style: MessageStyle.MARKDOWN,
-      });
+      await usage();
       return;
     }
 
@@ -316,10 +310,7 @@ export const onCommand = async ({
   if (sub === 'search') {
     const query = args.slice(1).join(' ').trim();
     if (!query) {
-      await chat.replyMessage({
-        message: `❌ Usage: ${prefix}user search <query|id>`,
-        style: MessageStyle.MARKDOWN,
-      });
+      await usage();
       return;
     }
 

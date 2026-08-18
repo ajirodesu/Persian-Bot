@@ -116,10 +116,7 @@ export const onCommand = async ({
   }
 
   if (!text.trim()) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: '❌ Please provide a reminder message.',
-    });
+    await usage();
     return;
   }
 

@@ -232,7 +232,7 @@ export const onCommand = async ({
   if (isNaN(amount) || amount <= 0) {
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: '❌ Invalid amount. Enter a positive number. Usage: `steal @user <amount>`',
+      message: '❌ Invalid amount. Enter a positive number.',
     });
     return;
   }

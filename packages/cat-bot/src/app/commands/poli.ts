@@ -27,13 +27,10 @@ export const meta: CommandMeta = {
 };
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args } = ctx;
+  const { chat, args, usage } = ctx;
   const query = args.join(' ').trim();
   if (!query) {
-    await chat.replyMessage({
-      message:
-        'Please provide a prompt, e.g. `/poli a beautiful sunset over the mountains`',
-    });
+    await usage();
     return;
   }
 

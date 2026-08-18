@@ -38,13 +38,10 @@ async function resolveGeminiKey(ctx: AppCtx): Promise<string | undefined> {
 }
 
 export const onCommand = async (ctx: AppCtx): Promise<void> => {
-  const { chat, args } = ctx;
+  const { chat, args, usage } = ctx;
   const query = args.join(' ').trim();
   if (!query) {
-    await chat.replyMessage({
-      message:
-        'Please provide a prompt, e.g. `/nano a cat astronaut on the moon`',
-    });
+    await usage();
     return;
   }
 

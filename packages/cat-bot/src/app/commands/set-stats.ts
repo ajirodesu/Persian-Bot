@@ -133,12 +133,10 @@ function fromStorageValue(raw: unknown, allowInfinity: boolean): number {
 // ── Shared handler ────────────────────────────────────────────────────────────
 
 async function runSetStat(ctx: AppCtx, config: StatConfig): Promise<void> {
-  const { chat, event, args, db, user, prefix = '' } = ctx;
+  const { chat, event, args, db, user, usage } = ctx;
   const mentions = event['mentions'] as Record<string, string> | undefined;
   const mentionIDs = Object.keys(mentions ?? {});
   const sub = args[0]?.toLowerCase();
-
-  const amountUsage = config.allowInfinity ? '<amount|infinity>' : '<amount>';
 
   // ── set___ me <amount> ──────────────────────────────────────────────────
   if (sub === 'me') {
@@ -146,10 +144,7 @@ async function runSetStat(ctx: AppCtx, config: StatConfig): Promise<void> {
     const amount = parseAmount(args[1], config.allowInfinity);
 
     if (!senderID || isNaN(amount)) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: \`${prefix}${config.name} me ${amountUsage}\``,
-      });
+      await usage();
       return;
     }
 
@@ -220,10 +215,7 @@ async function runSetStat(ctx: AppCtx, config: StatConfig): Promise<void> {
       return;
     }
 
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `❌ Usage: \`${prefix}${config.name} del me\` or \`${prefix}${config.name} del @mention\``,
-    });
+    await usage();
     return;
   }
 
@@ -233,10 +225,7 @@ async function runSetStat(ctx: AppCtx, config: StatConfig): Promise<void> {
     const amount = parseAmount(args[2], config.allowInfinity);
 
     if (!targetID || isNaN(amount)) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: \`${prefix}${config.name} uid <id> ${amountUsage}\``,
-      });
+      await usage();
       return;
     }
 
@@ -265,10 +254,7 @@ async function runSetStat(ctx: AppCtx, config: StatConfig): Promise<void> {
     const amount = parseAmount(args[args.length - 1], config.allowInfinity);
 
     if (isNaN(amount)) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: \`${prefix}${config.name} @mention ${amountUsage}\``,
-      });
+      await usage();
       return;
     }
 
@@ -287,17 +273,7 @@ async function runSetStat(ctx: AppCtx, config: StatConfig): Promise<void> {
   }
 
   // ── Fallback: no matching sub-command ────────────────────────────────────
-  await chat.replyMessage({
-    style: MessageStyle.MARKDOWN,
-    message: [
-      '❌ Wrong syntax. Available sub-commands:',
-      `\`${prefix}${config.name} me ${amountUsage}\``,
-      `\`${prefix}${config.name} del me\``,
-      `\`${prefix}${config.name} del @mention\``,
-      `\`${prefix}${config.name} @mention ${amountUsage}\``,
-      `\`${prefix}${config.name} uid <id> ${amountUsage}\``,
-    ].join('\n'),
-  });
+  await usage();
 }
 
 // ── Command entry generation ──────────────────────────────────────────────────

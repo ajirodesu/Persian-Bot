@@ -30,7 +30,7 @@ export const onCommand = async ({
   chat,
   event,
   args,
-  prefix = '',
+  usage,
 }: AppCtx): Promise<void> => {
   const messageReply = event['messageReply'] as
     | Record<string, unknown>
@@ -58,10 +58,7 @@ export const onCommand = async ({
   } else {
     // Non-reply path: text is required on the left side of the pipe.
     if (!beforePipe) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message: `❌ Usage: ${prefix}trans <text> | <lang>\nExample: ${prefix}trans Hello | vi`,
-      });
+      await usage();
       return;
     }
     text = beforePipe;
@@ -69,10 +66,7 @@ export const onCommand = async ({
   }
 
   if (!text.trim()) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: '❌ No text provided to translate.',
-    });
+    await usage();
     return;
   }
 

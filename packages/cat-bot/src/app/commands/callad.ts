@@ -79,6 +79,7 @@ export const onCommand = async ({
   user,
   thread,
   prefix = '',
+  usage,
 }: AppCtx): Promise<void> => {
   const { userId, platform, sessionId } = native;
 
@@ -92,10 +93,7 @@ export const onCommand = async ({
 
   const userMessage = args.join(' ').trim();
   if (!userMessage) {
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `❌ Please provide a message to send to the admin.\nUsage: ${prefix}callad <message>`,
-    });
+    await usage();
     return;
   }
 
