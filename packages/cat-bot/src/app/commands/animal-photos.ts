@@ -31,7 +31,7 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
-import type { CommandMeta } from '@/engine/types/module-config.types.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ const ANIMAL_CONFIGS: AnimalConfig[] = [
 async function fetchAnimalImage(config: AnimalConfig): Promise<string | null> {
   try {
     const { data } = await axios.get(config.apiUrl, {
-      params: config.apiParams,
+      ...(config.apiParams ? { params: config.apiParams } : {}),
       headers: { Accept: 'application/json' },
       timeout: 10000,
     });
