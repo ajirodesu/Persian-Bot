@@ -37,15 +37,33 @@ function toGitHubError(err: unknown): GitHubApiError {
   return new GitHubApiError(502, err instanceof Error ? err.message : String(err));
 }
 
+/**
+ * The write endpoints (blobs/trees/commits/refs — all under the Git Data API)
+ * need **Contents: Read and write** on the repo. A fine-grained token that can
+ * read the repo but is missing write access fails with the cryptic
+ * "403: Resource not accessible by personal access token" — turn that into the
+ * exact fix.
+ */
+function enrichWriteError(err: unknown, config: GitHubConfig): GitHubApiError {
+  const base = toGitHubError(err);
+  if (base.status !== 403) return base;
+  const isFineGrained = config.token.startsWith('github_pat_');
+  const hint = isFineGrained
+    ? 'The token can read the repo but has no write access. Edit it at GitHub → Settings → ' +
+      'Developer settings → Fine-grained personal access tokens: this repo needs **Contents: ' +
+      'Read and write** (Metadata: Read is included automatically). The commit writes go ' +
+      'through the Git Data API (blobs, trees, commits, refs) — all covered by Contents.'
+    : 'The token can read the repo but has no write access — a classic PAT needs the `repo` ' +
+      'scope (or `public_repo` for a public repo).';
+  return new GitHubApiError(base.status, `${base.message} — ${hint}`);
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 // Startup sanity check (mirrors the reference /ghp command): warn loudly when
 // the GitHub env vars aren't fully set — /push and /installer rely on them.
-if (
-  !process.env['GITHUB_TOKEN'] ||
-  (!process.env['GITHUB_REPO_OWNER'] && !process.env['GITHUB_OWNER']) ||
-  (!process.env['GITHUB_REPO_NAME'] && !process.env['GITHUB_REPO'])
-) {
+// Uses exactly the project's canonical env names (env.config.ts).
+if (!env.GITHUB_TOKEN || !env.GITHUB_REPO_OWNER || !env.GITHUB_REPO_NAME) {
   console.error(
     '[ghp] GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
       'this command will fail until they are added to your environment variables.',
@@ -63,9 +81,9 @@ export interface GitHubConfig {
 /**
  * Reads the GitHub env vars, throwing a clear error when any is missing. The
  * /push and /installer commands RELY on these — without them there is no repo
- * to write to. Prefers this project's canonical GITHUB_REPO_OWNER /
- * GITHUB_REPO_NAME and falls back to the reference /ghp command's
- * GITHUB_OWNER / GITHUB_REPO naming so either host setup works.
+ * to write to. Reads exactly the project's current env (env.config.ts):
+ * GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME (+ optional
+ * GITHUB_REPO_BASE_PATH).
  */
 /**
  * Cleans raw owner/repo env values into API-ready refs. Handles the common
@@ -78,6 +96,11 @@ function resolveOwnerAndRepo(rawOwner: string, rawRepo: string): { owner: string
   const strip = (value: string): string =>
     value
       .trim()
+      // Remove invisible/zero-width characters that sneak in when an env value
+      // is copied from a web page (zero-width space, ZWNJ/ZWJ, BOM, soft
+      // hyphen, word joiner). They render identically in logs but change the
+      // URL, making GitHub return 404 for a repo that clearly exists.
+      .replace(/[\u200B-\u200D\uFEFF\u00AD\u2060\u180E]/g, '')
       .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
       .replace(/^git@github\.com:/i, '')
       .replace(/^\/+|\/+$/g, '')
@@ -101,8 +124,8 @@ function resolveOwnerAndRepo(rawOwner: string, rawRepo: string): { owner: string
 export function getGitHubConfig(): GitHubConfig {
   const token = env.GITHUB_TOKEN ?? '';
   const { owner, repo } = resolveOwnerAndRepo(
-    env.GITHUB_REPO_OWNER ?? process.env['GITHUB_OWNER'] ?? '',
-    env.GITHUB_REPO_NAME ?? process.env['GITHUB_REPO'] ?? '',
+    env.GITHUB_REPO_OWNER ?? '',
+    env.GITHUB_REPO_NAME ?? '',
   );
   if (!token || !owner || !repo) {
     console.error(
@@ -154,7 +177,13 @@ function encodePath(repoPath: string): string {
 /** The repo's default branch — the branch commits land on. */
 export async function getDefaultBranch(config: GitHubConfig): Promise<string> {
   try {
-    const res = await createApi(config).get('/');
+    // NOTE: hit the repo URL WITHOUT a trailing slash. GitHub returns 404 for
+    // GET /repos/{owner}/{repo}/ (verified against a public repo), and axios's
+    // baseURL + '/' would produce exactly that — so use the explicit absolute
+    // URL here rather than `createApi(config).get('/')`.
+    const res = await createApi(config).get(
+      `https://api.github.com/repos/${config.owner}/${config.repo}`,
+    );
     const branch: unknown = res.data?.default_branch;
     return typeof branch === 'string' && branch !== '' ? branch : 'main';
   } catch (err) {
@@ -195,15 +224,27 @@ async function enrichRepoLookupError(err: unknown, config: GitHubConfig): Promis
   }
 
   if (base.status === 404 && tokenLogin) {
-    // 2. Maybe the owner is wrong — try the repo under the token's own account.
-    try {
-      await probe.get(`/repos/${tokenLogin}/${config.repo}`);
-      const hint =
-        `the repo exists under the token's account \`${tokenLogin}\`, but ` +
-        `GITHUB_REPO_OWNER is set to \`${config.owner}\`. Set GITHUB_REPO_OWNER ` +
-        `(or GITHUB_OWNER) to \`${tokenLogin}\` and try again.`;
-      return new GitHubApiError(base.status, `${base.message} — ${hint}`);
-    } catch {
+    // 2. Maybe the owner is wrong — try the repo under the token's own
+    //    account. Skip this when the env owner already matches the token's
+    //    account (e.g. an invisible character hiding in the env value made
+    //    the URL differ even though it renders the same) — then the "set it
+    //    to the token's account" advice would be circular, so fall straight
+    //    to the enumeration below.
+    const ownerMatchesToken =
+      config.owner.toLowerCase() === tokenLogin.toLowerCase();
+    if (!ownerMatchesToken) {
+      try {
+        await probe.get(`/repos/${tokenLogin}/${config.repo}`);
+        const hint =
+          `the repo exists under the token's account \`${tokenLogin}\`, but ` +
+          `GITHUB_REPO_OWNER is set to \`${config.owner}\`. Set GITHUB_REPO_OWNER ` +
+          `to \`${tokenLogin}\` and try again.`;
+        return new GitHubApiError(base.status, `${base.message} — ${hint}`);
+      } catch {
+        // Fall through to the enumeration below.
+      }
+    }
+    {
       // 3. Enumerate the repos this token can actually see and look for the
       //    target repo — this distinguishes a wrong owner from a token that
       //    simply hasn't been granted the repo (very common with fine-grained
@@ -229,7 +270,7 @@ async function enrichRepoLookupError(err: unknown, config: GitHubConfig): Promis
         const correctOwner = match.split('/')[0];
         const hint =
           `the repo exists as \`${match}\`, but GITHUB_REPO_OWNER is set to ` +
-          `\`${config.owner}\`. Set GITHUB_REPO_OWNER (or GITHUB_OWNER) to ` +
+          `\`${config.owner}\`. Set GITHUB_REPO_OWNER to ` +
           `\`${correctOwner}\` and try again.`;
         return new GitHubApiError(base.status, `${base.message} — ${hint}`);
       }
@@ -372,7 +413,7 @@ export async function pushFilesToGitHub(
       commitUrl: `https://github.com/${config.owner}/${config.repo}/commit/${newCommitSha}`,
     };
   } catch (err) {
-    throw toGitHubError(err);
+    throw enrichWriteError(err, config);
   }
 }
 
