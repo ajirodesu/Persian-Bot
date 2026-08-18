@@ -852,7 +852,7 @@ const CommitBox = memo(function CommitBox({
               busy !== null ||
               changesLength === 0 ||
               !commitMsg.trim() ||
-              !canPush
+              !status?.upstream
             }
             title="Commit the staged changes and push to upstream"
             onClick={() => void handleCommitAndPushSubmit()}
@@ -1108,11 +1108,19 @@ function GitPanel({
     [run, files],
   )
 
-  // Replit-style single action: commit the staged changes, then push.
+  // VS Code-style single action: commit the staged changes, then push. Enabled
+  // when a commit is possible (changes + message) AND the branch tracks an
+  // upstream (so the push has somewhere to go) — unlike the bare Push button,
+  // it does NOT require existing unpushed commits.
   const handleCommitAndPush = useCallback(
     (message: string): Promise<boolean> => {
       const msg = message.trim()
-      if (!msg || changes.length === 0 || busy !== null || !canPush) {
+      if (
+        !msg ||
+        changes.length === 0 ||
+        busy !== null ||
+        !status?.upstream
+      ) {
         return Promise.resolve(false)
       }
       return run('Committed & pushed', async () => {
@@ -1120,7 +1128,7 @@ function GitPanel({
         await files.commitAndPush(msg)
       })
     },
-    [changes.length, staged.length, busy, canPush, run, files],
+    [changes.length, staged.length, busy, status?.upstream, run, files],
   )
 
   const discardPath = useCallback(
