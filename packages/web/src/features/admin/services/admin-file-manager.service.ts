@@ -262,6 +262,24 @@ class AdminFileManagerService {
     )
     return response.data
   }
+
+  // POST /api/v1/admin/files/git/discard — discard working-tree changes
+  async gitDiscard(paths: string[]): Promise<{ ok: boolean }> {
+    const response = await apiClient.post<{ ok: boolean }>(
+      '/api/v1/admin/files/git/discard',
+      { paths },
+    )
+    return response.data
+  }
+
+  // POST /api/v1/admin/files/git/branches — create + switch to a new branch
+  async gitCreateBranch(name: string): Promise<{ ok: boolean }> {
+    const response = await apiClient.post<{ ok: boolean }>(
+      '/api/v1/admin/files/git/branches',
+      { name },
+    )
+    return response.data
+  }
 }
 
 export const adminFileManagerService = new AdminFileManagerService()

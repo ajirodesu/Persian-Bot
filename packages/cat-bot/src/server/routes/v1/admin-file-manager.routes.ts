@@ -103,4 +103,14 @@ adminFileManagerRouter.post('/git/checkout', (req, res) => {
   void adminFileManagerController.gitCheckout(req, res);
 });
 
+// POST /api/v1/admin/files/git/discard {paths} — discard working-tree changes
+adminFileManagerRouter.post('/git/discard', (req, res) => {
+  void adminFileManagerController.gitDiscard(req, res);
+});
+
+// POST /api/v1/admin/files/git/branches {name} — create + switch to a new branch
+adminFileManagerRouter.post('/git/branches', (req, res) => {
+  void adminFileManagerController.gitCreateBranch(req, res);
+});
+
 export default adminFileManagerRouter;

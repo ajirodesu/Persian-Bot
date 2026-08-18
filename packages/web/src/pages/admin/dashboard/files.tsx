@@ -44,6 +44,8 @@ import {
   History,
   Check,
   GitCommitHorizontal,
+  GitBranchPlus,
+  RotateCcw,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
@@ -71,6 +73,9 @@ import type {
 
 /** localStorage key remembering the last selected folder across refreshes. */
 const FOLDER_STORAGE_KEY = 'admin-file-manager:folder:v1'
+
+/** Sentinel value for the "+ New branch" option in the branch dropdown. */
+const NEW_BRANCH_VALUE = '__new_branch__'
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
@@ -646,12 +651,14 @@ const GitChangeRow = memo(function GitChangeRow({
   onDiff,
   onStage,
   onUnstage,
+  onDiscard,
 }: {
   change: GitChangeDto
   busy: string | null
   onDiff: (path: string, staged: boolean) => void
   onStage?: (path: string) => void
   onUnstage?: (path: string) => void
+  onDiscard?: (path: string) => void
 }) {
   const meta = CHANGE_META[change.status]
   const Icon = meta.icon
@@ -703,6 +710,18 @@ const GitChangeRow = memo(function GitChangeRow({
           onClick={() => onUnstage(change.path)}
         />
       )}
+      {onDiscard && (
+        <IconButton
+          variant="text"
+          size="sm"
+          isLoading={busy === change.path}
+          disabled={busy !== null}
+          icon={<RotateCcw className="h-3.5 w-3.5" />}
+          aria-label={`Discard changes to ${change.path}`}
+          title="Discard changes"
+          onClick={() => onDiscard(change.path)}
+        />
+      )}
     </div>
   )
 })
@@ -740,6 +759,7 @@ const CommitBox = memo(function CommitBox({
   changesLength,
   canPush,
   onCommit,
+  onCommitAndPush,
   onPush,
   onPull,
 }: {
@@ -750,6 +770,7 @@ const CommitBox = memo(function CommitBox({
   changesLength: number
   canPush: boolean
   onCommit: (message: string) => Promise<boolean>
+  onCommitAndPush: (message: string) => Promise<boolean>
   onPush: () => void
   onPull: () => void
 }) {
@@ -759,6 +780,10 @@ const CommitBox = memo(function CommitBox({
   // box re-renders while typing, so scrolling stays smooth on mobile.
   const handleSubmit = async () => {
     if (await onCommit(commitMsg)) setCommitMsg('')
+  }
+
+  const handleCommitAndPushSubmit = async () => {
+    if (await onCommitAndPush(commitMsg)) setCommitMsg('')
   }
 
   return (
@@ -795,23 +820,44 @@ const CommitBox = memo(function CommitBox({
         // without auto-zooming on focus, so the box stays stable while typing.
         className="w-full resize-none rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-3 py-2 font-mono text-[16px] leading-6 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:px-2 sm:py-1.5 sm:text-label-sm"
       />
-      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-        <Button
-          variant="filled"
-          color="primary"
-          size="sm"
-          className="w-full sm:w-auto"
-          isLoading={busy === 'Committed'}
-          disabled={
-            !configured ||
-            busy !== null ||
-            changesLength === 0 ||
-            !commitMsg.trim()
-          }
-          onClick={() => void handleSubmit()}
-        >
-          Commit
-        </Button>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+          <Button
+            variant="filled"
+            color="primary"
+            size="sm"
+            className="w-full sm:w-auto"
+            isLoading={busy === 'Committed'}
+            disabled={
+              !configured ||
+              busy !== null ||
+              changesLength === 0 ||
+              !commitMsg.trim()
+            }
+            onClick={() => void handleSubmit()}
+          >
+            Commit
+          </Button>
+          <Button
+            variant="filled"
+            color="secondary"
+            size="sm"
+            className="w-full sm:w-auto"
+            leftIcon={<GitBranchPlus className="h-4 w-4" />}
+            isLoading={busy === 'Committed & pushed'}
+            disabled={
+              !configured ||
+              busy !== null ||
+              changesLength === 0 ||
+              !commitMsg.trim() ||
+              !canPush
+            }
+            title="Commit the staged changes and push to upstream"
+            onClick={() => void handleCommitAndPushSubmit()}
+          >
+            Commit &amp; push
+          </Button>
+        </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
           <Button
             variant="tonal"
@@ -872,6 +918,16 @@ function GitPanel({
 }) {
   const { success, error } = useSnackbar()
   const [busy, setBusy] = useState<string | null>(null)
+
+  // Per-file "Discard changes" confirm target (path of the unstaged change).
+  const [discardTarget, setDiscardTarget] = useState<string | null>(null)
+  // "+ New branch" dialog state (name is controlled here so it resets
+  // cleanly between opens without a setState-in-effect).
+  const [newBranchOpen, setNewBranchOpen] = useState(false)
+  const [newBranchName, setNewBranchName] = useState('')
+  // Remounts the branch <select> after the create dialog closes without a
+  // checkout, so it stops displaying the "+ New branch" placeholder.
+  const [branchTick, setBranchTick] = useState(0)
 
   // Mobile commit composer. On phones the commit box renders as a fixed bar
   // pinned to the bottom of the visual viewport — the same stability model as
@@ -1055,6 +1111,38 @@ function GitPanel({
     [run, files],
   )
 
+  // Replit-style single action: commit the staged changes, then push.
+  const handleCommitAndPush = useCallback(
+    (message: string): Promise<boolean> => {
+      const msg = message.trim()
+      if (!msg || changes.length === 0 || busy !== null || !canPush) {
+        return Promise.resolve(false)
+      }
+      return run('Committed & pushed', async () => {
+        if (staged.length === 0) await files.stageAll()
+        await files.commitAndPush(msg)
+      })
+    },
+    [changes.length, staged.length, busy, canPush, run, files],
+  )
+
+  const discardPath = useCallback(
+    (path: string) => {
+      setDiscardTarget(null)
+      void run('Discarded changes', () => files.discardPaths([path]))
+    },
+    [run, files],
+  )
+
+  const handleCreateBranch = useCallback(
+    (name: string) => {
+      setNewBranchOpen(false)
+      setNewBranchName('')
+      void run(`Created branch ${name}`, () => files.createBranch(name))
+    },
+    [run, files],
+  )
+
   return (
     <div
       ref={panelRef}
@@ -1066,9 +1154,15 @@ function GitPanel({
         <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
           <select
             aria-label="Current branch"
+            key={branchTick}
             value={status?.branch ?? ''}
             onChange={(e) => {
               const branch = e.target.value
+              if (branch === NEW_BRANCH_VALUE) {
+                setNewBranchName('')
+                setNewBranchOpen(true)
+                return
+              }
               if (branch && branch !== status?.branch) checkout(branch)
             }}
             disabled={!configured || busy !== null}
@@ -1082,6 +1176,7 @@ function GitPanel({
                 {branch}
               </option>
             ))}
+            <option value={NEW_BRANCH_VALUE}>+ New branch</option>
           </select>
           <IconButton
             variant="text"
@@ -1186,6 +1281,7 @@ function GitPanel({
                     busy={busy}
                     onDiff={openDiff}
                     onStage={stagePath}
+                    onDiscard={discardPath}
                   />
                 ))}
               </div>
@@ -1207,6 +1303,7 @@ function GitPanel({
           changesLength={changes.length}
           canPush={canPush}
           onCommit={handleCommit}
+          onCommitAndPush={handleCommitAndPush}
           onPush={handlePush}
           onPull={handlePull}
         />
@@ -1302,6 +1399,26 @@ function GitPanel({
           onClose={files.closeDiff}
         />
       )}
+
+      <GitDiscardDialog
+        path={discardTarget}
+        onConfirm={() => {
+          if (discardTarget) discardPath(discardTarget)
+        }}
+        onCancel={() => setDiscardTarget(null)}
+      />
+      <NewBranchDialog
+        open={newBranchOpen}
+        busy={busy}
+        name={newBranchName}
+        onNameChange={setNewBranchName}
+        onConfirm={handleCreateBranch}
+        onCancel={() => {
+          setNewBranchOpen(false)
+          setNewBranchName('')
+          setBranchTick((t) => t + 1)
+        }}
+      />
     </div>
   )
 }
@@ -2628,6 +2745,130 @@ function DiscardDialog({
             </Button>
             <Button variant="filled" color="error" onClick={onConfirm}>
               Discard
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Positioner>
+    </Dialog.Root>
+  )
+}
+
+// ── Git discard confirm dialog ────────────────────────────────────────────────
+
+function GitDiscardDialog({
+  path,
+  onConfirm,
+  onCancel,
+}: {
+  path: string | null
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const open = path !== null
+
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onCancel()
+      }}
+    >
+      <Dialog.Positioner position="center">
+        <Dialog.Backdrop />
+        <Dialog.Content size="sm">
+          <Dialog.Header>
+            <Dialog.Title>Discard changes?</Dialog.Title>
+            <Dialog.CloseTrigger />
+          </Dialog.Header>
+          <Dialog.Body>
+            <p className="text-body-md text-on-surface">
+              {path ? (
+                <>
+                  Revert unstaged changes to{' '}
+                  <code className="font-mono">{path}</code>? Untracked files
+                  are deleted. This cannot be undone.
+                </>
+              ) : (
+                'Discard the unstaged changes? This cannot be undone.'
+              )}
+            </p>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Button variant="text" color="neutral" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button variant="filled" color="error" onClick={onConfirm}>
+              Discard
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Positioner>
+    </Dialog.Root>
+  )
+}
+
+// ── Create new branch dialog ──────────────────────────────────────────────────
+
+function NewBranchDialog({
+  open,
+  busy,
+  name,
+  onNameChange,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  busy: string | null
+  name: string
+  onNameChange: (value: string) => void
+  onConfirm: (name: string) => void
+  onCancel: () => void
+}) {
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onCancel()
+      }}
+    >
+      <Dialog.Positioner position="center">
+        <Dialog.Backdrop />
+        <Dialog.Content size="sm">
+          <Dialog.Header>
+            <Dialog.Title>Create new branch</Dialog.Title>
+            <Dialog.CloseTrigger />
+          </Dialog.Header>
+          <Dialog.Body>
+            <div className="flex flex-col gap-3">
+              <Field.Root>
+                <Field.Label>Branch name</Field.Label>
+                <Input
+                  placeholder="e.g. feat/new-command"
+                  value={name}
+                  onChange={(e) => onNameChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && name.trim() && !busy)
+                      onConfirm(name.trim())
+                  }}
+                  autoFocus
+                />
+                <Field.HelperText>
+                  Created from the current commit and checked out immediately.
+                </Field.HelperText>
+              </Field.Root>
+            </div>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Button variant="text" color="neutral" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button
+              variant="filled"
+              color="primary"
+              disabled={!name.trim() || busy !== null}
+              onClick={() => onConfirm(name.trim())}
+            >
+              Create branch
             </Button>
           </Dialog.Footer>
         </Dialog.Content>

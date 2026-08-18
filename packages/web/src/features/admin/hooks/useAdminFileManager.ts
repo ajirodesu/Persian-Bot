@@ -88,12 +88,15 @@ export interface UseAdminFileManagerReturn {
   stageAll: () => Promise<void>
   unstagePaths: (paths: string[]) => Promise<void>
   commitChanges: (message: string) => Promise<{ sha?: string } | null>
+  commitAndPush: (message: string) => Promise<{ sha?: string } | null>
   pushChanges: () => Promise<{ message?: string } | null>
   pullChanges: () => Promise<{ message?: string } | null>
+  discardPaths: (paths: string[]) => Promise<void>
   history: GitCommitInfoDto[]
   loadHistory: () => Promise<void>
   branches: string[]
   checkoutBranch: (name: string) => Promise<void>
+  createBranch: (name: string) => Promise<void>
 }
 
 /** Parent folder path for a repo path ('packages/a.ts' → 'packages'). */
@@ -569,6 +572,48 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [refreshGit],
   )
 
+  /** Commits the staged changes, then pushes — Replit-style single action. */
+  const commitAndPush = useCallback(
+    async (message: string): Promise<{ sha?: string } | null> => {
+      const data = await adminFileManagerService.gitCommit(message)
+      await adminFileManagerService.gitPush()
+      await refreshGit()
+      await loadHistory()
+      closeDiff()
+      return data
+    },
+    [refreshGit, loadHistory, closeDiff],
+  )
+
+  /**
+   * Discards working-tree changes for the given paths (unstaged edits are
+   * reverted, untracked files are deleted), then refreshes git state.
+   */
+  const discardPaths = useCallback(
+    async (paths: string[]): Promise<void> => {
+      await adminFileManagerService.gitDiscard(paths)
+      if (gitDiffPath && paths.includes(gitDiffPath)) {
+        setGitDiff(null)
+        setGitDiffPath(null)
+      }
+      await refreshGit()
+    },
+    [refreshGit, gitDiffPath],
+  )
+
+  /** Creates a new local branch from HEAD, switches to it, and refreshes. */
+  const createBranch = useCallback(
+    async (name: string): Promise<void> => {
+      await adminFileManagerService.gitCreateBranch(name)
+      setBranches(
+        await adminFileManagerService.getGitBranches().catch(() => []),
+      )
+      await refreshGit()
+      await loadHistory()
+    },
+    [refreshGit, loadHistory],
+  )
+
   // Load git status + history + branches once on mount.
   useEffect(() => {
     void refreshGit()
@@ -751,11 +796,14 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     stageAll,
     unstagePaths,
     commitChanges,
+    commitAndPush,
     pushChanges,
     pullChanges,
+    discardPaths,
     history,
     loadHistory,
     branches,
     checkoutBranch,
+    createBranch,
   }
 }

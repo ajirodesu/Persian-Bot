@@ -28,6 +28,8 @@ import {
 import {
   checkoutBranch,
   commitStaged,
+  createBranch,
+  discardChanges,
   getCommitLog,
   getFileDiff,
   getGitStatus,
@@ -270,6 +272,36 @@ class AdminFileManagerController {
       res.json({ ok: true, message });
     } catch (err) {
       this.#handleError(res, err, 'Failed to checkout branch');
+    }
+  }
+
+  // POST /api/v1/admin/files/git/discard {paths} — discard working-tree changes.
+  async gitDiscard(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    try {
+      const paths = Array.isArray(req.body?.paths)
+        ? (req.body.paths as unknown[]).filter((p): p is string => typeof p === 'string')
+        : [];
+      await discardChanges(paths);
+      res.json({ ok: true });
+    } catch (err) {
+      this.#handleError(res, err, 'Failed to discard changes');
+    }
+  }
+
+  // POST /api/v1/admin/files/git/branches {name} — create + switch to a new branch.
+  async gitCreateBranch(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    try {
+      const name = typeof req.body?.name === 'string' ? req.body.name : '';
+      if (!name) {
+        res.status(400).json({ error: 'Missing branch name' });
+        return;
+      }
+      const message = await createBranch(name);
+      res.json({ ok: true, message });
+    } catch (err) {
+      this.#handleError(res, err, 'Failed to create branch');
     }
   }
 

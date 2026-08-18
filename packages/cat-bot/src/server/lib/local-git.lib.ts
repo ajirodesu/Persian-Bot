@@ -585,3 +585,53 @@ export async function checkoutBranch(branch: string): Promise<string> {
   const out = await runGit(['checkout', branch]);
   return out.trim();
 }
+
+/**
+ * Discards working-tree changes for the given paths — unstaged edits on
+ * tracked files are reverted, and untracked files/folders are deleted.
+ * Mirrors Replit's per-file "Discard" in the Git panel. Never touches the
+ * index, so staged content is preserved (a file that is both staged and
+ * modified only loses its unstaged portion).
+ */
+export async function discardChanges(paths: string[]): Promise<void> {
+  const normalized = paths.map((p) => normalizeRepoPath(p));
+  if (normalized.length === 0) {
+    throw new RepoFileManagerError(
+      400,
+      'At least one path is required to discard changes',
+    );
+  }
+
+  // Untracked paths don't exist in git yet, so `git restore` cannot touch
+  // them — split the batch: restore tracked files, clean untracked ones.
+  const porcelain = await runGit([...NO_QUOTE_CONFIG, 'status', '--porcelain=v1', '-z']);
+  const untracked = new Set(
+    parsePorcelainChanges(porcelain)
+      .filter((c) => c.status === 'untracked' && !c.staged)
+      .map((c) => c.path),
+  );
+  const tracked = normalized.filter((p) => !untracked.has(p));
+  const cleanTargets = normalized.filter((p) => untracked.has(p));
+
+  if (tracked.length > 0) {
+    await runGit(['restore', '--', ...tracked]);
+  }
+  if (cleanTargets.length > 0) {
+    await runGit(['clean', '-fd', '--', ...cleanTargets]);
+  }
+}
+
+/** Creates a new local branch from the current HEAD and switches to it. */
+export async function createBranch(name: string): Promise<string> {
+  const cleanName = name.trim();
+  assertSafeName(cleanName);
+  if (
+    cleanName.startsWith('-') ||
+    cleanName.includes('..') ||
+    /\s/.test(cleanName)
+  ) {
+    throw new RepoFileManagerError(400, `Invalid branch name: ${cleanName}`);
+  }
+  const out = await runGit(['checkout', '-b', cleanName]);
+  return out.trim();
+}
