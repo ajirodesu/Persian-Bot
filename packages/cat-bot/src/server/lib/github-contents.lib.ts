@@ -32,7 +32,12 @@ function toGitHubError(err: unknown): GitHubApiError {
       (err.response?.data as { message?: string } | undefined)?.message ??
       err.message ??
       'GitHub API request failed';
-    return new GitHubApiError(status, `GitHub API ${status}: ${detail}`);
+    // Name the failing endpoint so a bare "404: Not Found" (GitHub hides the
+    // resource for both missing-branch and no-access) is at least traceable.
+    const method = String(err.config?.method ?? 'get').toUpperCase();
+    const url = typeof err.config?.url === 'string' ? err.config.url : '';
+    const where = url ? ` ${method} ${url}` : '';
+    return new GitHubApiError(status, `GitHub API ${status}${where}: ${detail}`);
   }
   return new GitHubApiError(502, err instanceof Error ? err.message : String(err));
 }
@@ -455,7 +460,17 @@ export interface GitHubPushResult {
   pushedCount: number;
 }
 
-/** The branch's current tip commit SHA on GitHub. */
+/**
+ * The branch's current tip commit SHA on GitHub.
+ *
+ * A 404 means one of two things: the branch genuinely doesn't exist on GitHub
+ * yet (a brand-new local branch — push will create it), OR the repo itself is
+ * unreachable (wrong GITHUB_REPO_OWNER/GITHUB_REPO_NAME, or a token without
+ * access, which GitHub also reports as 404). Both cases are disambiguated here
+ * so callers get an actionable error instead of a bare "404: Not Found": the
+ * repo is probed via getDefaultBranch, whose enriched error explains exactly
+ * how to fix a repo-access problem when that is the cause.
+ */
 export async function getBranchTipSha(
   config: GitHubConfig,
   branch: string,
@@ -472,6 +487,21 @@ export async function getBranchTipSha(
     }
     return sha;
   } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      let defaultBranch: string;
+      try {
+        defaultBranch = await getDefaultBranch(config);
+      } catch {
+        // The repo itself is the problem — surface getDefaultBranch's full
+        // diagnostic (wrong owner, token access, etc.) for the original 404.
+        throw await enrichRepoLookupError(err, config);
+      }
+      throw new GitHubApiError(
+        404,
+        `Branch "${branch}" does not exist in ${config.owner}/${config.repo} ` +
+          `(default branch: "${defaultBranch}").`,
+      );
+    }
     throw toGitHubError(err);
   }
 }
@@ -487,35 +517,49 @@ export async function getBranchTipSha(
  * ancestor of HEAD (a real non-fast-forward check). The ref fast-forwards with
  * `force: false` only after every commit is created, so a remote that moved in
  * the meantime is rejected exactly like git would.
+ *
+ * With `createRef: true` the branch is pushed as a BRAND-NEW branch (git's
+ * `git push -u origin <branch>` when no upstream exists): no tip-equality check
+ * is possible, so the commits are built on `parentTipSha` (the verified default
+ * branch tip) and the ref is created with POST /git/refs. A 422 from GitHub
+ * (the branch appeared mid-flight) is surfaced as a 409 "pull first".
  */
 export async function pushCommitsToGitHub(
   config: GitHubConfig,
   branch: string,
   parentTipSha: string,
   commits: GitHubCommitInput[],
+  options: { createRef?: boolean } = {},
 ): Promise<GitHubPushResult> {
   if (commits.length === 0) {
     throw new GitHubApiError(400, 'Nothing to push — no unpushed commits were provided.');
   }
   const api = createApi(config);
+  const createRef = options.createRef === true;
   try {
     // The branch must still sit exactly where our commits were built on — if it
     // moved (someone else pushed, or the bot itself pushed elsewhere), the
     // fast-forward below would fail anyway — fail early with a clear message.
-    const tipRes = await api.get(`/git/ref/heads/${encodeURIComponent(branch)}`);
-    const remoteTip: unknown = tipRes.data?.object?.sha;
-    if (typeof remoteTip !== 'string' || remoteTip === '') {
-      throw new GitHubApiError(502, `Could not resolve branch "${branch}" on GitHub.`);
+    let parentSha: string;
+    if (createRef) {
+      // New branch: the commit chain simply starts at the parent the caller
+      // verified (the default branch tip present in local history).
+      parentSha = parentTipSha;
+    } else {
+      const tipRes = await api.get(`/git/ref/heads/${encodeURIComponent(branch)}`);
+      const remoteTip: unknown = tipRes.data?.object?.sha;
+      if (typeof remoteTip !== 'string' || remoteTip === '') {
+        throw new GitHubApiError(502, `Could not resolve branch "${branch}" on GitHub.`);
+      }
+      if (remoteTip !== parentTipSha) {
+        throw new GitHubApiError(
+          409,
+          `The branch \`${branch}\` moved on GitHub since the check (remote is ` +
+            `\`${remoteTip.slice(0, 7)}\`). Pull the latest changes first, then try again.`,
+        );
+      }
+      parentSha = remoteTip;
     }
-    if (remoteTip !== parentTipSha) {
-      throw new GitHubApiError(
-        409,
-        `The branch \`${branch}\` moved on GitHub since the check (remote is ` +
-          `\`${remoteTip.slice(0, 7)}\`). Pull the latest changes first, then try again.`,
-      );
-    }
-
-    let parentSha = remoteTip;
     let baseTreeSha: string | null = null;
     let lastSha = parentSha;
 
@@ -594,11 +638,31 @@ export async function pushCommitsToGitHub(
       lastSha = newSha;
     }
 
-    // 5. Fast-forward the branch ref once every commit exists.
-    await api.patch(`/git/refs/heads/${encodeURIComponent(branch)}`, {
-      sha: lastSha,
-      force: false,
-    });
+    // 5. Point the branch ref at the new tip once every commit exists.
+    if (createRef) {
+      try {
+        await api.post('/git/refs', {
+          ref: `refs/heads/${branch}`,
+          sha: lastSha,
+        });
+      } catch (refErr) {
+        if (axios.isAxiosError(refErr) && refErr.response?.status === 422) {
+          // The branch appeared on GitHub while we were pushing (someone else
+          // created it) — refuse like git would.
+          throw new GitHubApiError(
+            409,
+            `The branch \`${branch}\` was just created on GitHub while pushing — ` +
+              'pull the latest changes first, then try again.',
+          );
+        }
+        throw refErr;
+      }
+    } else {
+      await api.patch(`/git/refs/heads/${encodeURIComponent(branch)}`, {
+        sha: lastSha,
+        force: false,
+      });
+    }
 
     return {
       commitSha: lastSha,

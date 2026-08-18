@@ -16,7 +16,9 @@ import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { env } from '@/engine/config/env.config.js';
 import {
+  GitHubApiError,
   getBranchTipSha,
+  getDefaultBranch,
   getGitHubConfig,
   pushCommitsToGitHub,
   type GitHubCommitFileInput,
@@ -713,8 +715,14 @@ async function tryUpdateTrackingRef(
  * commits to push are computed against GitHub's ACTUAL branch tip fetched fresh
  * through the API, not the possibly-stale local remote-tracking ref. A real
  * non-fast-forward check is done locally: the remote tip must be an ancestor of
- * HEAD, otherwise the push refuses and asks you to pull first. On success the
- * local remote-tracking ref is updated so the panel's ahead count is accurate.
+ * HEAD, otherwise the push refuses and asks you to pull first.
+ *
+ * When the branch does NOT exist on GitHub yet (e.g. a brand-new local branch,
+ * or a fork whose default branch is `master` while the checkout is on `main`),
+ * the branch is CREATED like `git push -u origin <branch>`: the commits are
+ * based on the repo's default-branch tip (verified to be in local history) and
+ * pushed as a new branch. On success the local remote-tracking ref is updated
+ * so the panel's ahead count is accurate.
  */
 export async function pushCurrent(): Promise<string> {
   const config = getGitHubConfig();
@@ -727,11 +735,39 @@ export async function pushCurrent(): Promise<string> {
     );
   }
 
-  // GitHub's real branch tip — the base our push builds on.
-  const upstreamSha = await getBranchTipSha(config, branch);
+  // GitHub's real branch tip — the base our push builds on. A 404 means the
+  // branch isn't on GitHub yet (getBranchTipSha verified the repo is reachable).
+  let upstreamSha: string;
+  let createRef = false;
+  try {
+    upstreamSha = await getBranchTipSha(config, branch);
+  } catch (err) {
+    if (!(err instanceof GitHubApiError) || err.status !== 404) throw err;
+    // Brand-new branch: base it on the default branch, exactly like git push
+    // -u would, as long as that tip is in this checkout's history.
+    const defaultBranch = await getDefaultBranch(config);
+    const defaultTip = await getBranchTipSha(config, defaultBranch);
+    const based = await runGitProbe([
+      'merge-base',
+      '--is-ancestor',
+      defaultTip,
+      'HEAD',
+    ]);
+    if (based.code !== 0) {
+      throw new RepoFileManagerError(
+        409,
+        `\`${branch}\` does not exist on GitHub, and this checkout is not based on ` +
+          `the default branch \`${defaultBranch}\`. Pull the latest changes first, ` +
+          'then push again.',
+      );
+    }
+    upstreamSha = defaultTip;
+    createRef = true;
+  }
 
   // Non-fast-forward guard: every commit GitHub already has must exist in our
-  // local history, otherwise pushing would lose work on the remote.
+  // local history, otherwise pushing would lose work on the remote. (When the
+  // branch is brand-new this was just validated against the default tip.)
   const ancestor = await runGitProbe([
     'merge-base',
     '--is-ancestor',
@@ -754,7 +790,9 @@ export async function pushCurrent(): Promise<string> {
     );
   }
 
-  const result = await pushCommitsToGitHub(config, branch, upstreamSha, commits);
+  const result = await pushCommitsToGitHub(config, branch, upstreamSha, commits, {
+    createRef,
+  });
   const upstream = await getUpstream();
   const remote =
     upstream && upstream.indexOf('/') !== -1
@@ -762,7 +800,8 @@ export async function pushCurrent(): Promise<string> {
       : 'origin';
   await tryUpdateTrackingRef(remote, branch, result.commitSha);
 
-  return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch} (${result.commitSha.slice(0, 7)})`;
+  const created = createRef ? ` (created new branch ${branch} on GitHub)` : '';
+  return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch}${created} (${result.commitSha.slice(0, 7)})`;
 }
 
 /** Pulls the latest changes for the current branch from its upstream. */
