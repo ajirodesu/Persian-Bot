@@ -67,10 +67,43 @@ export interface GitHubConfig {
  * GITHUB_REPO_NAME and falls back to the reference /ghp command's
  * GITHUB_OWNER / GITHUB_REPO naming so either host setup works.
  */
+/**
+ * Cleans raw owner/repo env values into API-ready refs. Handles the common
+ * paste mistakes: full `https://github.com/owner/repo` URLs, `.git` suffixes,
+ * and stray whitespace. An owner field that accidentally holds a whole
+ * `owner/repo` is split apart; a repo field that holds a full URL keeps only
+ * its last path segment.
+ */
+function resolveOwnerAndRepo(rawOwner: string, rawRepo: string): { owner: string; repo: string } {
+  const strip = (value: string): string =>
+    value
+      .trim()
+      .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+      .replace(/^git@github\.com:/i, '')
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/\.git$/i, '');
+
+  let owner = strip(rawOwner);
+  let repo = strip(rawRepo);
+
+  const ownerParts = owner.split('/').filter(Boolean);
+  if (ownerParts.length >= 2) {
+    // The owner field holds a full `owner/repo` (or a pasted repo URL).
+    owner = ownerParts[0]!;
+    if (!repo) repo = ownerParts[1]!;
+  }
+  const repoParts = repo.split('/').filter(Boolean);
+  if (repoParts.length >= 2) repo = repoParts[repoParts.length - 1]!;
+
+  return { owner, repo };
+}
+
 export function getGitHubConfig(): GitHubConfig {
   const token = env.GITHUB_TOKEN ?? '';
-  const owner = env.GITHUB_REPO_OWNER ?? process.env['GITHUB_OWNER'] ?? '';
-  const repo = env.GITHUB_REPO_NAME ?? process.env['GITHUB_REPO'] ?? '';
+  const { owner, repo } = resolveOwnerAndRepo(
+    env.GITHUB_REPO_OWNER ?? process.env['GITHUB_OWNER'] ?? '',
+    env.GITHUB_REPO_NAME ?? process.env['GITHUB_REPO'] ?? '',
+  );
   if (!token || !owner || !repo) {
     console.error(
       '[ghp] GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
@@ -91,15 +124,19 @@ export function getGitHubConfig(): GitHubConfig {
 
 // ── GitHub API plumbing ───────────────────────────────────────────────────────
 
+function authHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'cat-bot',
+  };
+}
+
 function createApi(config: GitHubConfig) {
   return axios.create({
     baseURL: `https://api.github.com/repos/${config.owner}/${config.repo}`,
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'cat-bot',
-    },
+    headers: authHeaders(config.token),
     timeout: 60_000,
   });
 }
@@ -121,8 +158,98 @@ export async function getDefaultBranch(config: GitHubConfig): Promise<string> {
     const branch: unknown = res.data?.default_branch;
     return typeof branch === 'string' && branch !== '' ? branch : 'main';
   } catch (err) {
-    throw toGitHubError(err);
+    throw await enrichRepoLookupError(err, config);
   }
+}
+
+/**
+ * Turns the bare "GitHub API 404: Not Found" from a failed repo lookup into
+ * an actionable diagnosis: whether the token itself is valid, and whether the
+ * repo exists under the token's own account (i.e. the owner env var is wrong).
+ * Non-repo-lookup failures pass through unchanged.
+ */
+async function enrichRepoLookupError(err: unknown, config: GitHubConfig): Promise<GitHubApiError> {
+  const base = toGitHubError(err);
+
+  // Only repo visibility failures (401/404 on GET /repos/{owner}/{repo}) get
+  // the full diagnostic — everything else is passed through untouched.
+  if (base.status !== 404 && base.status !== 401) return base;
+
+  const probe = axios.create({
+    baseURL: 'https://api.github.com',
+    headers: authHeaders(config.token),
+    timeout: 30_000,
+  });
+
+  // 1. Is the token itself valid? GET /user also reveals which account it
+  //    belongs to, which we can compare against GITHUB_REPO_OWNER.
+  let tokenLogin: string | null = null;
+  try {
+    const user = await probe.get('/user');
+    tokenLogin = typeof user.data?.login === 'string' ? (user.data.login as string) : null;
+  } catch {
+    const hint =
+      'GITHUB_TOKEN is invalid or expired — GitHub rejected it. Generate a new token ' +
+      '(GitHub → Settings → Developer settings → Personal access tokens) and update the env var.';
+    return new GitHubApiError(base.status, `${base.message} — ${hint}`);
+  }
+
+  if (base.status === 404 && tokenLogin) {
+    // 2. Maybe the owner is wrong — try the repo under the token's own account.
+    try {
+      await probe.get(`/repos/${tokenLogin}/${config.repo}`);
+      const hint =
+        `the repo exists under the token's account \`${tokenLogin}\`, but ` +
+        `GITHUB_REPO_OWNER is set to \`${config.owner}\`. Set GITHUB_REPO_OWNER ` +
+        `(or GITHUB_OWNER) to \`${tokenLogin}\` and try again.`;
+      return new GitHubApiError(base.status, `${base.message} — ${hint}`);
+    } catch {
+      // 3. Enumerate the repos this token can actually see and look for the
+      //    target repo — this distinguishes a wrong owner from a token that
+      //    simply hasn't been granted the repo (very common with fine-grained
+      //    PATs, which hide un-granted repos as 404 rather than 403).
+      let grantedRepos: string[] = [];
+      try {
+        const repos = await probe.get('/user/repos', { params: { per_page: 100 } });
+        const items: Array<{ full_name?: unknown }> = Array.isArray(repos.data)
+          ? (repos.data as Array<{ full_name?: unknown }>)
+          : [];
+        grantedRepos = items
+          .map((repo) => (typeof repo.full_name === 'string' ? repo.full_name : ''))
+          .filter(Boolean);
+      } catch {
+        // Enumeration failed — fall through to the generic hint.
+      }
+
+      const target = config.repo.toLowerCase();
+      const match = grantedRepos.find((full) =>
+        full.toLowerCase().endsWith(`/${target}`),
+      );
+      if (match) {
+        const correctOwner = match.split('/')[0];
+        const hint =
+          `the repo exists as \`${match}\`, but GITHUB_REPO_OWNER is set to ` +
+          `\`${config.owner}\`. Set GITHUB_REPO_OWNER (or GITHUB_OWNER) to ` +
+          `\`${correctOwner}\` and try again.`;
+        return new GitHubApiError(base.status, `${base.message} — ${hint}`);
+      }
+
+      const isFineGrained = config.token.startsWith('github_pat_');
+      const scopeHint = isFineGrained
+        ? 'This looks like a fine-grained token (github_pat_…). Edit it at GitHub → Settings → ' +
+          'Developer settings → Fine-grained personal access tokens: select this repo under ' +
+          '“Repository access”, and give it **Contents: Read and write** (Metadata: Read is ' +
+          'included automatically).'
+        : 'If the repo is private, the token needs the `repo` scope (or `public_repo` for a ' +
+          'public one) — regenerate a classic token with that scope.';
+      const hint =
+        `the token can't see the repo \`${config.repo}\` under \`${config.owner}\` (it can ` +
+        `see ${grantedRepos.length} repo(s) total). ${scopeHint}`;
+      return new GitHubApiError(base.status, `${base.message} — ${hint}`);
+    }
+  }
+
+  return base;
 }
 
 /**
