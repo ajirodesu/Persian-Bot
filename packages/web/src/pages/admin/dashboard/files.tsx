@@ -783,13 +783,15 @@ const CommitBox = memo(function CommitBox({
   // One button does both: commit the pending changes (with the message above)
   // and push to GitHub. When there are no changes to commit it acts as a plain
   // push of the unpushed commits — so a push that failed once can always be
-  // retried from this same button.
+  // retried from this same button. Only the current branch name is required:
+  // the backend resolves the push target from it, so a checkout without a
+  // tracking ref still works.
   const canCommitAndPush =
-    !!status?.upstream &&
+    !!status?.branch &&
     (changesLength > 0 ? commitMsg.trim() !== '' : canPush)
 
-  const commitAndPushTitle = !status?.upstream
-    ? 'No upstream set for this branch'
+  const commitAndPushTitle = !status?.branch
+    ? 'Check out a branch to commit and push'
     : changesLength > 0 && !commitMsg.trim()
       ? 'Type a commit message to commit and push'
       : changesLength > 0
@@ -1063,7 +1065,7 @@ function GitPanel({
   const handleCommitAndPush = useCallback(
     (message: string): Promise<boolean> => {
       const msg = message.trim()
-      if (busy !== null || !status?.upstream) return Promise.resolve(false)
+      if (busy !== null || !status?.branch) return Promise.resolve(false)
       if (changes.length > 0 && !msg) return Promise.resolve(false)
       if (changes.length === 0 && !canPush) return Promise.resolve(false)
       return run('Committed & pushed', async () => {
@@ -1075,7 +1077,7 @@ function GitPanel({
         }
       })
     },
-    [changes.length, staged.length, busy, status?.upstream, canPush, run, files],
+    [changes.length, staged.length, busy, status?.branch, canPush, run, files],
   )
 
   const discardPath = useCallback(

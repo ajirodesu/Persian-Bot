@@ -455,23 +455,43 @@ export interface GitHubPushResult {
   pushedCount: number;
 }
 
+/** The branch's current tip commit SHA on GitHub. */
+export async function getBranchTipSha(
+  config: GitHubConfig,
+  branch: string,
+): Promise<string> {
+  const api = createApi(config);
+  try {
+    const res = await api.get(`/git/ref/heads/${encodeURIComponent(branch)}`);
+    const sha: unknown = res.data?.object?.sha;
+    if (typeof sha !== 'string' || sha === '') {
+      throw new GitHubApiError(
+        502,
+        `Could not resolve branch "${branch}" on GitHub.`,
+      );
+    }
+    return sha;
+  } catch (err) {
+    throw toGitHubError(err);
+  }
+}
+
 /**
  * Pushes a linear series of commits onto `branch` via the Git Data API —
  * the GitHub-API equivalent of a `git push`, used by the Admin Git tab so a
  * managed host (Render/Railway, where git push credentials don't exist) can
  * push its local commits exactly like /installer and /push do.
  *
- * Safety:
- *   * `expectedTipSha` must match GitHub's current branch tip — otherwise the
- *     push refuses up front (the remote moved since the last fetch). This is
- *     the API analogue of git's non-fast-forward rejection, and it guarantees
- *     the recreated commits are built on top of the REAL remote history.
- *   * The branch ref fast-forwards only after every commit is created.
+ * `parentTipSha` must be the branch tip the commits were built on — the caller
+ * resolves it with getBranchTipSha() and verifies locally that it is an
+ * ancestor of HEAD (a real non-fast-forward check). The ref fast-forwards with
+ * `force: false` only after every commit is created, so a remote that moved in
+ * the meantime is rejected exactly like git would.
  */
 export async function pushCommitsToGitHub(
   config: GitHubConfig,
   branch: string,
-  expectedTipSha: string,
+  parentTipSha: string,
   commits: GitHubCommitInput[],
 ): Promise<GitHubPushResult> {
   if (commits.length === 0) {
@@ -479,18 +499,19 @@ export async function pushCommitsToGitHub(
   }
   const api = createApi(config);
   try {
-    // 0. The branch must still be exactly where we think it is.
+    // The branch must still sit exactly where our commits were built on — if it
+    // moved (someone else pushed, or the bot itself pushed elsewhere), the
+    // fast-forward below would fail anyway — fail early with a clear message.
     const tipRes = await api.get(`/git/ref/heads/${encodeURIComponent(branch)}`);
     const remoteTip: unknown = tipRes.data?.object?.sha;
     if (typeof remoteTip !== 'string' || remoteTip === '') {
       throw new GitHubApiError(502, `Could not resolve branch "${branch}" on GitHub.`);
     }
-    if (remoteTip !== expectedTipSha) {
+    if (remoteTip !== parentTipSha) {
       throw new GitHubApiError(
         409,
-        `The branch \`${branch}\` moved on GitHub since the last fetch (remote is ` +
-          `\`${remoteTip.slice(0, 7)}\`, expected \`${expectedTipSha.slice(0, 7)}\`). ` +
-          'Fetch or pull first, then push again.',
+        `The branch \`${branch}\` moved on GitHub since the check (remote is ` +
+          `\`${remoteTip.slice(0, 7)}\`). Pull the latest changes first, then try again.`,
       );
     }
 

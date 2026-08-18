@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { env } from '@/engine/config/env.config.js';
 import {
+  getBranchTipSha,
   getGitHubConfig,
   pushCommitsToGitHub,
   type GitHubCommitFileInput,
@@ -622,22 +623,6 @@ async function changedBetween(
   return { files, deletions };
 }
 
-/** Resolves a ref (e.g. `origin/main`) to its commit SHA, or throws. */
-async function resolveRefSha(ref: string): Promise<string> {
-  const res = await runGitProbe(['rev-parse', '--verify', `${ref}^{commit}`]);
-  if (res.code !== 0) {
-    throw new RepoFileManagerError(
-      400,
-      `Cannot resolve \`${ref}\` to a commit — fetch the branch first.`,
-    );
-  }
-  const sha = res.stdout.trim();
-  if (!sha) {
-    throw new RepoFileManagerError(400, `Cannot resolve \`${ref}\` to a commit.`);
-  }
-  return sha;
-}
-
 interface CommitPushInfo {
   message: string;
   author: { name: string; email: string; date: string } | undefined;
@@ -703,43 +688,65 @@ async function collectPushCommits(upstreamRef: string): Promise<GitHubCommitInpu
   return commits;
 }
 
-/** CAS-updates the remote-tracking ref so the Git tab shows 0 ahead after a push. */
+/** Updates the remote-tracking ref so the Git tab shows 0 ahead after a push. */
 async function tryUpdateTrackingRef(
   remote: string,
   branch: string,
-  oldSha: string,
   newSha: string,
 ): Promise<void> {
-  await runGitProbe([
-    'update-ref',
-    `refs/remotes/${remote}/${branch}`,
-    newSha,
-    oldSha,
-  ]);
+  const ref = `refs/remotes/${remote}/${branch}`;
+  const current = await runGitProbe(['rev-parse', '--verify', '--quiet', ref]);
+  if (current.code === 0 && current.stdout.trim() !== '') {
+    // CAS against the current tracking-ref value so a concurrent fetch can
+    // never be clobbered.
+    await runGitProbe(['update-ref', ref, newSha, current.stdout.trim()]);
+  } else {
+    await runGitProbe(['update-ref', ref, newSha]);
+  }
 }
 
 /**
  * Pushes the current branch's unpushed commits to GitHub via the REST API.
- * Refuses when the branch has no upstream or the remote moved since the last
- * fetch. On success the local remote-tracking ref is updated so the panel's
- * ahead count returns to zero without needing a fetch.
+ *
+ * The target branch is the CURRENT local branch name (no @{upstream} required —
+ * a checkout may legitimately have no tracking ref on a managed host), and the
+ * commits to push are computed against GitHub's ACTUAL branch tip fetched fresh
+ * through the API, not the possibly-stale local remote-tracking ref. A real
+ * non-fast-forward check is done locally: the remote tip must be an ancestor of
+ * HEAD, otherwise the push refuses and asks you to pull first. On success the
+ * local remote-tracking ref is updated so the panel's ahead count is accurate.
  */
 export async function pushCurrent(): Promise<string> {
   const config = getGitHubConfig();
 
-  const upstream = await getUpstream();
-  if (!upstream) {
+  const branch = await getCurrentBranch();
+  if (!branch) {
     throw new RepoFileManagerError(
       400,
-      'Cannot push — this branch has no upstream. Commit a change on a branch that tracks a remote branch, then push.',
+      'Cannot push — HEAD is detached. Check out a branch first.',
     );
   }
-  const slash = upstream.indexOf('/');
-  const remote = slash === -1 ? 'origin' : upstream.slice(0, slash);
-  const branch = slash === -1 ? upstream : upstream.slice(slash + 1);
 
-  const upstreamSha = await resolveRefSha(upstream);
-  const commits = await collectPushCommits(upstream);
+  // GitHub's real branch tip — the base our push builds on.
+  const upstreamSha = await getBranchTipSha(config, branch);
+
+  // Non-fast-forward guard: every commit GitHub already has must exist in our
+  // local history, otherwise pushing would lose work on the remote.
+  const ancestor = await runGitProbe([
+    'merge-base',
+    '--is-ancestor',
+    upstreamSha,
+    'HEAD',
+  ]);
+  if (ancestor.code !== 0) {
+    throw new RepoFileManagerError(
+      409,
+      `GitHub's \`${branch}\` has commits that are not in this checkout — ` +
+        'use Pull to bring them in (or rebase), then Commit & push again.',
+    );
+  }
+
+  const commits = await collectPushCommits(upstreamSha);
   if (commits.length === 0) {
     throw new RepoFileManagerError(
       400,
@@ -748,7 +755,12 @@ export async function pushCurrent(): Promise<string> {
   }
 
   const result = await pushCommitsToGitHub(config, branch, upstreamSha, commits);
-  await tryUpdateTrackingRef(remote, branch, upstreamSha, result.commitSha);
+  const upstream = await getUpstream();
+  const remote =
+    upstream && upstream.indexOf('/') !== -1
+      ? upstream.slice(0, upstream.indexOf('/'))
+      : 'origin';
+  await tryUpdateTrackingRef(remote, branch, result.commitSha);
 
   return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch} (${result.commitSha.slice(0, 7)})`;
 }
