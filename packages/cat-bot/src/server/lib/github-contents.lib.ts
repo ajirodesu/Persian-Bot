@@ -212,7 +212,7 @@ async function enrichRepoLookupError(err: unknown, config: GitHubConfig): Promis
 
   // 1. Is the token itself valid? GET /user also reveals which account it
   //    belongs to, which we can compare against GITHUB_REPO_OWNER.
-  let tokenLogin: string | null = null;
+  let tokenLogin: string | null;
   try {
     const user = await probe.get('/user');
     tokenLogin = typeof user.data?.login === 'string' ? (user.data.login as string) : null;
