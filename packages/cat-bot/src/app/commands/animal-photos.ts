@@ -13,11 +13,16 @@
  *   - The Cat API   → `[{ url }]`            (array)
  *   - RandomFox     → `{ image }`
  *   - random-d.uk   → `{ url }`
+ *   - Dog CEO       → `{ message }`
+ *   - nekos.life    → `{ url }`
  *
  * Commands:
- *   /cat   — random cat image  (aliases: catpic, catimage, meow)
- *   /fox   — random fox image  (aliases: foxpic, foximage, floof)
- *   /duck  — random duck image (aliases: duckpic, duckimage, quack)
+ *   /cat     — random cat image    (aliases: catpic, catimage, meow)
+ *   /fox     — random fox image    (aliases: foxpic, foximage, floof)
+ *   /duck    — random duck image   (aliases: duckpic, duckimage, quack)
+ *   /dog     — random dog image    (aliases: dogpic, dogimage, woof)
+ *   /lizard  — random lizard image (aliases: lizardpic, lizardimage, gecko)
+ *   /goose   — random goose image  (aliases: goosepic, gooseimage, honk)
  *
  * The loader (`engine/app.ts` loadCommands) natively supports a file
  * exporting `commands: Array<{ meta, onCommand, button? }>` and registers
@@ -75,6 +80,34 @@ const ANIMAL_CONFIGS: AnimalConfig[] = [
     emoji: '🦆',
     buttonLabel: '🔁 Another Duck',
     apiUrl: 'https://random-d.uk/api/random',
+    extractUrl: (data) => (data as { url?: string } | undefined)?.url || null,
+  },
+  {
+    name: 'dog',
+    aliases: ['dogpic', 'dogimage', 'woof'],
+    label: 'Random Dog Image',
+    emoji: '🐶',
+    buttonLabel: '🔁 Another Dog',
+    apiUrl: 'https://dog.ceo/api/breeds/image/random',
+    extractUrl: (data) =>
+      (data as { message?: string } | undefined)?.message || null,
+  },
+  {
+    name: 'lizard',
+    aliases: ['lizardpic', 'lizardimage', 'gecko'],
+    label: 'Random Lizard Image',
+    emoji: '🦎',
+    buttonLabel: '🔁 Another Lizard',
+    apiUrl: 'https://nekos.life/api/v2/img/lizard',
+    extractUrl: (data) => (data as { url?: string } | undefined)?.url || null,
+  },
+  {
+    name: 'goose',
+    aliases: ['goosepic', 'gooseimage', 'honk'],
+    label: 'Random Goose Image',
+    emoji: '🪿',
+    buttonLabel: '🔁 Another Goose',
+    apiUrl: 'https://nekos.life/api/v2/img/goose',
     extractUrl: (data) => (data as { url?: string } | undefined)?.url || null,
   },
 ];
