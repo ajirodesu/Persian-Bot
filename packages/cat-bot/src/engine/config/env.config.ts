@@ -64,6 +64,11 @@ interface EnvConfig {
   // real git (status/stage/commit/push). Defaults to auto-detecting the git
   // checkout that contains this process; override to point at another clone.
   readonly ADMIN_REPO_PATH?: string | undefined;
+  // Fallback committer identity for local-git commits when the server has no
+  // git user.name/user.email configured (common on Render/Railway deploys).
+  // Defaults to Cat-Bot <cat-bot@localhost> when unset.
+  readonly GIT_COMMITTER_NAME?: string | undefined;
+  readonly GIT_COMMITTER_EMAIL?: string | undefined;
 
   // Security
   readonly ENCRYPTION_KEY: string;
@@ -243,6 +248,8 @@ export const env: EnvConfig = {
   GITHUB_REPO_NAME: getOptionalEnv('GITHUB_REPO_NAME'),
   GITHUB_REPO_BASE_PATH: getOptionalEnv('GITHUB_REPO_BASE_PATH'),
   ADMIN_REPO_PATH: getOptionalEnv('ADMIN_REPO_PATH'),
+  GIT_COMMITTER_NAME: getOptionalEnv('GIT_COMMITTER_NAME'),
+  GIT_COMMITTER_EMAIL: getOptionalEnv('GIT_COMMITTER_EMAIL'),
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),

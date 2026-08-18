@@ -456,6 +456,41 @@ export async function unstagePaths(paths: string[]): Promise<void> {
   }
 }
 
+/**
+ * Fallback committer identity used when the server has no git
+ * user.name/user.email configured (common on Render/Railway deploys).
+ * Override with GIT_COMMITTER_NAME / GIT_COMMITTER_EMAIL env vars.
+ */
+const FALLBACK_COMMITTER = {
+  name: env.GIT_COMMITTER_NAME ?? 'Cat-Bot',
+  email: env.GIT_COMMITTER_EMAIL ?? 'cat-bot@localhost',
+};
+
+/** Runs `git commit` (optionally with a fallback `-c` identity) and parses the SHA. */
+async function runCommit(message: string, useFallbackIdentity = false): Promise<{ sha: string }> {
+  const args = useFallbackIdentity
+    ? [
+        '-c',
+        `user.name=${FALLBACK_COMMITTER.name}`,
+        '-c',
+        `user.email=${FALLBACK_COMMITTER.email}`,
+        'commit',
+        '-m',
+        message,
+      ]
+    : ['commit', '-m', message];
+  try {
+    const out = await runGit(args);
+    const sha = /^\[[^\]]* ([0-9a-f]+)\]/.exec(out.trim())?.[1] ?? '';
+    return { sha };
+  } catch (err) {
+    if (err instanceof RepoFileManagerError && /nothing to commit/i.test(err.message)) {
+      throw new RepoFileManagerError(400, 'Nothing staged to commit');
+    }
+    throw err;
+  }
+}
+
 /** Commits the staged changes. Throws when there is nothing staged. */
 export async function commitStaged(message: string): Promise<{ sha: string }> {
   const cleanMessage = message.trim();
@@ -463,20 +498,15 @@ export async function commitStaged(message: string): Promise<{ sha: string }> {
     throw new RepoFileManagerError(400, 'Commit message is required');
   }
   try {
-    const out = await runGit(['commit', '-m', cleanMessage]);
-    const sha = /^\[[^\]]* ([0-9a-f]+)\]/.exec(out.trim())?.[1] ?? '';
-    return { sha };
+    return await runCommit(cleanMessage);
   } catch (err) {
-    if (err instanceof RepoFileManagerError) {
-      if (/nothing to commit/i.test(err.message)) {
-        throw new RepoFileManagerError(400, 'Nothing staged to commit');
-      }
-      if (/user\.name|user\.email|tell me who you are/i.test(err.message)) {
-        throw new RepoFileManagerError(
-          400,
-          'Git has no committer identity — run `git config --global user.name "..."` and `git config --global user.email "..."` on the server, then try again.',
-        );
-      }
+    if (
+      err instanceof RepoFileManagerError &&
+      /user\.name|user\.email|tell me who you are/i.test(err.message)
+    ) {
+      // The server has no git identity — commit as the bot instead of failing.
+      // User-configured identity (repo/global git config) still wins when present.
+      return runCommit(cleanMessage, true);
     }
     throw err;
   }
