@@ -290,7 +290,7 @@ export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<v
     }
 
     const branch = await getDefaultBranch(config);
-    const { commitSha } = await pushFilesToGitHub(config, written, commitMessage, branch);
+    const { commitSha, commitUrl } = await pushFilesToGitHub(config, written, commitMessage, branch);
 
     const lines = [
       `✅ **Pushed to GitHub**`,
@@ -305,7 +305,7 @@ export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<v
     if (skipped.length) {
       lines.push(`⏭️ Skipped: ${skipped.slice(0, 10).join(', ')}${skipped.length > 10 ? ', …' : ''}`);
     }
-    lines.push(`_Pushed to \`${branch}\` via the GitHub API._`);
+    lines.push(`🔗 ${commitUrl}`);
 
     await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: lines.join('\n') });
   } catch (err) {

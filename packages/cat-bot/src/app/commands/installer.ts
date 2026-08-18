@@ -42,7 +42,7 @@ import {
   getGitHubConfig,
   getDefaultBranch,
   getFileSha,
-  pushFilesToGitHub,
+  pushFileToGithub,
   type GitHubConfig,
 } from '@/server/lib/github-contents.lib.js';
 
@@ -170,7 +170,7 @@ function commandRepoPath(config: GitHubConfig, commandName: string): string {
 
 /**
  * Commits the downloaded source into the repo on GitHub via the Git Data API
- * and returns the new commit's short sha. Refuses to overwrite a command
+ * and returns the new commit's sha + link. Refuses to overwrite a command
  * that already exists in the repo.
  */
 async function installCommand(
@@ -178,7 +178,7 @@ async function installCommand(
   commandName: string,
   source: string,
   commitMessage: string,
-): Promise<{ sha: string }> {
+): Promise<{ sha: string; commitUrl: string }> {
   const repoPath = commandRepoPath(config, commandName);
   const branch = await getDefaultBranch(config);
 
@@ -190,13 +190,13 @@ async function installCommand(
     );
   }
 
-  const { commitSha } = await pushFilesToGitHub(
+  const result = await pushFileToGithub(
     config,
-    [{ path: repoPath, content: Buffer.from(source, 'utf8') }],
+    { path: repoPath, content: Buffer.from(source, 'utf8') },
     commitMessage,
     branch,
   );
-  return { sha: commitSha };
+  return { sha: result.commitSha, commitUrl: result.commitUrl };
 }
 
 // ── Command Handler — step 1: request the filename ────────────────────────────
@@ -391,7 +391,7 @@ export const onReply = {
     try {
       const config = getGitHubConfig();
       const source = await fetchFileFromLink(fileLink);
-      const { sha } = await installCommand(config, commandName, source, commitMessage);
+      const { sha, commitUrl } = await installCommand(config, commandName, source, commitMessage);
 
       const activateHint = isManagedHosting()
         ? 'The bot will restart in a few minutes to apply these changes.'
@@ -400,6 +400,7 @@ export const onReply = {
         style: MessageStyle.MARKDOWN,
         message: [
           `✅ **Installed \`${commandName}.ts\`** · commit \`${sha.slice(0, 7) || '(unknown)'}\``,
+          `🔗 ${commitUrl}`,
           activateHint,
         ].join('\n'),
       });

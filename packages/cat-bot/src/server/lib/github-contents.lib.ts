@@ -39,6 +39,19 @@ function toGitHubError(err: unknown): GitHubApiError {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
+// Startup sanity check (mirrors the reference /ghp command): warn loudly when
+// the GitHub env vars aren't fully set — /push and /installer rely on them.
+if (
+  !process.env['GITHUB_TOKEN'] ||
+  (!process.env['GITHUB_REPO_OWNER'] && !process.env['GITHUB_OWNER']) ||
+  (!process.env['GITHUB_REPO_NAME'] && !process.env['GITHUB_REPO'])
+) {
+  console.error(
+    '[ghp] GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
+      'this command will fail until they are added to your environment variables.',
+  );
+}
+
 export interface GitHubConfig {
   token: string;
   owner: string;
@@ -50,12 +63,14 @@ export interface GitHubConfig {
 /**
  * Reads the GitHub env vars, throwing a clear error when any is missing. The
  * /push and /installer commands RELY on these — without them there is no repo
- * to write to.
+ * to write to. Prefers this project's canonical GITHUB_REPO_OWNER /
+ * GITHUB_REPO_NAME and falls back to the reference /ghp command's
+ * GITHUB_OWNER / GITHUB_REPO naming so either host setup works.
  */
 export function getGitHubConfig(): GitHubConfig {
   const token = env.GITHUB_TOKEN ?? '';
-  const owner = env.GITHUB_REPO_OWNER ?? '';
-  const repo = env.GITHUB_REPO_NAME ?? '';
+  const owner = env.GITHUB_REPO_OWNER ?? process.env['GITHUB_OWNER'] ?? '';
+  const repo = env.GITHUB_REPO_NAME ?? process.env['GITHUB_REPO'] ?? '';
   if (!token || !owner || !repo) {
     console.error(
       '[ghp] GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
@@ -142,6 +157,8 @@ export interface GitHubCommitResult {
   commitSha: string;
   branch: string;
   committedPaths: string[];
+  /** Link to the commit on github.com. */
+  commitUrl: string;
 }
 
 /**
@@ -225,8 +242,25 @@ export async function pushFilesToGitHub(
       commitSha: newCommitSha,
       branch,
       committedPaths: files.map((file) => file.path),
+      commitUrl: `https://github.com/${config.owner}/${config.repo}/commit/${newCommitSha}`,
     };
   } catch (err) {
     throw toGitHubError(err);
   }
+}
+
+/**
+ * Single-file convenience wrapper matching the reference /ghp command's
+ * `pushFileToGithub(buffer, repoPath, commitMessage)` API — lands one file on
+ * the repo as a commit and returns its link. `branch` defaults to the repo's
+ * default branch.
+ */
+export async function pushFileToGithub(
+  config: GitHubConfig,
+  file: GitHubFileInput,
+  message: string,
+  branch?: string,
+): Promise<GitHubCommitResult> {
+  const targetBranch = branch ?? (await getDefaultBranch(config));
+  return pushFilesToGitHub(config, [file], message, targetBranch);
 }
