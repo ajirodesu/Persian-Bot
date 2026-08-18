@@ -231,6 +231,23 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
       setChildren((prev) => ({ ...prev, [path]: data.entries }))
     } catch (err) {
       if (id !== fetchRef.current[path]) return
+      // A subfolder that failed to load (e.g. a vanished folder restored from
+      // the persisted session) must not take down the whole file manager with
+      // a global error banner. Collapse it and drop its cached children so the
+      // user can navigate elsewhere; only a repository-root failure is fatal.
+      if (path !== '') {
+        setExpanded((prev) => {
+          const next = new Set(prev)
+          next.delete(path)
+          return next
+        })
+        setChildren((prev) => {
+          const next = { ...prev }
+          delete next[path]
+          return next
+        })
+        return
+      }
       setDirectoryError(
         err instanceof Error ? err.message : 'Failed to load files',
       )

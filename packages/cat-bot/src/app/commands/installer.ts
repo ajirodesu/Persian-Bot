@@ -20,36 +20,33 @@
  * links are rewritten to their raw form and Pastebin links get `/raw`
  * appended so the file content (not an HTML page) is downloaded.
  *
- * Once all three fields are collected the module is written to
- * `src/app/commands/<name>.ts`, staged, and committed with the provided
- * commit message via the same local-git lib the Admin Git tab uses.
+ * Once all three fields are collected the module is committed to the repo
+ * via the GitHub REST API (GITHUB_TOKEN / GITHUB_REPO_OWNER /
+ * GITHUB_REPO_NAME — see github-contents.lib.ts) at
+ * `<GITHUB_REPO_BASE_PATH>/src/app/commands/<name>.ts`, authored by the
+ * token's account. No local git identity or checkout is needed — it works on
+ * Render/Railway out of the box.
  *
- * Restricted to SYSTEM_ADMIN — it writes files to disk on the host running
- * the bot process.
+ * Restricted to SYSTEM_ADMIN — it writes to the live repository.
  *
  * Author: AjiroDesu
  */
 
-import { writeFile, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import {
-  getRepoRootOrThrow,
-  normalizeRepoPath,
-  stagePaths,
-  commitStaged,
-  RepoFileManagerError,
-} from '@/server/lib/local-git.lib.js';
+  GitHubApiError,
+  getGitHubConfig,
+  getDefaultBranch,
+  getFileSha,
+  pushFilesToGitHub,
+  type GitHubConfig,
+} from '@/server/lib/github-contents.lib.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-
-/** Directory (relative to the cat-bot package root) that command modules live in. */
-const COMMANDS_DIR = join('src', 'app', 'commands');
 
 /** Timeout for downloading the file from the provided link. */
 const DOWNLOAD_TIMEOUT_MS = 15_000;
@@ -73,7 +70,7 @@ function isManagedHosting(): boolean {
 export const meta: CommandMeta = {
   name: 'installer',
   aliases: ['install', 'getcmd'] as string[],
-  version: '2.0.0',
+  version: '2.1.0',
   role: Role.SYSTEM_ADMIN,
   author: 'AjiroDesu',
   description: 'Installs a command module from a file link (Pastebin / GitHub) via an onReply flow.',
@@ -166,61 +163,51 @@ async function fetchFileFromLink(link: string): Promise<string> {
   return content;
 }
 
+/** Repo-relative path of a command module (inside the cat-bot package). */
+function commandRepoPath(config: GitHubConfig, commandName: string): string {
+  return `${config.basePath}/src/app/commands/${commandName}.ts`;
+}
+
 /**
- * Writes the downloaded source into the commands dir and commits it with the
- * provided commit message. Returns the new commit's short sha.
+ * Commits the downloaded source into the repo on GitHub via the Git Data API
+ * and returns the new commit's short sha. Refuses to overwrite a command
+ * that already exists in the repo.
  */
 async function installCommand(
+  config: GitHubConfig,
   commandName: string,
   source: string,
   commitMessage: string,
 ): Promise<{ sha: string }> {
-  const root = getRepoRootOrThrow();
-  const localPath = resolve(process.cwd(), COMMANDS_DIR, `${commandName}.ts`);
+  const repoPath = commandRepoPath(config, commandName);
+  const branch = await getDefaultBranch(config);
 
-  if (existsSync(localPath)) {
-    throw new RepoFileManagerError(
+  const existing = await getFileSha(config, repoPath, branch);
+  if (existing) {
+    throw new GitHubApiError(
       400,
-      `\`${commandName}.ts\` already exists locally. Remove it first if you want to reinstall.`,
+      `\`${commandName}.ts\` already exists in the repo. Remove it first if you want to reinstall.`,
     );
   }
 
-  await mkdir(dirname(localPath), { recursive: true });
-  await writeFile(localPath, source, 'utf-8');
-
-  // Stage the new file relative to the git repo root (forward slashes even on Windows).
-  const repoPath = normalizeRepoPath(relative(root, localPath).replace(/\\/g, '/'));
-  await stagePaths([repoPath]);
-
-  let sha: string;
-  try {
-    ({ sha } = await commitStaged(commitMessage));
-  } catch (err) {
-    if (err instanceof RepoFileManagerError && /nothing staged/i.test(err.message)) {
-      throw new RepoFileManagerError(
-        400,
-        `\`${commandName}.ts\` was written, but its content matches an already-committed file — nothing to commit.`,
-      );
-    }
-    throw err;
-  }
-
-  return { sha };
+  const { commitSha } = await pushFilesToGitHub(
+    config,
+    [{ path: repoPath, content: Buffer.from(source, 'utf8') }],
+    commitMessage,
+    branch,
+  );
+  return { sha: commitSha };
 }
 
 // ── Command Handler — step 1: request the filename ────────────────────────────
 
 export const onCommand = async ({ chat, state }: AppCtx): Promise<void> => {
-  // Fail fast if there's no git checkout configured — no point collecting
-  // three fields the command can't commit at the end.
+  // Rely on the GitHub env vars — without them there is no repo to install into.
   try {
-    getRepoRootOrThrow();
+    getGitHubConfig();
   } catch (err) {
-    const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `❌ ${error.message ?? 'No git repository is configured for installing.'}`,
-    });
+    const message = err instanceof Error ? err.message : 'GitHub is not configured.';
+    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: `❌ ${message}` });
     return;
   }
 
@@ -281,16 +268,6 @@ export const onReply = {
           context: {},
         });
       }
-      return;
-    }
-
-    const localPath = resolve(process.cwd(), COMMANDS_DIR, `${commandName}.ts`);
-    if (existsSync(localPath)) {
-      await chat.replyMessage({
-        style: MessageStyle.MARKDOWN,
-        message:
-          `⚠️ \`${commandName}.ts\` already exists locally. Remove it first if you want to reinstall — run \`/installer\` again.`,
-      });
       return;
     }
 
@@ -374,7 +351,7 @@ export const onReply = {
     });
   },
 
-  // Step 4: collect the commit message, then download + install + commit.
+  // Step 4: collect the commit message, then download + install via GitHub API.
   [STATE.awaiting_commit_message]: async ({
     chat,
     session,
@@ -412,8 +389,9 @@ export const onReply = {
     }
 
     try {
+      const config = getGitHubConfig();
       const source = await fetchFileFromLink(fileLink);
-      const { sha } = await installCommand(commandName, source, commitMessage);
+      const { sha } = await installCommand(config, commandName, source, commitMessage);
 
       const activateHint = isManagedHosting()
         ? 'The bot will restart in a few minutes to apply these changes.'
@@ -421,7 +399,7 @@ export const onReply = {
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
         message: [
-          `✅ **Installed \`${commandName}.ts\`** · commit \`${sha || '(unknown)'}\``,
+          `✅ **Installed \`${commandName}.ts\`** · commit \`${sha.slice(0, 7) || '(unknown)'}\``,
           activateHint,
         ].join('\n'),
       });

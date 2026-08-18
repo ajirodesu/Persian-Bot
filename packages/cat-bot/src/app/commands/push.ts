@@ -2,12 +2,14 @@
  * /push — Push a zip of files straight to GitHub (System Admin only)
  *
  * Lets a system admin drop a zip of changed files onto the bot and have it
- * land in the repo, staged, committed, and pushed — no manual file-manager
- * clicking. Built on top of the same local git checkout the Admin File
- * Manager / Git tab already operates on (see local-git.lib.ts,
- * local-file-manager.lib.ts) — this command does not talk to the GitHub API
- * directly, it writes to the working tree and runs `git add/commit/push`,
- * exactly like a human using the Git tab would.
+ * land in the repo, committed and pushed — no manual file-manager clicking.
+ *
+ * The commit + push go through the GitHub REST API using GITHUB_TOKEN /
+ * GITHUB_REPO_OWNER / GITHUB_REPO_NAME (see github-contents.lib.ts): every
+ * file in the zip lands on the repo's default branch as ONE commit, authored
+ * by the token's account. Unlike a local-git flow, this needs no git
+ * user.name/email and no push credentials on the host — it just works on
+ * Render/Railway. The local checkout is never touched.
  *
  * Flow (single-step, no onReply state):
  *   Admin: [quotes a message carrying a .zip, types] /push Fix the login bug
@@ -22,11 +24,12 @@
  *   `packages/cat-bot/src/app/commands/push.ts`) — the way every deliverable
  *   is packaged for this project. Some zip tools still wrap everything in one
  *   extra top-level folder (e.g. a temp working-dir name) that is NOT itself
- *   a real top-level directory in this repo. `resolveEntryPath()` detects
- *   that case — a single common first path segment that does not exist as a
- *   real folder at the repo root — and strips it, exactly the way Lance asks
- *   for every time a deliverable is handed over. A legitimate top-level repo
- *   folder (e.g. `packages/`) is left untouched.
+ *   a real top-level directory in this repo. `unwrapPrefix()` detects that
+ *   case — a single common first path segment that does not exist as a real
+ *   folder at the repo root — and strips it, exactly the way Lance asks for
+ *   every time a deliverable is handed over. A legitimate top-level repo
+ *   folder (e.g. `packages/`) is left untouched. The check is best-effort:
+ *   when no local checkout is resolvable the wrapper stripping is skipped.
  *
  * Attachment detection note:
  *   Discord and Fluxer attachments always carry a real `filename`, so a
@@ -46,7 +49,6 @@
  */
 
 import { promises as fsp } from 'node:fs';
-import { dirname, join } from 'node:path';
 import axios from 'axios';
 import AdmZip from 'adm-zip';
 import type { AppCtx } from '@/engine/types/controller.types.js';
@@ -54,14 +56,14 @@ import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
+import { getRepoRootOrThrow, normalizeRepoPath } from '@/server/lib/local-git.lib.js';
 import {
-  getRepoRootOrThrow,
-  normalizeRepoPath,
-  stagePaths,
-  commitStaged,
-  pushCurrent,
-  RepoFileManagerError,
-} from '@/server/lib/local-git.lib.js';
+  getGitHubConfig,
+  getDefaultBranch,
+  pushFilesToGitHub,
+  type GitHubConfig,
+  type GitHubFileInput,
+} from '@/server/lib/github-contents.lib.js';
 
 // ── Attachment shape (same convention as popcat-media.ts / agent-handler.lib.ts) ─
 
@@ -122,14 +124,19 @@ function hasUnresolvedAttachment(attachments: RawAttachment[]): boolean {
 }
 
 /**
- * Real top-level entries at the repo root, used to tell a legitimate
- * repo-relative path (e.g. `packages/...`) apart from an artificial wrapper
- * folder that some zip tools add.
+ * Best-effort real top-level entries at the repo root, used to tell a
+ * legitimate repo-relative path (e.g. `packages/...`) apart from an
+ * artificial wrapper folder that some zip tools add. Returns null when no
+ * local checkout is resolvable — in that case wrapper stripping is skipped.
  */
-async function repoRootEntries(): Promise<Set<string>> {
-  const root = getRepoRootOrThrow();
-  const dirents = await fsp.readdir(root, { withFileTypes: true });
-  return new Set(dirents.map((d) => d.name));
+async function repoRootEntries(): Promise<Set<string> | null> {
+  try {
+    const root = getRepoRootOrThrow();
+    const dirents = await fsp.readdir(root, { withFileTypes: true });
+    return new Set(dirents.map((d) => d.name));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -137,7 +144,8 @@ async function repoRootEntries(): Promise<Set<string>> {
  * when that folder name is NOT itself a real top-level directory in the repo
  * (which would mean it's a genuine monorepo-relative path, not a wrapper).
  */
-function unwrapPrefix(entryNames: string[], realTopLevel: Set<string>): string | null {
+function unwrapPrefix(entryNames: string[], realTopLevel: Set<string> | null): string | null {
+  if (!realTopLevel) return null;
   const firstSegments = new Set(
     entryNames.map((n) => n.split('/')[0]).filter((s): s is string => !!s),
   );
@@ -147,17 +155,21 @@ function unwrapPrefix(entryNames: string[], realTopLevel: Set<string>): string |
   return only;
 }
 
-interface PushSummary {
-  written: string[];
+interface ExtractedZip {
+  written: GitHubFileInput[];
   skipped: string[];
 }
 
-/** Extracts a zip buffer into the repo working tree, honoring the unwrap convention. */
-async function extractZipToRepo(buffer: Buffer): Promise<PushSummary> {
+/**
+ * Reads a zip buffer into in-memory file entries, honoring the unwrap
+ * convention. Nothing touches the local disk — the files are pushed to
+ * GitHub directly.
+ */
+async function extractZipEntries(buffer: Buffer): Promise<ExtractedZip> {
   const zip = new AdmZip(buffer);
   const zipEntries = zip.getEntries().filter((e) => !e.isDirectory);
   if (zipEntries.length === 0) {
-    throw new RepoFileManagerError(400, 'The zip contains no files.');
+    throw new Error('The zip contains no files.');
   }
 
   const realTopLevel = await repoRootEntries();
@@ -166,9 +178,8 @@ async function extractZipToRepo(buffer: Buffer): Promise<PushSummary> {
     realTopLevel,
   );
 
-  const written: string[] = [];
+  const written: GitHubFileInput[] = [];
   const skipped: string[] = [];
-  const root = getRepoRootOrThrow();
 
   for (const entry of zipEntries) {
     let relative = entry.entryName.replace(/\\/g, '/');
@@ -182,7 +193,7 @@ async function extractZipToRepo(buffer: Buffer): Promise<PushSummary> {
     try {
       repoPath = normalizeRepoPath(relative);
       if (repoPath === '.git' || repoPath.startsWith('.git/')) {
-        throw new RepoFileManagerError(400, 'Cannot modify .git');
+        throw new Error('Cannot modify .git');
       }
     } catch {
       skipped.push(entry.entryName);
@@ -195,10 +206,7 @@ async function extractZipToRepo(buffer: Buffer): Promise<PushSummary> {
       continue;
     }
 
-    const absTarget = join(root, ...repoPath.split('/'));
-    await fsp.mkdir(dirname(absTarget), { recursive: true });
-    await fsp.writeFile(absTarget, data);
-    written.push(repoPath);
+    written.push({ path: repoPath, content: data });
   }
 
   return { written, skipped };
@@ -209,7 +217,7 @@ async function extractZipToRepo(buffer: Buffer): Promise<PushSummary> {
 export const meta: CommandMeta = {
   name: 'push',
   aliases: ['gitpush'] as string[],
-  version: '1.1.0',
+  version: '2.0.0',
   role: Role.SYSTEM_ADMIN,
   author: 'AjiroDesu',
   description:
@@ -222,19 +230,16 @@ export const meta: CommandMeta = {
   platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
 };
 
-// ── Command Entry Point — single step: reply → unzip → commit → push ───────────
+// ── Command Entry Point — single step: reply → unzip → push via GitHub API ────
 
 export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<void> => {
-  // Fail fast if there's no git checkout configured — no point collecting a
-  // zip the command can't do anything with.
+  // Rely on the GitHub env vars — without them there is no repo to push to.
+  let config: GitHubConfig;
   try {
-    getRepoRootOrThrow();
+    config = getGitHubConfig();
   } catch (err) {
-    const error = err as { message?: string };
-    await chat.replyMessage({
-      style: MessageStyle.MARKDOWN,
-      message: `❌ ${error.message ?? 'No git repository is configured for pushing.'}`,
-    });
+    const message = err instanceof Error ? err.message : 'GitHub is not configured.';
+    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: `❌ ${message}` });
     return;
   }
 
@@ -272,10 +277,10 @@ export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<v
     });
     const buffer = Buffer.from(download.data);
     if (buffer.length < 4 || buffer.toString('ascii', 0, 2) !== 'PK') {
-      throw new RepoFileManagerError(400, 'That file is not a valid zip archive.');
+      throw new Error('That file is not a valid zip archive.');
     }
 
-    const { written, skipped } = await extractZipToRepo(buffer);
+    const { written, skipped } = await extractZipEntries(buffer);
     if (written.length === 0) {
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
@@ -284,52 +289,30 @@ export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<v
       return;
     }
 
-    await stagePaths(written);
-
-    let sha: string;
-    try {
-      ({ sha } = await commitStaged(commitMessage));
-    } catch (err) {
-      if (err instanceof RepoFileManagerError && /nothing staged/i.test(err.message)) {
-        await chat.replyMessage({
-          style: MessageStyle.MARKDOWN,
-          message: `ℹ️ Extracted ${written.length} file(s), but the content exactly matches what's already committed — nothing to push.`,
-        });
-        return;
-      }
-      throw err;
-    }
-
-    let pushOutput = '';
-    let pushError: string | null = null;
-    try {
-      pushOutput = await pushCurrent();
-    } catch (err) {
-      pushError = (err as { message?: string }).message ?? 'push failed';
-    }
+    const branch = await getDefaultBranch(config);
+    const { commitSha } = await pushFilesToGitHub(config, written, commitMessage, branch);
 
     const lines = [
-      pushError ? '⚠️ **Committed, but push failed**' : '✅ **Pushed to GitHub**',
-      `📝 ${written.length} file(s) written${skipped.length ? `, ${skipped.length} skipped` : ''} · commit \`${sha || '(unknown)'}\``,
+      `✅ **Pushed to GitHub**`,
+      `📝 ${written.length} file(s) pushed${skipped.length ? `, ${skipped.length} skipped` : ''} · commit \`${commitSha.slice(0, 7)}\``,
       '```',
-      written.slice(0, 20).join('\n') + (written.length > 20 ? `\n… +${written.length - 20} more` : ''),
+      written
+        .slice(0, 20)
+        .map((f) => f.path)
+        .join('\n') + (written.length > 20 ? `\n… +${written.length - 20} more` : ''),
       '```',
     ];
     if (skipped.length) {
       lines.push(`⏭️ Skipped: ${skipped.slice(0, 10).join(', ')}${skipped.length > 10 ? ', …' : ''}`);
     }
-    if (pushError) {
-      lines.push(`⚠️ \`${pushError}\` — the commit is local; push manually from the Git tab.`);
-    } else if (pushOutput) {
-      lines.push(`\n_${pushOutput}_`);
-    }
+    lines.push(`_Pushed to \`${branch}\` via the GitHub API._`);
 
     await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: lines.join('\n') });
   } catch (err) {
-    const error = err as { message?: string };
+    const message = err instanceof Error ? err.message : 'Unknown error';
     await chat.replyMessage({
       style: MessageStyle.MARKDOWN,
-      message: `⚠️ **Push failed:** \`${error.message ?? 'Unknown error'}\``,
+      message: `⚠️ **Push failed:** \`${message}\``,
     });
   }
 };

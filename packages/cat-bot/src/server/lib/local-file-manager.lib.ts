@@ -179,7 +179,12 @@ export async function listDirectory(raw: string): Promise<RepoDirectoryListing> 
     dirents = await fsp.readdir(dir, { withFileTypes: true });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new RepoFileManagerError(404, `Folder not found: ${repoPath || '(root)'}`);
+      // The folder does not exist in this checkout — e.g. a path restored from a
+      // persisted session, a folder that only exists on another branch, or one
+      // that was deleted since the tree index was built. Surface it as an empty
+      // folder instead of a hard 404 so a stale folder can't block the whole
+      // file manager with an error banner.
+      return { path: repoPath, entries: [] };
     }
     throw err;
   }
