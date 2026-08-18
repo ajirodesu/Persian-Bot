@@ -512,9 +512,37 @@ export async function commitStaged(message: string): Promise<{ sha: string }> {
   }
 }
 
-/** Pushes the current branch to its upstream. Returns git's output. */
+/**
+ * Pushes the current branch to its upstream. Returns git's output.
+ *
+ * Pushes to the EXPLICIT upstream ref rather than a bare `git push`: under
+ * git's default `push.default=simple`, a bare push refuses when the local
+ * branch name differs from its upstream branch name (e.g. local `feature`
+ * tracking `origin/main`), which made the panel's Push fail even though the
+ * branch was ahead. When the branch has no upstream yet, publishes it and
+ * sets the tracking ref (`git push -u`), so a newly-created branch can be
+ * pushed from the panel instead of being stuck on "no upstream".
+ */
 export async function pushCurrent(): Promise<string> {
-  const out = await runGit(['push']);
+  const upstream = await getUpstream();
+  if (upstream) {
+    const slash = upstream.indexOf('/');
+    const remote = slash === -1 ? 'origin' : upstream.slice(0, slash);
+    const branch = slash === -1 ? upstream : upstream.slice(slash + 1);
+    const out = await runGit(['push', remote, `HEAD:${branch}`]);
+    return out.trim();
+  }
+  // No upstream — publish the current branch and start tracking it so future
+  // pushes keep working without extra setup.
+  const res = await runGitProbe(['symbolic-ref', '--short', '-q', 'HEAD']);
+  if (res.code !== 0 || res.stdout.trim() === '') {
+    throw new RepoFileManagerError(
+      400,
+      'Cannot push — HEAD is detached. Check out a branch first.',
+    );
+  }
+  const branch = res.stdout.trim();
+  const out = await runGit(['push', '-u', 'origin', branch]);
   return out.trim();
 }
 
