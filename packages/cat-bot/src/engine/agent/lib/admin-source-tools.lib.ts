@@ -31,7 +31,10 @@ import path from 'node:path';
 import { getRepoRootOrThrow } from '@/server/lib/local-git.lib.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { resolveAgentContext } from '../agent.util.js';
+import { generateCommitMessage } from './commit-message.lib.js';
 import type { ToolContext } from '../agent-tool.types.js';
+
+export { generateCommitMessage };
 
 // ── Scope ─────────────────────────────────────────────────────────────────────
 // The ONLY filesystem locations these tools may touch, expressed as
@@ -344,22 +347,26 @@ export function detectHostingPlatform(): HostingPlatform {
 
 /**
  * Save-guidance appended after a successful admin edit. On Render/Railway the
- * working-tree changes only reach the deployed bot after an explicit push, so
- * the AI relays the exact dashboard navigation path (Admin Dashboard > Files >
- * Git > Push). Everywhere else it falls back to the generic git workflow hint.
+ * working-tree changes only reach the deployed bot after an explicit push. The
+ * agent can save them directly with the admin_commit_push tool (which stages,
+ * generates a commit message, and pushes via the GitHub API); the dashboard
+ * path (Admin Dashboard > Files > Git) remains as the manual fallback.
  */
 export function saveChangesHint(): string {
   const platform = detectHostingPlatform();
   if (platform === 'render' || platform === 'railway') {
     return (
       `To save these changes on ${platform === 'render' ? 'Render' : 'Railway'}: ` +
-      'open the Admin Dashboard, go to Files > Git, and click Push. ' +
+      'commit and push them directly with the admin_commit_push tool ' +
+      '(auto-generates a commit message and pushes through the GitHub API), ' +
+      'or open the Admin Dashboard, go to Files > Git, and click Push. ' +
       'Changes are not committed or deployed automatically.'
     );
   }
   return (
-    'Nothing was committed or pushed: use the admin panel Files > Git tab to ' +
-    'stage, commit, and push these changes.'
+    'Nothing was committed or pushed yet: use the admin_commit_push tool to ' +
+    'commit and push these changes directly, or the admin panel Files > Git ' +
+    'tab to stage, commit, and push them manually.'
   );
 }
 
