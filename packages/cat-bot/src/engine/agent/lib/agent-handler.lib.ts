@@ -68,6 +68,8 @@ import {
   deactivateSession,
   getCachedResult,
   cacheResult,
+  acquireTurnLock,
+  releaseTurnLock,
 } from './agent-thread.lib.js';
 import {
   detectActivation,
@@ -659,19 +661,29 @@ export async function runAgent(
   ctx: BaseCtx,
   queryOverride?: string,
 ): Promise<void> {
+  const key = buildAgentKey(ctx);
+  // Serialize turns per (session, thread, sender): if a turn is already running
+  // for this key, a burst of follow-up messages must not start a second one and
+  // race on the thread store. The skipped message's content is naturally picked
+  // up by the active session on the sender's next message.
+  if (key.senderID && key.threadID && !acquireTurnLock(key)) return;
   try {
-    await runAgentUnsafe(ctx, queryOverride);
-  } catch (err) {
-    // The command dispatcher and the natural-language path BOTH swallow thrown
-    // errors silently (command.dispatcher.ts logs and returns) — if anything
-    // unexpected fails mid-turn the user would see NOTHING. Reply with a
-    // fallback so the agent can never go silent on an internal error.
-    logger.error('[Agent] runAgent failed', { error: err });
     try {
-      await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
-    } catch {
-      // Even the fallback failed — nothing more we can do.
+      await runAgentUnsafe(ctx, queryOverride);
+    } catch (err) {
+      // The command dispatcher and the natural-language path BOTH swallow thrown
+      // errors silently (command.dispatcher.ts logs and returns) — if anything
+      // unexpected fails mid-turn the user would see NOTHING. Reply with a
+      // fallback so the agent can never go silent on an internal error.
+      logger.error('[Agent] runAgent failed', { error: err });
+      try {
+        await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
+      } catch {
+        // Even the fallback failed — nothing more we can do.
+      }
     }
+  } finally {
+    if (key.senderID && key.threadID) releaseTurnLock(key);
   }
 }
 

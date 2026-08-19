@@ -113,6 +113,36 @@ export function getThreadLength(key: AgentThreadKey): number {
   return getThread(key).length;
 }
 
+// ── Turn serialization ────────────────────────────────────────────────────────
+// A simple per-thread lock so overlapping messages from the same sender never
+// run two agent turns concurrently. Without it, a quick burst of messages can
+// race on appendThread (interleaved/lost history) and produce duplicate replies
+// to the same thread. The lock is held for the whole turn and released in a
+// finally block; a second message arriving mid-turn is skipped (the active
+// session keeps working and the sender can just send again).
+
+function turnKey(k: AgentThreadKey): string {
+  return `agent:turn:${ns(k)}`;
+}
+
+const turnLocks = new Set<string>();
+
+export function isTurnInFlight(key: AgentThreadKey): boolean {
+  return turnLocks.has(turnKey(key));
+}
+
+/** Attempts to take the turn lock; returns false when a turn is already running. */
+export function acquireTurnLock(key: AgentThreadKey): boolean {
+  const tk = turnKey(key);
+  if (turnLocks.has(tk)) return false;
+  turnLocks.add(tk);
+  return true;
+}
+
+export function releaseTurnLock(key: AgentThreadKey): void {
+  turnLocks.delete(turnKey(key));
+}
+
 // ── Prompt result caching (canis agentHandler) ────────────────────────────────
 
 function cacheKey(prompt: string): string {

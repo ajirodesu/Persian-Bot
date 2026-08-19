@@ -66,6 +66,130 @@ export interface AgentTurnConfig {
 // Sentinel returned to the LLM when run_command is intercepted.
 const RUN_CMD_SENTINEL = '__RUN_COMMAND_DISPATCHED__';
 
+// ── LLM call reliability: timeout + retry ─────────────────────────────────────
+// A hung or flaky provider request must never block a turn forever. Every LLM
+// call is bounded by a hard timeout and retried with exponential backoff +
+// jitter on transient failures (429/5xx/network), so heavy usage and provider
+// hiccups degrade gracefully instead of producing apologies or hanging chats.
+const LLM_TIMEOUT_MS = 90_000; // hard cap on one provider request
+const LLM_MAX_RETRIES = 2; // transient failures get at most 2 backoff retries
+const LLM_RETRY_BASE_MS = 500;
+const LLM_RETRY_MAX_MS = 4_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** True for errors worth a retry: rate limits, 5xx, and network resets. */
+function isRetryableError(err: unknown): boolean {
+  if (!err) return false;
+  const e = err as { status?: number; statusCode?: number; code?: unknown };
+  const status = e.status ?? e.statusCode;
+  if (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  ) {
+    return true;
+  }
+  const code = typeof e.code === 'string' ? e.code : '';
+  return /ECONNRESET|ETIMEDOUT|ECONNABORTED|ENOTFOUND|EAI_AGAIN|EPIPE|UND_ERR_CONNECT_TIMEOUT/i.test(
+    code,
+  );
+}
+
+/** Bounds fn with a hard timeout; aborts the underlying request when possible. */
+async function withTimeout<T>(
+  fn: (signal?: AbortSignal) => Promise<T>,
+  ms: number,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fn(controller.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`LLM request timed out after ${ms}ms`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Calls one LLM request with timeout + bounded backoff retry. Retrying is safe
+ * because each attempt is stateless — the caller's message list is only mutated
+ * with a SUCCESSFUL response, never here.
+ */
+async function callLlm<T>(
+  fn: (signal?: AbortSignal) => Promise<T>,
+): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await withTimeout(fn, LLM_TIMEOUT_MS);
+    } catch (err) {
+      attempt += 1;
+      if (attempt > LLM_MAX_RETRIES || !isRetryableError(err)) throw err;
+      const base = LLM_RETRY_BASE_MS * 2 ** (attempt - 1);
+      const jitter = Math.random() * LLM_RETRY_BASE_MS;
+      await delay(Math.min(base + jitter, LLM_RETRY_MAX_MS));
+    }
+  }
+}
+
+// ── Token-budget context control ──────────────────────────────────────────────
+// The conversation history is trimmed by ESTIMATED TOKENS (not just message
+// count) so long-winded histories never blow past a provider's context window
+// or burn tokens on stale turns. Tool results are also capped when fed back to
+// the LLM — the handler keeps full test_command results in the turn's tool log,
+// so capping the message copy never loses media/attachment keys.
+const HISTORY_TOKEN_BUDGET = 24_000; // oldest history dropped to stay under budget
+const MAX_TOOL_RESULT_CHARS = 6_000; // per tool result fed back to the LLM
+const CHARS_PER_TOKEN = 3.5;
+
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+/** Drops the OLDEST messages until the estimated token total fits the budget. */
+function trimHistoryToBudget<T extends ThreadMessage>(
+  history: T[],
+  budget: number,
+): T[] {
+  let total = 0;
+  const kept: T[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const cost = estimateTokens(history[i]!.content);
+    // Always keep the most recent message even if oversized (never empty input).
+    if (kept.length > 0 && total + cost > budget) break;
+    kept.unshift(history[i]!);
+    total += cost;
+  }
+  return kept;
+}
+
+/** Caps a tool result before it is fed back to the LLM. */
+function capToolResult(result: string): string {
+  return result.length > MAX_TOOL_RESULT_CHARS
+    ? `${result.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
+    : result;
+}
+
+/** True when a tool call batch must run sequentially (delivery/side-effects). */
+function needsSequentialTools(calls: Array<{ name: string }>): boolean {
+  return calls.some(
+    (c) => c.name === 'send_result' || c.name === 'run_command',
+  );
+}
+
 type ExecFn = (name: string, args: Record<string, unknown>) => Promise<string>;
 
 function stripRawToolCalls(text: string): string | null {
@@ -124,9 +248,11 @@ async function runOpenAILike(
       ]
     : userQuery;
 
+  const trimmedHistory = trimHistoryToBudget(history, HISTORY_TOKEN_BUDGET);
+
   const messages: any[] = [
     { role: 'system', content: systemPrompt },
-    ...history.map((m) => ({ role: m.role, content: m.content })),
+    ...trimmedHistory.map((m) => ({ role: m.role, content: m.content })),
     { role: 'user', content: userContent },
   ];
 
@@ -145,12 +271,18 @@ async function runOpenAILike(
   const startIdx = messages.length; // first index added this turn
 
   for (let i = 0; i < maxToolIterations; i++) {
-    const response = await client.chat.completions.create({
-      model,
-      messages,
-      // exactOptionalPropertyTypes: only attach tools/tool_choice when present.
-      ...(oaTools ? { tools: oaTools, tool_choice: 'auto' as const } : {}),
-    });
+    const response = await callLlm((signal) =>
+      client.chat.completions.create(
+        {
+          model,
+          messages,
+          // exactOptionalPropertyTypes: only attach tools/tool_choice when present.
+          ...(oaTools ? { tools: oaTools, tool_choice: 'auto' as const } : {}),
+        },
+        // The OpenAI SDK cancels the underlying HTTP request when aborted.
+        { signal },
+      ),
+    );
 
     const choice = response.choices?.[0];
     if (!choice) {
@@ -168,10 +300,15 @@ async function runOpenAILike(
       return text ? stripRawToolCalls(text) : null;
     }
 
+    const funcCalls = msg.tool_calls.filter(
+      (tc: any) => tc.type === 'function',
+    );
     let commandDispatched = false;
-    for (const tc of msg.tool_calls) {
-      // openai v6 unions custom tool calls in — only handle function calls.
-      if (tc.type !== 'function') continue;
+
+    // Parallel-safe batches (independent tools) run concurrently to cut turn
+    // latency; delivery/side-effect tools (send_result, run_command) keep
+    // strict ordering to avoid duplicate replies and single-use-key loss.
+    const runOne = async (tc: any): Promise<{ tc: any; result: string }> => {
       let args: Record<string, unknown> = {};
       try {
         args = JSON.parse(tc.function.arguments);
@@ -183,8 +320,29 @@ async function runOpenAILike(
         '[AgentTool]',
         `${tc.function.name} → ${result.slice(0, 80)}`,
       );
-      messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
-      if (result === RUN_CMD_SENTINEL) commandDispatched = true;
+      return { tc, result };
+    };
+
+    if (needsSequentialTools(funcCalls.map((tc: any) => tc.function))) {
+      for (const tc of funcCalls) {
+        const { result } = await runOne(tc);
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: capToolResult(result),
+        });
+        if (result === RUN_CMD_SENTINEL) commandDispatched = true;
+      }
+    } else {
+      const results = await Promise.all(funcCalls.map(runOne));
+      for (const { tc, result } of results) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: capToolResult(result),
+        });
+        if (result === RUN_CMD_SENTINEL) commandDispatched = true;
+      }
     }
 
     if (commandDispatched) return null;
@@ -225,8 +383,10 @@ async function runGemini(
     });
   }
 
+  const trimmedHistory = trimHistoryToBudget(history, HISTORY_TOKEN_BUDGET);
+
   const contents: any[] = [
-    ...history.map((m) => ({
+    ...trimmedHistory.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     })),
@@ -234,16 +394,18 @@ async function runGemini(
   ];
 
   for (let i = 0; i < maxToolIterations; i++) {
-    const response = await client.models.generateContent({
-      model,
-      contents,
-      config: {
-        systemInstruction: systemPrompt,
-        ...(functionDeclarations.length > 0
-          ? ({ tools: [{ functionDeclarations }] } as any)
-          : {}),
-      } as any,
-    });
+    const response = await callLlm(() =>
+      client.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: systemPrompt,
+          ...(functionDeclarations.length > 0
+            ? ({ tools: [{ functionDeclarations }] } as any)
+            : {}),
+        } as any,
+      }),
+    );
 
     const parts: any[] = response.candidates?.[0]?.content?.parts ?? [];
     const textPart = parts.find((p: any) => typeof p.text === 'string');
@@ -257,17 +419,39 @@ async function runGemini(
 
     let commandDispatched = false;
     const responseParts: any[] = [];
-    for (const part of callParts) {
+
+    const runOne = async (part: any): Promise<{ part: any; result: string }> => {
       const fc = part.functionCall;
       const result = await execFn(
         fc.name,
         (fc.args ?? {}) as Record<string, unknown>,
       );
       logger.debug('[AgentTool]', `${fc.name} → ${result.slice(0, 80)}`);
-      responseParts.push({
-        functionResponse: { name: fc.name, response: { result } },
-      });
-      if (result === RUN_CMD_SENTINEL) commandDispatched = true;
+      return { part, result };
+    };
+
+    if (needsSequentialTools(callParts.map((p: any) => p.functionCall))) {
+      for (const part of callParts) {
+        const { result } = await runOne(part);
+        responseParts.push({
+          functionResponse: {
+            name: part.functionCall.name,
+            response: { result: capToolResult(result) },
+          },
+        });
+        if (result === RUN_CMD_SENTINEL) commandDispatched = true;
+      }
+    } else {
+      const results = await Promise.all(callParts.map(runOne));
+      for (const { part, result } of results) {
+        responseParts.push({
+          functionResponse: {
+            name: part.functionCall.name,
+            response: { result: capToolResult(result) },
+          },
+        });
+        if (result === RUN_CMD_SENTINEL) commandDispatched = true;
+      }
     }
     contents.push({ role: 'user', parts: responseParts });
 

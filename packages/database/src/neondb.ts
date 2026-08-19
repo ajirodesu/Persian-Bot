@@ -159,3 +159,9 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/neondb/src/server/github-config.repo.js';
+
+// --- MCP SERVERS ---
+export {
+  getMcpServersStore,
+  saveMcpServersStore,
+} from '../adapters/neondb/src/server/mcp-servers.repo.js';

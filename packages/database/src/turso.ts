@@ -163,3 +163,9 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/turso/src/server/github-config.repo.js';
+
+// --- MCP SERVERS ---
+export {
+  getMcpServersStore,
+  saveMcpServersStore,
+} from '../adapters/turso/src/server/mcp-servers.repo.js';

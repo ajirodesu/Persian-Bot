@@ -42,6 +42,8 @@ import {
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
 import { setCachedSessionAdminOnly } from '@/engine/lib/admin-only-state.lib.js';
+import { warmupAgentTools } from '@/engine/agent/lib/mcp-tools.lib.js';
+import { warmupExternalMcpConnections } from '@/engine/agent/lib/external-mcp.lib.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -342,6 +344,11 @@ async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
       ...allSessions.map((s) =>
         warmSessionAdminOnly(s.userId, s.platform, s.sessionId),
       ),
+      // Pre-warm the agent tool loader (dynamic imports) and any configured
+      // external MCP servers so the FIRST agent turn after boot is already
+      // wired — no cold-start import or connection handshake on the hot path.
+      warmupAgentTools(),
+      warmupExternalMcpConnections(),
     ]);
 
     logger.info(

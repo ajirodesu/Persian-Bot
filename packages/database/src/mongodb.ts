@@ -155,3 +155,9 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/mongodb/src/server/github-config.repo.js';
+
+// --- MCP SERVERS ---
+export {
+  getMcpServersStore,
+  saveMcpServersStore,
+} from '../adapters/mongodb/src/server/mcp-servers.repo.js';

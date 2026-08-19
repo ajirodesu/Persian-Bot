@@ -29,6 +29,7 @@ import {
 import type { ToolContext } from '../agent-tool.types.js';
 import { loadAgentTools } from './agent-tool-loader.lib.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { getExternalMcpToolSet } from './external-mcp.lib.js';
 
 /** The LLM-facing schema for one MCP tool (OpenAI-compatible shape). */
 export interface McpToolSchema {
@@ -156,27 +157,52 @@ export async function createMcpToolSet(
     server.connect(serverTransport),
   ]);
 
+  // Internal tools take priority on a name collision — external names are
+  // namespaced `<server>_<tool>`, so this never triggers in practice.
+  const internalNames = new Set(enabled.map((t) => t.meta.name));
+  const internalCallTool = async (
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<string> => {
+    try {
+      const res = (await client.callTool({
+        name,
+        arguments: args,
+      })) as {
+        content: Array<{ type?: string; text?: unknown }>;
+        isError?: boolean;
+      };
+      const text = res.content
+        .filter((c) => c.type === 'text' && typeof c.text === 'string')
+        .map((c) => c.text as string)
+        .join('\n');
+      return text || '(tool returned no text)';
+    } catch (err) {
+      return `Tool call failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    }
+  };
+
+  // Custom MCP servers configured by system administrators (Admin dashboard →
+  // MCP Servers): connect, list their tools, and append them to this turn's
+  // tool set. Connections are cached globally across turns by
+  // external-mcp.lib.ts, so the per-turn cost here is just a reconcile.
+  const external = await getExternalMcpToolSet();
+
   return {
-    schemas,
+    schemas: [...schemas, ...external.schemas],
     callTool: async (name, args) => {
-      try {
-        const res = (await client.callTool({
-          name,
-          arguments: args,
-        })) as {
-          content: Array<{ type?: string; text?: unknown }>;
-          isError?: boolean;
-        };
-        const text = res.content
-          .filter((c) => c.type === 'text' && typeof c.text === 'string')
-          .map((c) => c.text as string)
-          .join('\n');
-        return text || '(tool returned no text)';
-      } catch (err) {
-        return `Tool call failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`;
-      }
+      if (internalNames.has(name)) return internalCallTool(name, args);
+      return external.callTool(name, args);
     },
   };
+}
+
+/**
+ * Pre-warms the internal tool loader + schema cache off the hot path so the
+ * first agent turn after boot never pays the dynamic-import cost.
+ */
+export async function warmupAgentTools(): Promise<void> {
+  await loadAgentTools();
 }

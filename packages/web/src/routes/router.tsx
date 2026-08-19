@@ -47,6 +47,7 @@ const AdminUsersPage = lazy(() => import('@/pages/admin/dashboard/users'))
 const AdminBotsPage = lazy(() => import('@/pages/admin/dashboard/bots'))
 const AdminFilesPage = lazy(() => import('@/pages/admin/dashboard/files'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/dashboard/settings'))
+const AdminMcpServersPage = lazy(() => import('@/pages/admin/dashboard/mcp-servers'))
 
 /**
  * AdminLayout — scopes AdminAuthProvider to the admin route subtree.
@@ -200,6 +201,10 @@ export const router = createBrowserRouter([
               {
                 path: ROUTES.ADMIN.SETTINGS,
                 element: withSuspense(<AdminSettingsPage />),
+              },
+              {
+                path: ROUTES.ADMIN.MCP_SERVERS,
+                element: withSuspense(<AdminMcpServersPage />),
               },
             ],
           },

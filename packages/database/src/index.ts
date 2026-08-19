@@ -276,3 +276,14 @@ export const getGitHubConfigStore = m.getGitHubConfigStore;
 export const saveGitHubConfigStore = m.saveGitHubConfigStore;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const clearGitHubConfigStore = m.clearGitHubConfigStore;
+
+// --- MCP SERVERS ---
+// Deployment-level custom MCP server registry — system administrators configure
+// MCP servers (name + URL + optional auth headers, headers AES-256-GCM
+// encrypted at rest) in the Admin dashboard. The AI agent loads these from the
+// database, connects to each enabled server over MCP Streamable HTTP, and
+// exposes its tools to the LLM.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getMcpServersStore = m.getMcpServersStore;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const saveMcpServersStore = m.saveMcpServersStore;

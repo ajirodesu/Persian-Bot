@@ -10,6 +10,7 @@ import {
   ChevronDown,
   X,
   Files,
+  Server,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react'
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
   { path: ROUTES.ADMIN.BOTS,      label: 'Bot Sessions',  icon: Bot },
   { path: ROUTES.ADMIN.FILES,     label: 'Files',         icon: Files },
   { path: ROUTES.ADMIN.SETTINGS,  label: 'Settings',      icon: Settings },
+  { path: ROUTES.ADMIN.MCP_SERVERS, label: 'MCP Servers', icon: Server },
 ] as const
 
 /** Width of the desktop sidebar when collapsed to an icon-only rail. */
