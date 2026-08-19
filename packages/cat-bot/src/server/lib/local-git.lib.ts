@@ -548,8 +548,8 @@ export async function commitStaged(
  * push`, which needs working git credentials on the host — the thing that
  * breaks on Render/Railway (and that made the panel's Push silently fail). It
  * now pushes through the GitHub REST API instead, exactly like /push and
- * /installer (GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME), so a
- * managed host can push without any git credentials.
+ * /installer (the deployment's single stored GitHub token + GITHUB_REPO_OWNER /
+ * GITHUB_REPO_NAME), so a managed host can push without any git credentials.
  *
  * The local unpushed commits are recreated on GitHub via the Git Data API —
  * blobs are content-addressed, so re-uploading a local blob's content yields
@@ -739,12 +739,11 @@ async function tryUpdateTrackingRef(
  * ref. A real non-fast-forward check is done locally: the remote tip must be an
  * ancestor of HEAD, otherwise the push refuses and asks you to pull first.
  *
- * Pass the admin's GitHub PAT as `tokenOverride` to attribute the pushed
- * commits to their account and to authenticate the write; when omitted the
- * server's GITHUB_TOKEN is used.
+ * Authenticated with the deployment's single stored GitHub token (set through
+ * the dashboard Git tab) — no per-request token override and no env var.
  */
-export async function pushCurrent(tokenOverride?: string): Promise<string> {
-  const config = getGitHubConfig(tokenOverride);
+export async function pushCurrent(): Promise<string> {
+  const config = await getGitHubConfig();
 
   // Always push to the repo's default branch (main) — never another branch.
   const branch = await getDefaultBranch(config);

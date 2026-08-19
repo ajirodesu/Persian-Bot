@@ -393,13 +393,6 @@ function getBorderRadiusClass(variant: ButtonVariant, pill: boolean): string {
 }
 
 /**
- * Signature glow shadow — reserved exclusively for the primary filled
- * button (the app's main call-to-action). Value comes from each
- * theme's own --shadow-cta-glow (falls back to `none` if unset).
- */
-const ctaGlowClass = 'shadow-[var(--shadow-cta-glow,none)] hover:brightness-110'
-
-/**
  * Button component with composable variant and color props
  *
  * **Variants:**
@@ -511,7 +504,6 @@ const Button = forwardRefWithAs<'button', ButtonOwnProps>((props, ref) => {
     isLinkVariant ? linkBaseStyles : baseStyles,
     getBorderRadiusClass(variant, pill),
     getVariantClasses(variant, resolvedColor),
-    variant === 'filled' && resolvedColor === 'primary' && ctaGlowClass,
     !isUnstyled && getSizeClasses(),
     iconOnly && !isUnstyled && 'relative',
     iconOnly && !isUnstyled && iconOnlyHitSlopClasses[size],

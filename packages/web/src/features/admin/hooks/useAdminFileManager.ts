@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { adminFileManagerService, setGitHubToken } from '@/features/admin/services/admin-file-manager.service'
+import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
 import type {
   GitCommitInfoDto,
   GitStatusDto,
@@ -98,13 +98,14 @@ export interface UseAdminFileManagerReturn {
   checkoutBranch: (name: string) => Promise<void>
   createBranch: (name: string) => Promise<void>
 
-  // GitHub identity (admin's personal access token)
+  // GitHub identity (deployment's single stored token)
   githubToken: string
   githubIdentity: GitHubIdentityDto | null
   githubIdentityLoading: boolean
   githubIdentityError: string | null
   setGithubToken: (token: string) => void
   verifyGithubIdentity: (token: string) => Promise<GitHubIdentityDto | null>
+  disconnectGithub: () => Promise<void>
 }
 
 /** Parent folder path for a repo path ('packages/a.ts' → 'packages'). */
@@ -115,18 +116,6 @@ function parentOf(entryPath: string): string {
 
 /** localStorage key for the editor's persisted session state. */
 const STORAGE_KEY = 'admin-file-manager:state:v1'
-
-/** localStorage key remembering the admin's GitHub personal access token. */
-const GITHUB_TOKEN_STORAGE_KEY = 'admin-file-manager:github-token:v1'
-
-/** Reads a persisted GitHub token; returns '' when absent/corrupt. */
-function readGithubToken(): string {
-  try {
-    return localStorage.getItem(GITHUB_TOKEN_STORAGE_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
 
 interface PersistedState {
   expanded: string[]
@@ -193,11 +182,11 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const [history, setHistory] = useState<GitCommitInfoDto[]>([])
   const [branches, setBranches] = useState<string[]>([])
 
-  // GitHub identity — the admin's personal access token is persisted so the
-  // session resumes connected; the identity is verified against GitHub's API.
-  const [githubToken, setGithubTokenState] = useState<string>(() =>
-    readGithubToken(),
-  )
+  // GitHub identity — the deployment's SINGLE global token lives on the server
+  // (set via the Git tab, encrypted in the DB); the client only holds the token
+  // in the input field while connecting and never persists it. The identity is
+  // restored from the server on mount so a refresh resumes as connected.
+  const [githubToken, setGithubTokenState] = useState<string>('')
   const [githubIdentity, setGithubIdentity] = useState<GitHubIdentityDto | null>(
     null,
   )
@@ -645,29 +634,28 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [refreshGit, loadHistory],
   )
 
-  // ── GitHub identity (admin's personal access token) ─────────────────────────
+  // ── GitHub identity (deployment's single stored token) ──────────────────────
 
   /**
-   * Sets the admin's GitHub PAT, persists it, and syncs it to the service so
-   * commit/push requests carry it. A blank value disconnects.
+   * Holds the token currently typed into the connect input. A blank value
+   * clears the local identity state. The token is never persisted client-side —
+   * the server stores it (encrypted) once verified.
    */
   const setGithubToken = useCallback((token: string): void => {
     const trimmed = token.trim()
     setGithubTokenState(trimmed)
-    setGitHubToken(trimmed === '' ? null : trimmed)
-    try {
-      if (trimmed === '') localStorage.removeItem(GITHUB_TOKEN_STORAGE_KEY)
-      else localStorage.setItem(GITHUB_TOKEN_STORAGE_KEY, trimmed)
-    } catch {
-      // Ignore storage failures (private mode / quota).
-    }
     if (trimmed === '') {
       setGithubIdentity(null)
       setGithubIdentityError(null)
     }
   }, [])
 
-  /** Verifies the token against GitHub and stores the authenticated identity. */
+  /**
+   * Verifies the token against GitHub and — on success — stores it on the
+   * server as the single global deployment token. Connects the whole bot:
+   * /push, /installer, /update, the agent tools and this Git tab all use it
+   * from now on.
+   */
   const verifyGithubIdentity = useCallback(
     async (token: string): Promise<GitHubIdentityDto | null> => {
       const trimmed = token.trim()
@@ -681,7 +669,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
       try {
         const identity = await adminFileManagerService.gitIdentity(trimmed)
         setGithubIdentity(identity)
-        setGithubToken(trimmed)
+        setGithubTokenState(trimmed)
         return identity
       } catch (err) {
         setGithubIdentity(null)
@@ -693,17 +681,41 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         setGithubIdentityLoading(false)
       }
     },
-    [setGithubToken],
+    [],
   )
 
-  // On mount: restore the persisted token, sync it to the service, and re-verify
-  // the identity so a refreshed page resumes as the connected GitHub user.
+  /** Disconnects the global token on the server and clears local state. */
+  const disconnectGithub = useCallback(async (): Promise<void> => {
+    setGithubIdentityLoading(true)
+    setGithubIdentityError(null)
+    try {
+      await adminFileManagerService.clearGitConfig()
+    } catch {
+      // Best-effort — the local state clears even if the server call failed.
+    } finally {
+      setGithubIdentityLoading(false)
+    }
+    setGithubTokenState('')
+    setGithubIdentity(null)
+  }, [])
+
+  // On mount: restore the connected identity from the server so a refreshed
+  // page resumes as the connected GitHub account (the token itself stays on
+  // the server and never reaches the browser).
   useEffect(() => {
-    const restored = readGithubToken()
-    if (restored === '') return
-    setGitHubToken(restored)
-    void verifyGithubIdentity(restored)
-  }, [verifyGithubIdentity])
+    let cancelled = false
+    adminFileManagerService
+      .getGitConfig()
+      .then((data) => {
+        if (!cancelled && data.identity) setGithubIdentity(data.identity)
+      })
+      .catch(() => {
+        // Best-effort — the Git tab works without a connected account.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Load git status + history + branches once on mount.
   useEffect(() => {
@@ -901,5 +913,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     githubIdentityError,
     setGithubToken,
     verifyGithubIdentity,
+    disconnectGithub,
   }
 }

@@ -259,9 +259,6 @@
 
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.06);
   --shadow-inner-lg: inset 0 4px 6px 0 rgb(0 0 0 / 0.12);
-  --shadow-glow-sm: 0 0 12px rgb(var(--color-primary) / 0.25);
-  --shadow-glow-md: 0 0 24px rgb(var(--color-primary) / 0.35);
-  --shadow-glow-lg: 0 0 40px rgb(var(--color-primary) / 0.45);
 
   /* ==================== SURFACE MATERIALS (iOS vibrancy) ====================
      The one deliberate exception to "no gradients": frosted-glass blur,

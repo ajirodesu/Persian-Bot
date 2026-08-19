@@ -21,8 +21,8 @@
  * appended so the file content (not an HTML page) is downloaded.
  *
  * Once all three fields are collected the module is committed to the repo
- * via the GitHub REST API (GITHUB_TOKEN / GITHUB_REPO_OWNER /
- * GITHUB_REPO_NAME — see github-contents.lib.ts) at
+ * via the GitHub REST API (the deployment's single stored GitHub token +
+ * GITHUB_REPO_OWNER / GITHUB_REPO_NAME — see github-contents.lib.ts) at
  * `<GITHUB_REPO_BASE_PATH>/src/app/commands/<name>.ts`, authored by the
  * token's account. No local git identity or checkout is needed — it works on
  * Render/Railway out of the box.
@@ -202,12 +202,12 @@ async function installCommand(
 // ── Command Handler — step 1: request the filename ────────────────────────────
 
 export const onCommand = async ({ chat, state }: AppCtx): Promise<void> => {
-  // Rely on the GitHub env vars — without them there is no repo to install
-  // into. Also verify the repo is reachable up front, so a misconfigured
-  // GitHub setup (wrong owner/repo, dead token) fails right here with a clear
-  // diagnosis instead of after the whole 3-step conversation.
+  // Rely on the stored GitHub config — without a connected token there is no
+  // repo to install into. Also verify the repo is reachable up front, so a
+  // misconfigured GitHub setup (wrong owner/repo, dead token) fails right here
+  // with a clear diagnosis instead of after the whole 3-step conversation.
   try {
-    const config = getGitHubConfig();
+    const config = await getGitHubConfig();
     await getDefaultBranch(config);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'GitHub is not configured.';
@@ -393,7 +393,7 @@ export const onReply = {
     }
 
     try {
-      const config = getGitHubConfig();
+      const config = await getGitHubConfig();
       const source = await fetchFileFromLink(fileLink);
       const { sha, commitUrl } = await installCommand(config, commandName, source, commitMessage);
 

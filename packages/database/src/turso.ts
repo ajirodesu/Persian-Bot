@@ -156,3 +156,10 @@ export {
   getMaintenanceModeEnabled,
   setMaintenanceModeEnabled,
 } from '../adapters/turso/src/server/maintenance-mode.repo.js';
+
+// --- GLOBAL GITHUB CONFIG ---
+export {
+  getGitHubConfigStore,
+  saveGitHubConfigStore,
+  clearGitHubConfigStore,
+} from '../adapters/turso/src/server/github-config.repo.js';

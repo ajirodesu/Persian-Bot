@@ -148,3 +148,10 @@ export {
   getMaintenanceModeEnabled,
   setMaintenanceModeEnabled,
 } from '../adapters/mongodb/src/server/maintenance-mode.repo.js';
+
+// --- GLOBAL GITHUB CONFIG ---
+export {
+  getGitHubConfigStore,
+  saveGitHubConfigStore,
+  clearGitHubConfigStore,
+} from '../adapters/mongodb/src/server/github-config.repo.js';

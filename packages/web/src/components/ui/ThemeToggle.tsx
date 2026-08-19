@@ -150,7 +150,7 @@ export default function ThemeToggle({ className }: ThemeToggleProps) {
           height: INDICATOR_SIZE,
           transform: `translate(${indicator.left}px, ${indicator.top}px)`,
           background: 'var(--color-gradient-primary)',
-          boxShadow: `var(--shadow-cta-glow), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 1px rgba(0,0,0,0.12)`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 1px rgba(0,0,0,0.12)`,
         }}
       />
 

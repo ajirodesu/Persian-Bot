@@ -264,3 +264,15 @@ export const deleteUserTimezone = m.deleteUserTimezone;
 export const getMaintenanceModeEnabled = m.getMaintenanceModeEnabled;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const setMaintenanceModeEnabled = m.setMaintenanceModeEnabled;
+
+// --- GLOBAL GITHUB CONFIG ---
+// Single deployment-level GitHub token (AES-256-GCM encrypted at rest) + the
+// identity of the account it belongs to. Set through the dashboard Git tab;
+// used by /push, /installer, /update, the admin_commit_push agent tool, and
+// the Admin File Manager's commit/push.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getGitHubConfigStore = m.getGitHubConfigStore;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const saveGitHubConfigStore = m.saveGitHubConfigStore;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const clearGitHubConfigStore = m.clearGitHubConfigStore;

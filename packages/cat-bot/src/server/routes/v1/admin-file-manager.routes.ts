@@ -84,6 +84,16 @@ adminFileManagerRouter.post('/git/identity', (req, res) => {
   void adminFileManagerController.gitIdentity(req, res);
 });
 
+// GET /api/v1/admin/files/git/config — global GitHub token status + identity
+adminFileManagerRouter.get('/git/config', (req, res) => {
+  void adminFileManagerController.gitConfig(req, res);
+});
+
+// DELETE /api/v1/admin/files/git/config — disconnect the global GitHub token
+adminFileManagerRouter.delete('/git/config', (req, res) => {
+  void adminFileManagerController.gitConfigDelete(req, res);
+});
+
 // POST /api/v1/admin/files/git/push — push the current branch upstream
 adminFileManagerRouter.post('/git/push', (req, res) => {
   void adminFileManagerController.gitPush(req, res);

@@ -4,12 +4,12 @@
  * Lets a system admin drop a zip of changed files onto the bot and have it
  * land in the repo, committed and pushed — no manual file-manager clicking.
  *
- * The commit + push go through the GitHub REST API using GITHUB_TOKEN /
- * GITHUB_REPO_OWNER / GITHUB_REPO_NAME (see github-contents.lib.ts): every
- * file in the zip lands on the repo's default branch as ONE commit, authored
- * by the token's account. Unlike a local-git flow, this needs no git
- * user.name/email and no push credentials on the host — it just works on
- * Render/Railway. The local checkout is never touched.
+ * The commit + push go through the GitHub REST API using the deployment's
+ * single stored GitHub token + GITHUB_REPO_OWNER / GITHUB_REPO_NAME (see
+ * github-contents.lib.ts): every file in the zip lands on the repo's default
+ * branch as ONE commit, authored by the token's account. Unlike a local-git
+ * flow, this needs no git user.name/email and no push credentials on the host —
+ * it just works on Render/Railway. The local checkout is never touched.
  *
  * Flow (single-step, no onReply state):
  *   Admin: [quotes a message carrying a .zip, types] /push Fix the login bug
@@ -233,10 +233,11 @@ export const meta: CommandMeta = {
 // ── Command Entry Point — single step: reply → unzip → push via GitHub API ────
 
 export const onCommand = async ({ chat, args, event, usage }: AppCtx): Promise<void> => {
-  // Rely on the GitHub env vars — without them there is no repo to push to.
+  // Rely on the stored GitHub config — without a connected token there is no
+  // repo to push to.
   let config: GitHubConfig;
   try {
-    config = getGitHubConfig();
+    config = await getGitHubConfig();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'GitHub is not configured.';
     await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: `❌ ${message}` });

@@ -152,3 +152,10 @@ export {
   getMaintenanceModeEnabled,
   setMaintenanceModeEnabled,
 } from '../adapters/neondb/src/server/maintenance-mode.repo.js';
+
+// --- GLOBAL GITHUB CONFIG ---
+export {
+  getGitHubConfigStore,
+  saveGitHubConfigStore,
+  clearGitHubConfigStore,
+} from '../adapters/neondb/src/server/github-config.repo.js';

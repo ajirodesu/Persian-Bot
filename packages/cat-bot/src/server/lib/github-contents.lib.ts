@@ -1,16 +1,19 @@
 /**
  * GitHub Contents Lib — authenticated GitHub API writes for the bot.
  *
- * Used by /push and /installer to land files in the repo through the GitHub
- * REST API using GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME, instead
- * of committing to a local git checkout (which needs git user.name/email and
- * push credentials on the host — the things that break on Render/Railway).
+ * Used by /push, /installer and /update to land files in the repo through the
+ * GitHub REST API using the deployment's single GitHub token (stored encrypted
+ * in the DB and set through the dashboard's Git tab) plus GITHUB_REPO_OWNER /
+ * GITHUB_REPO_NAME, instead of committing to a local git checkout (which needs
+ * git user.name/email and push credentials on the host — the things that break
+ * on Render/Railway).
  *
  * Everything here goes through the Git Data API so a batch of files lands as
  * ONE commit, authored by the token's account. No local checkout is touched.
  */
 
 import axios from 'axios';
+import { getStoredGitHubConfig } from '@/engine/repos/github-config.repo.js';
 import { env } from '@/engine/config/env.config.js';
 
 // ── Error type ────────────────────────────────────────────────────────────────
@@ -65,16 +68,6 @@ function enrichWriteError(err: unknown, config: GitHubConfig): GitHubApiError {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-// Startup sanity check (mirrors the reference /ghp command): warn loudly when
-// the GitHub env vars aren't fully set — /push and /installer rely on them.
-// Uses exactly the project's canonical env names (env.config.ts).
-if (!env.GITHUB_TOKEN || !env.GITHUB_REPO_OWNER || !env.GITHUB_REPO_NAME) {
-  console.error(
-    '[ghp] GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
-      'this command will fail until they are added to your environment variables.',
-  );
-}
-
 export interface GitHubConfig {
   token: string;
   owner: string;
@@ -83,13 +76,6 @@ export interface GitHubConfig {
   basePath: string;
 }
 
-/**
- * Reads the GitHub env vars, throwing a clear error when any is missing. The
- * /push and /installer commands RELY on these — without them there is no repo
- * to write to. Reads exactly the project's current env (env.config.ts):
- * GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME (+ optional
- * GITHUB_REPO_BASE_PATH).
- */
 /**
  * Cleans raw owner/repo env values into API-ready refs. Handles the common
  * paste mistakes: full `https://github.com/owner/repo` URLs, `.git` suffixes,
@@ -126,26 +112,36 @@ function resolveOwnerAndRepo(rawOwner: string, rawRepo: string): { owner: string
   return { owner, repo };
 }
 
-export function getGitHubConfig(tokenOverride?: string): GitHubConfig {
-  // A per-request token (the admin's own PAT, sent by the File Manager) wins
-  // over the server env token so commits/pushes are attributed to the person
-  // actually performing them.
-  const token =
-    typeof tokenOverride === 'string' && tokenOverride.trim() !== ''
-      ? tokenOverride.trim()
-      : (env.GITHUB_TOKEN ?? '');
+/**
+ * Resolves the effective GitHub config. The token ALWAYS comes from the stored
+ * deployment config (set through the dashboard's Git tab — the single token
+ * shared by /push, /installer, /update, admin_commit_push and the File
+ * Manager), and owner/repo come from the env vars (+ optional
+ * GITHUB_REPO_BASE_PATH). Throws a clear error when either side is missing.
+ */
+export async function getGitHubConfig(): Promise<GitHubConfig> {
+  // The token ALWAYS comes from the stored deployment config — the single token
+  // set through the dashboard's Git tab. No per-request override, no env var.
+  const stored = await getStoredGitHubConfig();
+  const token = stored?.token ?? '';
   const { owner, repo } = resolveOwnerAndRepo(
     env.GITHUB_REPO_OWNER ?? '',
     env.GITHUB_REPO_NAME ?? '',
   );
-  if (!token || !owner || !repo) {
+  if (!token) {
+    throw new GitHubApiError(
+      503,
+      'GitHub is not configured — connect a GitHub personal access token (classic, ghp_…) in the Admin dashboard → Files → Git tab, then try again.',
+    );
+  }
+  if (!owner || !repo) {
     console.error(
-      '[ghp] GITHUB_TOKEN / GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
+      '[ghp] GITHUB_REPO_OWNER / GITHUB_REPO_NAME are not fully set — ' +
         'this command will fail until they are added to your environment variables.',
     );
     throw new GitHubApiError(
       503,
-      'GitHub is not configured — set GITHUB_TOKEN, GITHUB_REPO_OWNER and GITHUB_REPO_NAME in the server environment, then try again.',
+      'GitHub is not configured — set GITHUB_REPO_OWNER and GITHUB_REPO_NAME in the server environment, then try again.',
     );
   }
   return {
@@ -284,8 +280,9 @@ async function enrichRepoLookupError(err: unknown, config: GitHubConfig): Promis
     tokenLogin = typeof user.data?.login === 'string' ? (user.data.login as string) : null;
   } catch {
     const hint =
-      'GITHUB_TOKEN is invalid or expired — GitHub rejected it. Generate a new token ' +
-      '(GitHub → Settings → Developer settings → Personal access tokens) and update the env var.';
+      'the stored GitHub token is invalid or expired — GitHub rejected it. ' +
+      'Connect a fresh token in the Admin dashboard → Files → Git tab ' +
+      '(GitHub → Settings → Developer settings → Personal access tokens).';
     return new GitHubApiError(base.status, `${base.message} — ${hint}`);
   }
 

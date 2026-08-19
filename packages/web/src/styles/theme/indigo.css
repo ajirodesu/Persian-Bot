@@ -128,12 +128,6 @@ html[data-theme='indigo'] {
   --shadow-card-rest: var(--shadow-soft-sm);
   --shadow-card-hover: var(--shadow-soft-md);
 
-  /* Signature glow — reserved exclusively for primary CTA buttons */
-  --shadow-cta-glow:
-    0 0 0 1px rgba(156, 135, 245, 0.4),
-    0 8px 28px rgba(156, 135, 245, 0.4),
-    0 2px 10px rgba(156, 135, 245, 0.32);
-
   /* Wide, soft accent glow ring for focused inputs */
   --shadow-focus-ring: 0 0 0 4px rgba(156, 135, 245, 0.24);
 

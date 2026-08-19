@@ -920,7 +920,7 @@ function GithubIdentityCard({
 
   const handleDisconnect = () => {
     setTokenInput('')
-    files.setGithubToken('')
+    void files.disconnectGithub()
   }
 
   return (
@@ -1010,9 +1010,10 @@ function GithubIdentityCard({
             />
           )}
           <p className="text-body-xs text-on-surface-variant">
-            Commits and pushes are authenticated with this key and attributed to
-            the GitHub account it belongs to. Changes are pushed directly to the
-            repository&apos;s default branch.
+            This is the bot&apos;s single GitHub token: it is stored encrypted on
+            the server and used by /push, /installer, /update, the agent tools,
+            and this File Manager. Commits are attributed to this account.
+            Changes are pushed directly to the repository&apos;s default branch.
           </p>
         </>
       )}
@@ -2012,7 +2013,7 @@ export default function AdminFilesPage() {
           variant="tonal"
           color="warning"
           title="GitHub not configured"
-          message="Set GITHUB_TOKEN (and optionally GITHUB_REPO_OWNER / GITHUB_REPO_NAME) in the server .env to enable the file manager."
+          message="Connect a GitHub personal access token (ghp_…) in the Git tab to enable commits and pushes. The repo (GITHUB_REPO_OWNER / GITHUB_REPO_NAME) is set in the server environment."
         />
       )}
 

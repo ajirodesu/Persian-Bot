@@ -243,7 +243,7 @@ export const button = {
 
       let config: GitHubConfig;
       try {
-        config = getGitHubConfig();
+        config = await getGitHubConfig();
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'GitHub is not configured.';
@@ -320,7 +320,7 @@ export const onCommand = async ({
 
   let config: GitHubConfig;
   try {
-    config = getGitHubConfig();
+    config = await getGitHubConfig();
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'GitHub is not configured.';

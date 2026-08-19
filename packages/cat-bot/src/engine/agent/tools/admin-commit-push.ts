@@ -4,11 +4,11 @@
  * SYSTEM ADMIN ONLY. Saves the admin's source edits directly to GitHub: stages
  * every working-tree change, commits with an automatically generated
  * conventional-commit message (or an explicit `message`), then pushes the
- * current branch through the GitHub REST API (GITHUB_TOKEN) — the same path the
- * /push command and the dashboard Git tab use, so no git credentials are needed
- * on the host. When the working tree is clean but the branch still has unpushed
- * commits, the tool pushes those instead, so a push that failed once can be
- * retried with the same call.
+ * current branch through the GitHub REST API (the deployment's single stored
+ * GitHub token) — the same path the /push command and the dashboard Git tab
+ * use, so no git credentials are needed on the host. When the working tree is
+ * clean but the branch still has unpushed commits, the tool pushes those
+ * instead, so a push that failed once can be retried with the same call.
  */
 
 import type { ToolMeta, ToolContext } from '../agent-tool.types.js';
@@ -16,6 +16,7 @@ import {
   requireSystemAdmin,
   generateCommitMessage,
 } from '../lib/admin-source-tools.lib.js';
+import { getStoredGitHubConfig } from '@/engine/repos/github-config.repo.js';
 import {
   getGitStatus,
   stagePaths,
@@ -84,8 +85,18 @@ export const initialize = async (
     const commitMessage =
       explicit !== '' ? explicit : generateCommitMessage(status.changes);
 
+    // Author the local commit with the stored GitHub identity when connected,
+    // so the bot's commits carry the account that owns the deployment token.
+    const stored = await getStoredGitHubConfig();
+    const commitIdentity = stored
+      ? {
+          name: stored.name ?? stored.login,
+          email: stored.email ?? `${stored.login}@users.noreply.github.com`,
+        }
+      : undefined;
+
     await stagePaths([]);
-    const commit = await commitStaged(commitMessage);
+    const commit = await commitStaged(commitMessage, commitIdentity);
 
     let pushSummary: string;
     try {
