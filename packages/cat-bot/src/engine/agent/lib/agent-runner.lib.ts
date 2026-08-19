@@ -333,6 +333,7 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
       case 'groq':
       case 'nvidia':
       case 'openai':
+      case 'zen':
         text = await runOpenAILike(
           cfg.provider,
           cfg.apiKey,

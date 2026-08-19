@@ -21,7 +21,8 @@ export type AiProviderId =
   | 'groq'
   | 'nvidia'
   | 'openai'
-  | 'gemini';
+  | 'gemini'
+  | 'zen';
 
 export interface AiProviderModel {
   /** The model id sent to the provider's API (e.g. "openai/gpt-oss-120b"). */
@@ -160,6 +161,32 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProviderDefinition> = {
       { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash (preview)' },
       { id: 'gemini-2.5-pro-preview-05-20', label: 'Gemini 2.5 Pro (preview)' },
       { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+    ],
+  },
+  zen: {
+    id: 'zen',
+    label: 'OpenCode Zen',
+    description:
+      'OpenCode Zen — the OpenCode team\u2019s curated, benchmarked model gateway. ' +
+      'One API key for GPT, Claude, Gemini, Grok, DeepSeek, Kimi and more, served ' +
+      'from OpenAI/Anthropic/openai-compatible endpoints (opencode.ai/zen/v1).',
+    baseURL: 'https://opencode.ai/zen/v1',
+    modelsUrl: 'https://opencode.ai/zen/v1/models',
+    keyPlaceholder: 'sk-…',
+    // Zen keys use the standard "sk-" bearer format (no provider-specific prefix).
+    keyPattern: /^sk-[A-Za-z0-9_-]{20,}$/,
+    // Picked for low latency + strong tool calling (chat-completions family).
+    defaultModel: 'gpt-5.4-mini',
+    fallbackModels: [
+      { id: 'gpt-5.4-mini', label: 'GPT 5.4 Mini' },
+      { id: 'gpt-5.6-luna', label: 'GPT 5.6 Luna' },
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+      { id: 'deepseek-v4-flash-free', label: 'DeepSeek V4 Flash — free', free: true },
+      { id: 'big-pickle', label: 'Big Pickle — free', free: true },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+      { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite' },
+      { id: 'grok-4.5', label: 'Grok 4.5' },
+      { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code' },
     ],
   },
 };

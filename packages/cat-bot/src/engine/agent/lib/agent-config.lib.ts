@@ -70,6 +70,8 @@ interface StoredAiConfigLike {
   openaiModel: string;
   geminiEncryptedKey: string;
   geminiModel: string;
+  zenEncryptedKey: string;
+  zenModel: string;
   agentSettings: Record<string, unknown>;
 }
 

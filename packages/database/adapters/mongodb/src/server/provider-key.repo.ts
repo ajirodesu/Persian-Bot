@@ -8,7 +8,7 @@ import { getMongoDb } from '../client.js';
  * model each. The legacy botUserGroqKeys collection (predates the
  * multi-provider feature) is lazily migrated to this collection on first read.
  */
-export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini';
+export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini' | 'zen';
 
 export interface StoredAiConfig {
   provider: AiProvider;
@@ -27,6 +27,9 @@ export interface StoredAiConfig {
   geminiEncryptedKey: string;
   geminiKeyHint: string;
   geminiModel: string;
+  zenEncryptedKey: string;
+  zenKeyHint: string;
+  zenModel: string;
   /**
    * Free-form per-user agent settings blob. Holds the agent behavior settings:
    * trigger word, behavior toggles/limits. Provider keys/models all live in
@@ -52,6 +55,9 @@ interface StoredAiConfigDoc {
   geminiEncryptedKey?: string;
   geminiKeyHint?: string;
   geminiModel?: string;
+  zenEncryptedKey?: string;
+  zenKeyHint?: string;
+  zenModel?: string;
   agentSettings?: Record<string, unknown>;
 }
 
@@ -64,13 +70,15 @@ const FIELD_PREFIXES = [
   'nvidia',
   'openai',
   'gemini',
+  'zen',
 ] as const;
 
 function providerOf(value: string | undefined): AiProvider {
   return value === 'groq' ||
     value === 'nvidia' ||
     value === 'openai' ||
-    value === 'gemini'
+    value === 'gemini' ||
+    value === 'zen'
     ? value
     : 'openrouter';
 }
@@ -203,7 +211,8 @@ function isSupportedAiProvider(value: string): boolean {
     value === 'groq' ||
     value === 'nvidia' ||
     value === 'openai' ||
-    value === 'gemini'
+    value === 'gemini' ||
+    value === 'zen'
   );
 }
 

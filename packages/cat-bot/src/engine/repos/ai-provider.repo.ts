@@ -56,6 +56,7 @@ export interface AiSettingsStatus {
   nvidiaModel: string;
   openaiModel: string;
   geminiModel: string;
+  zenModel: string;
   providers: Record<AiProviderId, AiProviderKeyStatus>;
   models: Record<AiProviderId, AiProviderModel[]>;
   agent: Required<AgentSettingsPayload>;
@@ -102,6 +103,9 @@ interface StoredAiConfigLike {
   geminiEncryptedKey: string;
   geminiKeyHint: string;
   geminiModel: string;
+  zenEncryptedKey: string;
+  zenKeyHint: string;
+  zenModel: string;
   agentSettings: Record<string, unknown>;
 }
 
@@ -138,6 +142,7 @@ function pickActiveProviderAfterRemoval(
     'nvidia',
     'openai',
     'gemini',
+    'zen',
   ];
   for (const p of order) {
     if (p !== removed && hasKey(p)) return p;
@@ -274,13 +279,14 @@ export async function getAiSettingsStatus(
   const geminiKey = decryptStoredKey('gemini');
 
   // Catalogs are cached (6h) — parallel fetch, sequential after warm-up.
-  const [openrouterList, groqList, nvidiaList, openaiList, geminiList] =
+  const [openrouterList, groqList, nvidiaList, openaiList, geminiList, zenList] =
     await Promise.all([
       resolveModelList('openrouter'),
       resolveModelList('groq', groqKey, userId),
       resolveModelList('nvidia', nvidiaKey, userId),
       resolveModelList('openai', openaiKey, userId),
       resolveModelList('gemini', geminiKey, userId),
+      resolveModelList('zen'),
     ]);
 
   const openrouterModel = normalizeFromList(
@@ -313,6 +319,12 @@ export async function getAiSettingsStatus(
     storedModelOf(stored, 'gemini'),
     AI_PROVIDERS.gemini.defaultModel,
   );
+  const zenModel = normalizeFromList(
+    zenList.models,
+    zenList.live,
+    storedModelOf(stored, 'zen'),
+    AI_PROVIDERS.zen.defaultModel,
+  );
 
   const activeModel =
     provider === 'openrouter'
@@ -323,7 +335,9 @@ export async function getAiSettingsStatus(
           ? openaiModel
           : provider === 'gemini'
             ? geminiModel
-            : groqModel;
+            : provider === 'zen'
+              ? zenModel
+              : groqModel;
 
   const agent = await getUserAgentSettings(userId);
 
@@ -335,6 +349,7 @@ export async function getAiSettingsStatus(
     nvidiaModel,
     openaiModel,
     geminiModel,
+    zenModel,
     providers: {
       openrouter: {
         hasKey: stored.openrouterEncryptedKey.length > 0,
@@ -356,6 +371,10 @@ export async function getAiSettingsStatus(
         hasKey: stored.geminiEncryptedKey.length > 0,
         keyHint: stored.geminiKeyHint || null,
       },
+      zen: {
+        hasKey: stored.zenEncryptedKey.length > 0,
+        keyHint: stored.zenKeyHint || null,
+      },
     },
     models: {
       openrouter: openrouterList.models,
@@ -363,6 +382,7 @@ export async function getAiSettingsStatus(
       nvidia: nvidiaList.models,
       openai: openaiList.models,
       gemini: geminiList.models,
+      zen: zenList.models,
     },
     agent: { ...AGENT_SETTINGS_DEFAULTS, ...agent },
   };
@@ -425,6 +445,7 @@ export async function saveUserAiConfig(
     provider === 'groq' || provider === 'nvidia' || provider === 'openai' || provider === 'gemini'
       ? (apiKey || storedKey || undefined)
       : undefined;
+
   const { models: providerModels, live } = await resolveModelList(
     provider,
     fetchKey,
@@ -537,12 +558,14 @@ function buildEmptyStatus(): AiSettingsStatus {
     nvidiaModel: AI_PROVIDERS.nvidia.defaultModel,
     openaiModel: AI_PROVIDERS.openai.defaultModel,
     geminiModel: AI_PROVIDERS.gemini.defaultModel,
+    zenModel: AI_PROVIDERS.zen.defaultModel,
     providers: {
       openrouter: { hasKey: false, keyHint: null },
       groq: { hasKey: false, keyHint: null },
       nvidia: { hasKey: false, keyHint: null },
       openai: { hasKey: false, keyHint: null },
       gemini: { hasKey: false, keyHint: null },
+      zen: { hasKey: false, keyHint: null },
     },
     models: {
       openrouter: AI_PROVIDERS.openrouter.fallbackModels,
@@ -550,6 +573,7 @@ function buildEmptyStatus(): AiSettingsStatus {
       nvidia: AI_PROVIDERS.nvidia.fallbackModels,
       openai: AI_PROVIDERS.openai.fallbackModels,
       gemini: AI_PROVIDERS.gemini.fallbackModels,
+      zen: AI_PROVIDERS.zen.fallbackModels,
     },
     agent: { ...AGENT_SETTINGS_DEFAULTS },
   };

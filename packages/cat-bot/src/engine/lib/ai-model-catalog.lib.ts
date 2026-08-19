@@ -29,6 +29,7 @@ const MODELS_FETCH_TIMEOUT_MS = 10_000;
 
 const OPENROUTER_CACHE_KEY = 'ai:models:openrouter';
 const NVIDIA_CACHE_KEY = 'ai:models:nvidia';
+const ZEN_CACHE_KEY = 'ai:models:zen';
 const groqCacheKey = (userId: string): string => `ai:models:groq:${userId}`;
 const openaiCacheKey = (userId: string): string => `ai:models:openai:${userId}`;
 const geminiCacheKey = (userId: string): string => `ai:models:gemini:${userId}`;
@@ -189,6 +190,36 @@ async function fetchNvidiaModels(
 }
 
 /**
+ * Fetches OpenCode Zen's model catalog. The /models endpoint is public — the
+ * dashboard model picker works even before a Zen key is saved. Zen returns the
+ * curated gateway catalog (GPT, Claude, Gemini, Grok, DeepSeek, Kimi, free
+ * models) with `free` marked via the standard `:free` suffix convention.
+ */
+async function fetchZenModels(): Promise<AiProviderModel[] | null> {
+  const { data } = await axios.get<OpenRouterModelEntry[] | { data?: unknown }>(
+    AI_PROVIDERS.zen.modelsUrl,
+    { timeout: MODELS_FETCH_TIMEOUT_MS },
+  );
+  // Zen may return a bare array or the OpenAI-style { data: [...] } envelope.
+  const entries = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { data?: unknown })?.data)
+      ? ((data as { data: OpenRouterModelEntry[] }).data)
+      : [];
+  if (entries.length === 0) return null;
+  const models: AiProviderModel[] = [];
+  for (const e of entries) {
+    if (typeof e.id !== 'string' || e.id.length === 0) continue;
+    models.push({
+      id: e.id,
+      label: (e.name && e.name.trim()) || formatModelLabel(e.id),
+      free: isFreeModel(e.id, e),
+    });
+  }
+  return models.length > 0 ? sortModels(models) : null;
+}
+
+/**
  * Fetches Google AI Studio's model list (Generative Language API). The endpoint
  * returns names prefixed with "models/" (e.g. "models/gemini-2.0-flash-001");
  * the prefix is stripped because the @google/genai SDK accepts the bare id.
@@ -240,6 +271,9 @@ export async function getProviderModelsCached(
   } else if (provider === 'nvidia') {
     cacheKeyId = NVIDIA_CACHE_KEY;
     fetcher = () => fetchNvidiaModels(apiKey);
+  } else if (provider === 'zen') {
+    cacheKeyId = ZEN_CACHE_KEY;
+    fetcher = () => fetchZenModels();
   } else if (provider === 'openai') {
     cacheKeyId = openaiCacheKey(cacheKey || 'default');
     fetcher = () => fetchOpenAiModels(apiKey ?? '');

@@ -88,6 +88,7 @@ const AI_CONFIG_PROVIDERS = new Set([
   'nvidia',
   'openai',
   'gemini',
+  'zen',
 ]);
 
 function isSupportedAiProvider(value: string): boolean {
@@ -151,6 +152,9 @@ export async function initDb(): Promise<void> {
       gemini_encrypted_key     TEXT,
       gemini_key_hint          TEXT,
       gemini_model             TEXT,
+      zen_encrypted_key        TEXT,
+      zen_key_hint             TEXT,
+      zen_model                TEXT,
       provider                 TEXT DEFAULT 'openrouter',
       agent_settings           TEXT,
       created_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -183,6 +187,9 @@ export async function initDb(): Promise<void> {
     ['gemini_encrypted_key', 'TEXT'],
     ['gemini_key_hint', 'TEXT'],
     ['gemini_model', 'TEXT'],
+    ['zen_encrypted_key', 'TEXT'],
+    ['zen_key_hint', 'TEXT'],
+    ['zen_model', 'TEXT'],
     ['provider', "TEXT DEFAULT 'openrouter'"],
     // Per-user AI agent settings blob (JSON text): trigger word, behavior
     // toggles/limits. Provider keys/models all live in their own columns now.

@@ -8,7 +8,7 @@ import { pool } from '../client.js';
  * model for each. The legacy bot_user_groq_key table (predates the
  * multi-provider feature) is migrated to this schema by initDb.
  */
-export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini';
+export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini' | 'zen';
 
 export interface StoredAiConfig {
   provider: AiProvider;
@@ -27,6 +27,9 @@ export interface StoredAiConfig {
   geminiEncryptedKey: string;
   geminiKeyHint: string;
   geminiModel: string;
+  zenEncryptedKey: string;
+  zenKeyHint: string;
+  zenModel: string;
   /**
    * Free-form per-user agent settings blob (JSON). Holds the agent behavior
    * settings: trigger word, behavior toggles/limits. Provider keys/models all
@@ -51,13 +54,17 @@ const PROVIDER_COLUMNS = [
   'gemini_encrypted_key',
   'gemini_key_hint',
   'gemini_model',
+  'zen_encrypted_key',
+  'zen_key_hint',
+  'zen_model',
 ] as const;
 
 function providerOf(value: string | null): AiProvider {
   return value === 'groq' ||
     value === 'nvidia' ||
     value === 'openai' ||
-    value === 'gemini'
+    value === 'gemini' ||
+    value === 'zen'
     ? value
     : 'openrouter';
 }

@@ -32,6 +32,7 @@ type AiProviderId =
   | 'nvidia'
   | 'openai'
   | 'gemini'
+  | 'zen'
 
 interface AiProviderKeyStatus {
   hasKey: boolean
@@ -53,6 +54,7 @@ interface AiSettingsStatus {
   nvidiaModel: string
   openaiModel: string
   geminiModel: string
+  zenModel: string
   providers: Record<AiProviderId, AiProviderKeyStatus>
   models: Record<
     AiProviderId,
@@ -67,6 +69,7 @@ const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
   nvidia: 'NVIDIA',
   openai: 'OpenAI',
   gemini: 'AI Studio',
+  zen: 'OpenCode Zen',
 }
 
 const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
@@ -75,6 +78,7 @@ const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
   nvidia: 'nvapi-…',
   openai: 'sk-…',
   gemini: 'AIza… / AQ…',
+  zen: 'sk-…',
 }
 
 const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
@@ -83,6 +87,7 @@ const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: 'nvidia', label: 'NVIDIA' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'AI Studio' },
+  { value: 'zen', label: 'OpenCode Zen' },
 ]
 
 // Infers the provider from a key's prefix as it's typed/pasted —
@@ -111,12 +116,14 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
   nvidiaModel: '',
   openaiModel: '',
   geminiModel: '',
+  zenModel: '',
   providers: {
     openrouter: { hasKey: false, keyHint: null },
     groq: { hasKey: false, keyHint: null },
     nvidia: { hasKey: false, keyHint: null },
     openai: { hasKey: false, keyHint: null },
     gemini: { hasKey: false, keyHint: null },
+    zen: { hasKey: false, keyHint: null },
   },
   models: {
     openrouter: [],
@@ -124,6 +131,7 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
     nvidia: [],
     openai: [],
     gemini: [],
+    zen: [],
   },
   agent: {
     agentName: '',
@@ -445,6 +453,7 @@ export default function SettingsPage() {
     if (provider === 'groq') return aiStatus?.groqModel ?? ''
     if (provider === 'nvidia') return aiStatus?.nvidiaModel ?? ''
     if (provider === 'openai') return aiStatus?.openaiModel ?? ''
+    if (provider === 'zen') return aiStatus?.zenModel ?? ''
     return aiStatus?.geminiModel ?? ''
   }
 
