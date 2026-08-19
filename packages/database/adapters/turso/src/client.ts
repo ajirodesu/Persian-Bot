@@ -431,6 +431,43 @@ export async function initDb(): Promise<void> {
     );
   `);
 
+  // "account".issuer — better-auth 1.7+ scopes account identity by the OAuth
+  // provider issuer. Fresh databases get the column from the CREATE TABLE inside
+  // the guarded DDL block below; pre-existing databases that predate the column
+  // are upgraded in place with the same PRAGMA introspection + ALTER TABLE ADD
+  // COLUMN pattern as bot_discord_channel/bot_threads above (SQLite has no
+  // ADD COLUMN IF NOT EXISTS). Created unconditionally so every database
+  // converges on the full schema regardless of when it was bootstrapped.
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS "account" (
+      id TEXT PRIMARY KEY,
+      accountId TEXT NOT NULL,
+      providerId TEXT NOT NULL,
+      userId TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      accessToken TEXT,
+      refreshToken TEXT,
+      idToken TEXT,
+      accessTokenExpiresAt TEXT,
+      refreshTokenExpiresAt TEXT,
+      scope TEXT,
+      password TEXT,
+      issuer TEXT,
+      createdAt TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updatedAt TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+  const accountCols = await tursoClient.execute(
+    `PRAGMA table_info("account")`,
+  );
+  const accountColNames = new Set(
+    (accountCols.rows as unknown as Array<{ name: string }>).map((r) => r.name),
+  );
+  if (!accountColNames.has('issuer')) {
+    await tursoClient.execute({
+      sql: `ALTER TABLE "account" ADD COLUMN issuer TEXT`,
+    });
+  }
+
   if (schemaCheck.rows.length > 0) return;
 
   await tursoClient.executeMultiple(`
@@ -472,6 +509,7 @@ export async function initDb(): Promise<void> {
       refreshTokenExpiresAt TEXT,
       scope TEXT,
       password TEXT,
+      issuer TEXT,
       createdAt TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updatedAt TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );

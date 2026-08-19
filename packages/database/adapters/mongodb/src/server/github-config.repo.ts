@@ -61,5 +61,5 @@ export async function saveGitHubConfigStore(value: GitHubConfigStoreValue): Prom
 
 export async function clearGitHubConfigStore(): Promise<void> {
   const db = getMongoDb();
-  await db.collection(COLLECTION).deleteOne({ _id: KEY });
+  await db.collection<GitHubConfigDoc>(COLLECTION).deleteOne({ _id: KEY });
 }

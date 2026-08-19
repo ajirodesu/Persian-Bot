@@ -50,9 +50,14 @@ CREATE TABLE IF NOT EXISTS "account" (
   "refreshTokenExpiresAt" TIMESTAMPTZ,
   scope                    TEXT,
   password                 TEXT,
+  issuer                   TEXT,
   "createdAt"              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt"              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- better-auth 1.7+ scopes account identity by the OAuth provider issuer.
+-- Idempotent column migration for pre-existing databases that predate it.
+ALTER TABLE "account" ADD COLUMN IF NOT EXISTS issuer TEXT;
 
 CREATE TABLE IF NOT EXISTS "verification" (
   id         TEXT PRIMARY KEY,

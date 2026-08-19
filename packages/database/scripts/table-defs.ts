@@ -79,6 +79,7 @@ export const tablesDef = [
       refreshTokenExpiresAt: '"refreshTokenExpiresAt"',
       scope: 'scope',
       password: 'password',
+      issuer: 'issuer',
       createdAt: '"createdAt"',
       updatedAt: '"updatedAt"',
     },
