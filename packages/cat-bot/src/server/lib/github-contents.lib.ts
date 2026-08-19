@@ -126,8 +126,14 @@ function resolveOwnerAndRepo(rawOwner: string, rawRepo: string): { owner: string
   return { owner, repo };
 }
 
-export function getGitHubConfig(): GitHubConfig {
-  const token = env.GITHUB_TOKEN ?? '';
+export function getGitHubConfig(tokenOverride?: string): GitHubConfig {
+  // A per-request token (the admin's own PAT, sent by the File Manager) wins
+  // over the server env token so commits/pushes are attributed to the person
+  // actually performing them.
+  const token =
+    typeof tokenOverride === 'string' && tokenOverride.trim() !== ''
+      ? tokenOverride.trim()
+      : (env.GITHUB_TOKEN ?? '');
   const { owner, repo } = resolveOwnerAndRepo(
     env.GITHUB_REPO_OWNER ?? '',
     env.GITHUB_REPO_NAME ?? '',
@@ -178,6 +184,61 @@ function encodePath(repoPath: string): string {
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
+
+/** The GitHub account that owns a personal access token — used to identify the
+ *  admin operating the File Manager and to author their commits with the real
+ *  GitHub username/name/email instead of a server-side fallback identity. */
+export interface GitHubUserIdentity {
+  login: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * Identifies the GitHub user behind `token` via GET /user. Throws a
+ * GitHubApiError (401 for an invalid/expired token) when the key is rejected.
+ */
+export async function getGitHubUserIdentity(
+  token: string,
+): Promise<GitHubUserIdentity> {
+  const probe = axios.create({
+    baseURL: 'https://api.github.com',
+    headers: authHeaders(token),
+    timeout: 30_000,
+  });
+  try {
+    const res = await probe.get('/user');
+    const data = res.data ?? {};
+    const login =
+      typeof data.login === 'string' && data.login !== '' ? data.login : '';
+    if (!login) {
+      throw new GitHubApiError(
+        502,
+        'GitHub did not return a username for this API key.',
+      );
+    }
+    return {
+      login,
+      name: typeof data.name === 'string' && data.name !== '' ? data.name : null,
+      email:
+        typeof data.email === 'string' && data.email !== '' ? data.email : null,
+      avatarUrl:
+        typeof data.avatar_url === 'string' && data.avatar_url !== ''
+          ? data.avatar_url
+          : null,
+    };
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401) {
+      throw new GitHubApiError(
+        401,
+        'Invalid GitHub API key — GitHub rejected it. Generate a new token ' +
+          '(GitHub → Settings → Developer settings → Personal access tokens) and try again.',
+      );
+    }
+    throw toGitHubError(err);
+  }
+}
 
 /** The repo's default branch — the branch commits land on. */
 export async function getDefaultBranch(config: GitHubConfig): Promise<string> {

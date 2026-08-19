@@ -25,8 +25,7 @@
     "noUncheckedSideEffectImports": true,
 
     /* Path Aliases */
-    /* baseUrl required alongside paths in bundler moduleResolution mode */
-    "baseUrl": ".",
+    /* paths are resolved relative to this tsconfig (no baseUrl needed) */
     "paths": {
       "@/*": ["./src/*"]
     }

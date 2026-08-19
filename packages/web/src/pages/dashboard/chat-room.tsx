@@ -3371,7 +3371,7 @@ export default function ChatRoomPage() {
     const replyTargetSnapshot = replyTarget
 
     void (async () => {
-      let wireAttachments: ChatAttachment[] = []
+      let wireAttachments: ChatAttachment[]
       try {
         wireAttachments = await resolveAttachmentsForSend(attachmentsSnapshot)
       } catch (err) {

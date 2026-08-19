@@ -14,7 +14,11 @@
 import type { Request, Response } from 'express';
 import { requireAdmin } from '@/server/validators/auth-session.validator.js';
 import { RepoFileManagerError } from '@/server/lib/local-git.lib.js';
-import { GitHubApiError } from '@/server/lib/github-contents.lib.js';
+import {
+  GitHubApiError,
+  getGitHubUserIdentity,
+  type GitHubUserIdentity,
+} from '@/server/lib/github-contents.lib.js';
 import {
   createFile,
   createFolder,
@@ -40,6 +44,20 @@ import {
   stagePaths,
   unstagePaths,
 } from '@/server/lib/local-git.lib.js';
+
+/** Header the admin's GitHub personal access token is sent in. */
+const GITHUB_TOKEN_HEADER = 'x-github-token';
+
+/** Reads the admin's GitHub PAT from the request headers (or falls back to the
+ *  server env token). Returns null when neither is present. */
+function getGitHubToken(req: Request): string | null {
+  const header =
+    typeof req.headers[GITHUB_TOKEN_HEADER] === 'string'
+      ? (req.headers[GITHUB_TOKEN_HEADER] as string).trim()
+      : '';
+  if (header !== '') return header;
+  return null;
+}
 
 class AdminFileManagerController {
   // GET /api/v1/admin/files/meta — repo identity + branch + configured flag.
@@ -206,26 +224,51 @@ class AdminFileManagerController {
   }
 
   // POST /api/v1/admin/files/git/commit {message} — commit the staged changes.
+  // Requires the admin's GitHub API key (x-github-token header): the key
+  // identifies the authenticated GitHub user and their identity is used as the
+  // commit author, so commits carry the real GitHub username/name/email.
   async gitCommit(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
+    const identity = await this.#requireGitHubIdentity(req, res);
+    if (!identity) return;
     try {
       const message = typeof req.body?.message === 'string' ? req.body.message : '';
-      const result = await commitStaged(message);
-      res.json({ ok: true, ...result });
+      const email = identity.email ?? `${identity.login}@users.noreply.github.com`;
+      const name = identity.name ?? identity.login;
+      const result = await commitStaged(message, { name, email });
+      res.json({
+        ok: true,
+        ...result,
+        author: { login: identity.login, name: identity.name, email },
+      });
     } catch (err) {
       this.#handleError(res, err, 'Failed to commit');
     }
   }
 
-  // POST /api/v1/admin/files/git/push — push the current branch upstream.
+  // POST /api/v1/admin/files/git/push — push unpushed commits to GitHub.
+  // Authenticated with the admin's GitHub API key; pushes DIRECTLY to the
+  // repository's default branch (main) and never creates another branch.
   async gitPush(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
+    const identity = await this.#requireGitHubIdentity(req, res);
+    if (!identity) return;
     try {
-      const message = await pushCurrent();
-      res.json({ ok: true, message });
+      const token = getGitHubToken(req);
+      const message = await pushCurrent(token ?? undefined);
+      res.json({ ok: true, message, author: identity.login });
     } catch (err) {
       this.#handleError(res, err, 'Failed to push');
     }
+  }
+
+  // POST /api/v1/admin/files/git/identity — verify the admin's GitHub API key
+  // and return the authenticated user's identity (login/name/email/avatar).
+  async gitIdentity(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    const identity = await this.#requireGitHubIdentity(req, res);
+    if (!identity) return;
+    res.json(identity);
   }
 
   // POST /api/v1/admin/files/git/pull — pull the current branch from upstream.
@@ -303,6 +346,32 @@ class AdminFileManagerController {
       res.json({ ok: true, message });
     } catch (err) {
       this.#handleError(res, err, 'Failed to create branch');
+    }
+  }
+
+  /**
+   * Authenticates the admin via their GitHub API key and identifies who they
+   * are. Returns the GitHub identity on success, or writes a 401/400 response
+   * and returns null. A missing key is a 401; an invalid/expired key (GitHub
+   * rejects it) is a 401 with an actionable message.
+   */
+  async #requireGitHubIdentity(
+    req: Request,
+    res: Response,
+  ): Promise<GitHubUserIdentity | null> {
+    const token = getGitHubToken(req);
+    if (!token) {
+      res.status(401).json({
+        error:
+          'A GitHub API key is required — send it in the x-github-token header to commit and push.',
+      });
+      return null;
+    }
+    try {
+      return await getGitHubUserIdentity(token);
+    } catch (err) {
+      this.#handleError(res, err, 'Failed to verify GitHub API key');
+      return null;
     }
   }
 

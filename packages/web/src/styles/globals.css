@@ -13,7 +13,7 @@
  * @layer declarations before Tailwind resolves layer injection order.
  *
  * WCAG 2.1 AA Compliant
- */
+  */
 
 /* -----------------------------------------------------------
   0. Web Fonts
@@ -29,6 +29,16 @@
   in code blocks and tabular data (see DESIGN_NOTES_M3_IOS.md).
   ----------------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* -----------------------------------------------------------
+  Tailwind CSS v4 — CSS-first config.
+  The design system's custom theme (colors/fonts/typography/
+  shadows/z-index/motion mapped to runtime CSS variables that
+  switch per html[data-theme]) is kept in the legacy JS config
+  and loaded via @config; v4 merges it with any @theme below.
+  ----------------------------------------------------------- */
+@import 'tailwindcss';
+@config '../../tailwind.config.js';
 
 /* -----------------------------------------------------------
   1. Theme Color Variables
@@ -73,10 +83,3 @@
   5. Keyframe Animations
   ----------------------------------------------------------- */
 @import './animations.css';
-
-/* -----------------------------------------------------------
-  Tailwind Directives
-  ----------------------------------------------------------- */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

@@ -16,7 +16,6 @@ import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { env } from '@/engine/config/env.config.js';
 import {
-  GitHubApiError,
   getBranchTipSha,
   getDefaultBranch,
   getGitHubConfig,
@@ -475,14 +474,27 @@ const FALLBACK_COMMITTER = {
   email: env.GIT_COMMITTER_EMAIL ?? 'cat-bot@localhost',
 };
 
-/** Runs `git commit` (optionally with a fallback `-c` identity) and parses the SHA. */
-async function runCommit(message: string, useFallbackIdentity = false): Promise<{ sha: string }> {
-  const args = useFallbackIdentity
+/**
+ * Author/committer identity for a commit. The File Manager passes the
+ * authenticated GitHub user's real name + email so commits carry the admin's
+ * actual GitHub identity instead of the server fallback.
+ */
+export interface GitCommitterIdentity {
+  name: string;
+  email: string;
+}
+
+/** Runs `git commit`, optionally pinning the author/committer identity. */
+async function runCommit(
+  message: string,
+  identity?: GitCommitterIdentity,
+): Promise<{ sha: string }> {
+  const args = identity
     ? [
         '-c',
-        `user.name=${FALLBACK_COMMITTER.name}`,
+        `user.name=${identity.name}`,
         '-c',
-        `user.email=${FALLBACK_COMMITTER.email}`,
+        `user.email=${identity.email}`,
         'commit',
         '-m',
         message,
@@ -500,14 +512,22 @@ async function runCommit(message: string, useFallbackIdentity = false): Promise<
   }
 }
 
-/** Commits the staged changes. Throws when there is nothing staged. */
-export async function commitStaged(message: string): Promise<{ sha: string }> {
+/**
+ * Commits the staged changes. When a GitHub identity is supplied it is used as
+ * the author/committer (the File Manager passes the authenticated GitHub user);
+ * otherwise the repo git config wins and the server fallback is used only when
+ * no identity is configured at all. Throws when there is nothing staged.
+ */
+export async function commitStaged(
+  message: string,
+  identity?: GitCommitterIdentity,
+): Promise<{ sha: string }> {
   const cleanMessage = message.trim();
   if (!cleanMessage) {
     throw new RepoFileManagerError(400, 'Commit message is required');
   }
   try {
-    return await runCommit(cleanMessage);
+    return await runCommit(cleanMessage, identity);
   } catch (err) {
     if (
       err instanceof RepoFileManagerError &&
@@ -515,7 +535,7 @@ export async function commitStaged(message: string): Promise<{ sha: string }> {
     ) {
       // The server has no git identity — commit as the bot instead of failing.
       // User-configured identity (repo/global git config) still wins when present.
-      return runCommit(cleanMessage, true);
+      return runCommit(cleanMessage, FALLBACK_COMMITTER);
     }
     throw err;
   }
@@ -710,64 +730,32 @@ async function tryUpdateTrackingRef(
 /**
  * Pushes the current branch's unpushed commits to GitHub via the REST API.
  *
- * The target branch is the CURRENT local branch name (no @{upstream} required —
- * a checkout may legitimately have no tracking ref on a managed host), and the
- * commits to push are computed against GitHub's ACTUAL branch tip fetched fresh
- * through the API, not the possibly-stale local remote-tracking ref. A real
- * non-fast-forward check is done locally: the remote tip must be an ancestor of
- * HEAD, otherwise the push refuses and asks you to pull first.
+ * The push ALWAYS targets the repository's DEFAULT branch (main) — it never
+ * creates or pushes to another branch, so every change lands directly on main
+ * with no merge/PR involved, exactly like a straight `git push origin HEAD:main`.
  *
- * When the branch does NOT exist on GitHub yet (e.g. a brand-new local branch,
- * or a fork whose default branch is `master` while the checkout is on `main`),
- * the branch is CREATED like `git push -u origin <branch>`: the commits are
- * based on the repo's default-branch tip (verified to be in local history) and
- * pushed as a new branch. On success the local remote-tracking ref is updated
- * so the panel's ahead count is accurate.
+ * The commits to push are computed against GitHub's ACTUAL default-branch tip
+ * fetched fresh through the API, not the possibly-stale local remote-tracking
+ * ref. A real non-fast-forward check is done locally: the remote tip must be an
+ * ancestor of HEAD, otherwise the push refuses and asks you to pull first.
+ *
+ * Pass the admin's GitHub PAT as `tokenOverride` to attribute the pushed
+ * commits to their account and to authenticate the write; when omitted the
+ * server's GITHUB_TOKEN is used.
  */
-export async function pushCurrent(): Promise<string> {
-  const config = getGitHubConfig();
+export async function pushCurrent(tokenOverride?: string): Promise<string> {
+  const config = getGitHubConfig(tokenOverride);
 
-  const branch = await getCurrentBranch();
-  if (!branch) {
-    throw new RepoFileManagerError(
-      400,
-      'Cannot push — HEAD is detached. Check out a branch first.',
-    );
-  }
+  // Always push to the repo's default branch (main) — never another branch.
+  const branch = await getDefaultBranch(config);
 
   // GitHub's real branch tip — the base our push builds on. A 404 means the
-  // branch isn't on GitHub yet (getBranchTipSha verified the repo is reachable).
-  let upstreamSha: string;
-  let createRef = false;
-  try {
-    upstreamSha = await getBranchTipSha(config, branch);
-  } catch (err) {
-    if (!(err instanceof GitHubApiError) || err.status !== 404) throw err;
-    // Brand-new branch: base it on the default branch, exactly like git push
-    // -u would, as long as that tip is in this checkout's history.
-    const defaultBranch = await getDefaultBranch(config);
-    const defaultTip = await getBranchTipSha(config, defaultBranch);
-    const based = await runGitProbe([
-      'merge-base',
-      '--is-ancestor',
-      defaultTip,
-      'HEAD',
-    ]);
-    if (based.code !== 0) {
-      throw new RepoFileManagerError(
-        409,
-        `\`${branch}\` does not exist on GitHub, and this checkout is not based on ` +
-          `the default branch \`${defaultBranch}\`. Pull the latest changes first, ` +
-          'then push again.',
-      );
-    }
-    upstreamSha = defaultTip;
-    createRef = true;
-  }
+  // repo isn't reachable / branch doesn't exist (getBranchTipSha verifies the
+  // repo is reachable and enriches the error).
+  const upstreamSha = await getBranchTipSha(config, branch);
 
   // Non-fast-forward guard: every commit GitHub already has must exist in our
-  // local history, otherwise pushing would lose work on the remote. (When the
-  // branch is brand-new this was just validated against the default tip.)
+  // local history, otherwise pushing would lose work on the remote.
   const ancestor = await runGitProbe([
     'merge-base',
     '--is-ancestor',
@@ -791,7 +779,7 @@ export async function pushCurrent(): Promise<string> {
   }
 
   const result = await pushCommitsToGitHub(config, branch, upstreamSha, commits, {
-    createRef,
+    createRef: false,
   });
   const upstream = await getUpstream();
   const remote =
@@ -800,8 +788,7 @@ export async function pushCurrent(): Promise<string> {
       : 'origin';
   await tryUpdateTrackingRef(remote, branch, result.commitSha);
 
-  const created = createRef ? ` (created new branch ${branch} on GitHub)` : '';
-  return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch}${created} (${result.commitSha.slice(0, 7)})`;
+  return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch} (${result.commitSha.slice(0, 7)})`;
 }
 
 /** Pulls the latest changes for the current branch from its upstream. */

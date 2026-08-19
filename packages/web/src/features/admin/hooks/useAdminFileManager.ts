@@ -10,10 +10,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
+import { adminFileManagerService, setGitHubToken } from '@/features/admin/services/admin-file-manager.service'
 import type {
   GitCommitInfoDto,
   GitStatusDto,
+  GitHubIdentityDto,
   RepoEntryDto,
   RepoMetaDto,
   RepoMutationResultDto,
@@ -96,6 +97,14 @@ export interface UseAdminFileManagerReturn {
   branches: string[]
   checkoutBranch: (name: string) => Promise<void>
   createBranch: (name: string) => Promise<void>
+
+  // GitHub identity (admin's personal access token)
+  githubToken: string
+  githubIdentity: GitHubIdentityDto | null
+  githubIdentityLoading: boolean
+  githubIdentityError: string | null
+  setGithubToken: (token: string) => void
+  verifyGithubIdentity: (token: string) => Promise<GitHubIdentityDto | null>
 }
 
 /** Parent folder path for a repo path ('packages/a.ts' → 'packages'). */
@@ -106,6 +115,18 @@ function parentOf(entryPath: string): string {
 
 /** localStorage key for the editor's persisted session state. */
 const STORAGE_KEY = 'admin-file-manager:state:v1'
+
+/** localStorage key remembering the admin's GitHub personal access token. */
+const GITHUB_TOKEN_STORAGE_KEY = 'admin-file-manager:github-token:v1'
+
+/** Reads a persisted GitHub token; returns '' when absent/corrupt. */
+function readGithubToken(): string {
+  try {
+    return localStorage.getItem(GITHUB_TOKEN_STORAGE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
 
 interface PersistedState {
   expanded: string[]
@@ -171,6 +192,19 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const [gitDiffError, setGitDiffError] = useState<string | null>(null)
   const [history, setHistory] = useState<GitCommitInfoDto[]>([])
   const [branches, setBranches] = useState<string[]>([])
+
+  // GitHub identity — the admin's personal access token is persisted so the
+  // session resumes connected; the identity is verified against GitHub's API.
+  const [githubToken, setGithubTokenState] = useState<string>(() =>
+    readGithubToken(),
+  )
+  const [githubIdentity, setGithubIdentity] = useState<GitHubIdentityDto | null>(
+    null,
+  )
+  const [githubIdentityLoading, setGithubIdentityLoading] = useState(false)
+  const [githubIdentityError, setGithubIdentityError] = useState<string | null>(
+    null,
+  )
 
   // Stable snapshot of the folders that were expanded in the restored session,
   // used exactly once to re-fetch their children after mount.
@@ -611,6 +645,66 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [refreshGit, loadHistory],
   )
 
+  // ── GitHub identity (admin's personal access token) ─────────────────────────
+
+  /**
+   * Sets the admin's GitHub PAT, persists it, and syncs it to the service so
+   * commit/push requests carry it. A blank value disconnects.
+   */
+  const setGithubToken = useCallback((token: string): void => {
+    const trimmed = token.trim()
+    setGithubTokenState(trimmed)
+    setGitHubToken(trimmed === '' ? null : trimmed)
+    try {
+      if (trimmed === '') localStorage.removeItem(GITHUB_TOKEN_STORAGE_KEY)
+      else localStorage.setItem(GITHUB_TOKEN_STORAGE_KEY, trimmed)
+    } catch {
+      // Ignore storage failures (private mode / quota).
+    }
+    if (trimmed === '') {
+      setGithubIdentity(null)
+      setGithubIdentityError(null)
+    }
+  }, [])
+
+  /** Verifies the token against GitHub and stores the authenticated identity. */
+  const verifyGithubIdentity = useCallback(
+    async (token: string): Promise<GitHubIdentityDto | null> => {
+      const trimmed = token.trim()
+      if (!trimmed) {
+        setGithubIdentity(null)
+        setGithubIdentityError('Enter your GitHub personal access token to connect.')
+        return null
+      }
+      setGithubIdentityLoading(true)
+      setGithubIdentityError(null)
+      try {
+        const identity = await adminFileManagerService.gitIdentity(trimmed)
+        setGithubIdentity(identity)
+        setGithubToken(trimmed)
+        return identity
+      } catch (err) {
+        setGithubIdentity(null)
+        setGithubIdentityError(
+          err instanceof Error ? err.message : 'Failed to verify GitHub API key',
+        )
+        return null
+      } finally {
+        setGithubIdentityLoading(false)
+      }
+    },
+    [setGithubToken],
+  )
+
+  // On mount: restore the persisted token, sync it to the service, and re-verify
+  // the identity so a refreshed page resumes as the connected GitHub user.
+  useEffect(() => {
+    const restored = readGithubToken()
+    if (restored === '') return
+    setGitHubToken(restored)
+    void verifyGithubIdentity(restored)
+  }, [verifyGithubIdentity])
+
   // Load git status + history + branches once on mount.
   useEffect(() => {
     void refreshGit()
@@ -801,5 +895,11 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     branches,
     checkoutBranch,
     createBranch,
+    githubToken,
+    githubIdentity,
+    githubIdentityLoading,
+    githubIdentityError,
+    setGithubToken,
+    verifyGithubIdentity,
   }
 }

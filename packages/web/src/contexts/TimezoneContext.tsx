@@ -104,7 +104,7 @@ export const TimezoneProvider: React.FC<{ children: React.ReactNode }> = ({
         apiErr.message ||
         'Failed to save timezone.'
       setError(message)
-      throw new Error(message)
+      throw new Error(message, { cause: err })
     } finally {
       setIsSaving(false)
     }

@@ -104,6 +104,32 @@ export interface GitCommitInfoDto {
   subject: string
 }
 
+/** The GitHub account behind an admin's personal access token. */
+export interface GitHubIdentityDto {
+  login: string
+  name: string | null
+  email: string | null
+  avatarUrl: string | null
+}
+
+/** Header the admin's GitHub personal access token is sent in. */
+const GITHUB_TOKEN_HEADER = 'x-github-token'
+
+/**
+ * Module-level GitHub API key held by the hook. Commit/push/identity requests
+ * attach it as the x-github-token header so the server authenticates the
+ * request with the admin's own key and attributes commits to their account.
+ */
+let githubToken: string | null = null
+
+export function setGitHubToken(token: string | null): void {
+  githubToken = token
+}
+
+export function getGitHubToken(): string | null {
+  return githubToken
+}
+
 class AdminFileManagerService {
   // GET /api/v1/admin/files/meta — repo identity + branch + configured
   async getMeta(): Promise<RepoMetaDto> {
@@ -212,19 +238,35 @@ class AdminFileManagerService {
     return response.data
   }
 
-  // POST /api/v1/admin/files/git/commit — commit the staged changes
-  async gitCommit(message: string): Promise<{ ok: boolean; sha?: string }> {
-    const response = await apiClient.post<{ ok: boolean; sha?: string }>(
+  // POST /api/v1/admin/files/git/commit — commit the staged changes as the
+  // authenticated GitHub user (the x-github-token header provides the identity).
+  async gitCommit(message: string): Promise<{ ok: boolean; sha?: string; author?: GitHubIdentityDto }> {
+    const response = await apiClient.post<{ ok: boolean; sha?: string; author?: GitHubIdentityDto }>(
       '/api/v1/admin/files/git/commit',
       { message },
+      { headers: githubToken ? { [GITHUB_TOKEN_HEADER]: githubToken } : undefined },
     )
     return response.data
   }
 
-  // POST /api/v1/admin/files/git/push — push the current branch upstream
-  async gitPush(): Promise<{ ok: boolean; message?: string }> {
-    const response = await apiClient.post<{ ok: boolean; message?: string }>(
+  // POST /api/v1/admin/files/git/identity — verify the GitHub API key and return
+  // the authenticated user's identity. Used to connect + display who is logged in.
+  async gitIdentity(token: string): Promise<GitHubIdentityDto> {
+    const response = await apiClient.post<GitHubIdentityDto>(
+      '/api/v1/admin/files/git/identity',
+      {},
+      { headers: { [GITHUB_TOKEN_HEADER]: token } },
+    )
+    return response.data
+  }
+
+  // POST /api/v1/admin/files/git/push — push unpushed commits directly to the
+  // repo's default branch (main); authenticated with the admin's GitHub key.
+  async gitPush(): Promise<{ ok: boolean; message?: string; author?: string }> {
+    const response = await apiClient.post<{ ok: boolean; message?: string; author?: string }>(
       '/api/v1/admin/files/git/push',
+      {},
+      { headers: githubToken ? { [GITHUB_TOKEN_HEADER]: githubToken } : undefined },
     )
     return response.data
   }

@@ -78,6 +78,12 @@ adminFileManagerRouter.post('/git/commit', (req, res) => {
   void adminFileManagerController.gitCommit(req, res);
 });
 
+// GET /api/v1/admin/files/git/identity — verify the GitHub API key and return
+// the authenticated user's GitHub identity (login/name/email/avatar).
+adminFileManagerRouter.post('/git/identity', (req, res) => {
+  void adminFileManagerController.gitIdentity(req, res);
+});
+
 // POST /api/v1/admin/files/git/push — push the current branch upstream
 adminFileManagerRouter.post('/git/push', (req, res) => {
   void adminFileManagerController.gitPush(req, res);

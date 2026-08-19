@@ -46,6 +46,9 @@ import {
   GitCommitHorizontal,
   GitBranchPlus,
   RotateCcw,
+  UserKey,
+  KeyRound,
+  LogOut,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
@@ -73,9 +76,6 @@ import type {
 
 /** localStorage key remembering the last selected folder across refreshes. */
 const FOLDER_STORAGE_KEY = 'admin-file-manager:folder:v1'
-
-/** Sentinel value for the "+ New branch" option in the branch dropdown. */
-const NEW_BRANCH_VALUE = '__new_branch__'
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
@@ -754,6 +754,7 @@ const HistoryRow = memo(function HistoryRow({
 const CommitBox = memo(function CommitBox({
   ref,
   configured,
+  connected,
   status,
   busy,
   changesLength,
@@ -764,6 +765,7 @@ const CommitBox = memo(function CommitBox({
 }: {
   ref?: Ref<HTMLDivElement>
   configured: boolean
+  connected: boolean
   status: GitStatusDto | null
   busy: string | null
   changesLength: number
@@ -788,17 +790,20 @@ const CommitBox = memo(function CommitBox({
   // tracking ref still works.
   const canCommitAndPush =
     !!status?.branch &&
+    connected &&
     (changesLength > 0 ? commitMsg.trim() !== '' : canPush)
 
   const commitAndPushTitle = !status?.branch
     ? 'Check out a branch to commit and push'
-    : changesLength > 0 && !commitMsg.trim()
-      ? 'Type a commit message to commit and push'
-      : changesLength > 0
-        ? 'Commit the changes and push to GitHub'
-        : canPush
-          ? `Push ${status.ahead} unpushed commit${status.ahead === 1 ? '' : 's'} to GitHub`
-          : 'Nothing to commit or push'
+    : !connected
+      ? 'Connect your GitHub identity above to commit and push'
+      : changesLength > 0 && !commitMsg.trim()
+        ? 'Type a commit message to commit and push'
+        : changesLength > 0
+          ? 'Commit the changes and push to GitHub'
+          : canPush
+            ? `Push ${status.ahead} unpushed commit${status.ahead === 1 ? '' : 's'} to GitHub`
+            : 'Nothing to commit or push'
 
   return (
     <div
@@ -876,6 +881,145 @@ const CommitBox = memo(function CommitBox({
   )
 })
 
+// ── GitHub identity card (commit/push authentication) ─────────────────────────
+
+/**
+ * Collects the admin's GitHub personal access token. Commit and push are
+ * authenticated with this key, and commits are authored by the GitHub user it
+ * belongs to — so the card shows the connected account and blocks commit/push
+ * until a valid key is verified.
+ */
+function GithubIdentityCard({
+  files,
+  configured,
+}: {
+  files: UseAdminFileManagerReturn
+  configured: boolean
+}) {
+  const [tokenInput, setTokenInput] = useState(files.githubToken)
+  const [verifyBusy, setVerifyBusy] = useState(false)
+  const { success, error } = useSnackbar()
+
+  const identity = files.githubIdentity
+
+  const handleConnect = async () => {
+    const trimmed = tokenInput.trim()
+    if (!trimmed) {
+      error('Enter your GitHub personal access token to connect.')
+      return
+    }
+    setVerifyBusy(true)
+    try {
+      const result = await files.verifyGithubIdentity(trimmed)
+      if (result) success(`Connected as @${result.login}`)
+      else error(files.githubIdentityError ?? 'Failed to connect GitHub account')
+    } finally {
+      setVerifyBusy(false)
+    }
+  }
+
+  const handleDisconnect = () => {
+    setTokenInput('')
+    files.setGithubToken('')
+  }
+
+  return (
+    <div className="flex shrink-0 flex-col gap-2 border-b border-outline-variant/70 px-3 py-2">
+      <div className="flex items-center gap-1.5">
+        <KeyRound className="h-4 w-4 shrink-0 text-on-surface-variant" />
+        <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
+          GitHub identity
+        </span>
+        {identity && (
+          <Badge color="success" variant="tonal" size="sm" className="ml-auto">
+            connected
+          </Badge>
+        )}
+      </div>
+
+      {identity ? (
+        <div className="flex items-center gap-2.5">
+          {identity.avatarUrl ? (
+            <img
+              src={identity.avatarUrl}
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 rounded-full border border-outline-variant/60"
+            />
+          ) : (
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-label-sm font-bold text-primary">
+              {(identity.name ?? identity.login).slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-label-md font-semibold text-on-surface">
+              {identity.name ?? `@${identity.login}`}
+            </p>
+            <p className="truncate font-mono text-body-xs text-on-surface-variant">
+              @{identity.login}
+            </p>
+          </div>
+          <Button
+            variant="text"
+            color="secondary"
+            size="sm"
+            className="ml-auto shrink-0"
+            leftIcon={<LogOut className="h-4 w-4" />}
+            onClick={handleDisconnect}
+          >
+            Disconnect
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <Input
+              type="password"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="ghp_… personal access token"
+              inputSize="sm"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={!configured || verifyBusy}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleConnect()
+              }}
+              className="min-w-0 flex-1 font-mono"
+            />
+            <Button
+              variant="filled"
+              color="secondary"
+              size="sm"
+              isLoading={verifyBusy}
+              disabled={!configured || verifyBusy || tokenInput.trim() === ''}
+              leftIcon={<UserKey className="h-4 w-4" />}
+              onClick={() => void handleConnect()}
+            >
+              Connect
+            </Button>
+          </div>
+          {files.githubIdentityError && (
+            <Alert
+              variant="tonal"
+              color="error"
+              title="Could not connect GitHub"
+              message={files.githubIdentityError}
+              className="mt-1"
+            />
+          )}
+          <p className="text-body-xs text-on-surface-variant">
+            Commits and pushes are authenticated with this key and attributed to
+            the GitHub account it belongs to. Changes are pushed directly to the
+            repository&apos;s default branch.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 function GitPanel({
   files,
   configured,
@@ -888,13 +1032,6 @@ function GitPanel({
 
   // Per-file "Discard changes" confirm target (path of the unstaged change).
   const [discardTarget, setDiscardTarget] = useState<string | null>(null)
-  // "+ New branch" dialog state (name is controlled here so it resets
-  // cleanly between opens without a setState-in-effect).
-  const [newBranchOpen, setNewBranchOpen] = useState(false)
-  const [newBranchName, setNewBranchName] = useState('')
-  // Remounts the branch <select> after the create dialog closes without a
-  // checkout, so it stops displaying the "+ New branch" placeholder.
-  const [branchTick, setBranchTick] = useState(0)
 
   // Mobile commit composer. On phones the commit box renders as a fixed bar
   // pinned to the bottom of the visual viewport — the same stability model as
@@ -1062,12 +1199,15 @@ function GitPanel({
   // (if needed), commits, then pushes to GitHub via the REST API. With no
   // changes to commit it acts as a plain push of the unpushed commits, so a
   // push that failed once is always retryable from this same button.
+  // Requires a connected GitHub identity — commit/push are authenticated with
+  // the admin's GitHub API key.
   const handleCommitAndPush = useCallback(
     (message: string): Promise<boolean> => {
       const msg = message.trim()
       if (busy !== null || !status?.branch) return Promise.resolve(false)
       if (changes.length > 0 && !msg) return Promise.resolve(false)
       if (changes.length === 0 && !canPush) return Promise.resolve(false)
+      if (!files.githubIdentity) return Promise.resolve(false)
       return run('Committed & pushed', async () => {
         if (changes.length > 0) {
           if (staged.length === 0) await files.stageAll()
@@ -1088,15 +1228,6 @@ function GitPanel({
     [run, files],
   )
 
-  const handleCreateBranch = useCallback(
-    (name: string) => {
-      setNewBranchOpen(false)
-      setNewBranchName('')
-      void run(`Created branch ${name}`, () => files.createBranch(name))
-    },
-    [run, files],
-  )
-
   return (
     <div
       ref={panelRef}
@@ -1104,19 +1235,15 @@ function GitPanel({
     >
       {/* Left column — branch, changes, commit box, history */}
       <div className="flex min-w-0 flex-col border-b border-outline-variant/70 pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
+        <GithubIdentityCard files={files} configured={configured} />
+
         {/* Branch + sync actions */}
         <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
           <select
             aria-label="Current branch"
-            key={branchTick}
             value={status?.branch ?? ''}
             onChange={(e) => {
               const branch = e.target.value
-              if (branch === NEW_BRANCH_VALUE) {
-                setNewBranchName('')
-                setNewBranchOpen(true)
-                return
-              }
               if (branch && branch !== status?.branch) checkout(branch)
             }}
             disabled={!configured || busy !== null}
@@ -1130,7 +1257,6 @@ function GitPanel({
                 {branch}
               </option>
             ))}
-            <option value={NEW_BRANCH_VALUE}>+ New branch</option>
           </select>
           <IconButton
             variant="text"
@@ -1252,6 +1378,7 @@ function GitPanel({
         <CommitBox
           ref={composerRef}
           configured={configured}
+          connected={files.githubIdentity !== null}
           status={status}
           busy={busy}
           changesLength={changes.length}
@@ -1359,18 +1486,6 @@ function GitPanel({
           if (discardTarget) discardPath(discardTarget)
         }}
         onCancel={() => setDiscardTarget(null)}
-      />
-      <NewBranchDialog
-        open={newBranchOpen}
-        busy={busy}
-        name={newBranchName}
-        onNameChange={setNewBranchName}
-        onConfirm={handleCreateBranch}
-        onCancel={() => {
-          setNewBranchOpen(false)
-          setNewBranchName('')
-          setBranchTick((t) => t + 1)
-        }}
       />
     </div>
   )
@@ -2752,76 +2867,6 @@ function GitDiscardDialog({
             </Button>
             <Button variant="filled" color="error" onClick={onConfirm}>
               Discard
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
-  )
-}
-
-// ── Create new branch dialog ──────────────────────────────────────────────────
-
-function NewBranchDialog({
-  open,
-  busy,
-  name,
-  onNameChange,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean
-  busy: string | null
-  name: string
-  onNameChange: (value: string) => void
-  onConfirm: (name: string) => void
-  onCancel: () => void
-}) {
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onCancel()
-      }}
-    >
-      <Dialog.Positioner position="center">
-        <Dialog.Backdrop />
-        <Dialog.Content size="sm">
-          <Dialog.Header>
-            <Dialog.Title>Create new branch</Dialog.Title>
-            <Dialog.CloseTrigger />
-          </Dialog.Header>
-          <Dialog.Body>
-            <div className="flex flex-col gap-3">
-              <Field.Root>
-                <Field.Label>Branch name</Field.Label>
-                <Input
-                  placeholder="e.g. feat/new-command"
-                  value={name}
-                  onChange={(e) => onNameChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && name.trim() && !busy)
-                      onConfirm(name.trim())
-                  }}
-                  autoFocus
-                />
-                <Field.HelperText>
-                  Created from the current commit and checked out immediately.
-                </Field.HelperText>
-              </Field.Root>
-            </div>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <Button variant="text" color="neutral" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button
-              variant="filled"
-              color="primary"
-              disabled={!name.trim() || busy !== null}
-              onClick={() => onConfirm(name.trim())}
-            >
-              Create branch
             </Button>
           </Dialog.Footer>
         </Dialog.Content>
