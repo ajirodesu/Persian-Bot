@@ -346,15 +346,16 @@ async function runOpenAILike(
       }
     }
 
-    if (commandDispatched) return null;
-
     // The send_result tool already delivered the final reply to the chat (it
-    // sets context.agentReplyDelivered on success). Stop the loop here — a
-    // follow-up LLM call would only produce trailing chatter on top of an
-    // already-delivered message and burn an extra request.
+    // sets context.agentReplyDelivered on success). This check MUST come before
+    // the commandDispatched return: when a batch mixes run_command with a
+    // successful send_result, the delivered message is the reply — re-running
+    // the command afterwards would post a second response.
     if (context.agentReplyDelivered) {
       return context.agentReplyDelivered.message ?? null;
     }
+
+    if (commandDispatched) return null;
   }
 
   // Only scan messages added in this turn — never return stale history.
@@ -465,13 +466,14 @@ async function runGemini(
     }
     contents.push({ role: 'user', parts: responseParts });
 
-    if (commandDispatched) return null;
-
-    // Same early-exit as the OpenAI loop: once send_result has delivered the
-    // final reply, any further LLM round-trip is wasted tokens.
+    // Same early-exit as the OpenAI loop — and checked before commandDispatched
+    // for the same reason: a successful send_result delivery already answered
+    // the turn, so a run_command in the same batch must not post a second reply.
     if (context.agentReplyDelivered) {
       return context.agentReplyDelivered.message ?? null;
     }
+
+    if (commandDispatched) return null;
   }
 
   const lastModel = [...contents]

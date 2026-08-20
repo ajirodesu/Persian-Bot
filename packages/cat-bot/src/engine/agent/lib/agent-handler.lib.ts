@@ -953,6 +953,17 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
   const body = (ctx.event['message'] ?? ctx.event['body'] ?? '') as string;
   if (!body) return;
 
+  // Never answer the bot's OWN messages — platforms that echo the bot's posts
+  // back through the message pipeline (e.g. userbot setups) would otherwise
+  // re-trigger the agent on its own reply and double-respond.
+  try {
+    const botID = await ctx.api.getBotID();
+    const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
+    if (botID && senderID && String(senderID) === String(botID)) return;
+  } catch {
+    // Bot ID unavailable — fail-open and continue.
+  }
+
   // Skip command invocations — commands are handled by the dispatcher and
   // must never be hijacked by natural-language activation.
   const prefix = ctx.prefix ?? '';
