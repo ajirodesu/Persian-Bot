@@ -56,6 +56,49 @@ export interface McpToolSet {
 // the filtered view is derived per call, so admin status is never cached.
 let cachedSchemas: McpToolSchema[] | null = null;
 
+// Tool descriptions are trimmed to a hard token budget — long schema text is
+// sent to the LLM on EVERY request (system + each tool call), so a few verbose
+// tool files silently inflate the cost of every turn. The cap keeps selection
+// accurate while cutting redundant instructions (which now live in the prompt).
+const TOOL_DESCRIPTION_MAX_CHARS = 280;
+const TOOL_PARAM_DESCRIPTION_MAX_CHARS = 220;
+
+function capDescription(description: string): string {
+  return description.length > TOOL_DESCRIPTION_MAX_CHARS
+    ? `${description.slice(0, TOOL_DESCRIPTION_MAX_CHARS).trimEnd()}…`
+    : description;
+}
+
+/**
+ * Trims every property `description` inside a JSON-schema parameters object —
+ * those strings are part of the schema sent to the LLM on every request too.
+ * Walks only the top-level properties (no nested schemas) to keep it simple.
+ */
+function capParameterDescriptions(
+  parameters: Record<string, unknown>,
+): Record<string, unknown> {
+  const props = (parameters['properties'] ?? {}) as Record<
+    string,
+    { description?: unknown; [k: string]: unknown }
+  >;
+  if (!props || typeof props !== 'object') return parameters;
+  const out: Record<string, unknown> = { ...parameters };
+  const newProps: Record<string, unknown> = {};
+  for (const [key, def] of Object.entries(props)) {
+    if (def && typeof def === 'object' && typeof def['description'] === 'string') {
+      const desc = def['description'] as string;
+      newProps[key] =
+        desc.length > TOOL_PARAM_DESCRIPTION_MAX_CHARS
+          ? { ...def, description: `${desc.slice(0, TOOL_PARAM_DESCRIPTION_MAX_CHARS).trimEnd()}…` }
+          : def;
+    } else {
+      newProps[key] = def;
+    }
+  }
+  out['properties'] = newProps;
+  return out;
+}
+
 /**
  * Resolves whether the turn's sender is a registered system administrator.
  * Fail-closed: a missing sender ID or an auth-check error means "not admin".
@@ -99,8 +142,10 @@ export async function createMcpToolSet(
   if (!cachedSchemas) {
     cachedSchemas = toolModules.map((t) => ({
       name: t.meta.name,
-      description: t.meta.description,
-      parameters: t.meta.parameters as Record<string, unknown>,
+      description: capDescription(t.meta.description),
+      parameters: capParameterDescriptions(
+        t.meta.parameters as Record<string, unknown>,
+      ),
     }));
   }
   const schemas = isAdmin

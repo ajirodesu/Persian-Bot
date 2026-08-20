@@ -15,18 +15,13 @@
  * and bot commands run through the real command dispatcher.
  */
 
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import axios from 'axios';
 import type { BaseCtx } from '@/engine/types/controller.types.js';
 import type { OnCommandCtx } from '@/engine/types/middleware.types.js';
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
-import type { CommandModule } from '@/engine/types/controller.types.js';
 import { dispatchCommand } from '@/engine/controllers/dispatchers/command.dispatcher.js';
 import { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import { Role, type RoleLevel } from '@/engine/constants/role.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
@@ -54,6 +49,11 @@ import {
   type ImageData,
   type ToolLogEntry,
 } from './agent-runner.lib.js';
+import {
+  buildAgentSystemPrompt,
+  buildCommandCatalog,
+  buildThreadEntry,
+} from './agent-prompt.lib.js';
 import { deliverCombinedResult } from '../tools/send_results.js';
 import { containsMarkdown } from './markdown.util.js';
 import { resolveAgentConfig } from './agent-config.lib.js';
@@ -102,18 +102,10 @@ const NO_KEY_REPLY =
   '⚠️ No AI provider configured yet. Add your API key in the dashboard (AI Integration) ' +
   'to enable AI features — there is no server-side key anymore.';
 
-
-// ── System prompt template (Cat-Bot style) ───────────────────────────────────
-//
-// Loaded from agent/system_prompt.md at module evaluation time so it's
-// instantly available on every turn — the same setup as the upstream Cat-Bot
-// (johnlester-0369). The path is resolved relative to this module, so it works
-// symmetrically from src/ (tsx watch) and dist/ (compiled build).
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const SYSTEM_PROMPT_TEMPLATE = fs.readFileSync(
-  path.join(MODULE_DIR, '../../../../agent/system_prompt.md'),
-  'utf-8',
-);
+// The system-prompt template (agent/system_prompt.md) is loaded and rendered in
+// agent-prompt.lib.ts — a single source of truth for every text the LLM sees.
+// The prompt deliberately does NOT inline the command list; the model discovers
+// commands via list_commands/help (cheaper on tokens, and reused from history).
 
 /** Minimal shape of a unified attachment entry. */
 interface RawAttachment {
@@ -264,100 +256,6 @@ async function resolveUserRoleLabel(
     // Fail-open — a temporary DB outage defaults to Regular User.
     return 'Regular User';
   }
-}
-
-// The command roster is fixed at boot (loadCommands runs once), so the
-// category-grouped list only needs building once per (map, platform) pair.
-let commandsListCache: { map: unknown; platform: string; list: string } | null =
-  null;
-
-/**
- * Builds the `<available_commands>` list — commands grouped by category and
- * sorted, so the LLM sees domain structure (the same approach as upstream
- * Cat-Bot) instead of a flat alphabetical list. Memoized per command map.
- */
-function buildAvailableCommandsList(
-  commands: Map<string, CommandModule>,
-  platform: string,
-): string {
-  if (
-    commandsListCache &&
-    commandsListCache.map === commands &&
-    commandsListCache.platform === platform
-  ) {
-    return commandsListCache.list;
-  }
-
-  const byCategory = new Map<string, string[]>();
-  const seen = new Set<CommandModule>();
-  for (const [name, mod] of commands) {
-    // Deduplicate aliases — the command map stores one entry per name AND per
-    // alias key; only the canonical module counts once.
-    if (seen.has(mod)) continue;
-    seen.add(mod);
-    if (!isPlatformAllowed(mod, platform)) continue;
-    const meta = (mod['meta'] ?? {}) as {
-      name?: string;
-      category?: string;
-    };
-    const cmdName = (meta.name ?? name).toLowerCase();
-    const category = meta.category?.trim() || 'Uncategorized';
-    if (!byCategory.has(category)) byCategory.set(category, []);
-    byCategory.get(category)!.push(cmdName);
-  }
-  const list = [...byCategory.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([cat, cmds]) => `${cat}: ${[...cmds].sort().join(', ')}`)
-    .join('\n');
-  commandsListCache = { map: commands, platform, list };
-  return list;
-}
-
-/**
- * Fills the Cat-Bot system-prompt template (agent/system_prompt.md) with the
- * per-turn context: the bot's name, the sender's name/role, the command
- * prefix, the available commands, and the current time in the user's
- * timezone. The resolved model + provider names are injected so the agent
- * knows (and can truthfully report) which language model it runs on. A
- * mention hint is appended on top.
- */
-function buildSystemPrompt(params: {
-  mentioned: boolean;
-  timeZone: string;
-  botName: string;
-  userName: string;
-  userRole: string;
-  prefix: string;
-  availableCommands: string;
-  modelName: string;
-  providerName: string;
-}): string {
-  let prompt = SYSTEM_PROMPT_TEMPLATE
-    .replaceAll('{{BOT_NAME}}', params.botName)
-    .replaceAll('{{USER_NAME}}', params.userName)
-    .replaceAll('{{USER_ROLE}}', params.userRole)
-    .replaceAll('{{COMMAND_PREFIX}}', params.prefix)
-    .replaceAll('{{AVAILABLE_COMMANDS}}', params.availableCommands || '(none)')
-    .replaceAll('{{CURRENT_DATETIME}}', formatLocalNow(params.timeZone))
-    .replaceAll('{{AI_MODEL_NAME}}', params.modelName || 'unknown')
-    .replaceAll('{{AI_PROVIDER_NAME}}', params.providerName || 'unknown');
-  if (params.mentioned) {
-    prompt +=
-      '\n\nThe user has mentioned people in this message — you can @mention them in your reply.';
-  }
-  return prompt;
-}
-
-function buildToolSummary(toolLog: ToolLogEntry[]): string {
-  if (!toolLog.length) return '';
-  const lines = toolLog.map((t) => {
-    const argsStr = Object.values(t.args)
-      .map((v) => String(v))
-      .join(', ')
-      .slice(0, 80);
-    return `• ${t.name}(${argsStr}) → ${t.result.slice(0, 200)}`;
-  });
-  return `[Tools used this turn:\n${lines.join('\n')}]\n\n`;
 }
 
 /** Captured media keys from every test_command run in a turn's tool log. */
@@ -515,33 +413,6 @@ function withReplyCapture(
   return wrapped;
 }
 
-/** Role labels exposed to the LLM (canis's user/admin/super-admin taxonomy). */
-function roleLabel(level: RoleLevel | undefined): string {
-  switch (level) {
-    case Role.PREMIUM:
-      return 'premium';
-    case Role.THREAD_ADMIN:
-    case Role.BOT_ADMIN:
-      return 'admin';
-    case Role.SYSTEM_ADMIN:
-      return 'super-admin';
-    default:
-      return 'user';
-  }
-}
-
-function roleMatchesFilter(
-  level: RoleLevel | undefined,
-  filter: string,
-): boolean {
-  const label = roleLabel(level);
-  if (filter === 'all') return true;
-  if (filter === 'admin') return label === 'admin' || label === 'super-admin';
-  if (filter === 'super-admin') return label === 'super-admin';
-  if (filter === 'premium') return label === 'premium';
-  return label === 'user'; // 'user' filter → ANYONE commands only
-}
-
 function buildToolContext(ctx: BaseCtx): ToolContext {
   const threadID = (ctx.event['threadID'] as string) ?? '';
 
@@ -568,35 +439,8 @@ function buildToolContext(ctx: BaseCtx): ToolContext {
       }
     },
 
-    listCommands: async (role = 'all') => {
-      const MAX_OUTPUT = 2000;
-      const result: Record<
-        string,
-        { description: string; usage: string; role: string }
-      > = {};
-      const seen = new Set<CommandModule>();
-      for (const [name, mod] of ctx.commands) {
-        if (seen.has(mod)) continue;
-        seen.add(mod);
-        const cfg = (mod['meta'] ?? {}) as {
-          name?: string;
-          description?: string;
-          usage?: string | string[];
-          role?: RoleLevel;
-        };
-        const label = roleLabel(cfg.role);
-        if (role !== 'all' && !roleMatchesFilter(cfg.role, role)) continue;
-        const usage = Array.isArray(cfg.usage)
-          ? cfg.usage.join(' | ')
-          : (cfg.usage ?? '');
-        result[cfg.name ?? name] = {
-          description: cfg.description ?? '',
-          usage,
-          role: label,
-        };
-      }
-      return JSON.stringify(result).slice(0, MAX_OUTPUT);
-    },
+    listCommands: async (role = 'all') =>
+      buildCommandCatalog(ctx.commands, ctx.native.platform ?? '', role),
 
     runBotCommand: async (command: string) => {
       const [name, ...rest] = command.trim().split(/\s+/);
@@ -745,20 +589,18 @@ async function runAgentUnsafe(
     return;
   }
 
-  // Cat-Bot style personalization: fill the system-prompt template with the
-  // bot's name (session nickname or trigger word), the sender's name + role,
-  // the command prefix, and the available commands grouped by category.
-  const systemPrompt = buildSystemPrompt({
+  // Cat-Bot style personalization: fill the compact agentic system prompt with
+  // the bot's name (session nickname or trigger word), the sender's name +
+  // role, and the command prefix. The command catalogue is NOT inlined here —
+  // the model discovers it once via list_commands and reuses it from history,
+  // which keeps every turn (including each tool iteration) much cheaper.
+  const systemPrompt = buildAgentSystemPrompt({
     mentioned,
-    timeZone: config.timezone,
     botName: botNickname ?? displayName(config.agentName),
     userName,
     userRole,
     prefix: ctx.prefix ?? '/',
-    availableCommands: buildAvailableCommandsList(
-      ctx.commands,
-      key.platform,
-    ),
+    currentDatetime: formatLocalNow(config.timezone),
     modelName: config.model,
     providerName: AI_PROVIDERS[config.provider]?.label ?? config.provider,
   });
@@ -805,12 +647,7 @@ async function runAgentUnsafe(
   const deliveredViaSendResult =
     !!lastSendResult && !lastSendResult.result.startsWith('Delivery failed');
   if (deliveredViaSendResult) {
-    appendThread(
-      key,
-      threadQuery,
-      buildToolSummary(result.toolLog) + (result.text ?? ''),
-      threadLimits,
-    );
+    appendThread(key, threadQuery, buildThreadEntry(result.toolLog, result.text), threadLimits);
     return;
   }
 
@@ -849,9 +686,10 @@ async function runAgentUnsafe(
       button: capturedMedia.buttonKeys,
       attachment: capturedMedia.binaryKeys,
     });
-    const threadAssistant =
-      buildToolSummary(result.toolLog) +
-      (caption && !looksLikeRawToolDump(caption) ? caption : '');
+    const threadAssistant = buildThreadEntry(
+      result.toolLog,
+      caption && !looksLikeRawToolDump(caption) ? caption : null,
+    );
     appendThread(key, threadQuery, threadAssistant, threadLimits);
     // Only short-circuit when delivery actually succeeded — a failed delivery
     // falls through to the plain-text path so the user still gets a reply.
@@ -870,8 +708,9 @@ async function runAgentUnsafe(
     ? (extractCapturedCaption(result.toolLog) ?? 'Here you go! 🎉')
     : result.text;
 
-  // Prepend tool summary to the assistant thread entry so the next turn has full context.
-  const threadAssistant = buildToolSummary(result.toolLog) + replyText;
+  // Concise assistant thread entry: one-line tool summary + the delivered
+  // reply, so history stays small and the next turn keeps full context.
+  const threadAssistant = buildThreadEntry(result.toolLog, replyText);
 
   // Auto-markdown: the model is prompted to format with bold/lists/code blocks,
   // but only text that actually contains supported Markdown syntax is delivered

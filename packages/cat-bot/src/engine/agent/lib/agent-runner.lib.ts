@@ -231,6 +231,7 @@ async function runOpenAILike(
   userQuery: string,
   tools: McpToolSet,
   execFn: ExecFn,
+  context: ToolContext,
   imageData: ImageData | undefined,
   maxToolIterations: number,
 ): Promise<string | null> {
@@ -346,6 +347,14 @@ async function runOpenAILike(
     }
 
     if (commandDispatched) return null;
+
+    // The send_result tool already delivered the final reply to the chat (it
+    // sets context.agentReplyDelivered on success). Stop the loop here — a
+    // follow-up LLM call would only produce trailing chatter on top of an
+    // already-delivered message and burn an extra request.
+    if (context.agentReplyDelivered) {
+      return context.agentReplyDelivered.message ?? null;
+    }
   }
 
   // Only scan messages added in this turn — never return stale history.
@@ -366,6 +375,7 @@ async function runGemini(
   userQuery: string,
   tools: McpToolSet,
   execFn: ExecFn,
+  context: ToolContext,
   imageData: ImageData | undefined,
   maxToolIterations: number,
 ): Promise<string | null> {
@@ -456,6 +466,12 @@ async function runGemini(
     contents.push({ role: 'user', parts: responseParts });
 
     if (commandDispatched) return null;
+
+    // Same early-exit as the OpenAI loop: once send_result has delivered the
+    // final reply, any further LLM round-trip is wasted tokens.
+    if (context.agentReplyDelivered) {
+      return context.agentReplyDelivered.message ?? null;
+    }
   }
 
   const lastModel = [...contents]
@@ -527,6 +543,7 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
           cfg.userQuery,
           cfg.tools,
           execFn,
+          cfg.context,
           cfg.imageData,
           maxToolIterations,
         );
@@ -540,6 +557,7 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
           cfg.userQuery,
           cfg.tools,
           execFn,
+          cfg.context,
           cfg.imageData,
           maxToolIterations,
         );
