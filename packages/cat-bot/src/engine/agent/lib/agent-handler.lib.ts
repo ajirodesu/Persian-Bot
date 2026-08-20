@@ -397,8 +397,10 @@ function withReplyCapture(
   api: UnifiedApi,
   capture: (text: string) => void,
 ): UnifiedApi {
-  const wrapped = Object.create(api) as UnifiedApi;
-  wrapped.replyMessage = async (threadID, options = {}) => {
+  const wrappedReplyMessage = async (
+    threadID: string,
+    options: Parameters<UnifiedApi['replyMessage']>[1] = {},
+  ) => {
     const m = options.message;
     if (typeof m === 'string') capture(m);
     else if (
@@ -410,7 +412,19 @@ function withReplyCapture(
     }
     return api.replyMessage(threadID, options);
   };
-  return wrapped;
+
+  // A Proxy (NOT Object.create): platform API classes hold private fields
+  // (#ctx on Telegram, etc.) that only exist on real instances. Method calls on
+  // an Object.create clone run with `this = clone`, so private-field access
+  // crashes ("Cannot read private member #ctx..."). Every forwarded method is
+  // bound to the ORIGINAL api so `this` stays a genuine instance.
+  return new Proxy(api, {
+    get(target, prop) {
+      if (prop === 'replyMessage') return wrappedReplyMessage;
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 function buildToolContext(ctx: BaseCtx): ToolContext {
