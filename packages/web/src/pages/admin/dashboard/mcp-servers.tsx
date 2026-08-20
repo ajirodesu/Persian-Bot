@@ -195,8 +195,8 @@ export default function AdminMcpServersPage() {
         <title>MCP Servers · Admin · Cat-Bot</title>
       </Helmet>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
             MCP Servers
           </h1>
@@ -211,7 +211,7 @@ export default function AdminMcpServersPage() {
           size="md"
           onClick={openCreateDialog}
           leftIcon={<Plus size={18} />}
-          className="shrink-0"
+          className="w-full shrink-0 sm:w-auto"
         >
           Add Server
         </Button>
@@ -228,9 +228,9 @@ export default function AdminMcpServersPage() {
           <Table.Header>
             <Table.Row>
               <Table.Head>Name</Table.Head>
-              <Table.Head>URL</Table.Head>
+              <Table.Head className="hidden md:table-cell">URL</Table.Head>
               <Table.Head>Status</Table.Head>
-              <Table.Head>Headers</Table.Head>
+              <Table.Head className="hidden sm:table-cell">Headers</Table.Head>
               <Table.Head align="right">Actions</Table.Head>
             </Table.Row>
           </Table.Header>
@@ -247,16 +247,16 @@ export default function AdminMcpServersPage() {
               sortedServers.map((server) => (
                 <Table.Row key={server.id}>
                   <Table.Cell>
-                    <div className="flex items-center gap-3">
-                      <span className="text-on-surface-variant">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-on-surface-variant shrink-0">
                         <Server size={18} />
                       </span>
-                      <span className="font-medium text-on-surface">
+                      <span className="font-medium text-on-surface truncate min-w-0">
                         {server.name}
                       </span>
                     </div>
                   </Table.Cell>
-                  <Table.Cell className="text-body-sm text-on-surface-variant break-all">
+                  <Table.Cell className="hidden md:table-cell text-body-sm text-on-surface-variant break-all">
                     {server.url}
                   </Table.Cell>
                   <Table.Cell>
@@ -268,7 +268,7 @@ export default function AdminMcpServersPage() {
                       size="sm"
                     />
                   </Table.Cell>
-                  <Table.Cell>
+                  <Table.Cell className="hidden sm:table-cell">
                     {server.headerKeys.length === 0 ? (
                       <span className="text-body-sm text-on-surface-variant">
                         —
@@ -292,8 +292,9 @@ export default function AdminMcpServersPage() {
                           void handleTest(server)
                         }}
                         leftIcon={<RefreshCcw size={14} />}
+                        aria-label={`Test ${server.name}`}
                       >
-                        Test
+                        <span className="hidden sm:inline">Test</span>
                       </Button>
                       <Button
                         variant="tonal"
