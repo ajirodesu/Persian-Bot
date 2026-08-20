@@ -20,7 +20,14 @@ import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 
 export type AgentProviderId =
-  'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini' | 'zen';
+  | 'openrouter'
+  | 'groq'
+  | 'nvidia'
+  | 'openai'
+  | 'gemini'
+  | 'zen'
+  | 'orcarouter'
+  | 'fastrouter';
 
 export const AGENT_PROVIDER_IDS: AgentProviderId[] = [
   'openrouter',
@@ -29,6 +36,8 @@ export const AGENT_PROVIDER_IDS: AgentProviderId[] = [
   'openai',
   'gemini',
   'zen',
+  'orcarouter',
+  'fastrouter',
 ];
 
 export function isAgentProviderId(value: unknown): value is AgentProviderId {
@@ -46,6 +55,8 @@ const BASE_URLS: Partial<Record<AgentProviderId, string>> = {
   nvidia: 'https://integrate.api.nvidia.com/v1',
   openai: 'https://api.openai.com/v1',
   zen: 'https://opencode.ai/zen/v1',
+  orcarouter: 'https://api.orcarouter.ai/v1',
+  fastrouter: 'https://api.fastrouter.ai/api/v1',
 };
 
 /** Cache keyed by `${baseURL}::${apiKey}` so per-user keys stay isolated. */

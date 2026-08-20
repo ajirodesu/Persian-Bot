@@ -57,6 +57,8 @@ export interface AiSettingsStatus {
   openaiModel: string;
   geminiModel: string;
   zenModel: string;
+  orcarouterModel: string;
+  fastrouterModel: string;
   providers: Record<AiProviderId, AiProviderKeyStatus>;
   models: Record<AiProviderId, AiProviderModel[]>;
   agent: Required<AgentSettingsPayload>;
@@ -106,6 +108,12 @@ interface StoredAiConfigLike {
   zenEncryptedKey: string;
   zenKeyHint: string;
   zenModel: string;
+  orcarouterEncryptedKey: string;
+  orcarouterKeyHint: string;
+  orcarouterModel: string;
+  fastrouterEncryptedKey: string;
+  fastrouterKeyHint: string;
+  fastrouterModel: string;
   agentSettings: Record<string, unknown>;
 }
 
@@ -143,6 +151,8 @@ function pickActiveProviderAfterRemoval(
     'openai',
     'gemini',
     'zen',
+    'orcarouter',
+    'fastrouter',
   ];
   for (const p of order) {
     if (p !== removed && hasKey(p)) return p;
@@ -277,17 +287,29 @@ export async function getAiSettingsStatus(
   const nvidiaKey = decryptStoredKey('nvidia');
   const openaiKey = decryptStoredKey('openai');
   const geminiKey = decryptStoredKey('gemini');
+  const orcarouterKey = decryptStoredKey('orcarouter');
+  const fastrouterKey = decryptStoredKey('fastrouter');
 
   // Catalogs are cached (6h) — parallel fetch, sequential after warm-up.
-  const [openrouterList, groqList, nvidiaList, openaiList, geminiList, zenList] =
-    await Promise.all([
-      resolveModelList('openrouter'),
-      resolveModelList('groq', groqKey, userId),
-      resolveModelList('nvidia', nvidiaKey, userId),
-      resolveModelList('openai', openaiKey, userId),
-      resolveModelList('gemini', geminiKey, userId),
-      resolveModelList('zen'),
-    ]);
+  const [
+    openrouterList,
+    groqList,
+    nvidiaList,
+    openaiList,
+    geminiList,
+    zenList,
+    orcarouterList,
+    fastrouterList,
+  ] = await Promise.all([
+    resolveModelList('openrouter'),
+    resolveModelList('groq', groqKey, userId),
+    resolveModelList('nvidia', nvidiaKey, userId),
+    resolveModelList('openai', openaiKey, userId),
+    resolveModelList('gemini', geminiKey, userId),
+    resolveModelList('zen'),
+    resolveModelList('orcarouter', orcarouterKey, userId),
+    resolveModelList('fastrouter', fastrouterKey, userId),
+  ]);
 
   const openrouterModel = normalizeFromList(
     openrouterList.models,
@@ -325,31 +347,43 @@ export async function getAiSettingsStatus(
     storedModelOf(stored, 'zen'),
     AI_PROVIDERS.zen.defaultModel,
   );
+  const orcarouterModel = normalizeFromList(
+    orcarouterList.models,
+    orcarouterList.live,
+    storedModelOf(stored, 'orcarouter'),
+    AI_PROVIDERS.orcarouter.defaultModel,
+  );
+  const fastrouterModel = normalizeFromList(
+    fastrouterList.models,
+    fastrouterList.live,
+    storedModelOf(stored, 'fastrouter'),
+    AI_PROVIDERS.fastrouter.defaultModel,
+  );
 
-  const activeModel =
-    provider === 'openrouter'
-      ? openrouterModel
-      : provider === 'nvidia'
-        ? nvidiaModel
-        : provider === 'openai'
-          ? openaiModel
-          : provider === 'gemini'
-            ? geminiModel
-            : provider === 'zen'
-              ? zenModel
-              : groqModel;
+  const modelByProvider: Record<AiProviderId, string> = {
+    openrouter: openrouterModel,
+    groq: groqModel,
+    nvidia: nvidiaModel,
+    openai: openaiModel,
+    gemini: geminiModel,
+    zen: zenModel,
+    orcarouter: orcarouterModel,
+    fastrouter: fastrouterModel,
+  };
 
   const agent = await getUserAgentSettings(userId);
 
   return {
     provider,
-    model: activeModel,
+    model: modelByProvider[provider],
     openrouterModel,
     groqModel,
     nvidiaModel,
     openaiModel,
     geminiModel,
     zenModel,
+    orcarouterModel,
+    fastrouterModel,
     providers: {
       openrouter: {
         hasKey: stored.openrouterEncryptedKey.length > 0,
@@ -375,6 +409,14 @@ export async function getAiSettingsStatus(
         hasKey: stored.zenEncryptedKey.length > 0,
         keyHint: stored.zenKeyHint || null,
       },
+      orcarouter: {
+        hasKey: stored.orcarouterEncryptedKey.length > 0,
+        keyHint: stored.orcarouterKeyHint || null,
+      },
+      fastrouter: {
+        hasKey: stored.fastrouterEncryptedKey.length > 0,
+        keyHint: stored.fastrouterKeyHint || null,
+      },
     },
     models: {
       openrouter: openrouterList.models,
@@ -383,6 +425,8 @@ export async function getAiSettingsStatus(
       openai: openaiList.models,
       gemini: geminiList.models,
       zen: zenList.models,
+      orcarouter: orcarouterList.models,
+      fastrouter: fastrouterList.models,
     },
     agent: { ...AGENT_SETTINGS_DEFAULTS, ...agent },
   };
@@ -442,7 +486,12 @@ export async function saveUserAiConfig(
   // model is validated/normalized against what's actually available. When a
   // new key is being saved, prefer it for the fetch.
   const fetchKey =
-    provider === 'groq' || provider === 'nvidia' || provider === 'openai' || provider === 'gemini'
+    provider === 'groq' ||
+    provider === 'nvidia' ||
+    provider === 'openai' ||
+    provider === 'gemini' ||
+    provider === 'orcarouter' ||
+    provider === 'fastrouter'
       ? (apiKey || storedKey || undefined)
       : undefined;
 
@@ -559,6 +608,8 @@ function buildEmptyStatus(): AiSettingsStatus {
     openaiModel: AI_PROVIDERS.openai.defaultModel,
     geminiModel: AI_PROVIDERS.gemini.defaultModel,
     zenModel: AI_PROVIDERS.zen.defaultModel,
+    orcarouterModel: AI_PROVIDERS.orcarouter.defaultModel,
+    fastrouterModel: AI_PROVIDERS.fastrouter.defaultModel,
     providers: {
       openrouter: { hasKey: false, keyHint: null },
       groq: { hasKey: false, keyHint: null },
@@ -566,6 +617,8 @@ function buildEmptyStatus(): AiSettingsStatus {
       openai: { hasKey: false, keyHint: null },
       gemini: { hasKey: false, keyHint: null },
       zen: { hasKey: false, keyHint: null },
+      orcarouter: { hasKey: false, keyHint: null },
+      fastrouter: { hasKey: false, keyHint: null },
     },
     models: {
       openrouter: AI_PROVIDERS.openrouter.fallbackModels,
@@ -574,6 +627,8 @@ function buildEmptyStatus(): AiSettingsStatus {
       openai: AI_PROVIDERS.openai.fallbackModels,
       gemini: AI_PROVIDERS.gemini.fallbackModels,
       zen: AI_PROVIDERS.zen.fallbackModels,
+      orcarouter: AI_PROVIDERS.orcarouter.fallbackModels,
+      fastrouter: AI_PROVIDERS.fastrouter.fallbackModels,
     },
     agent: { ...AGENT_SETTINGS_DEFAULTS },
   };

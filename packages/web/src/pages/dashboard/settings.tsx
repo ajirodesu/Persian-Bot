@@ -33,6 +33,8 @@ type AiProviderId =
   | 'openai'
   | 'gemini'
   | 'zen'
+  | 'orcarouter'
+  | 'fastrouter'
 
 interface AiProviderKeyStatus {
   hasKey: boolean
@@ -55,6 +57,8 @@ interface AiSettingsStatus {
   openaiModel: string
   geminiModel: string
   zenModel: string
+  orcarouterModel: string
+  fastrouterModel: string
   providers: Record<AiProviderId, AiProviderKeyStatus>
   models: Record<
     AiProviderId,
@@ -70,6 +74,8 @@ const AI_PROVIDER_LABELS: Record<AiProviderId, string> = {
   openai: 'OpenAI',
   gemini: 'AI Studio',
   zen: 'OpenCode Zen',
+  orcarouter: 'OrcaRouter',
+  fastrouter: 'FastRouter',
 }
 
 const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
@@ -79,6 +85,8 @@ const AI_KEY_PLACEHOLDERS: Record<AiProviderId, string> = {
   openai: 'sk-…',
   gemini: 'AIza… / AQ…',
   zen: 'sk-…',
+  orcarouter: 'sk-orca-…',
+  fastrouter: '…',
 }
 
 const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
@@ -88,6 +96,8 @@ const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'AI Studio' },
   { value: 'zen', label: 'OpenCode Zen' },
+  { value: 'orcarouter', label: 'OrcaRouter' },
+  { value: 'fastrouter', label: 'FastRouter' },
 ]
 
 // Infers the provider from a key's prefix as it's typed/pasted —
@@ -104,6 +114,7 @@ const detectProviderFromKey = (key: string): AiProviderId | null => {
     return 'openai'
   }
   if (trimmed.startsWith('AIza') || trimmed.startsWith('AQ')) return 'gemini'
+  if (trimmed.startsWith('sk-orca-')) return 'orcarouter'
   return null
 }
 
@@ -117,6 +128,8 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
   openaiModel: '',
   geminiModel: '',
   zenModel: '',
+  orcarouterModel: '',
+  fastrouterModel: '',
   providers: {
     openrouter: { hasKey: false, keyHint: null },
     groq: { hasKey: false, keyHint: null },
@@ -124,6 +137,8 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
     openai: { hasKey: false, keyHint: null },
     gemini: { hasKey: false, keyHint: null },
     zen: { hasKey: false, keyHint: null },
+    orcarouter: { hasKey: false, keyHint: null },
+    fastrouter: { hasKey: false, keyHint: null },
   },
   models: {
     openrouter: [],
@@ -132,6 +147,8 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
     openai: [],
     gemini: [],
     zen: [],
+    orcarouter: [],
+    fastrouter: [],
   },
   agent: {
     agentName: '',
@@ -454,6 +471,8 @@ export default function SettingsPage() {
     if (provider === 'nvidia') return aiStatus?.nvidiaModel ?? ''
     if (provider === 'openai') return aiStatus?.openaiModel ?? ''
     if (provider === 'zen') return aiStatus?.zenModel ?? ''
+    if (provider === 'orcarouter') return aiStatus?.orcarouterModel ?? ''
+    if (provider === 'fastrouter') return aiStatus?.fastrouterModel ?? ''
     return aiStatus?.geminiModel ?? ''
   }
 

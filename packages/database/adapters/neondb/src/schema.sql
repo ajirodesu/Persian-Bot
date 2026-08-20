@@ -317,6 +317,12 @@ CREATE TABLE IF NOT EXISTS bot_user_ai_config (
   zen_encrypted_key        TEXT,
   zen_key_hint             TEXT,
   zen_model                TEXT,
+  orcarouter_encrypted_key TEXT,
+  orcarouter_key_hint      TEXT,
+  orcarouter_model         TEXT,
+  fastrouter_encrypted_key TEXT,
+  fastrouter_key_hint      TEXT,
+  fastrouter_model         TEXT,
   provider                 TEXT DEFAULT 'openrouter',
   agent_settings           JSONB,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -341,6 +347,12 @@ ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS gemini_model TEXT;
 ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS zen_encrypted_key TEXT;
 ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS zen_key_hint TEXT;
 ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS zen_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS orcarouter_encrypted_key TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS orcarouter_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS orcarouter_model TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS fastrouter_encrypted_key TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS fastrouter_key_hint TEXT;
+ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS fastrouter_model TEXT;
 ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'openrouter';
 -- Per-user AI agent settings blob (trigger word, behavior toggles/limits).
 ALTER TABLE bot_user_ai_config ADD COLUMN IF NOT EXISTS agent_settings JSONB;

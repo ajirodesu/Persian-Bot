@@ -8,7 +8,15 @@ import { getMongoDb } from '../client.js';
  * model each. The legacy botUserGroqKeys collection (predates the
  * multi-provider feature) is lazily migrated to this collection on first read.
  */
-export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini' | 'zen';
+export type AiProvider =
+  | 'openrouter'
+  | 'groq'
+  | 'nvidia'
+  | 'openai'
+  | 'gemini'
+  | 'zen'
+  | 'orcarouter'
+  | 'fastrouter';
 
 export interface StoredAiConfig {
   provider: AiProvider;
@@ -30,6 +38,12 @@ export interface StoredAiConfig {
   zenEncryptedKey: string;
   zenKeyHint: string;
   zenModel: string;
+  orcarouterEncryptedKey: string;
+  orcarouterKeyHint: string;
+  orcarouterModel: string;
+  fastrouterEncryptedKey: string;
+  fastrouterKeyHint: string;
+  fastrouterModel: string;
   /**
    * Free-form per-user agent settings blob. Holds the agent behavior settings:
    * trigger word, behavior toggles/limits. Provider keys/models all live in
@@ -58,6 +72,12 @@ interface StoredAiConfigDoc {
   zenEncryptedKey?: string;
   zenKeyHint?: string;
   zenModel?: string;
+  orcarouterEncryptedKey?: string;
+  orcarouterKeyHint?: string;
+  orcarouterModel?: string;
+  fastrouterEncryptedKey?: string;
+  fastrouterKeyHint?: string;
+  fastrouterModel?: string;
   agentSettings?: Record<string, unknown>;
 }
 
@@ -71,6 +91,8 @@ const FIELD_PREFIXES = [
   'openai',
   'gemini',
   'zen',
+  'orcarouter',
+  'fastrouter',
 ] as const;
 
 function providerOf(value: string | undefined): AiProvider {
@@ -78,7 +100,9 @@ function providerOf(value: string | undefined): AiProvider {
     value === 'nvidia' ||
     value === 'openai' ||
     value === 'gemini' ||
-    value === 'zen'
+    value === 'zen' ||
+    value === 'orcarouter' ||
+    value === 'fastrouter'
     ? value
     : 'openrouter';
 }
@@ -212,7 +236,9 @@ function isSupportedAiProvider(value: string): boolean {
     value === 'nvidia' ||
     value === 'openai' ||
     value === 'gemini' ||
-    value === 'zen'
+    value === 'zen' ||
+    value === 'orcarouter' ||
+    value === 'fastrouter'
   );
 }
 

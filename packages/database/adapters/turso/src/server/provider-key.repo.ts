@@ -8,7 +8,15 @@ import { tursoClient } from '../client.js';
  * model for each. The legacy bot_user_groq_key table (predates the
  * multi-provider feature) is migrated to this schema by initDb.
  */
-export type AiProvider = 'openrouter' | 'groq' | 'nvidia' | 'openai' | 'gemini' | 'zen';
+export type AiProvider =
+  | 'openrouter'
+  | 'groq'
+  | 'nvidia'
+  | 'openai'
+  | 'gemini'
+  | 'zen'
+  | 'orcarouter'
+  | 'fastrouter';
 
 export interface StoredAiConfig {
   provider: AiProvider;
@@ -30,6 +38,12 @@ export interface StoredAiConfig {
   zenEncryptedKey: string;
   zenKeyHint: string;
   zenModel: string;
+  orcarouterEncryptedKey: string;
+  orcarouterKeyHint: string;
+  orcarouterModel: string;
+  fastrouterEncryptedKey: string;
+  fastrouterKeyHint: string;
+  fastrouterModel: string;
   /**
    * Free-form per-user agent settings blob (JSON). Holds the agent behavior
    * settings: trigger word, behavior toggles/limits. Provider keys/models all
@@ -57,6 +71,12 @@ const PROVIDER_COLUMNS = [
   'zen_encrypted_key',
   'zen_key_hint',
   'zen_model',
+  'orcarouter_encrypted_key',
+  'orcarouter_key_hint',
+  'orcarouter_model',
+  'fastrouter_encrypted_key',
+  'fastrouter_key_hint',
+  'fastrouter_model',
 ] as const;
 
 const NOW_SQL = `STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')`;
@@ -66,7 +86,9 @@ function providerOf(value: string | null): AiProvider {
     value === 'nvidia' ||
     value === 'openai' ||
     value === 'gemini' ||
-    value === 'zen'
+    value === 'zen' ||
+    value === 'orcarouter' ||
+    value === 'fastrouter'
     ? value
     : 'openrouter';
 }

@@ -25,6 +25,8 @@ import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
 import {
   AI_PROVIDERS,
+  getFreeModelOf,
+  isFreeOrAutoModel,
   type AiProviderId,
 } from '@/engine/repos/ai-provider.constants.js';
 import {
@@ -94,6 +96,20 @@ function defaultModelOf(provider: AgentProviderId): string {
   return def?.defaultModel ?? AI_PROVIDERS.openrouter.defaultModel;
 }
 
+/**
+ * Free/auto model auto-preference: for providers that support a free/auto
+ * model, prefer it over the saved (possibly paid) model so turns don't
+ * instantly hit the provider's rate limit. A user's own free-model choice is
+ * respected — it's already free. Providers without a free tier keep the
+ * user's saved model untouched.
+ */
+function preferFreeModel(provider: AgentProviderId, model: string): string {
+  const id = provider as AiProviderId;
+  const free = getFreeModelOf(id);
+  if (free && !isFreeOrAutoModel(id, model)) return free;
+  return model;
+}
+
 /** Resolved agent behavior with hardcoded defaults (never throws). */
 export function resolveAgentBehavior(): Omit<
   ResolvedAgentConfig,
@@ -152,7 +168,7 @@ export async function resolveAgentConfig(
             // A user with a stored key but empty model (fresh row) still gets a
             // sensible default — never send an empty model to the provider.
             apiKey: apiKey || undefined,
-            model: storedModel || defaultModelOf(provider),
+            model: preferFreeModel(provider, storedModel || defaultModelOf(provider)),
             ...resolveBehaviorWithBlob(blob),
             // The dashboard timezone lives in its own table (not the blob).
             timezone: await getUserTimezoneOrDefault(userId),
@@ -171,7 +187,10 @@ export async function resolveAgentConfig(
   const resolved: ResolvedAgentConfig = {
     provider: DEFAULT_AI_PROVIDER,
     apiKey: undefined,
-    model: defaultModelOf(DEFAULT_AI_PROVIDER),
+    model: preferFreeModel(
+      DEFAULT_AI_PROVIDER,
+      defaultModelOf(DEFAULT_AI_PROVIDER),
+    ),
     ...resolveAgentBehavior(),
     // Still honor the user's dashboard timezone when they have one.
     timezone: await getUserTimezoneOrDefault(userId ?? ''),

@@ -33,6 +33,10 @@ const ZEN_CACHE_KEY = 'ai:models:zen';
 const groqCacheKey = (userId: string): string => `ai:models:groq:${userId}`;
 const openaiCacheKey = (userId: string): string => `ai:models:openai:${userId}`;
 const geminiCacheKey = (userId: string): string => `ai:models:gemini:${userId}`;
+const orcarouterCacheKey = (userId: string): string =>
+  `ai:models:orcarouter:${userId}`;
+const fastrouterCacheKey = (userId: string): string =>
+  `ai:models:fastrouter:${userId}`;
 
 // ── API response shapes ──────────────────────────────────────────────────────
 
@@ -249,12 +253,35 @@ async function fetchGeminiModels(apiKey: string): Promise<AiProviderModel[] | nu
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
+ * Shared fetcher for the OpenAI-style /models endpoint used by the gateway
+ * providers (tokenrouter, huggingface, orcarouter, fastrouter). All four return
+ * `{ data: [{ id, name? }] }`; the key is sent as a Bearer token.
+ */
+async function fetchBearerModels(
+  apiKey: string,
+  url: string,
+): Promise<AiProviderModel[] | null> {
+  const { data } = await axios.get<GroqModelsResponse>(url, {
+    timeout: MODELS_FETCH_TIMEOUT_MS,
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  const entries = data?.data;
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const models: AiProviderModel[] = [];
+  for (const e of entries) {
+    if (typeof e.id !== 'string' || e.id.length === 0) continue;
+    models.push({ id: e.id, label: formatModelLabel(e.id) });
+  }
+  return models.length > 0 ? sortModels(models) : null;
+}
+
+/**
  * Returns the live model catalog for a provider, or null when the fetch failed
  * (callers fall back to the static catalog). Results are cached for 6h.
  *
- * @param apiKey  Required for groq/openai/gemini (their endpoints authenticate
- *                per key); unused for openrouter (public endpoint), optional
- *                for nvidia.
+ * @param apiKey  Required for groq/openai/gemini/orcarouter/fastrouter
+ *                (their endpoints authenticate per key); unused for
+ *                openrouter/zen (public endpoint), optional for nvidia.
  * @param cacheKey User id for groq/openai/gemini — those catalogs are cached
  *                per user because the list can differ between keys.
  */
@@ -280,16 +307,27 @@ export async function getProviderModelsCached(
   } else if (provider === 'gemini') {
     cacheKeyId = geminiCacheKey(cacheKey || 'default');
     fetcher = () => fetchGeminiModels(apiKey ?? '');
+  } else if (provider === 'orcarouter') {
+    cacheKeyId = orcarouterCacheKey(cacheKey || 'default');
+    fetcher = () => fetchBearerModels(apiKey ?? '', AI_PROVIDERS.orcarouter.modelsUrl);
+  } else if (provider === 'fastrouter') {
+    cacheKeyId = fastrouterCacheKey(cacheKey || 'default');
+    fetcher = () => fetchBearerModels(apiKey ?? '', AI_PROVIDERS.fastrouter.modelsUrl);
   } else {
     cacheKeyId = groqCacheKey(cacheKey || 'default');
     fetcher = () => fetchGroqModels(apiKey ?? '');
   }
 
-  // Key-required providers (openai/groq/gemini) reject an empty Authorization
-  // header with a 401. Without a key there is nothing to fetch — fall back to
-  // the static catalog instead of burning a rejected request on every status load.
+  // Key-required providers (openai/groq/gemini + the gateway providers)
+  // reject an empty Authorization header with a 401. Without a key there is
+  // nothing to fetch — fall back to the static catalog instead of burning a
+  // rejected request on every status load.
   if (
-    (provider === 'openai' || provider === 'groq' || provider === 'gemini') &&
+    (provider === 'openai' ||
+      provider === 'groq' ||
+      provider === 'gemini' ||
+      provider === 'orcarouter' ||
+      provider === 'fastrouter') &&
     (typeof apiKey !== 'string' || apiKey.length === 0)
   ) {
     return null;

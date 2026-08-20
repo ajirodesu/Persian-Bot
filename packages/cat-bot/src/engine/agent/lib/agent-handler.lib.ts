@@ -46,6 +46,9 @@ import { createMcpToolSet } from './mcp-tools.lib.js';
 import type { ToolContext } from '../agent-tool.types.js';
 import {
   runAgentTurn,
+  AgentRateLimitError,
+  type AgentTurnConfig,
+  type AgentResult,
   type ImageData,
   type ToolLogEntry,
 } from './agent-runner.lib.js';
@@ -56,8 +59,15 @@ import {
 } from './agent-prompt.lib.js';
 import { deliverCombinedResult } from '../tools/send_results.js';
 import { containsMarkdown } from './markdown.util.js';
-import { resolveAgentConfig } from './agent-config.lib.js';
-import { AI_PROVIDERS } from '@/engine/repos/ai-provider.constants.js';
+import {
+  resolveAgentConfig,
+  resolveStoredApiKey,
+} from './agent-config.lib.js';
+import { AI_PROVIDERS, getFreeModelOf } from '@/engine/repos/ai-provider.constants.js';
+import {
+  type AgentProviderId,
+  AGENT_PROVIDER_IDS,
+} from './agent-providers.lib.js';
 import {
   type AgentThreadKey,
   getThread,
@@ -106,6 +116,96 @@ const NO_KEY_REPLY =
 // agent-prompt.lib.ts — a single source of truth for every text the LLM sees.
 // The prompt deliberately does NOT inline the command list; the model discovers
 // commands via list_commands/help (cheaper on tokens, and reused from history).
+
+// ── Automatic free/auto-model + rate-limit failover ───────────────────────────
+// Providers with a free/auto tier (openrouter, groq, gemini, zen, orcarouter)
+// run on their free/auto model by default (see preferFreeModel in agent-config)
+// so turns don't instantly hit rate limits. If a turn is STILL rate-limited
+// (429, after the runner's own backoff retries), the turn is retried on another
+// provider that also has a saved key AND supports a free/auto model. OpenAI /
+// NVIDIA / FastRouter have no free/auto tier, so they never participate — their
+// keys only run when the user selects them explicitly.
+
+/** A concrete provider/key/model combination a turn can run on. */
+interface AgentRunPlan {
+  provider: AgentProviderId;
+  apiKey?: string | undefined;
+  model: string;
+}
+
+/**
+ * Builds the failover candidates for a rate-limited turn: every provider that
+ * supports a free/auto model AND has a saved decryptable key, excluding the
+ * provider that just got rate-limited. Empty when the user has no other
+ * free-tier key — the rate-limit message is surfaced instead.
+ */
+async function buildFailoverPlans(
+  userId: string | undefined,
+  activeProvider: AgentProviderId,
+): Promise<AgentRunPlan[]> {
+  const plans: AgentRunPlan[] = [];
+  for (const provider of AGENT_PROVIDER_IDS) {
+    if (provider === activeProvider) continue;
+    const freeModel = getFreeModelOf(provider);
+    if (!freeModel) continue; // no free/auto tier → never a candidate
+    const apiKey = await resolveStoredApiKey(userId, provider);
+    if (!apiKey) continue; // no saved key → never a candidate
+    plans.push({ provider, apiKey, model: freeModel });
+  }
+  return plans;
+}
+
+/**
+ * Runs an agent turn on the primary provider, auto-failovering to other
+ * free/auto providers on a rate limit. The system prompt is rebuilt per attempt
+ * so the model sees its real model/provider names on each failover. Never
+ * throws on rate limits — if every candidate is rate-limited the turn resolves
+ * to the apology message.
+ */
+async function runAgentTurnWithFailover(
+  userId: string | undefined,
+  primary: AgentRunPlan,
+  base: Omit<
+    AgentTurnConfig,
+    'systemPrompt' | 'provider' | 'apiKey' | 'model' | 'rethrowRateLimit'
+  >,
+  buildSystemPrompt: (plan: AgentRunPlan) => string,
+): Promise<AgentResult> {
+  const attempt = async (plan: AgentRunPlan): Promise<AgentResult> =>
+    runAgentTurn({
+      ...base,
+      systemPrompt: buildSystemPrompt(plan),
+      provider: plan.provider,
+      apiKey: plan.apiKey,
+      model: plan.model,
+      rethrowRateLimit: true,
+    });
+
+  try {
+    return await attempt(primary);
+  } catch (err) {
+    if (!(err instanceof AgentRateLimitError)) throw err;
+    logger.warn(
+      `[Agent] ${primary.provider} rate-limited — failover to another free/auto provider`,
+      { userId },
+    );
+    for (const plan of await buildFailoverPlans(userId, primary.provider)) {
+      try {
+        return await attempt(plan);
+      } catch (e) {
+        if (!(e instanceof AgentRateLimitError)) throw e;
+        logger.warn(`[Agent] failover ${plan.provider} also rate-limited`, {
+          userId,
+        });
+      }
+    }
+    return {
+      text: "I'm being rate-limited right now. Please try again shortly.",
+      commandToExecute: null,
+      toolLog: [],
+    };
+  }
+}
 
 /** Minimal shape of a unified attachment entry. */
 interface RawAttachment {
@@ -608,16 +708,18 @@ async function runAgentUnsafe(
   // role, and the command prefix. The command catalogue is NOT inlined here —
   // the model discovers it once via list_commands and reuses it from history,
   // which keeps every turn (including each tool iteration) much cheaper.
-  const systemPrompt = buildAgentSystemPrompt({
-    mentioned,
-    botName: botNickname ?? displayName(config.agentName),
-    userName,
-    userRole,
-    prefix: ctx.prefix ?? '/',
-    currentDatetime: formatLocalNow(config.timezone),
-    modelName: config.model,
-    providerName: AI_PROVIDERS[config.provider]?.label ?? config.provider,
-  });
+  // Built per attempt so a failover run sees its real provider/model names.
+  const buildTurnPrompt = (plan: AgentRunPlan): string =>
+    buildAgentSystemPrompt({
+      mentioned,
+      botName: botNickname ?? displayName(config.agentName),
+      userName,
+      userRole,
+      prefix: ctx.prefix ?? '/',
+      currentDatetime: formatLocalNow(config.timezone),
+      modelName: plan.model,
+      providerName: AI_PROVIDERS[plan.provider]?.label ?? plan.provider,
+    });
 
   const toolContext = buildToolContext(ctx);
   // Spin up the in-process MCP server bound to this turn's context — the
@@ -631,18 +733,23 @@ async function runAgentUnsafe(
 
   logger.info('[Agent]', `${senderID} → ${query.slice(0, 80)}`);
 
-  const result = await runAgentTurn({
-    systemPrompt,
-    history,
-    userQuery: query || '[Describe this image]',
-    tools,
-    context: toolContext,
-    provider: config.provider,
-    apiKey: config.apiKey,
-    model: config.model,
-    imageData,
-    maxToolIterations: config.maxToolIterations,
-  });
+  const result = await runAgentTurnWithFailover(
+    key.userId || undefined,
+    {
+      provider: config.provider,
+      apiKey: config.apiKey,
+      model: config.model,
+    },
+    {
+      history,
+      userQuery: query || '[Describe this image]',
+      tools,
+      context: toolContext,
+      imageData,
+      maxToolIterations: config.maxToolIterations,
+    },
+    buildTurnPrompt,
+  );
 
   activateSession(key);
   const threadLimits = {
@@ -1077,31 +1184,37 @@ export async function generateSimpleText(
   if (cached) return cached;
 
   try {
-    const result = await runAgentTurn({
-      systemPrompt: 'You are a helpful AI assistant. Today is %TODAY%.'.replace(
-        '%TODAY%',
-        today,
-      ),
-      history: [],
-      userQuery: prompt,
-      // No tools — an empty MCP tool set (schemas: [] means the LLM gets no
-      // function declarations, and callTool is never reached).
-      tools: {
-        schemas: [],
-        callTool: async () => '(no tools available)',
+    const result = await runAgentTurnWithFailover(
+      ctx.native.userId,
+      {
+        provider: config.provider,
+        apiKey: config.apiKey,
+        model: config.model,
       },
-      // No tools are passed to this completion, so the context is never used
-      // for tool execution — only the helper surface matters here.
-      context: {
-        getUserInfo: async () => null,
-        getThreadInfo: async () => null,
-        listCommands: async () => '{}',
-        runBotCommand: async () => ({ ok: false, error: 'Not available' }),
-      } as unknown as ToolContext,
-      provider: config.provider,
-      apiKey: config.apiKey,
-      model: config.model,
-    });
+      {
+        history: [],
+        userQuery: prompt,
+        // No tools — an empty MCP tool set (schemas: [] means the LLM gets no
+        // function declarations, and callTool is never reached).
+        tools: {
+          schemas: [],
+          callTool: async () => '(no tools available)',
+        },
+        // No tools are passed to this completion, so the context is never used
+        // for tool execution — only the helper surface matters here.
+        context: {
+          getUserInfo: async () => null,
+          getThreadInfo: async () => null,
+          listCommands: async () => '{}',
+          runBotCommand: async () => ({ ok: false, error: 'Not available' }),
+        } as unknown as ToolContext,
+      },
+      () =>
+        'You are a helpful AI assistant. Today is %TODAY%.'.replace(
+          '%TODAY%',
+          today,
+        ),
+    );
     if (result.text) cacheResult(prompt, today, result.text);
     return result.text;
   } catch (err) {

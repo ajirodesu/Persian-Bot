@@ -61,6 +61,25 @@ export interface AgentTurnConfig {
   imageData?: ImageData | undefined;
   /** Max tool-call iterations (defaults to 5 when unset). */
   maxToolIterations?: number;
+  /** Throw an AgentRateLimitError on a 429 instead of returning the apology
+   * message — used by the auto-failover wrapper (agent-handler) so it can retry
+   * the turn on another provider. */
+  rethrowRateLimit?: boolean;
+}
+
+/**
+ * Thrown when a provider returns a rate-limit (429) error and the caller asked
+ * to rethrow it (see AgentTurnConfig.rethrowRateLimit) instead of the default
+ * apology message. Carries the provider + optional retry hint for logging.
+ */
+export class AgentRateLimitError extends Error {
+  constructor(
+    public readonly provider: AgentProviderId,
+    public readonly hint?: string,
+  ) {
+    super(`Rate limited by ${provider}`);
+    this.name = 'AgentRateLimitError';
+  }
 }
 
 // Sentinel returned to the LLM when run_command is intercepted.
@@ -536,6 +555,8 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
       case 'nvidia':
       case 'openai':
       case 'zen':
+      case 'orcarouter':
+      case 'fastrouter':
         text = await runOpenAILike(
           cfg.provider,
           cfg.apiKey,
@@ -580,6 +601,12 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
         ? ` Try again in ${reset}.`
         : ' Please try again shortly.';
       logger.warn(`[AgentRunner] Rate limited by ${cfg.provider}${hint}`);
+      if (cfg.rethrowRateLimit) {
+        throw new AgentRateLimitError(
+          cfg.provider,
+          hint.trim() || undefined,
+        );
+      }
       return emptyResult(`I'm being rate-limited right now.${hint}`);
     }
 
