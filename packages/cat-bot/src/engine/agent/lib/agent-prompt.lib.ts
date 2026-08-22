@@ -71,28 +71,43 @@ export interface SystemPromptParams {
   userName: string;
   userRole: string;
   prefix: string;
-  modelName: string;
-  providerName: string;
+}
+
+/**
+ * Renders the agentic system prompt for a turn. Deliberately STATIC per user
+ * (bot/user names, role, prefix only): anything that changes between turns
+ * (datetime, model, provider) would break the byte-identical prefix that
+ * providers (OpenRouter, Groq, OpenAI, …) use for automatic prompt caching —
+ * a changing system prompt re-pays full input price every turn. Per-turn
+ * context lives in the turn context line appended to the user message instead
+ * (see buildTurnContextLine).
+ */
+export function buildAgentSystemPrompt(params: SystemPromptParams): string {
+  return SYSTEM_PROMPT_TEMPLATE
+    .replaceAll('{{BOT_NAME}}', params.botName)
+    .replaceAll('{{USER_NAME}}', params.userName)
+    .replaceAll('{{USER_ROLE}}', params.userRole)
+    .replaceAll('{{COMMAND_PREFIX}}', params.prefix);
+}
+
+export interface TurnContextParams {
   currentDatetime: string;
   /** Appended hint when the message mentions people (reply can @mention them). */
   mentioned?: boolean;
 }
 
-/** Renders the compact agentic system prompt for a turn. */
-export function buildAgentSystemPrompt(params: SystemPromptParams): string {
-  let prompt = SYSTEM_PROMPT_TEMPLATE
-    .replaceAll('{{BOT_NAME}}', params.botName)
-    .replaceAll('{{USER_NAME}}', params.userName)
-    .replaceAll('{{USER_ROLE}}', params.userRole)
-    .replaceAll('{{COMMAND_PREFIX}}', params.prefix)
-    .replaceAll('{{CURRENT_DATETIME}}', params.currentDatetime)
-    .replaceAll('{{AI_MODEL_NAME}}', params.modelName || 'unknown')
-    .replaceAll('{{AI_PROVIDER_NAME}}', params.providerName || 'unknown');
+/**
+ * Per-turn context appended to the user message (NOT the system prompt) so the
+ * system prompt + tool schemas stay byte-identical and prompt-cacheable across
+ * turns. The model/provider identity is appended per attempt by the failover
+ * wrapper (it can change mid-turn on a provider failover).
+ */
+export function buildTurnContextLine(params: TurnContextParams): string {
+  let line = `[Context: now: ${params.currentDatetime}]`;
   if (params.mentioned) {
-    prompt +=
-      '\n\nThe user has mentioned people in this message — you can @mention them in your reply.';
+    line += ' [The user mentioned people — you can @mention them in your reply.]';
   }
-  return prompt;
+  return line;
 }
 
 // ── Command catalogue (list_commands output) ───────────────────────────────────

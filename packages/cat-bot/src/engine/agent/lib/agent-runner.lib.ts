@@ -119,6 +119,28 @@ function isRetryableError(err: unknown): boolean {
   );
 }
 
+/**
+ * True for 400-class rejections that indicate the model/endpoint does not
+ * support (native) tool calling — "tools is not supported", "function calling
+ * is not enabled", "invalid type for 'tools'", etc. Lets the loops degrade to
+ * a plain no-tools completion instead of failing the turn.
+ */
+function isToolsUnsupportedError(err: unknown): boolean {
+  if (!err) return false;
+  const e = err as {
+    status?: number;
+    statusCode?: number;
+    message?: string;
+    error?: { message?: string } | string;
+  };
+  const status = e.status ?? e.statusCode;
+  if (status !== 400 && status !== 404 && status !== 422) return false;
+  const detail =
+    typeof e.error === 'string' ? e.error : (e.error?.message ?? '');
+  const msg = `${e.message ?? ''} ${detail}`.toLowerCase();
+  return /tool|function/.test(msg);
+}
+
 /** Bounds fn with a hard timeout; aborts the underlying request when possible. */
 async function withTimeout<T>(
   fn: (signal?: AbortSignal) => Promise<T>,
@@ -171,7 +193,18 @@ async function callLlm<T>(
 // so capping the message copy never loses media/attachment keys.
 const HISTORY_TOKEN_BUDGET = 24_000; // oldest history dropped to stay under budget
 const MAX_TOOL_RESULT_CHARS = 6_000; // per tool result fed back to the LLM
-const CHARS_PER_TOKEN = 3.5;
+// Conservative (most tokenizers land near 3 chars/token; 3.5 undershoots on
+// English prose and code) — overshooting small models' context windows is
+// worse than trimming a little early.
+const CHARS_PER_TOKEN = 3;
+// Output cap per LLM request — without it a runaway model can emit thousands
+// of completion tokens per tool-loop iteration (up to 6 requests per turn).
+const MAX_OUTPUT_TOKENS = 2_048;
+// Head+tail split for truncated tool results: leading content usually carries
+// the payload, while errors/summaries land at the tail — keeping both sides
+// preserves far more signal than a head-only cut for the same token budget.
+const TOOL_RESULT_HEAD_CHARS = 4_000;
+const TOOL_RESULT_TAIL_CHARS = 1_500;
 
 function estimateTokens(text: string): number {
   if (!text) return 0;
@@ -195,11 +228,18 @@ function trimHistoryToBudget<T extends ThreadMessage>(
   return kept;
 }
 
-/** Caps a tool result before it is fed back to the LLM. */
-function capToolResult(result: string): string {
-  return result.length > MAX_TOOL_RESULT_CHARS
-    ? `${result.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated]`
-    : result;
+/**
+ * Caps a tool result before it is fed back to the LLM, keeping BOTH the head
+ * and the tail (errors/summaries usually appear at the end of long output).
+ */
+export function capToolResult(result: string): string {
+  if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
+  const omitted = result.length - TOOL_RESULT_HEAD_CHARS - TOOL_RESULT_TAIL_CHARS;
+  return (
+    result.slice(0, TOOL_RESULT_HEAD_CHARS) +
+    `\n…[truncated ${omitted} chars]…\n` +
+    result.slice(-TOOL_RESULT_TAIL_CHARS)
+  );
 }
 
 /** True when a tool call batch must run sequentially (delivery/side-effects). */
@@ -211,34 +251,136 @@ function needsSequentialTools(calls: Array<{ name: string }>): boolean {
 
 type ExecFn = (name: string, args: Record<string, unknown>) => Promise<string>;
 
-function stripRawToolCalls(text: string): string | null {
-  const cleaned = text
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
-    .replace(/<function_calls?>[\s\S]*?<\/function_calls?>/gi, '')
-    .replace(
-      /```(?:json)?\s*\{[\s\S]*?"(?:name|function)"[\s\S]*?\}\s*```/gi,
-      '',
-    )
-    .trim();
+/** One tool call parsed out of model-emitted TEXT (not native tool_calls). */
+interface ParsedTextCall {
+  name: string;
+  args: Record<string, unknown>;
+}
 
-  if (!cleaned) return null;
-
-  // Whole response is a bare JSON tool call object.
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      parsed.name &&
-      (parsed.arguments !== undefined || parsed.parameters !== undefined)
-    ) {
-      return null;
+/**
+ * Extracts {name, arguments|parameters} from a candidate JSON tool-call body,
+ * accepting both the flat shape ({"name","arguments"}) and the nested shape
+ * ({"function":{"name","arguments"}}) that prompt-style models emit.
+ */
+function coerceToolCallJson(parsed: unknown): ParsedTextCall | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const obj = parsed as Record<string, any>;
+  const flat =
+    typeof obj.name === 'string' && obj.name
+      ? { name: obj.name, args: obj.arguments ?? obj.parameters ?? {} }
+      : null;
+  const nested =
+    obj.function && typeof obj.function.name === 'string'
+      ? {
+          name: obj.function.name,
+          args: obj.function.arguments ?? {},
+        }
+      : null;
+  const call = flat ?? nested;
+  if (!call) return null;
+  if (typeof call.args === 'string') {
+    try {
+      call.args = JSON.parse(call.args);
+    } catch {
+      call.args = {};
     }
-  } catch {
-    // Not JSON — fall through and return the cleaned text.
+  }
+  if (!call.args || typeof call.args !== 'object') call.args = {};
+  return { name: call.name, args: call.args as Record<string, unknown> };
+}
+
+/**
+ * Parses tool calls that models without native function calling emit as TEXT
+ * (common behind router providers like OrcaRouter/FastRouter auto routes,
+ * Qwen/DeepSeek-style). Supported shapes:
+ *   • <tool_call>{"name":…, "arguments":{…}}</tool_call> (Qwen, repeatable)
+ *   • <function_calls>…</function_calls> wrapping JSON call object(s)
+ *   • a fenced or bare JSON object that is a single tool call
+ * Returns the parsed calls and whatever prose remains outside them.
+ */
+export function parseTextToolCalls(
+  text: string,
+): { calls: ParsedTextCall[]; prose: string } {
+  const calls: ParsedTextCall[] = [];
+  let prose = text;
+
+  // <tool_call>{…}</tool_call> — may appear several times in one response.
+  prose = prose.replace(/<tool_call>([\s\S]*?)<\/tool_call>/gi, (_m, body: string) => {
+    try {
+      const call = coerceToolCallJson(JSON.parse(body));
+      if (call) calls.push(call);
+    } catch {
+      /* unparsable body — drop it */
+    }
+    return '';
+  });
+
+  // <function_calls>{…}</function_calls> — some templates wrap JSON, others
+  // wrap <invoke> markup; only the JSON variant is handled, the rest falls
+  // through to stripping.
+  prose = prose.replace(
+    /<function_calls?>([\s\S]*?)<\/function_calls?>/gi,
+    (_m, body: string) => {
+      const jsonBody = body.match(/\{[\s\S]*\}/);
+      if (jsonBody) {
+        try {
+          const call = coerceToolCallJson(JSON.parse(jsonBody[0]));
+          if (call) {
+            calls.push(call);
+            return '';
+          }
+        } catch {
+          /* not JSON — keep it out of the prose but don't crash */
+          return '';
+        }
+      }
+      return '';
+    },
+  );
+
+  // Fenced JSON tool call ```json {"name": …, "arguments": …}```
+  prose = prose.replace(
+    /```(?:json)?\s*(\{[\s\S]*?\})\s*```/gi,
+    (_m, body: string) => {
+      try {
+        const call = coerceToolCallJson(JSON.parse(body));
+        if (call) {
+          calls.push(call);
+          return '';
+        }
+      } catch {
+        /* not a tool call — keep the fence */
+        return _m;
+      }
+      return _m;
+    },
+  );
+
+  // Whole (remaining) response is a bare JSON tool-call object.
+  const trimmed = prose.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const call = coerceToolCallJson(JSON.parse(trimmed));
+      if (call) {
+        calls.push(call);
+        prose = '';
+      }
+    } catch {
+      /* not JSON — leave as prose */
+    }
   }
 
-  return cleaned;
+  return { calls, prose: prose.trim() };
+}
+
+/**
+ * Strips any text-emitted tool-call markup from a reply, returning null when
+ * nothing but tool calls remain (the caller then has no text to deliver).
+ */
+function stripRawToolCalls(text: string): string | null {
+  const { calls, prose } = parseTextToolCalls(text);
+  if (calls.length > 0 && !prose) return null;
+  return prose || null;
 }
 
 async function runOpenAILike(
@@ -289,20 +431,40 @@ async function runOpenAILike(
       : undefined;
 
   const startIdx = messages.length; // first index added this turn
+  let toolsDisabled = false; // set when a provider rejects tools (see below)
 
   for (let i = 0; i < maxToolIterations; i++) {
-    const response = await callLlm((signal) =>
-      client.chat.completions.create(
-        {
-          model,
-          messages,
-          // exactOptionalPropertyTypes: only attach tools/tool_choice when present.
-          ...(oaTools ? { tools: oaTools, tool_choice: 'auto' as const } : {}),
-        },
-        // The OpenAI SDK cancels the underlying HTTP request when aborted.
-        { signal },
-      ),
-    );
+    let response: any;
+    try {
+      response = await callLlm((signal) =>
+        client.chat.completions.create(
+          {
+            model,
+            messages,
+            max_tokens: MAX_OUTPUT_TOKENS,
+            // exactOptionalPropertyTypes: only attach tools/tool_choice when present.
+            ...(oaTools && !toolsDisabled
+              ? { tools: oaTools, tool_choice: 'auto' as const }
+              : {}),
+          },
+          // The OpenAI SDK cancels the underlying HTTP request when aborted.
+          { signal },
+        ),
+      );
+    } catch (err: any) {
+      // Some models behind OpenAI-compatible gateways don't accept function
+      // calling at all and 400 on the tools parameter. Retry once WITHOUT
+      // tools so the model still answers instead of the turn dying.
+      if (oaTools && !toolsDisabled && isToolsUnsupportedError(err)) {
+        logger.warn(
+          '[AgentRunner] Provider rejected tools — retrying without tools',
+          { provider, model },
+        );
+        toolsDisabled = true;
+        continue;
+      }
+      throw err;
+    }
 
     const choice = response.choices?.[0];
     if (!choice) {
@@ -313,16 +475,36 @@ async function runOpenAILike(
     }
 
     const msg = choice.message;
+
+    // Models without native function calling (common on router auto-routes)
+    // emit tool calls as TEXT. Parse those shapes and run them through the
+    // exact same execution path as native tool_calls, so every provider can
+    // actually use tools instead of the calls being silently discarded.
+    let funcCalls: any[] = (msg.tool_calls ?? []).filter(
+      (tc: any) => tc.type === 'function',
+    );
+    if (funcCalls.length === 0 && typeof msg.content === 'string') {
+      const parsed = parseTextToolCalls(msg.content);
+      if (parsed.calls.length > 0) {
+        funcCalls = parsed.calls.map((c, idx) => ({
+          id: `textcall_${Date.now()}_${idx}`,
+          type: 'function',
+          function: {
+            name: c.name,
+            arguments: JSON.stringify(c.args),
+          },
+        }));
+        msg.content = parsed.prose || null;
+      }
+    }
+
     messages.push(msg);
 
-    if (!msg.tool_calls || msg.tool_calls.length === 0) {
+    if (funcCalls.length === 0) {
       const text = typeof msg.content === 'string' ? msg.content : null;
       return text ? stripRawToolCalls(text) : null;
     }
 
-    const funcCalls = msg.tool_calls.filter(
-      (tc: any) => tc.type === 'function',
-    );
     let commandDispatched = false;
 
     // Parallel-safe batches (independent tools) run concurrently to cut turn
@@ -330,12 +512,17 @@ async function runOpenAILike(
     // strict ordering to avoid duplicate replies and single-use-key loss.
     const runOne = async (tc: any): Promise<{ tc: any; result: string }> => {
       let args: Record<string, unknown> = {};
+      let malformed = false;
       try {
         args = JSON.parse(tc.function.arguments);
       } catch {
-        // Malformed arguments — execute with an empty args object.
+        malformed = true;
       }
-      const result = await execFn(tc.function.name, args);
+      // Never EXECUTE a tool with silently-emptied args — the wrong command
+      // could run. Bounce it back so the model re-emits valid JSON arguments.
+      const result = malformed
+        ? 'Error: the tool call arguments were not valid JSON. Re-send the tool call with a valid JSON "arguments" object.'
+        : await execFn(tc.function.name, args);
       logger.debug(
         '[AgentTool]',
         `${tc.function.name} → ${result.slice(0, 80)}`,
@@ -387,6 +574,49 @@ async function runOpenAILike(
   return null;
 }
 
+// ── Gemini schema sanitization ─────────────────────────────────────────────────
+// Gemini function declarations accept a SUBSET of JSON Schema: keys like
+// $schema, additionalProperties, default, exclusiveMinimum as a number, etc.
+// are rejected with a 400. MCP tool schemas (internal AND external) are plain
+// JSON Schema, so every declaration is sanitized before it is sent.
+const GEMINI_DROP_KEYS = new Set([
+  '$schema',
+  '$defs',
+  '$id',
+  '$comment',
+  'title',
+  'additionalProperties',
+  'default',
+  'examples',
+  'format',
+  'patternProperties',
+  'dependencies',
+  'dependentSchemas',
+  'if',
+  'then',
+  'else',
+  'contains',
+  'propertyNames',
+  'minProperties',
+  'maxProperties',
+]);
+
+export function sanitizeForGemini(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(sanitizeForGemini);
+  if (!node || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (GEMINI_DROP_KEYS.has(k)) continue;
+    // Gemini wants exclusiveMinimum/Maximum as numbers, JSON Schema Draft-4
+    // style; Draft-6 booleans are dropped (min/max already carry the bound).
+    if ((k === 'exclusiveMinimum' || k === 'exclusiveMaximum') && typeof v === 'boolean') {
+      continue;
+    }
+    out[k] = sanitizeForGemini(v);
+  }
+  return out;
+}
+
 async function runGemini(
   apiKey: string | undefined,
   model: string,
@@ -403,8 +633,9 @@ async function runGemini(
   const functionDeclarations = tools.schemas.map((t) => ({
     name: t.name,
     description: t.description,
-    parameters: t.parameters,
+    parameters: sanitizeForGemini(t.parameters),
   }));
+  let toolsDisabled = false; // set when the model rejects function calling
 
   const userParts: any[] = [{ text: userQuery }];
   if (imageData) {
@@ -423,19 +654,34 @@ async function runGemini(
     { role: 'user', parts: userParts },
   ];
 
+  const buildRequest = () =>
+    ({
+      model,
+      contents,
+      config: {
+        systemInstruction: systemPrompt,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        ...(functionDeclarations.length > 0 && !toolsDisabled
+          ? { tools: [{ functionDeclarations }] }
+          : {}),
+      },
+    }) as any;
+
   for (let i = 0; i < maxToolIterations; i++) {
-    const response = await callLlm(() =>
-      client.models.generateContent({
-        model,
-        contents,
-        config: {
-          systemInstruction: systemPrompt,
-          ...(functionDeclarations.length > 0
-            ? ({ tools: [{ functionDeclarations }] } as any)
-            : {}),
-        } as any,
-      }),
-    );
+    let response: any;
+    try {
+      response = await callLlm(() => client.models.generateContent(buildRequest()));
+    } catch (err: any) {
+      if (functionDeclarations.length > 0 && !toolsDisabled && isToolsUnsupportedError(err)) {
+        logger.warn(
+          '[AgentRunner] Gemini rejected tools — retrying without tools',
+          { model },
+        );
+        toolsDisabled = true;
+        continue;
+      }
+      throw err;
+    }
 
     const parts: any[] = response.candidates?.[0]?.content?.parts ?? [];
     const textPart = parts.find((p: any) => typeof p.text === 'string');

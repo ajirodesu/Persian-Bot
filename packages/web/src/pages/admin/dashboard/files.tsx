@@ -49,6 +49,8 @@ import {
   UserKey,
   KeyRound,
   LogOut,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
@@ -898,6 +900,7 @@ function GithubIdentityCard({
 }) {
   const [tokenInput, setTokenInput] = useState(files.githubToken)
   const [verifyBusy, setVerifyBusy] = useState(false)
+  const [showToken, setShowToken] = useState(false)
   const { success, error } = useSnackbar()
 
   const identity = files.githubIdentity
@@ -973,21 +976,56 @@ function GithubIdentityCard({
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <Input
-              type="password"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="ghp_… personal access token"
-              inputSize="sm"
-              autoComplete="off"
-              spellCheck={false}
-              disabled={!configured || verifyBusy}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleConnect()
-              }}
-              className="min-w-0 flex-1 font-mono"
-            />
+          {/* Token entry. Mobile-first: the field and the Connect button stack
+              vertically (the button is full-width, a comfortable tap target;
+              the shared Input's sm size is only restored from `sm` up, where
+              the row goes side-by-side again). text-[16px] on mobile is the
+              minimum iOS Safari renders inputs at — anything smaller makes it
+              auto-zoom the page on focus and shifts the whole panel under the
+              keyboard; the CommitBox textarea uses the same pattern. The eye
+              toggle helps paste/type long ghp_… tokens on a phone keyboard. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                placeholder="ghp_… personal access token"
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                disabled={!configured || verifyBusy}
+                onFocus={(e) => {
+                  // Keep the field in view above the on-screen keyboard — the
+                  // visual viewport shrinks, so centering guarantees the input
+                  // (and the Connect button right below it) stay visible.
+                  window.setTimeout(
+                    () => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+                    150,
+                  )
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleConnect()
+                }}
+                className="w-full rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-3 py-2.5 pr-11 font-mono text-[16px] leading-6 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:py-1.5 sm:text-label-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken((v) => !v)}
+                disabled={!configured || verifyBusy}
+                aria-label={showToken ? 'Hide token' : 'Show token'}
+                title={showToken ? 'Hide token' : 'Show token'}
+                tabIndex={!configured || verifyBusy ? -1 : 0}
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[var(--radius-compact)] text-on-surface-variant transition-colors duration-fast hover:bg-on-surface/5 hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {showToken ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             <Button
               variant="filled"
               color="secondary"
@@ -996,6 +1034,7 @@ function GithubIdentityCard({
               disabled={!configured || verifyBusy || tokenInput.trim() === ''}
               leftIcon={<UserKey className="h-4 w-4" />}
               onClick={() => void handleConnect()}
+              className="w-full shrink-0 sm:w-auto"
             >
               Connect
             </Button>

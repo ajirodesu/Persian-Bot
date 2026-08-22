@@ -99,6 +99,49 @@ function capParameterDescriptions(
   return out;
 }
 
+// ── External MCP schema hygiene ────────────────────────────────────────────────
+// External MCP servers (admin-configured) can return arbitrarily verbose tool
+// schemas — some ship multi-KB descriptions. Those schemas are sent to the LLM
+// on EVERY request, so uncapped external tools silently inflate every turn the
+// way verbose internal ones used to. The same budgets the internal tools obey
+// are applied at the merge point, plus removal of pure bookkeeping keys
+// ($schema/title) that cost tokens without helping the model.
+
+const EXTERNAL_SCHEMA_STRIP_KEYS = new Set(['$schema', 'title']);
+
+/** Recursively strips bookkeeping keys from a JSON-schema-like object. */
+function stripSchemaNoise(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripSchemaNoise);
+  if (!node || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (EXTERNAL_SCHEMA_STRIP_KEYS.has(k)) continue;
+    out[k] = stripSchemaNoise(v);
+  }
+  return out;
+}
+
+/**
+ * Applies the internal token budgets to an external MCP tool schema:
+ * description caps, per-parameter description caps, and bookkeeping-key strip.
+ * Returns null when the tool is unusable (no name) so it can be dropped.
+ */
+function sanitizeExternalSchema(
+  tool: McpToolSchema,
+): McpToolSchema | null {
+  if (!tool.name) return null;
+  return {
+    name: tool.name,
+    description: capDescription(tool.description ?? ''),
+    parameters: capParameterDescriptions(
+      stripSchemaNoise(tool.parameters ?? { type: 'object', properties: {} }) as Record<
+        string,
+        unknown
+      >,
+    ),
+  };
+}
+
 /**
  * Resolves whether the turn's sender is a registered system administrator.
  * Fail-closed: a missing sender ID or an auth-check error means "not admin".
@@ -234,9 +277,12 @@ export async function createMcpToolSet(
   // tool set. Connections are cached globally across turns by
   // external-mcp.lib.ts, so the per-turn cost here is just a reconcile.
   const external = await getExternalMcpToolSet();
+  const externalSchemas = external.schemas
+    .map(sanitizeExternalSchema)
+    .filter((s): s is McpToolSchema => s !== null);
 
   return {
-    schemas: [...schemas, ...external.schemas],
+    schemas: [...schemas, ...externalSchemas],
     callTool: async (name, args) => {
       if (internalNames.has(name)) return internalCallTool(name, args);
       return external.callTool(name, args);

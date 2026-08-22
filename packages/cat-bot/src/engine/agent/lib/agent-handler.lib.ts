@@ -56,6 +56,7 @@ import {
   buildAgentSystemPrompt,
   buildCommandCatalog,
   buildThreadEntry,
+  buildTurnContextLine,
 } from './agent-prompt.lib.js';
 import { deliverCombinedResult } from '../tools/send_results.js';
 import { containsMarkdown } from './markdown.util.js';
@@ -157,10 +158,12 @@ async function buildFailoverPlans(
 
 /**
  * Runs an agent turn on the primary provider, auto-failovering to other
- * free/auto providers on a rate limit. The system prompt is rebuilt per attempt
- * so the model sees its real model/provider names on each failover. Never
- * throws on rate limits — if every candidate is rate-limited the turn resolves
- * to the apology message.
+ * free/auto providers on a rate limit. The system prompt is STATIC across
+ * attempts (deliberately — a byte-identical system prompt + tool schema prefix
+ * lets providers prompt-cache the input instead of re-billing it every turn);
+ * the per-attempt model/provider identity rides in the turn context line
+ * inside the user message instead. Never throws on rate limits — if every
+ * candidate is rate-limited the turn resolves to the apology message.
  */
 async function runAgentTurnWithFailover(
   userId: string | undefined,
@@ -169,12 +172,17 @@ async function runAgentTurnWithFailover(
     AgentTurnConfig,
     'systemPrompt' | 'provider' | 'apiKey' | 'model' | 'rethrowRateLimit'
   >,
-  buildSystemPrompt: (plan: AgentRunPlan) => string,
+  systemPrompt: string,
 ): Promise<AgentResult> {
   const attempt = async (plan: AgentRunPlan): Promise<AgentResult> =>
     runAgentTurn({
       ...base,
-      systemPrompt: buildSystemPrompt(plan),
+      // Attempt-specific identity (model/provider) rides at the END of the
+      // user message so a failover never disturbs the cacheable prefix.
+      userQuery: `${base.userQuery}\n[Running on: ${plan.model} via ${
+        AI_PROVIDERS[plan.provider]?.label ?? plan.provider
+      }]`,
+      systemPrompt,
       provider: plan.provider,
       apiKey: plan.apiKey,
       model: plan.model,
@@ -706,20 +714,23 @@ async function runAgentUnsafe(
   // Cat-Bot style personalization: fill the compact agentic system prompt with
   // the bot's name (session nickname or trigger word), the sender's name +
   // role, and the command prefix. The command catalogue is NOT inlined here —
-  // the model discovers it once via list_commands and reuses it from history,
-  // which keeps every turn (including each tool iteration) much cheaper.
-  // Built per attempt so a failover run sees its real provider/model names.
-  const buildTurnPrompt = (plan: AgentRunPlan): string =>
-    buildAgentSystemPrompt({
-      mentioned,
-      botName: botNickname ?? displayName(config.agentName),
-      userName,
-      userRole,
-      prefix: ctx.prefix ?? '/',
-      currentDatetime: formatLocalNow(config.timezone),
-      modelName: plan.model,
-      providerName: AI_PROVIDERS[plan.provider]?.label ?? plan.provider,
-    });
+  // the model discovers it once via list_commands and reuses it from history.
+  // The prompt is intentionally STATIC (no datetime/model/provider) so the
+  // system prompt + tool schemas stay byte-identical across turns, letting
+  // providers prompt-cache the prefix instead of re-billing it. Per-turn
+  // context (datetime, model, provider, mention hint) rides as a short context
+  // line appended to the user message — failover attempts only change that
+  // line, never the cached prefix.
+  const systemPrompt = buildAgentSystemPrompt({
+    botName: botNickname ?? displayName(config.agentName),
+    userName,
+    userRole,
+    prefix: ctx.prefix ?? '/',
+  });
+  const turnContext = buildTurnContextLine({
+    currentDatetime: formatLocalNow(config.timezone),
+    mentioned,
+  });
 
   const toolContext = buildToolContext(ctx);
   // Spin up the in-process MCP server bound to this turn's context — the
@@ -742,13 +753,13 @@ async function runAgentUnsafe(
     },
     {
       history,
-      userQuery: query || '[Describe this image]',
+      userQuery: `${query || '[Describe this image]'}\n\n${turnContext}`,
       tools,
       context: toolContext,
       imageData,
       maxToolIterations: config.maxToolIterations,
     },
-    buildTurnPrompt,
+    systemPrompt,
   );
 
   activateSession(key);
@@ -1209,11 +1220,10 @@ export async function generateSimpleText(
           runBotCommand: async () => ({ ok: false, error: 'Not available' }),
         } as unknown as ToolContext,
       },
-      () =>
-        'You are a helpful AI assistant. Today is %TODAY%.'.replace(
-          '%TODAY%',
-          today,
-        ),
+      'You are a helpful AI assistant. Today is %TODAY%.'.replace(
+        '%TODAY%',
+        today,
+      ),
     );
     if (result.text) cacheResult(prompt, today, result.text);
     return result.text;
