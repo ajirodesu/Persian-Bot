@@ -29,6 +29,12 @@ import {
 import type { ToolContext } from '../agent-tool.types.js';
 import { loadAgentTools } from './agent-tool-loader.lib.js';
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import {
+  cachedIsBotAdmin,
+  cachedIsBotPremium,
+  cachedIsThreadAdmin,
+  cachedIsSystemAdmin,
+} from '@/engine/lib/auth-cache.lib.js';
 import { getExternalMcpToolSet } from './external-mcp.lib.js';
 
 /** The LLM-facing schema for one MCP tool (OpenAI-compatible shape). */
@@ -157,6 +163,68 @@ async function senderIsSystemAdmin(ctx: ToolContext): Promise<boolean> {
 }
 
 /**
+ * Builds the per-turn role gate for external MCP servers — the same
+ * minimum-role semantics as command meta.role (enforcePermission in
+ * on-command.middleware): system admins pass every gate, otherwise each gate
+ * checks its own qualifying roles (thread admin / premium / bot admin).
+ * Fail-closed on auth errors: a gate that cannot be verified denies.
+ */
+async function buildExternalRoleGate(
+  ctx: ToolContext,
+): Promise<(server: { role: number }) => boolean> {
+  const senderID = (ctx.event['senderID'] as string) ?? '';
+  const threadID = (ctx.event['threadID'] as string) ?? '';
+  const sessionUserId = ctx.native.userId ?? '';
+  const sessionId = ctx.native.sessionId ?? '';
+  const platform = ctx.native.platform;
+
+  const check = async (fn: () => Promise<boolean>): Promise<boolean> => {
+    if (!senderID) return false;
+    try {
+      return await fn();
+    } catch {
+      return false;
+    }
+  };
+
+  const results = {
+    systemAdmin: await check(() => cachedIsSystemAdmin(ctx, senderID)),
+    botAdmin: false,
+    premium: false,
+    threadAdmin: false,
+  };
+  if (!results.systemAdmin) {
+    results.botAdmin = await check(() =>
+      cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID),
+    );
+    results.premium = await check(() =>
+      cachedIsBotPremium(ctx, sessionUserId, platform, sessionId, senderID),
+    );
+    results.threadAdmin = threadID
+      ? await check(() => cachedIsThreadAdmin(ctx, threadID, senderID))
+      : false;
+  }
+
+  return (server) => {
+    const role = typeof server.role === 'number' ? server.role : 0;
+    if (role <= 0) return true; // anyone
+    if (results.systemAdmin) return true; // system admins pass every gate
+    switch (role) {
+      case 1: // group/thread admin — thread, bot, premium members all qualify
+        return results.threadAdmin || results.botAdmin || results.premium;
+      case 2: // premium — premium, bot admins (mirrors enforcePermission)
+        return results.premium || results.botAdmin;
+      case 3: // bot admin
+        return results.botAdmin;
+      case 4: // system admin
+        return false;
+      default:
+        return false;
+    }
+  };
+}
+
+/**
  * Builds a live MCP server + client pair bound to this turn's ToolContext.
  * The server is created fresh per turn so each tool call runs against the
  * current conversation (thread, sender); tool modules themselves are loaded
@@ -275,8 +343,11 @@ export async function createMcpToolSet(
   // Custom MCP servers configured by system administrators (Admin dashboard →
   // MCP Servers): connect, list their tools, and append them to this turn's
   // tool set. Connections are cached globally across turns by
-  // external-mcp.lib.ts, so the per-turn cost here is just a reconcile.
-  const external = await getExternalMcpToolSet();
+  // external-mcp.lib.ts, so the per-turn cost here is just a reconcile. The
+  // role gate mirrors command meta.role enforcement — servers whose role
+  // requirement the sender doesn't meet are excluded from this turn entirely.
+  const roleGate = await buildExternalRoleGate(ctx);
+  const external = await getExternalMcpToolSet(roleGate);
   const externalSchemas = external.schemas
     .map(sanitizeExternalSchema)
     .filter((s): s is McpToolSchema => s !== null);

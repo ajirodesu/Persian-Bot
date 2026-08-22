@@ -29,6 +29,8 @@ interface McpServerDto {
   name: string;
   url: string;
   enabled: boolean;
+  /** Minimum role required to use this server's tools (RoleLevel 0-4). */
+  role: number;
   headerKeys: string[];
   createdAt: string;
   updatedAt: string;
@@ -40,10 +42,20 @@ function toDto(s: McpServerConfig): McpServerDto {
     name: s.name,
     url: s.url,
     enabled: s.enabled,
+    role: s.role,
     headerKeys: Object.keys(s.headers),
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
   };
+}
+
+/** Validates an optional role gate (RoleLevel 0-4). null when invalid. */
+function validateRole(value: unknown): number | undefined | null {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 4) {
+    return null;
+  }
+  return value;
 }
 
 /** Validates an absolute http(s) URL. Returns the trimmed URL or null. */
@@ -102,6 +114,7 @@ class McpServersController {
       name?: unknown;
       url?: unknown;
       enabled?: unknown;
+      role?: unknown;
       headers?: unknown;
     };
     const name = validateName(body.name);
@@ -114,6 +127,11 @@ class McpServersController {
       res.status(400).json({ error: 'url must be a valid absolute http(s) URL' });
       return;
     }
+    const role = validateRole(body.role);
+    if (role === null) {
+      res.status(400).json({ error: 'role must be an integer between 0 and 4' });
+      return;
+    }
     const headers = validateHeaders(body.headers);
     if (headers === null) {
       res.status(400).json({ error: 'headers must be an object of string values' });
@@ -124,6 +142,7 @@ class McpServersController {
         name,
         url,
         enabled: body.enabled !== false,
+        role: role ?? 0,
         ...(headers ? { headers } : {}),
       });
       invalidateMcpServersCache();
@@ -147,12 +166,14 @@ class McpServersController {
       name?: unknown;
       url?: unknown;
       enabled?: unknown;
+      role?: unknown;
       headers?: unknown;
     };
     const patch: {
       name?: string;
       url?: string;
       enabled?: boolean;
+      role?: number;
       headers?: Record<string, string>;
     } = {};
     if (body.name !== undefined) {
@@ -177,6 +198,14 @@ class McpServersController {
         return;
       }
       patch.enabled = body.enabled;
+    }
+    if (body.role !== undefined) {
+      const role = validateRole(body.role);
+      if (role === null) {
+        res.status(400).json({ error: 'role must be an integer between 0 and 4' });
+        return;
+      }
+      if (role !== undefined) patch.role = role;
     }
     if (body.headers !== undefined) {
       const headers = validateHeaders(body.headers);

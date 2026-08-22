@@ -206,10 +206,19 @@ async function ensureConnected(
  * Builds the merged tool set from every enabled external MCP server. Cheap on
  * the hot path: the server list is LRU-cached and live connections are reused,
  * so this is just map lookups + a lightweight reconcile.
+ *
+ * `roleGate` (optional) filters servers whose role requirement the current
+ * sender does not meet — same minimum-role semantics as command meta.role
+ * (0 anyone … 4 system admin). Servers excluded by the gate are never
+ * connected, never listed, and their tools cannot be called this turn.
  */
-export async function getExternalMcpToolSet(): Promise<McpToolSet> {
+export async function getExternalMcpToolSet(
+  roleGate?: (server: McpServerConfig) => boolean,
+): Promise<McpToolSet> {
   const servers = await listMcpServers();
-  const enabled = servers.filter((s) => s.enabled);
+  const enabled = servers.filter(
+    (s) => s.enabled && (!roleGate || roleGate(s)),
+  );
 
   const schemas: McpToolSchema[] = [];
   const byName = new Map<

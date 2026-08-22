@@ -7,6 +7,8 @@ export interface AdminMcpServerDto {
   name: string
   url: string
   enabled: boolean
+  /** Minimum role required to use this server's tools (0 anyone … 4 system admin). */
+  role: number
   /** Only the header KEY names are exposed — values are encrypted at rest and never sent to the client. */
   headerKeys: string[]
   createdAt: string
@@ -29,9 +31,20 @@ export interface McpServerInput {
   name: string
   url: string
   enabled?: boolean
+  /** Minimum role required to use this server's tools (0-4). */
+  role?: number
   /** Optional request headers (e.g. { Authorization: 'Bearer …' }) — encrypted at rest. */
   headers?: Record<string, string>
 }
+
+/** Role gate levels — mirrors the backend Role constants (role.constants.ts). */
+export const MCP_ROLE_OPTIONS = [
+  { value: 0, label: 'Anyone' },
+  { value: 1, label: 'Group Admin' },
+  { value: 2, label: 'Premium' },
+  { value: 3, label: 'Bot Admin' },
+  { value: 4, label: 'System Admin' },
+] as const
 
 // ── Service class ──────────────────────────────────────────────────────────────
 

@@ -33,6 +33,8 @@ export interface McpServerConfig {
   name: string;
   url: string;
   enabled: boolean;
+  /** Minimum role required to use this server's tools (RoleLevel, default anyone). */
+  role: number;
   /** Request headers sent on every MCP call (already decrypted). */
   headers: Record<string, string>;
   createdAt: string;
@@ -45,6 +47,7 @@ interface StoredMcpServerRecord {
   name: string;
   url: string;
   enabled: boolean;
+  role?: number;
   headersEncrypted?: string | undefined;
   createdAt: string;
   updatedAt: string;
@@ -55,6 +58,7 @@ export interface McpServerInput {
   name: string;
   url: string;
   enabled?: boolean;
+  role?: number;
   headers?: Record<string, string>;
 }
 
@@ -101,6 +105,7 @@ export async function listMcpServers(): Promise<McpServerConfig[]> {
         name: s.name,
         url: s.url,
         enabled: s.enabled === true,
+        role: typeof s.role === 'number' ? s.role : 0,
         headers: decryptHeaders(s.headersEncrypted),
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
@@ -121,6 +126,7 @@ async function persist(servers: McpServerConfig[]): Promise<void> {
       name: s.name,
       url: s.url,
       enabled: s.enabled,
+      role: s.role,
       headersEncrypted: encryptHeaders(s.headers),
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
@@ -139,6 +145,7 @@ export async function addMcpServer(
     name: input.name.trim(),
     url: input.url.trim(),
     enabled: input.enabled !== false,
+    role: input.role ?? 0,
     headers: input.headers ?? {},
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -162,6 +169,7 @@ export async function updateMcpServer(
     name: patch.name !== undefined ? patch.name.trim() : current.name,
     url: patch.url !== undefined ? patch.url.trim() : current.url,
     enabled: patch.enabled !== undefined ? patch.enabled : current.enabled,
+    role: patch.role !== undefined ? patch.role : current.role,
     headers:
       patch.headers !== undefined
         ? patch.headers
