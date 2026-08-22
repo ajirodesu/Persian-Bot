@@ -6,6 +6,10 @@ export default {
     extend: {
       // ==================== COLORS ====================
       colors: {
+        // Hairline — the 8%-opacity separator spec every theme defines;
+        // shells and dividers use it so structural lines stay whisper-thin
+        // and consistent instead of the heavier outline-variant borders.
+        hairline: 'var(--color-hairline-border)',
         // Primary
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
         'on-primary': 'rgb(var(--color-on-primary) / <alpha-value>)',

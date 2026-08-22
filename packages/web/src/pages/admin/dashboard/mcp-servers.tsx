@@ -493,9 +493,29 @@ export default function AdminMcpServersPage() {
       )}
 
       {isLoading ? (
+        // Skeleton mirrors the real server card one-to-one: icon + name row
+        // with chevron, mono URL line, then the badge row — same paddings,
+        // radii, and grid so content pops in without any layout shift.
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} variant="rectangular" className="h-28" />
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-hairline bg-surface p-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Skeleton variant="circular" width={16} height={16} />
+                  <Skeleton variant="text" width={96} textSize="label-lg" />
+                </div>
+                <Skeleton variant="circular" width={16} height={16} />
+              </div>
+              <Skeleton variant="text" width="75%" textSize="body-sm" />
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <Skeleton variant="pill" width={48} height={20} />
+                <Skeleton variant="pill" width={80} height={20} />
+                <Skeleton variant="pill" width={32} height={20} />
+              </div>
+            </div>
           ))}
         </div>
       ) : sortedServers.length === 0 ? (

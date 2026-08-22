@@ -10,6 +10,7 @@ import Input from '@/components/ui/forms/Input'
 import Textarea from '@/components/ui/forms/Textarea'
 import Select from '@/components/ui/forms/Select'
 import Alert from '@/components/ui/feedback/Alert'
+import Skeleton from '@/components/ui/feedback/Skeleton'
 import Badge from '@/components/ui/data-display/Badge'
 import { useAdminBots } from '@/features/admin/hooks/useAdminBots'
 import { useAdminUsers } from '@/features/admin/hooks/useAdminUsers'
@@ -337,7 +338,41 @@ export default function AdminUsersPage() {
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {isLoading && <Table.Loading colSpan={7} rows={4} />}
+            {isLoading &&
+              // Row skeletons mirror the real user rows cell-for-cell —
+              // name, email, two badge pills, session badge pill, date, and
+              // the right-aligned action-button cluster — so data pops in
+              // with zero layout shift (Table.Loading's uniform bars don't
+              // match any of these column shapes).
+              [0, 1, 2, 3, 4].map((i) => (
+                <Table.Row key={`skeleton-${i}`}>
+                  <Table.Cell>
+                    <Skeleton variant="text" width="70%" />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="text" width="85%" />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="pill" width={48} height={20} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="pill" width={64} height={20} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="pill" width={72} height={20} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="text" width={80} />
+                  </Table.Cell>
+                  <Table.Cell align="right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton variant="pill" width={44} height={24} />
+                      <Skeleton variant="pill" width={44} height={24} />
+                      <Skeleton variant="circular" width={24} height={24} />
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
             {!isLoading &&
               users.map((u) => (
                 <Table.Row key={u.id}>

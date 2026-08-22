@@ -35,6 +35,7 @@ import Button from '@/components/ui/buttons/Button'
 import Badge from '@/components/ui/data-display/Badge'
 import Alert from '@/components/ui/feedback/Alert'
 import Table from '@/components/ui/data-display/Table'
+import Skeleton from '@/components/ui/feedback/Skeleton'
 import Dialog from '@/components/ui/overlay/Dialog'
 import DataList from '@/components/ui/data-display/DataList'
 import { useSnackbar } from '@/contexts/SnackbarContext'
@@ -49,6 +50,7 @@ import {
 import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
+  BotDatabaseGroup,
   BotDatabaseStatusFilter,
   BotDatabaseTypeFilter,
   BotDatabaseSortBy,
@@ -244,7 +246,11 @@ function DatabaseToolbar({
           onClick={onRefresh}
           isLoading={isLoading}
         />
-        {!isLoading && (
+        {isLoading ? (
+          /* Mirrors the count badge's footprint so the toolbar row never
+             reflows when results arrive. */
+          <Skeleton variant="pill" width={72} height={26} />
+        ) : (
           <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
             {search.trim() || status !== 'all' || (type && type !== 'all')
               ? `${total} matched`
@@ -425,7 +431,33 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {isLoading && <Table.Loading colSpan={5} rows={5} />}
+            {isLoading &&
+              // Row skeletons mirror the real user rows: name, mono ID chip,
+              // status badge pill, last-seen date, and the right-aligned
+              // detail/ban/delete action cluster.
+              [0, 1, 2, 3, 4].map((i) => (
+                <Table.Row key={`user-skeleton-${i}`}>
+                  <Table.Cell>
+                    <Skeleton variant="text" width="60%" />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="rounded" width={96} height={20} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="pill" width={56} height={20} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="text" width={80} />
+                  </Table.Cell>
+                  <Table.Cell align="right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton variant="circular" width={24} height={24} />
+                      <Skeleton variant="pill" width={44} height={24} />
+                      <Skeleton variant="pill" width={52} height={24} />
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
             {!isLoading &&
               users.map((user) => (
                 <Table.Row key={user.id}>
@@ -715,12 +747,11 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
 
 // ── Groups tab (Telegram / webchat) ──────────────────────────────────────────
 //
-// Mirrors the server-hierarchy Groups tab's structure for platforms without a
-// server → channel hierarchy. A group dropdown (fed by useBotDatabaseGroupSelector,
-// the flat-list analogue of the server dropdown) picks the focused group;
-// selecting one reveals a header card with its badges + ban/unban/delete actions
-// and a scoped details table below. Groups are flat entities, so the details
-// table shows that one group's own record instead of child channels.
+// Telegram-style platforms have FLAT groups — there is no server → channel
+// hierarchy like Discord/Fluxer, so this tab does NOT use the drill-down
+// pattern. Instead it lists every recorded group as a first-class table row
+// (type badge, member count, last activity, status) with per-row
+// ban/unban/delete actions — the same treatment as the Users tab.
 
 function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
   const {
@@ -730,25 +761,21 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
     error,
     refetch,
   } = useBotDatabaseGroupSelector(sessionId, sessionKey)
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  // The group a ban/unban/delete dialog is acting on. Telegram-style groups
+  // are FLAT entities — there is no server → channel hierarchy to drill into,
+  // so the tab lists every group directly and actions target a row.
+  const [actionTarget, setActionTarget] = useState<BotDatabaseGroup | null>(null)
   const { snackbar, setPosition } = useSnackbar()
   const { timezone } = useTimezone()
+
+  // Dialogs read the target through this alias so their markup stays uniform
+  // with the server-hierarchy tab's dialogs.
+  const selectedGroup = actionTarget
 
   const notify = (message: string, color: 'success' | 'warning') => {
     setPosition('bottom-right')
     snackbar({ message, color, duration: 4000 })
   }
-
-  // Default to the first group once the list loads.
-  useEffect(() => {
-    if (selectedGroupId === null && groups.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- select the first group once the list arrives
-      setSelectedGroupId(groups[0].id)
-    }
-  }, [groups, selectedGroupId])
-
-  const selectedGroup =
-    groups.find((g) => g.id === selectedGroupId) ?? null
 
   // ── Ban dialog state (targets the selected group) ──
   const [isBanning, setIsBanning] = useState(false)
@@ -807,7 +834,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
       await botService.deleteDatabaseGroup(sessionId, selectedGroup.id)
       notify(`"${selectedGroup.name}" was removed from this session.`, 'success')
       setDeleteOpen(false)
-      setSelectedGroupId(null)
+      setActionTarget(null)
       refetch()
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete group')
@@ -816,41 +843,28 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
     }
   }
 
-  const groupOptions = groups.map((g) => ({
-    value: g.id,
-    label: g.name,
-  }))
-
   return (
     <div className="flex flex-col gap-4">
-      {/* Group selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
-          <Select
-            options={groupOptions}
-            value={selectedGroupId ?? ''}
-            onChange={(v) => setSelectedGroupId(v as string)}
-            placeholder={
-              groups.length > 0 ? 'Select a group…' : 'No groups found'
-            }
-            pill
-          />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="tonal"
-            color="secondary"
-            size="sm"
-            iconOnly
-            leftIcon={<RefreshCw className="h-4 w-4" />}
-            aria-label="Refresh"
-            onClick={refetch}
-            isLoading={isLoading}
-          />
+      {/* Toolbar — refresh + total count (pill skeleton while loading so the
+          row never reflows) */}
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="tonal"
+          color="secondary"
+          size="sm"
+          iconOnly
+          leftIcon={<RefreshCw className="h-4 w-4" />}
+          aria-label="Refresh"
+          onClick={refetch}
+          isLoading={isLoading}
+        />
+        {isLoading ? (
+          <Skeleton variant="pill" width={72} height={26} />
+        ) : (
           <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
             {total} total
           </Badge>
-        </div>
+        )}
       </div>
 
       {error !== null && (
@@ -859,129 +873,152 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
         </div>
       )}
 
-      {/* Selected group header + actions */}
-      {selectedGroup !== null && (
-        <div className="bg-surface rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-body-lg font-semibold text-on-surface truncate">
-                  {selectedGroup.name}
-                </p>
-                <Badge
-                  variant="tonal"
-                  color={groupTypeColor(selectedGroup.type)}
-                  size="sm"
-                  pill
-                >
-                  {groupTypeLabel(selectedGroup)}
-                </Badge>
-                <Badge
-                  variant="tonal"
-                  color={selectedGroup.is_banned ? 'error' : 'success'}
-                  size="sm"
-                  pill
-                >
-                  {selectedGroup.is_banned ? 'Banned' : 'Active'}
-                </Badge>
-              </div>
-              <p className="mt-1 text-body-sm text-on-surface-variant">
-                {selectedGroup.member_count != null
-                  ? `${selectedGroup.member_count.toLocaleString()} members`
-                  : 'Member count unknown'}
-                {' · '}
-                {formatDate(selectedGroup.last_seen, timezone)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {selectedGroup.is_banned ? (
-              <Button
-                variant="tonal"
-                color="success"
-                size="sm"
-                onClick={() => {
-                  setUnbanError(null)
-                  setUnbanOpen(true)
-                }}
-              >
-                Unban
-              </Button>
-            ) : (
-              <Button
-                variant="tonal"
-                color="error"
-                size="sm"
-                onClick={() => {
-                  setBanReason('')
-                  setBanError(null)
-                  setBanOpen(true)
-                }}
-              >
-                Ban
-              </Button>
+      {/* Flat group list — Telegram-style platforms have no server hierarchy,
+          so every group is a first-class row with its type, member count,
+          activity, status, and per-row ban/unban/delete actions. This mirrors
+          the Users tab's table treatment instead of the Discord/Fluxer
+          server → channels drill-down. */}
+      <Table.ScrollArea className="bg-surface">
+        <Table.Root variant="glass" fullWidth>
+          <Table.Header>
+            <Table.Row>
+              <Table.Head>Group</Table.Head>
+              <Table.Head className="hidden md:table-cell">Group ID</Table.Head>
+              <Table.Head>Members</Table.Head>
+              <Table.Head>Last Seen</Table.Head>
+              <Table.Head>Status</Table.Head>
+              <Table.Head align="right">Actions</Table.Head>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {isLoading &&
+              // Row skeletons mirror the real rows: name + type badge, mono
+              // ID chip, member count, date, status pill, action buttons.
+              [0, 1, 2, 3, 4].map((i) => (
+                <Table.Row key={`group-skeleton-${i}`}>
+                  <Table.Cell>
+                    <div className="flex items-center gap-2">
+                      <Skeleton variant="text" width="55%" />
+                      <Skeleton variant="pill" width={64} height={20} />
+                    </div>
+                  </Table.Cell>
+                  <Table.Cell className="hidden md:table-cell">
+                    <Skeleton variant="rounded" width={96} height={20} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="text" width={40} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="text" width={80} />
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Skeleton variant="pill" width={56} height={20} />
+                  </Table.Cell>
+                  <Table.Cell align="right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton variant="pill" width={44} height={24} />
+                      <Skeleton variant="pill" width={52} height={24} />
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            {!isLoading &&
+              groups.map((group) => (
+                <Table.Row key={group.id}>
+                  <Table.Cell>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium text-on-surface">
+                        {group.name}
+                      </span>
+                      <Badge
+                        variant="tonal"
+                        color={groupTypeColor(group.type)}
+                        size="sm"
+                        pill
+                      >
+                        {groupTypeLabel(group)}
+                      </Badge>
+                    </div>
+                  </Table.Cell>
+                  <Table.Cell className="hidden md:table-cell">
+                    <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
+                      {group.id}
+                    </code>
+                  </Table.Cell>
+                  <Table.Cell className="text-on-surface-variant">
+                    {group.member_count != null
+                      ? group.member_count.toLocaleString()
+                      : '—'}
+                  </Table.Cell>
+                  <Table.Cell className="text-on-surface-variant">
+                    {formatDate(group.last_seen, timezone)}
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Badge
+                      variant="tonal"
+                      color={group.is_banned ? 'error' : 'success'}
+                      size="sm"
+                      pill
+                    >
+                      {group.is_banned ? 'Banned' : 'Active'}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell align="right">
+                    <div className="flex items-center justify-end gap-2">
+                      {group.is_banned ? (
+                        <Button
+                          variant="tonal"
+                          color="success"
+                          size="xs"
+                          onClick={() => {
+                            setActionTarget(group)
+                            setUnbanError(null)
+                            setUnbanOpen(true)
+                          }}
+                        >
+                          Unban
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="tonal"
+                          color="error"
+                          size="xs"
+                          onClick={() => {
+                            setActionTarget(group)
+                            setBanReason('')
+                            setBanError(null)
+                            setBanOpen(true)
+                          }}
+                        >
+                          Ban
+                        </Button>
+                      )}
+                      <Button
+                        variant="tonal"
+                        color="error"
+                        size="xs"
+                        onClick={() => {
+                          setActionTarget(group)
+                          setDeleteError(null)
+                          setDeleteOpen(true)
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            {!isLoading && groups.length === 0 && (
+              <Table.Empty
+                colSpan={6}
+                icon={<MessageSquare className="h-8 w-8" />}
+                message="No groups recorded yet. Send a message in a group, supergroup, or channel where this bot is present, then reload this page."
+              />
             )}
-            <Button
-              variant="tonal"
-              color="error"
-              size="sm"
-              onClick={() => {
-                setDeleteError(null)
-                setDeleteOpen(true)
-              }}
-            >
-              Delete
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Group details table — scoped to the selected group, mirroring
-          the server → channels layout for a flat group entity */}
-      {selectedGroup !== null && (
-        <Table.ScrollArea className="bg-surface">
-          <Table.Root variant="glass" fullWidth>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Group ID</Table.Head>
-                <Table.Head>Members</Table.Head>
-                <Table.Head>Last Seen</Table.Head>
-                <Table.Head>Ban Reason</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              <Table.Row>
-                <Table.Cell>
-                  <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
-                    {selectedGroup.id}
-                  </code>
-                </Table.Cell>
-                <Table.Cell className="text-on-surface-variant">
-                  {selectedGroup.member_count != null
-                    ? selectedGroup.member_count.toLocaleString()
-                    : '—'}
-                </Table.Cell>
-                <Table.Cell className="text-on-surface-variant">
-                  {formatDate(selectedGroup.last_seen, timezone)}
-                </Table.Cell>
-                <Table.Cell className="text-on-surface-variant">
-                  {selectedGroup.ban_reason ?? '—'}
-                </Table.Cell>
-              </Table.Row>
-            </Table.Body>
-          </Table.Root>
-        </Table.ScrollArea>
-      )}
-
-      {selectedGroup === null && !isLoading && groups.length === 0 && (
-        <div className="bg-surface rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
-          <MessageSquare className="h-8 w-8 text-on-surface-variant" />
-          <p className="text-body-md text-on-surface-variant">
-            No groups recorded yet. Send a message in a group, supergroup, or
-            channel where this bot is present, then reload this page.
-          </p>
-        </div>
-      )}
+          </Table.Body>
+        </Table.Root>
+      </Table.ScrollArea>
 
       {/* Ban dialog */}
       <Dialog.Root
@@ -1429,7 +1466,25 @@ function ServerHierarchyGroupsTab({
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {channelsLoading && <Table.Loading colSpan={4} rows={5} />}
+              {channelsLoading &&
+                // Mirrors the real channel rows: name, type, mono ID chip,
+                // status badge pill.
+                [0, 1, 2, 3, 4].map((i) => (
+                  <Table.Row key={`channel-skeleton-${i}`}>
+                    <Table.Cell>
+                      <Skeleton variant="text" width="50%" />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Skeleton variant="text" width={64} />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Skeleton variant="rounded" width={96} height={20} />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Skeleton variant="pill" width={56} height={20} />
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
               {!channelsLoading &&
                 channels.map((channel) => (
                   <Table.Row key={channel.id}>

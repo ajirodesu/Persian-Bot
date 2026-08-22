@@ -125,7 +125,7 @@ const SidebarNav = memo(function SidebarNav({
       {/* Sidebar header — aligns with content header */}
       <div
         className={cn(
-          'flex items-center border-b border-outline-variant/70 shrink-0 transition-colors duration-normal',
+          'flex items-center border-b border-hairline shrink-0 transition-colors duration-normal',
           H_HEIGHT,
           collapsed ? 'justify-center px-0' : H_PX,
         )}
@@ -278,7 +278,7 @@ const SidebarNav = memo(function SidebarNav({
       {/* Sidebar footer — collapse toggle */}
       <div
         className={cn(
-          'border-t border-outline-variant/50 transition-colors duration-normal',
+          'border-t border-hairline transition-colors duration-normal',
           collapsed ? 'flex justify-center px-0 py-2' : 'flex items-center justify-between px-4 py-3',
         )}
       >
@@ -395,13 +395,13 @@ const UserMenu = memo(function UserMenu() {
           aria-label="User menu"
           className={cn(
             'absolute right-0 top-full mt-1.5 z-dropdown min-w-[210px]',
-            'rounded-[var(--radius-input)] border border-outline-variant/80 bg-surface-container-low',
+            'rounded-[var(--radius-input)] border border-outline-variant bg-surface-container-low',
             'shadow-elevation-3 py-1 overflow-hidden',
             '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
           )}
         >
           {/* User info header */}
-          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-outline-variant/60">
+          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-hairline">
             <span
               className={cn(
                 'flex items-center justify-center rounded-full shrink-0 bg-primary text-on-primary select-none font-bold',
@@ -613,7 +613,7 @@ export default function DashboardLayout() {
             hidden entirely below md (mobile uses the off-canvas drawer) */}
         <aside
           className={cn(
-            'glass-surface hidden md:flex shrink-0 flex-col border-r border-outline-variant/70 sticky top-0 h-screen overflow-y-hidden transition-[width] duration-normal',
+            'glass-surface hidden md:flex shrink-0 flex-col border-r border-hairline sticky top-0 h-screen overflow-y-hidden transition-[width] duration-normal',
             collapsed ? COLLAPSED_SIDEBAR_W : H_SIDEBAR_WIDTH,
           )}
         >
@@ -637,7 +637,7 @@ export default function DashboardLayout() {
         {/* Mobile off-canvas drawer */}
         <aside
           className={cn(
-            'glass-surface fixed inset-y-0 left-0 z-modal flex flex-col border-r border-outline-variant/70 md:hidden transition-transform duration-normal',
+            'glass-surface fixed inset-y-0 left-0 z-modal flex flex-col border-r border-hairline md:hidden transition-transform duration-normal',
             H_SIDEBAR_WIDTH,
             mobileOpen ? 'translate-x-0 shadow-elevation-4' : '-translate-x-full',
           )}
@@ -679,8 +679,8 @@ export default function DashboardLayout() {
                 // dashboard header uses. Desktop always shows the full
                 // header, regardless of scroll position.
                 isHeaderScrolled
-                  ? 'glass-surface border-b border-outline-variant/70'
-                  : 'bg-transparent border-b border-transparent md:glass-surface md:border-outline-variant/70',
+                  ? 'glass-surface border-b border-hairline'
+                  : 'bg-transparent border-b border-transparent md:glass-surface md:border-hairline',
                 H_HEIGHT,
                 H_PX,
               )}

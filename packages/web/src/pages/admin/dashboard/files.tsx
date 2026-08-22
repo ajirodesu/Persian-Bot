@@ -216,7 +216,7 @@ const RowMenu = memo(function RowMenu({
           >
             <div
               role="menu"
-              className="absolute w-56 overflow-hidden rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container-high shadow-elevation-3"
+              className="absolute w-56 overflow-hidden rounded-[var(--radius-card)] border border-hairline bg-surface-container-high shadow-elevation-3"
               style={{ top: pos.top, left: pos.left }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -815,7 +815,7 @@ const CommitBox = memo(function CommitBox({
         // (above the keyboard — the timezone sheet's stability model). It is
         // anchored once and never re-anchors while typing; the translate lifts
         // it by exactly the covered height when the keyboard opens.
-        'flex shrink-0 flex-col gap-2 border-t border-outline-variant/70 bg-surface-container p-3',
+        'flex shrink-0 flex-col gap-2 border-t border-hairline bg-surface-container p-3',
         'fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[var(--z-sticky)] shadow-elevation-2 transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none',
         // Desktop: normal in-flow box inside the left column.
         'lg:static lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
@@ -927,7 +927,7 @@ function GithubIdentityCard({
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-b border-outline-variant/70 px-3 py-2">
+    <div className="flex shrink-0 flex-col gap-2 border-b border-hairline px-3 py-2">
       <div className="flex items-center gap-1.5">
         <KeyRound className="h-4 w-4 shrink-0 text-on-surface-variant" />
         <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
@@ -948,7 +948,7 @@ function GithubIdentityCard({
               alt=""
               width={28}
               height={28}
-              className="h-7 w-7 shrink-0 rounded-full border border-outline-variant/60"
+              className="h-7 w-7 shrink-0 rounded-full border border-hairline"
             />
           ) : (
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-label-sm font-bold text-primary">
@@ -1274,11 +1274,11 @@ function GitPanel({
       className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
     >
       {/* Left column — branch, changes, commit box, history */}
-      <div className="flex min-w-0 flex-col border-b border-outline-variant/70 pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
+      <div className="flex min-w-0 flex-col border-b border-hairline pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
         <GithubIdentityCard files={files} configured={configured} />
 
         {/* Branch + sync actions */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
+        <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-3 py-2">
           <select
             aria-label="Current branch"
             value={status?.branch ?? ''}
@@ -1429,7 +1429,7 @@ function GitPanel({
         />
 
         {/* History */}
-        <div className="shrink-0 border-t border-outline-variant/70">
+        <div className="shrink-0 border-t border-hairline">
           <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1">
             <History className="h-3.5 w-3.5 text-on-surface-variant" />
             <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
@@ -1462,7 +1462,7 @@ function GitPanel({
       <div className="hidden min-w-0 min-h-0 flex-1 flex-col lg:flex">
         {files.gitDiffPath ? (
           <>
-            <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2">
+            <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-3 py-2">
               <span className="min-w-0 flex-1 truncate font-mono text-label-sm text-on-surface">
                 {files.gitDiffPath}
               </span>
@@ -1569,7 +1569,7 @@ function MobileDiffSheet({
       aria-label={`Diff for ${path}`}
       className="fixed inset-0 z-overlay flex flex-col overflow-hidden bg-surface-container-lowest [height:100dvh] lg:hidden"
     >
-      <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/70 px-3 py-2 [padding-top:max(0.75rem,env(safe-area-inset-top))]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-3 py-2 [padding-top:max(0.75rem,env(safe-area-inset-top))]">
         <GitCommitHorizontal className="h-4 w-4 shrink-0 text-on-surface-variant" />
         <span className="min-w-0 flex-1 truncate font-mono text-label-sm text-on-surface">
           {path}
@@ -2067,7 +2067,7 @@ export default function AdminFilesPage() {
       {/* ── Workspace ──────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Workspace toolbar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant/70 bg-surface-container/70 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-surface-container/70 px-3 py-2">
           {/* Files / Git view toggle */}
           <div className="flex items-center rounded-[var(--radius-input)] bg-surface-container-high p-0.5">
             <button
@@ -2178,7 +2178,7 @@ export default function AdminFilesPage() {
                 className={cn(
                   'flex min-w-0 shrink-0 flex-col bg-surface-container',
                   // Mobile drawer behaviour
-                  'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-outline-variant/70 shadow-elevation-3',
+                  'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-hairline shadow-elevation-3',
                   'transition-transform duration-200 ease-out lg:transition-none',
                   mobileFilesOpen ? 'translate-x-0' : '-translate-x-full',
                   // Desktop static column
@@ -2347,7 +2347,7 @@ export default function AdminFilesPage() {
               {/* ── Editor pane ─────────────────────────────────────────────────── */}
               <div className="flex min-w-0 min-h-0 flex-1 flex-col">
                 {/* Tab bar */}
-                <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-outline-variant/70 bg-surface-container/70 px-2 py-1 scrollbar-hidden">
+                <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-hairline bg-surface-container/70 px-2 py-1 scrollbar-hidden">
                   {/* Mobile-only: open the file explorer drawer */}
                   <IconButton
                     variant="text"

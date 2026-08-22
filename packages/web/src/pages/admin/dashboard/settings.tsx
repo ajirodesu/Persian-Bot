@@ -79,7 +79,7 @@ function AdminSettingsPageSkeleton() {
           </div>
         </Card.Header>
         <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between py-2 border-b border-outline-variant/50">
+          <div className="flex items-center justify-between py-2 border-b border-hairline">
             <Skeleton variant="text" textSize="label-md" width="48px" />
             <Skeleton variant="text" textSize="body-sm" width="55%" />
           </div>
@@ -119,7 +119,7 @@ function AdminSettingsPageSkeleton() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <div className="flex items-start gap-4">
           <Skeleton variant="input" width={40} height={40} />
@@ -131,7 +131,7 @@ function AdminSettingsPageSkeleton() {
           </div>
           <Skeleton variant="pill" width="44px" height="24px" />
         </div>
-        <div className="mt-4 pt-4 border-t border-outline-variant/40">
+        <div className="mt-4 pt-4 border-t border-hairline">
           <Skeleton variant="text" textSize="body-sm" width="70%" />
         </div>
       </Card.Root>
@@ -172,7 +172,7 @@ function AdminSettingsPageSkeleton() {
             <Skeleton variant="text" textSize="body-sm" width="280px" />
           </div>
         </Card.Header>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-outline-variant/50">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-hairline">
           <div className="flex flex-col gap-1.5">
             <Skeleton variant="text" textSize="label-lg" width="150px" />
             <Skeleton variant="text" textSize="body-sm" width="85%" />
@@ -674,7 +674,7 @@ export default function AdminSettingsPage() {
           'transition-colors duration-normal',
           maintenanceEnabled
             ? 'border border-primary/30 bg-primary/5'
-            : 'border border-outline-variant/60',
+            : 'border border-hairline',
         ].join(' ')}
       >
         <div className="flex items-start gap-4">
@@ -719,7 +719,7 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-outline-variant/40">
+        <div className="mt-4 pt-4 border-t border-hairline">
           <p className="text-body-sm text-on-surface-variant leading-relaxed">
             System-level switch that takes effect immediately across every bot
             and platform. Only registered System Administrators bypass this
@@ -786,7 +786,7 @@ export default function AdminSettingsPage() {
           {isEmailEnabled && (
             <>
               {/* Admin password recovery directly from session state */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-[var(--radius-card)] border border-outline-variant/50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-[var(--radius-card)] border border-hairline">
                 <div>
                   <p className="text-label-lg font-medium text-on-surface">
                     Password Reset
@@ -936,7 +936,7 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         </Card.Header>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-[var(--radius-card)] border border-outline-variant/50">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-lowest rounded-[var(--radius-card)] border border-hairline">
           <div>
             <p className="text-label-lg font-medium text-on-surface">
               Reset All Database

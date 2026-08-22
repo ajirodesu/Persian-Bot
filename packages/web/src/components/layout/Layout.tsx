@@ -64,8 +64,8 @@ export default function Layout() {
           // surfaces — migrated off hardcoded backdrop-blur-xl/md onto the
           // shared --surface-blur-lg/md tokens (same material as Dialog/Select).
           scrolled
-            ? 'bg-surface/85 [backdrop-filter:var(--surface-blur-lg)] border-b border-outline-variant/70 shadow-elevation-1'
-            : 'bg-surface/60 [backdrop-filter:var(--surface-blur-md)] border-b border-outline-variant/40',
+            ? 'bg-surface/85 [backdrop-filter:var(--surface-blur-lg)] border-b border-hairline shadow-elevation-1'
+            : 'bg-surface/60 [backdrop-filter:var(--surface-blur-md)] border-b border-hairline',
         )}
       >
         <nav
@@ -171,7 +171,7 @@ export default function Layout() {
             role="navigation"
             aria-label="Mobile navigation"
             className={cn(
-              'md:hidden border-t border-outline-variant/60 bg-surface-container-low/95 [backdrop-filter:var(--surface-blur-lg)]',
+              'md:hidden border-t border-hairline bg-surface-container-low/95 [backdrop-filter:var(--surface-blur-lg)]',
               '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
             )}
           >
@@ -222,7 +222,7 @@ export default function Layout() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-outline-variant/50 bg-surface-container-low/40">
+      <footer className="border-t border-hairline bg-surface-container-low/40">
         <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Logo className="h-4 w-4 text-primary/70" />

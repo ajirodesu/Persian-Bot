@@ -825,7 +825,7 @@ function AudioPlayer({
         'cr-audio-player flex items-center gap-3',
         flush
           ? 'w-full px-3.5 py-3'
-          : 'pl-1.5 pr-3 py-2 rounded-[var(--radius-card)] bg-on-surface/5 border border-outline-variant/50 min-w-[248px] max-w-[300px]',
+          : 'pl-1.5 pr-3 py-2 rounded-[var(--radius-card)] bg-on-surface/5 border border-hairline min-w-[248px] max-w-[300px]',
       )}
     >
       <audio ref={audioRef} preload="metadata">
@@ -1024,7 +1024,7 @@ function ImageLightbox({
             type="button"
             onClick={(e) => { e.stopPropagation(); goPrev() }}
             aria-label="Previous image"
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-outline-variant/60 transition-colors z-10"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-hairline transition-colors z-10"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -1032,7 +1032,7 @@ function ImageLightbox({
             type="button"
             onClick={(e) => { e.stopPropagation(); goNext() }}
             aria-label="Next image"
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-outline-variant/60 transition-colors z-10"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-hairline transition-colors z-10"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -1362,7 +1362,7 @@ function AttachmentView({ att }: { att: ChatAttachment }) {
       target="_blank"
       rel="noopener noreferrer"
       download={att.name}
-      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-low hover:bg-surface-container transition-colors text-xs border border-outline-variant/50"
+      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-low hover:bg-surface-container transition-colors text-xs border border-hairline"
     >
       <FileText className="h-4 w-4 shrink-0 opacity-70" />
       <span className="truncate max-w-[160px]">{att.name ?? 'File'}</span>
@@ -1859,7 +1859,7 @@ function ChatSettingsMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 z-[150] w-[248px] rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 overflow-hidden"
+          className="absolute right-0 top-full mt-2 z-[150] w-[248px] rounded-[var(--radius-card)] border border-hairline bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 overflow-hidden"
           style={{ animation: 'cr-fadeIn 140ms ease both' }}
         >
           <div className="px-4 pt-3.5 pb-2.5 border-b border-outline-variant/30">
@@ -1973,7 +1973,7 @@ function NicknameModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-[360px] rounded-[var(--radius-card-lg)] bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
+        className="w-[360px] rounded-[var(--radius-card-lg)] bg-surface-container border border-hairline shadow-elevation-3 p-6"
         style={{ animation: 'cr-fadeIn 160ms ease both' }}
       >
         <div className="flex items-center justify-between mb-1">
@@ -1988,7 +1988,7 @@ function NicknameModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-outline-variant/50 px-3 py-2.5 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
+        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-hairline px-3 py-2.5 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
           <Tag className="h-4 w-4 text-primary shrink-0" />
           <input
             ref={inputRef}
@@ -2059,7 +2059,7 @@ function PrefixModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
+        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-hairline shadow-elevation-3 p-6"
         style={{ animation: 'cr-fadeIn 160ms ease both' }}
       >
         <div className="flex items-center justify-between mb-4">
@@ -2072,7 +2072,7 @@ function PrefixModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-outline-variant/50 px-3 py-2.5 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
+        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-hairline px-3 py-2.5 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
           <Hash className="h-4 w-4 text-primary shrink-0" />
           <input
             ref={inputRef}
@@ -2122,7 +2122,7 @@ function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: ()
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-outline-variant/50 shadow-elevation-3 p-6"
+        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-hairline shadow-elevation-3 p-6"
         style={{ animation: 'cr-fadeIn 160ms ease both' }}
       >
         <div className="h-11 w-11 rounded-[var(--radius-card)] bg-error/12 flex items-center justify-center mb-4">
@@ -2328,7 +2328,7 @@ function AttachmentPicker({
       className="absolute bottom-full mb-2 left-0 z-[120]"
       style={{ animation: 'cr-fadeIn 110ms ease both' }}
     >
-      <div className="rounded-[var(--radius-card)] border border-outline-variant/50 bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
+      <div className="rounded-[var(--radius-card)] border border-hairline bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
         {options.map((opt) => (
           <label
             key={opt.id}
@@ -2644,7 +2644,7 @@ const Composer = memo(function Composer({
             {pendingAttachments.map((att, i) => (
               <div key={i} className="relative group/att">
                 {att.type === 'image' && att.localUrl ? (
-                  <div className="relative h-16 w-16 rounded-[var(--radius-input)] overflow-hidden border border-outline-variant/60 shadow-sm">
+                  <div className="relative h-16 w-16 rounded-[var(--radius-input)] overflow-hidden border border-hairline shadow-sm">
                     <img
                       src={att.localUrl}
                       alt={att.name}
@@ -2657,7 +2657,7 @@ const Composer = memo(function Composer({
                     )}
                   </div>
                 ) : (
-                  <div className="h-16 w-16 rounded-[var(--radius-input)] bg-on-surface/5 border border-outline-variant/60 flex flex-col items-center justify-center gap-1 p-1">
+                  <div className="h-16 w-16 rounded-[var(--radius-input)] bg-on-surface/5 border border-hairline flex flex-col items-center justify-center gap-1 p-1">
                     {<FileText className="h-4 w-4 text-on-surface-variant" />}
                     <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
                   </div>
@@ -2666,7 +2666,7 @@ const Composer = memo(function Composer({
                   type="button"
                   onClick={() => onRemoveAttachment(i)}
                   aria-label="Remove attachment"
-                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-outline-variant/50 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-hairline flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -3519,8 +3519,8 @@ export default function ChatRoomPage() {
             // dashboard header uses. Desktop is unaffected and always shows
             // the full header, regardless of scroll position.
             isHeaderScrolled
-              ? 'glass-surface border-b border-outline-variant/70'
-              : 'bg-transparent border-b border-transparent md:glass-surface md:border-outline-variant/70',
+              ? 'glass-surface border-b border-hairline'
+              : 'bg-transparent border-b border-transparent md:glass-surface md:border-hairline',
             H_HEIGHT,
             H_PX,
           )}
@@ -3658,7 +3658,7 @@ export default function ChatRoomPage() {
                 isNearBottomRef.current = true
                 scrollToBottom()
               }}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-outline-variant/50 shadow-elevation-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-hairline shadow-elevation-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
             >
               <ChevronDown className="h-5 w-5" />
             </button>

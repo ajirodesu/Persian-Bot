@@ -40,7 +40,7 @@ function BotCard({
       padding="md"
       interactive
       onClick={onClick}
-      className="group hover:shadow-elevation-2 hover:border-outline-variant/80 transition-all duration-normal border border-outline-variant/60"
+      className="group hover:shadow-elevation-2 hover:border-outline-variant transition-all duration-normal border border-hairline"
     >
       {/* Identity + live status */}
       <div className="flex items-start justify-between gap-4">
@@ -96,7 +96,7 @@ function BotCardSkeleton() {
       variant="elevated"
       padding="md"
       shadowElevation={1}
-      className="border border-outline-variant/60"
+      className="border border-hairline"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -143,12 +143,18 @@ export default function BotManagerPage() {
           <h1 className="text-headline-sm font-bold text-on-surface tracking-tight md:hidden">
             Bot Manager
           </h1>
-          <p className="mt-1 text-body-sm text-on-surface-variant md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
+          <p className="mt-1 flex items-center gap-1.5 text-body-sm text-on-surface-variant md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
             Configure and monitor your deployed bots.
-            {!isLoading && bots.length > 0 && (
-              <span className="ml-1.5 text-success font-medium">
-                {onlineBots} of {bots.length} online
-              </span>
+            {isLoading ? (
+              /* Mirrors the "X of Y online" span's footprint so the header
+                 never reflows when the counts arrive. */
+              <Skeleton variant="text" width={96} className="ml-1.5" />
+            ) : (
+              bots.length > 0 && (
+                <span className="ml-1.5 text-success font-medium">
+                  {onlineBots} of {bots.length} online
+                </span>
+              )
             )}
           </p>
         </div>

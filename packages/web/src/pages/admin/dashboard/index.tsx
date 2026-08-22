@@ -21,7 +21,7 @@ function StatCard({
   colorClass: string
 }) {
   return (
-    <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 flex flex-col gap-3 shadow-elevation-1">
+    <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 flex flex-col gap-3 shadow-elevation-1">
       <div
         className={`h-10 w-10 rounded-[var(--radius-input)] flex items-center justify-center ${colorClass}`}
       >
@@ -37,7 +37,7 @@ function StatCard({
 
 function StatCardSkeleton() {
   return (
-    <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 flex flex-col gap-3 shadow-elevation-1">
+    <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 flex flex-col gap-3 shadow-elevation-1">
       <Skeleton variant="input" width={40} height={40} />
       <div className="flex flex-col gap-1.5">
         <Skeleton variant="text" textSize="headline-sm" width="56%" />
@@ -134,7 +134,7 @@ export default function AdminDashboardPage() {
       {/* ── Detail cards ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Platform distribution — real data from useAdminBots */}
-        <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 shadow-elevation-1">
+        <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 shadow-elevation-1">
           <h2 className="text-title-md font-semibold text-on-surface mb-4">
             Bot Platform Distribution
           </h2>
@@ -187,7 +187,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Recent registrations */}
-        <div className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-5 shadow-elevation-1">
+        <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 shadow-elevation-1">
           <h2 className="text-title-md font-semibold text-on-surface mb-4">
             Recent Registrations
           </h2>

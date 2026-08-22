@@ -17,18 +17,18 @@
 
 /* -----------------------------------------------------------
   0. Web Fonts
-  Fraunces: unified serif typeface used for --font-family-brand
-  AND --font-family-plain, on every theme — headings and body
-  copy both read Fraunces, site-wide. Loaded across its full
-  optical-size axis (9..144) so small body text and large
-  display headings each get their own optically-tuned cut
-  rather than one static weight stretched to every size.
-  JetBrains Mono: distinct developer-grade monospace, still used
-  by every theme for code/data — deliberately NOT switched to
-  Fraunces, since a display serif would break alignment/legibility
-  in code blocks and tabular data (see DESIGN_NOTES_M3_IOS.md).
+  Inter: the UI/body typeface — a clean, neutral, highly legible
+  grotesque that reads instantly modern and professional at app
+  scale (dense dashboards, tables, forms). Used for every piece
+  of body copy, labels, and controls via --font-family-plain.
+  Fraunces: the display/brand serif — loaded ONLY at its large
+  optical sizes and heavier weights so hero headlines and brand
+  marks keep a distinctive editorial voice (--font-family-brand).
+  JetBrains Mono: developer-grade monospace for code/data — a
+  serif or proportional face would break alignment in code
+  blocks and tabular data.
   ----------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@72..144,600;72..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* -----------------------------------------------------------
   Tailwind CSS v4 — CSS-first config.

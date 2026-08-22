@@ -146,20 +146,17 @@ html[data-theme='aqua'] {
     0 0 0 5px rgba(52, 224, 190, 0.55),
     0 0 32px rgba(52, 224, 190, 0.35);
 
-  /* ==================== MOTION ====================
-     Custom springy easing — replaces the default M3 standard
-     curve so every hover/press/focus transition feels bouncy */
-  --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
-
   /* ==================== TYPOGRAPHY ====================
-     Fraunces, unified across brand (headings) AND plain (body) —
-     same face on every theme, per the site-wide typography spec.
-     Only font-family lives here; every size/line-height/spacing
-     token stays in tokens.css, shared and untouched by any theme. */
+     Inter drives all body/UI text (--font-family-plain) for a
+     clean, modern, professional app voice; Fraunces remains the
+     display serif for hero/brand headlines only
+     (--font-family-brand). Only font-family lives here; every
+     size/line-height/spacing token stays in tokens.css, shared
+     and untouched by any theme. */
   --font-family-brand:
     'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
   --font-family-plain:
-    'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+    'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-family-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 

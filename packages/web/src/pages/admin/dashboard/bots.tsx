@@ -6,6 +6,7 @@ import EmptyState from '@/components/ui/data-display/EmptyState'
 import Input from '@/components/ui/forms/Input'
 import { Bot, Search } from 'lucide-react'
 import Badge from '@/components/ui/data-display/Badge'
+import Skeleton from '@/components/ui/feedback/Skeleton'
 import { useAdminBots } from '@/features/admin/hooks/useAdminBots'
 import { useDebounce } from '@/hooks/useDebounce'
 import Dialog from '@/components/ui/overlay/Dialog'
@@ -110,35 +111,50 @@ export default function AdminBotsPage() {
         </div>
       )}
 
-      {/* Per-platform summary cards */}
+      {/* Per-platform summary cards — skeleton while loading matches the
+          card shape (label / big number / running line) so the grid never
+          flashes placeholder zeros */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {(
-          [
-            'discord',
-            'fluxer',
-            'telegram',
-          ] as const
-        ).map((platform) => {
-          // Stat derived from server's global knowledge
-          const platTotal = stats?.platformDist?.[platform] ?? 0
-          const platRunning = stats?.platformActiveDist?.[platform] ?? 0
-          return (
+        {isLoading ? (
+          [0, 1, 2].map((i) => (
             <div
-              key={platform}
-              className="rounded-[var(--radius-card)] bg-surface border border-outline-variant p-4 shadow-elevation-1 flex flex-col gap-2"
+              key={`plat-skeleton-${i}`}
+              className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-hairline bg-surface p-4 shadow-elevation-1"
             >
-              <span className="text-body-sm font-medium text-on-surface">
-                {PLATFORM_LABELS[platform] ?? platform}
-              </span>
-              <p className="text-headline-sm font-bold text-on-surface">
-                {platTotal}
-              </p>
-              <p className="text-label-sm text-on-surface-variant">
-                {platRunning} running
-              </p>
+              <Skeleton variant="text" width="55%" />
+              <Skeleton variant="text" width={36} textSize="headline-sm" />
+              <Skeleton variant="text" width="45%" />
             </div>
-          )
-        })}
+          ))
+        ) : (
+          (
+            [
+              'discord',
+              'fluxer',
+              'telegram',
+            ] as const
+          ).map((platform) => {
+            // Stat derived from server's global knowledge
+            const platTotal = stats?.platformDist?.[platform] ?? 0
+            const platRunning = stats?.platformActiveDist?.[platform] ?? 0
+            return (
+              <div
+                key={platform}
+                className="rounded-[var(--radius-card)] bg-surface border border-hairline p-4 shadow-elevation-1 flex flex-col gap-2"
+              >
+                <span className="text-body-sm font-medium text-on-surface">
+                  {PLATFORM_LABELS[platform] ?? platform}
+                </span>
+                <p className="text-headline-sm font-bold text-on-surface">
+                  {platTotal}
+                </p>
+                <p className="text-label-sm text-on-surface-variant">
+                  {platRunning} running
+                </p>
+              </div>
+            )
+          })
+        )}
       </div>
 
       <div className="bg-surface p-2 rounded-full">
@@ -177,7 +193,35 @@ export default function AdminBotsPage() {
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {isLoading && <Table.Loading colSpan={6} rows={4} />}
+                {isLoading &&
+                  // Row skeletons mirror the real session rows: nickname,
+                  // stacked owner name/email, platform, mono prefix, status
+                  // dot-badge, right-aligned Delete button.
+                  [0, 1, 2, 3, 4].map((i) => (
+                    <Table.Row key={`skeleton-${i}`}>
+                      <Table.Cell>
+                        <Skeleton variant="text" width="60%" />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex flex-col gap-1.5">
+                          <Skeleton variant="text" width="70%" />
+                          <Skeleton variant="text" width="85%" />
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Skeleton variant="text" width={64} />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Skeleton variant="text" width={32} />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Skeleton variant="pill" width={72} height={20} />
+                      </Table.Cell>
+                      <Table.Cell align="right">
+                        <Skeleton variant="pill" width={56} height={24} />
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
                 {!isLoading &&
                   bots.map((session) => (
                     <Table.Row key={`${session.userId}:${session.sessionId}`}>

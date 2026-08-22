@@ -137,19 +137,15 @@ html[data-theme='indigo'] {
     0 0 0 5px rgba(156, 135, 245, 0.55),
     0 0 32px rgba(156, 135, 245, 0.35);
 
-  /* ==================== MOTION ====================
-     Same springy easing as Aqua and Burnt — one unified motion feel */
-  --easing-standard: cubic-bezier(0.34, 1.56, 0.64, 1);
-
   /* ==================== TYPOGRAPHY ====================
-     Fraunces, unified across brand (headings) AND plain (body) —
-     same face on every theme, per the site-wide typography spec.
-     Only font-family lives here; every size/line-height/spacing
-     token stays in tokens.css, shared and untouched by any theme. */
+     Inter for body/UI, Fraunces for display/brand — the exact
+     same faces Aqua and Burnt use. Only font-family lives here;
+     every size/line-height/spacing token stays in tokens.css,
+     shared and untouched by any theme. */
   --font-family-brand:
     'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
   --font-family-plain:
-    'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+    'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-family-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 

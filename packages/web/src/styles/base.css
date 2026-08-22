@@ -12,12 +12,13 @@
     line-height: 1.6;
     letter-spacing: 0em;
     color-scheme: dark;
-    /* Fraunces is a variable font with its own optical-size (opsz)
-       axis — auto lets the browser pick the right cut per rendered
-       size instead of stretching one static weight everywhere. */
+    /* Inter is a variable font with an optical-size (opsz) axis — auto lets
+       the browser pick the right cut per rendered size; Fraunces (brand) is
+       loaded at display optical sizes only. */
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   html {
@@ -76,13 +77,20 @@
     background: rgb(var(--color-outline) / 0.8);
   }
 
+  /* Display serif for the big editorial headings only (h1–h3); small
+     headings (h4–h6) use the UI sans at a semibold weight so dense app
+     screens stay clean and neutral — a display serif at 14–16px reads
+     fussy and hurts scannability. */
   h1,
   h2,
-  h3,
+  h3 {
+    font-family: var(--font-family-brand);
+  }
+
   h4,
   h5,
   h6 {
-    font-family: var(--font-family-brand);
+    font-family: var(--font-family-plain);
   }
 
   h1 {
@@ -139,6 +147,7 @@
   code {
     font-family: var(--font-family-mono);
     font-size: 0.875em;
+    font-variant-numeric: tabular-nums;
     background-color: rgb(var(--color-surface-container-highest) / 1);
     color: rgb(var(--color-primary) / 0.9);
     padding: 0.15rem 0.35rem;

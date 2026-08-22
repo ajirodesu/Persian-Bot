@@ -573,7 +573,7 @@ export default function BotSettingsPage() {
           'transition-colors duration-normal',
           adminOnlyEnabled
             ? 'border border-primary/30 bg-primary/5'
-            : 'border border-outline-variant/60',
+            : 'border border-hairline',
         ].join(' ')}
       >
         {/* ── Main row: icon · info · switch ── */}
@@ -632,7 +632,7 @@ export default function BotSettingsPage() {
         </div>
 
         {/* ── Divider + command reference ── */}
-        <div className="mt-4 pt-4 border-t border-outline-variant/40">
+        <div className="mt-4 pt-4 border-t border-hairline">
           <p className="text-body-sm text-on-surface-variant leading-relaxed">
             Equivalent to{' '}
             <code className="font-mono text-label-sm bg-surface-container px-1 py-0.5 rounded">

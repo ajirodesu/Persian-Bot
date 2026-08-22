@@ -176,7 +176,7 @@ function SettingsPageSkeleton() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex flex-col gap-1.5">
@@ -192,7 +192,7 @@ function SettingsPageSkeleton() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex flex-col gap-1.5">
@@ -208,7 +208,7 @@ function SettingsPageSkeleton() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex flex-col gap-1.5">
@@ -221,7 +221,7 @@ function SettingsPageSkeleton() {
             <Skeleton variant="input" height={44} className="w-full" />
             <Skeleton variant="input" height={44} className="w-full" />
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-outline-variant/50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[var(--radius-card)] border border-hairline">
             <div className="flex flex-col gap-1.5">
               <Skeleton variant="text" textSize="label-lg" width="160px" />
               <Skeleton variant="text" textSize="body-sm" width="120px" />
@@ -240,7 +240,7 @@ function SettingsPageSkeleton() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex flex-col gap-1.5">
@@ -249,7 +249,7 @@ function SettingsPageSkeleton() {
           </div>
         </Card.Header>
         <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between py-2 border-b border-outline-variant/50">
+          <div className="flex items-center justify-between py-2 border-b border-hairline">
             <Skeleton variant="text" textSize="label-md" width="48px" />
             <Skeleton variant="text" textSize="body-sm" width="55%" />
           </div>
@@ -268,7 +268,7 @@ function SettingsPageSkeleton() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex flex-col gap-1.5">
@@ -648,7 +648,7 @@ export default function SettingsPage() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div>
@@ -666,7 +666,7 @@ export default function SettingsPage() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex items-start justify-between w-full">
@@ -714,7 +714,7 @@ export default function SettingsPage() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex items-start justify-between w-full">
@@ -770,7 +770,7 @@ export default function SettingsPage() {
 
               {/* Connection status for the selected provider */}
               {providerStatus.hasKey ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-hairline">
                   <div>
                     <p className="text-label-lg font-semibold text-on-surface">
                       {AI_PROVIDER_LABELS[providerDraft]} API key connected
@@ -859,7 +859,7 @@ export default function SettingsPage() {
               )}
 
               {/* ── Agent behavior — web-based AI configuration ── */}
-              <div className="mt-2 pt-4 border-t border-outline-variant/50">
+              <div className="mt-2 pt-4 border-t border-hairline">
                 <div className="flex items-start justify-between w-full mb-4">
                   <div>
                     <p className="text-title-md font-semibold text-on-surface">
@@ -938,7 +938,7 @@ export default function SettingsPage() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div className="flex items-start justify-between w-full">
@@ -1024,7 +1024,7 @@ export default function SettingsPage() {
         variant="elevated"
         shadowElevation={1}
         padding="md"
-        className="border border-outline-variant/60"
+        className="border border-hairline"
       >
         <Card.Header>
           <div>
@@ -1040,7 +1040,7 @@ export default function SettingsPage() {
           {isEmailEnabled && (
             <>
               {/* Quick reset code shortcut */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-outline-variant/50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-hairline">
                 <div>
                   <p className="text-label-lg font-semibold text-on-surface">
                     Password Reset

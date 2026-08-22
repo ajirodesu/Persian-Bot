@@ -108,10 +108,11 @@ export default function HomePage() {
                 Multi-platform · Multi-bot · Open source
               </div>
 
-              {/* Headline */}
-              <div className="flex flex-col gap-4">
+              {/* Headline — Fraunces display serif at full presence on
+                  desktop, one step down on phones so it never overflows */}
+              <div className="flex flex-col gap-5">
                 <h1
-                  className="font-brand text-display-sm font-bold text-on-surface leading-[1.08] tracking-tight"
+                  className="font-brand text-[2.5rem] leading-[1.05] font-bold text-on-surface tracking-tight sm:text-display-sm lg:text-display-md"
                   style={{
                     animation:
                       'fade-in-down 500ms 100ms var(--easing-emphasized-decelerate) both',
@@ -208,9 +209,9 @@ export default function HomePage() {
               }}
             >
               {/* Terminal-chrome wrapper */}
-              <div className="rounded-2xl overflow-hidden border border-outline-variant/60 bg-surface shadow-elevation-3">
+              <div className="rounded-[var(--radius-card-lg)] overflow-hidden border border-hairline bg-surface shadow-elevation-3">
                 {/* Chrome bar */}
-                <div className="flex items-center gap-3 border-b border-outline-variant/60 bg-surface-container-low px-4 py-3">
+                <div className="flex items-center gap-3 border-b border-hairline bg-surface-container-low px-4 py-3">
                   <div className="flex gap-1.5">
                     <span className="h-3 w-3 rounded-full bg-[#FF5F56]" />
                     <span className="h-3 w-3 rounded-full bg-[#FFBD2E]" />
@@ -229,7 +230,7 @@ export default function HomePage() {
                   {PLATFORMS.map((p) => (
                     <div
                       key={p.name}
-                      className="flex items-center justify-between py-2.5 px-1 border-b border-outline-variant/20 last:border-b-0"
+                      className="flex items-center justify-between py-2.5 px-1 border-b border-hairline last:border-b-0"
                     >
                       <div className="flex items-center gap-3">
                         <span
@@ -265,11 +266,11 @@ export default function HomePage() {
       </section>
 
       {/* ── Features ──────────────────────────────────────────────────────── */}
-      <section className="py-24 px-6 border-y border-outline-variant/60 relative overflow-hidden">
+      <section className="py-20 px-6 border-y border-hairline relative overflow-hidden sm:py-24">
         {/* Subtle section background */}
         <div className="absolute inset-0 bg-surface-container-low/40 pointer-events-none" />
 
-        <div className="relative max-w-6xl mx-auto flex flex-col gap-14">
+        <div className="relative max-w-6xl mx-auto flex flex-col gap-12 sm:gap-14">
           <div className="flex flex-col gap-3 text-center">
             <p className="eyebrow-mono justify-center">
               Capabilities
@@ -283,13 +284,17 @@ export default function HomePage() {
             </p>
           </div>
 
+          {/* 5 features: 4-up on lg with the last card spanning two columns
+              so the grid stays balanced instead of orphaning a single tile. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {FEATURES.map((f) => (
+            {FEATURES.map((f, i) => (
               <div
                 key={f.title}
-                className="group flex flex-col gap-4 rounded-2xl border border-outline-variant/60 bg-surface p-6 shadow-elevation-1 transition-all duration-normal hover:shadow-elevation-2 hover:border-outline-variant cursor-default"
+                className={`group flex flex-col gap-4 rounded-[var(--radius-card)] border border-hairline bg-surface p-6 shadow-elevation-1 transition-all duration-normal hover:shadow-elevation-2 hover:border-outline-variant cursor-default ${
+                  i === FEATURES.length - 1 ? 'sm:col-span-2' : ''
+                }`}
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-container text-on-primary-container group-hover:scale-110 transition-transform duration-fast">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-input)] bg-primary-container text-on-primary-container transition-transform duration-fast group-hover:scale-110">
                   <f.Icon className="h-5 w-5" />
                 </span>
                 <div className="flex flex-col gap-1.5">

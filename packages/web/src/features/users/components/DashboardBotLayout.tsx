@@ -6,15 +6,24 @@ import {
   Outlet,
   useOutletContext,
 } from 'react-router-dom'
-import { Bot, ArrowLeft } from 'lucide-react'
-import Tabs from '@/components/ui/navigation/Tabs'
+import { Bot, ArrowLeft, Terminal, List, Zap, Database, Settings } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import Skeleton from '@/components/ui/feedback/Skeleton'
+import { cn } from '@/utils/cn.util'
 import { ROUTES } from '@/constants/routes.constants'
 
 import { useBotDetail } from '@/features/users/hooks/useBotDetail'
 import { useBotStatus } from '@/features/users/hooks/useBotStatus'
 import type { GetBotDetailResponseDto } from '@/features/users/dtos/bot.dto'
+
+/** The bot section's page switcher — one entry per nested route. */
+const BOT_TABS = [
+  { value: 'console', label: 'Console', Icon: Terminal },
+  { value: 'commands', label: 'Commands', Icon: List },
+  { value: 'events', label: 'Events', Icon: Zap },
+  { value: 'database', label: 'Database', Icon: Database },
+  { value: 'settings', label: 'Settings', Icon: Settings },
+] as const
 
 export interface BotContextType {
   bot: GetBotDetailResponseDto
@@ -69,19 +78,17 @@ export default function BotLayout() {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6">
-        {/* Tab bar placeholder — mirrors the 5-tab layout below */}
-        <div className="flex items-center gap-6 border-b border-outline-variant/60 pb-3">
-          {['Console', 'Commands', 'Events', 'Database', 'Settings'].map(
-            (tab) => (
-              <Skeleton
-                key={tab}
-                variant="text"
-                textSize="label-lg"
-                width="72px"
-                animation="pulse"
-              />
-            ),
-          )}
+        {/* Segmented switcher placeholder — mirrors the pill container below */}
+        <div className="flex w-fit max-w-full items-center gap-1 rounded-[var(--radius-input)] border border-hairline bg-surface-container-low/80 p-1">
+          {BOT_TABS.map((tab) => (
+            <Skeleton
+              key={tab.value}
+              variant="pill"
+              width={96}
+              height={32}
+              animation="pulse"
+            />
+          ))}
         </div>
         {/* Content placeholder — header + stat/sidebar blocks */}
         <div className="flex flex-col gap-4">
@@ -146,16 +153,39 @@ export default function BotLayout() {
         <title>{bot.nickname} · Cat-Bot</title>
       </Helmet>
 
-      {/* Controlled tabs navigating React Router underneath */}
-      <Tabs.Root value={currentTab} onChange={handleTabChange}>
-        <Tabs.List variant="line">
-          <Tabs.Tab value="console">Console</Tabs.Tab>
-          <Tabs.Tab value="commands">Commands</Tabs.Tab>
-          <Tabs.Tab value="events">Events</Tabs.Tab>
-          <Tabs.Tab value="database">Database</Tabs.Tab>
-          <Tabs.Tab value="settings">Settings</Tabs.Tab>
-        </Tabs.List>
-      </Tabs.Root>
+      {/* Page switcher — a premium segmented control (Linear/Vercel style):
+          a pill container where the active page rises to an elevated surface
+          thumb with a soft shadow, and inactive items are quiet until hovered.
+          Horizontally scrollable on phones so all five sections stay one swipe
+          away; icons + labels aid recognition at a glance. */}
+      <div
+        role="tablist"
+        aria-label="Bot sections"
+        className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--radius-input)] border border-hairline bg-surface-container-low/80 p-1"
+      >
+        {BOT_TABS.map(({ value, label, Icon }) => {
+          const active = currentTab === value
+          return (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => handleTabChange(value)}
+              className={cn(
+                'flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-[calc(var(--radius-input)-0.25rem)] px-3.5 py-2 text-label-md font-medium outline-none transition-all duration-fast',
+                'focus-visible:ring-2 focus-visible:ring-primary/40',
+                active
+                  ? 'bg-surface text-on-surface shadow-elevation-1'
+                  : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </button>
+          )
+        })}
+      </div>
 
       {/* Outlet renders the specific page chunk, wrapped in animation classes matching Tabs.Panel */}
       <div className="focus-visible:outline-none animate-in fade-in slide-in-from-left-2 duration-normal ease-[var(--easing-emphasized-decelerate)]">
