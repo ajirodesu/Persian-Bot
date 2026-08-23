@@ -665,7 +665,9 @@ const GitChangeRow = memo(function GitChangeRow({
   const meta = CHANGE_META[change.status]
   const Icon = meta.icon
   return (
-    <div className="flex w-full items-center gap-2 rounded-[var(--radius-input)] py-1.5 pr-1 pl-1.5 transition-colors duration-fast hover:bg-on-surface/5">
+    // Roomier rows on phones (44px-friendly) settling back to the compact
+    // rhythm from `lg` up.
+    <div className="flex w-full items-center gap-2 rounded-[var(--radius-input)] py-2 pr-1 pl-1.5 transition-colors duration-fast hover:bg-on-surface/5 lg:py-1.5">
       <Icon className={cn('h-4 w-4 shrink-0', meta.className)} />
       <button
         type="button"
@@ -734,7 +736,7 @@ const HistoryRow = memo(function HistoryRow({
   commit: GitCommitInfoDto
 }) {
   return (
-    <div className="flex items-start gap-2 px-2 py-1.5">
+    <div className="flex items-start gap-2 px-2 py-2 lg:py-1.5">
       <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 font-mono text-[10px] font-semibold text-primary">
         {commit.sha}
       </span>
@@ -810,6 +812,7 @@ const CommitBox = memo(function CommitBox({
   return (
     <div
       ref={ref}
+      data-git-composer=""
       className={cn(
         // Mobile: fixed composer pinned to the bottom of the visual viewport
         // (above the keyboard — the timezone sheet's stability model). It is
@@ -927,7 +930,15 @@ function GithubIdentityCard({
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-b border-hairline px-3 py-2">
+    // data-git-token-card routes mobile keyboard handling: when the token
+    // input inside this card is focused, the GitPanel's VisualViewport effect
+    // shifts ONLY this card up by exactly the amount the keyboard clips it
+    // (--git-token-offset) — the commit composer and everything else in the
+    // panel stay perfectly still.
+    <div
+      data-git-token-card=""
+      className="flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 transition-transform duration-200 ease-out will-change-transform [transform:translateY(calc(var(--git-token-offset,0px)*-1))] sm:py-2 lg:bg-transparent"
+    >
       <div className="flex items-center gap-1.5">
         <KeyRound className="h-4 w-4 shrink-0 text-on-surface-variant" />
         <span className="text-label-xs font-semibold tracking-wide text-on-surface-variant uppercase">
@@ -996,15 +1007,6 @@ function GithubIdentityCard({
                 autoCorrect="off"
                 spellCheck={false}
                 disabled={!configured || verifyBusy}
-                onFocus={(e) => {
-                  // Keep the field in view above the on-screen keyboard — the
-                  // visual viewport shrinks, so centering guarantees the input
-                  // (and the Connect button right below it) stay visible.
-                  window.setTimeout(
-                    () => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }),
-                    150,
-                  )
-                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void handleConnect()
                 }}
@@ -1073,7 +1075,7 @@ function GitPanel({
   // Per-file "Discard changes" confirm target (path of the unstaged change).
   const [discardTarget, setDiscardTarget] = useState<string | null>(null)
 
-  // Mobile commit composer. On phones the commit box renders as a fixed bar
+  // Mobile keyboard handling. On phones the commit box renders as a fixed bar
   // pinned to the bottom of the visual viewport — the same stability model as
   // the timezone search's mobile sheet: the composer is anchored once against
   // the VisualViewport and never re-anchors while typing, so the input stays
@@ -1082,9 +1084,13 @@ function GitPanel({
   // height — never a hardcoded keyboard height — is lifted off via a
   // translate). Android/Chrome with the app's interactive-widget=resizes-content
   // meta already reflows the layout, so the value reads ~0 there and the
-  // composer never double-moves. All values are pushed straight into CSS vars
-  // from rAF-throttled listeners, so keyboard open/close never triggers a React
-  // render of the Git panel.
+  // composer never double-moves.
+  //
+  // Focus-scoped: ONLY the focused input adjusts for the keyboard. Focusing
+  // the commit composer lifts the composer (--git-kb-offset); focusing the
+  // GitHub token input shifts just the identity card by exactly the amount it
+  // is clipped by the keyboard (--git-token-offset) — the composer and every
+  // other element stay put, so nothing else jumps around while typing.
   const panelRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -1094,6 +1100,8 @@ function GitPanel({
     const mq = window.matchMedia('(max-width: 1023px) and (pointer: coarse)')
     const vv = window.visualViewport
     let raf = 0
+    let mode: 'composer' | 'token' | null = null
+    let prevTokenShift = 0
 
     const update = () => {
       raf = 0
@@ -1103,7 +1111,43 @@ function GitPanel({
         mq.matches && vv
           ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop))
           : 0
-      root.style.setProperty('--git-kb-offset', `${kb}px`)
+
+      if (mode === 'composer') {
+        // Only the commit composer lifts, by the full covered height.
+        root.style.setProperty('--git-kb-offset', `${kb}px`)
+        root.style.setProperty('--git-token-offset', '0px')
+        prevTokenShift = 0
+        return
+      }
+
+      root.style.setProperty('--git-kb-offset', '0px')
+
+      if (mode === 'token') {
+        // Shift the identity card up by exactly the amount its bottom is
+        // clipped by the keyboard (plus a small breathing margin) — never
+        // more, so the card (and everything else) barely moves. The shift is
+        // clamped so the card's top never leaves the visible viewport, and
+        // the measurement compensates for any shift already applied.
+        const card = root.querySelector<HTMLElement>('[data-git-token-card]')
+        if (card && vv) {
+          const rect = card.getBoundingClientRect()
+          const visibleTop = vv.offsetTop
+          const visibleBottom = vv.height + vv.offsetTop
+          const rawBottom = rect.bottom + prevTokenShift
+          const rawTop = rect.top + prevTokenShift
+          const wanted = rawBottom - visibleBottom + 16
+          const maxShift = Math.max(0, rawTop - visibleTop)
+          const shift = Math.min(Math.max(0, wanted), maxShift)
+          prevTokenShift = shift
+          root.style.setProperty('--git-token-offset', `${shift}px`)
+        } else {
+          root.style.setProperty('--git-token-offset', '0px')
+          prevTokenShift = 0
+        }
+      } else {
+        root.style.setProperty('--git-token-offset', '0px')
+        prevTokenShift = 0
+      }
     }
 
     // The keyboard open/close sequence fires a burst of viewport events —
@@ -1113,15 +1157,40 @@ function GitPanel({
       raf = requestAnimationFrame(update)
     }
 
+    // Focus routing: which on-screen input owns the keyboard right now.
+    const classify = (target: Element | null): 'composer' | 'token' | null => {
+      if (!target) return null
+      if (target.closest('[data-git-composer]')) return 'composer'
+      if (target.closest('[data-git-token-card]')) return 'token'
+      return null
+    }
+    const onFocusIn = (e: FocusEvent) => {
+      mode = classify(e.target as Element | null)
+      onEvent()
+    }
+    // focusout fires before the next focusin — re-check in a microtask so
+    // tabbing between the panel's inputs never flashes back to "no mode".
+    const onFocusOut = () => {
+      queueMicrotask(() => {
+        mode = classify(document.activeElement)
+        onEvent()
+      })
+    }
+
     update()
     vv?.addEventListener('resize', onEvent)
     vv?.addEventListener('scroll', onEvent)
     window.addEventListener('resize', onEvent)
+    const root = panelRef.current
+    root?.addEventListener('focusin', onFocusIn)
+    root?.addEventListener('focusout', onFocusOut)
     return () => {
       if (raf) cancelAnimationFrame(raf)
       vv?.removeEventListener('resize', onEvent)
       vv?.removeEventListener('scroll', onEvent)
       window.removeEventListener('resize', onEvent)
+      root?.removeEventListener('focusin', onFocusIn)
+      root?.removeEventListener('focusout', onFocusOut)
     }
   }, [])
 
@@ -1287,7 +1356,7 @@ function GitPanel({
               if (branch && branch !== status?.branch) checkout(branch)
             }}
             disabled={!configured || busy !== null}
-            className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-1.5 text-label-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+            className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-2 py-2.5 text-label-sm text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
           >
             <option value="" disabled>
               {status?.branch ?? 'no branch'}
@@ -1359,7 +1428,7 @@ function GitPanel({
                     type="button"
                     onClick={unstageAll}
                     disabled={busy !== null}
-                    className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
+                    className="ml-auto rounded px-2 py-2 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:px-1.5 lg:py-1 hover:bg-on-surface/5 hover:text-on-surface"
                   >
                     Unstage all
                   </button>
@@ -1387,7 +1456,7 @@ function GitPanel({
                     type="button"
                     onClick={stageAll}
                     disabled={busy !== null}
-                    className="ml-auto rounded px-1.5 py-1 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:py-0 hover:bg-on-surface/5 hover:text-on-surface"
+                    className="ml-auto rounded px-2 py-2 text-label-xs font-medium text-on-surface-variant transition-colors duration-fast lg:px-1.5 lg:py-1 hover:bg-on-surface/5 hover:text-on-surface"
                   >
                     Stage all
                   </button>

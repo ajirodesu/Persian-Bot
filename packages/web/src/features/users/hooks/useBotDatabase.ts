@@ -606,6 +606,9 @@ export interface UseBotDatabaseGroupSelectorReturn {
 export function useBotDatabaseGroupSelector(
   sessionId: string,
   sessionKey?: string,
+  search = '',
+  status: BotDatabaseStatusFilter = 'all',
+  type: BotDatabaseTypeFilter = 'all',
 ): UseBotDatabaseGroupSelectorReturn {
   const [groups, setGroups] = useState<BotDatabaseGroup[]>([])
   const [total, setTotal] = useState(0)
@@ -620,9 +623,11 @@ export function useBotDatabaseGroupSelector(
     setIsLoading(true)
     setError(null)
     botService
-      .getDatabaseGroups(sessionId, 1, 50, '', {
+      .getDatabaseGroups(sessionId, 1, 50, search, {
         sortBy: 'last_seen',
         sortDir: 'desc',
+        status,
+        type,
       })
       .then((data) => {
         if (id !== fetchRef.current) return
@@ -636,7 +641,7 @@ export function useBotDatabaseGroupSelector(
       .finally(() => {
         if (id === fetchRef.current) setIsLoading(false)
       })
-  }, [sessionId])
+  }, [sessionId, search, status, type])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching

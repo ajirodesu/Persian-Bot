@@ -47,6 +47,7 @@ import {
   useBotDatabaseChannels,
   useBotDatabaseGroupSelector,
 } from '@/features/users/hooks/useBotDatabase'
+import { useDebounce } from '@/hooks/useDebounce'
 import { botService } from '@/features/users/services/bot.service'
 import type {
   BotDatabaseUser,
@@ -77,6 +78,13 @@ const statusFilterOptions = [
   { value: 'all', label: 'All statuses' },
   { value: 'active', label: 'Active only' },
   { value: 'banned', label: 'Banned only' },
+]
+
+/** Groups label ban state differently from users — "Not banned", not "Active". */
+const groupStatusFilterOptions = [
+  { value: 'all', label: 'All groups' },
+  { value: 'active', label: 'Not banned' },
+  { value: 'banned', label: 'Banned' },
 ]
 
 const channelTypeLabels: Record<string, string> = {
@@ -195,6 +203,8 @@ function DatabaseToolbar({
   matchedLabel,
   isLoading,
   onRefresh,
+  statusOptions = statusFilterOptions,
+  typeOptions = typeFilterOptions,
 }: {
   search: string
   onSearchChange: (v: string) => void
@@ -207,6 +217,10 @@ function DatabaseToolbar({
   matchedLabel: string
   isLoading: boolean
   onRefresh: () => void
+  /** Per-tab status filter options (e.g. groups label states "Not banned"). */
+  statusOptions?: { value: string; label: string }[]
+  /** Per-tab type filter options. */
+  typeOptions?: { value: string; label: string }[]
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -222,7 +236,7 @@ function DatabaseToolbar({
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
         {onTypeChange && type && (
           <Select
-            options={typeFilterOptions}
+            options={typeOptions}
             value={type}
             onChange={(v) => onTypeChange(v as BotDatabaseTypeFilter)}
             size="sm"
@@ -230,7 +244,7 @@ function DatabaseToolbar({
           />
         )}
         <Select
-          options={statusFilterOptions}
+          options={statusOptions}
           value={status}
           onChange={(v) => onStatusChange(v as BotDatabaseStatusFilter)}
           size="sm"
@@ -754,13 +768,20 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
 // ban/unban/delete actions — the same treatment as the Users tab.
 
 function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: string }) {
+  // Search + filters mirror the Users tab: the raw search string stays in
+  // local state for a snappy input, while a debounced copy drives the fetch.
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<BotDatabaseStatusFilter>('all')
+  const [type, setType] = useState<BotDatabaseTypeFilter>('all')
+  const debouncedSearch = useDebounce(search, 300)
+
   const {
     groups,
     total,
     isLoading,
     error,
     refetch,
-  } = useBotDatabaseGroupSelector(sessionId, sessionKey)
+  } = useBotDatabaseGroupSelector(sessionId, sessionKey, debouncedSearch.trim(), status, type)
   // The group a ban/unban/delete dialog is acting on. Telegram-style groups
   // are FLAT entities — there is no server → channel hierarchy to drill into,
   // so the tab lists every group directly and actions target a row.
@@ -845,27 +866,23 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Toolbar — refresh + total count (pill skeleton while loading so the
-          row never reflows) */}
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="tonal"
-          color="secondary"
-          size="sm"
-          iconOnly
-          leftIcon={<RefreshCw className="h-4 w-4" />}
-          aria-label="Refresh"
-          onClick={refetch}
-          isLoading={isLoading}
-        />
-        {isLoading ? (
-          <Skeleton variant="pill" width={72} height={26} />
-        ) : (
-          <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
-            {total} total
-          </Badge>
-        )}
-      </div>
+      {/* Search + filter toolbar — the exact same component as the Users tab,
+          with group-specific option labels (chat type + Not banned/Banned). */}
+      <DatabaseToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search groups by name or ID…"
+        status={status}
+        onStatusChange={setStatus}
+        type={type}
+        onTypeChange={setType}
+        total={total}
+        matchedLabel={`${total} total`}
+        isLoading={isLoading}
+        onRefresh={refetch}
+        statusOptions={groupStatusFilterOptions}
+        typeOptions={typeFilterOptions}
+      />
 
       {error !== null && (
         <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
@@ -1013,7 +1030,11 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
               <Table.Empty
                 colSpan={6}
                 icon={<MessageSquare className="h-8 w-8" />}
-                message="No groups recorded yet. Send a message in a group, supergroup, or channel where this bot is present, then reload this page."
+                message={
+                  search.trim() || status !== 'all' || type !== 'all'
+                    ? 'No groups match the current search or filters.'
+                    : 'No groups recorded yet. Send a message in a group, supergroup, or channel where this bot is present, then reload this page.'
+                }
               />
             )}
           </Table.Body>
