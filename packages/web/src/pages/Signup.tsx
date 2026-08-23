@@ -12,6 +12,7 @@ import { useUserAuth } from '@/contexts/UserAuthContext'
 import apiClient from '@/lib/api-client.lib'
 import Logo from '@/components/ui/Logo'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { useSessionFormDraft } from '@/hooks/useSessionFormDraft'
 
 interface SignupForm {
   name: string
@@ -31,12 +32,13 @@ export default function SignupPage() {
   const navigate = useNavigate()
   const { login } = useUserAuth()
   const { isEmailEnabled } = useEmailServiceEnabled()
-  const [form, setForm] = useState<SignupForm>({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  })
+  // Session-persisted draft: a phone browser that discards the backgrounded
+  // tab and reloads it restores every field the user had typed. Cleared once
+  // the account is created (or the user signs in through the same form).
+  const [form, setForm, clearDraft] = useSessionFormDraft<SignupForm>(
+    'draft:signup',
+    { name: '', email: '', password: '', confirmPassword: '' },
+  )
   const [errors, setErrors] = useState<SignupErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -81,6 +83,7 @@ export default function SignupPage() {
       if (status.exists) {
         try {
           await login(form.email, form.password)
+          clearDraft()
           navigate(ROUTES.DASHBOARD.ROOT)
           return
         } catch (signInErr) {
@@ -128,6 +131,9 @@ export default function SignupPage() {
         throw new Error(result.error.message ?? 'Registration failed')
       }
 
+      // Account created — the draft (with its password fields) must not
+      // outlive the form.
+      clearDraft()
       if (isEmailEnabled) {
         navigate(
           `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`,
