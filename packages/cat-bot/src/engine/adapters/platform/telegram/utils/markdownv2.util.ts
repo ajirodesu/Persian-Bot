@@ -10,7 +10,7 @@
  *
  * sanitizeMarkdownV2 pipeline:
  *   1. preprocessMarkdown  — converts CommonMark/LLM constructs to Telegram equivalents
- *   2. convertCommonMarkEmphasis — **→*, *→_, ***→*_ _* (bold/italic/bold-italic)
+ *   2. convertCommonMarkBold — **bold** → *bold*
  *   3. State machine — char-by-char span recognition and escaping
  *
  * Idempotent: running on already-sanitized text returns the same string.
@@ -24,25 +24,9 @@ const RESERVED = new Set<string>([
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-/**
- * Converts CommonMark emphasis to Telegram MarkdownV2 equivalents:
- *   ***bold italic*** → *_bold italic_*
- *   **bold**          → *bold*      (Telegram bold is single asterisk)
- *   *italic*          → _italic_    (Telegram italic is underscore)
- *
- * Placeholders protect already-converted bold spans from being re-matched as
- * italic by the single-asterisk pass.
- */
-function convertCommonMarkEmphasis(text: string): string {
-  return (
-    text
-      .replace(/\*\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*\*/g, '\u0001$1\u0002')
-      .replace(/\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*/g, '\u0003$1\u0004')
-      .replace(/\*(?=\S)([^*\n]+?)(?<=\S)\*/g, '_$1_')
-      .replace(/[\u0001\u0002\u0003\u0004]/g, (m) =>
-        m === '\u0001' ? '*_' : m === '\u0002' ? '_*' : '*',
-      )
-  );
+/** Converts CommonMark **double-asterisk bold** → Telegram MarkdownV2 *single-asterisk bold*. */
+function convertCommonMarkBold(text: string): string {
+  return text.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
 }
 
 /**
@@ -175,8 +159,7 @@ function escapeInner(content: string, exceptChar: string): string {
  * Span priority order: ``` before `, __ before _, || before |.
  */
 export function sanitizeMarkdownV2(text: string): string {
-  // Emphasis converts first so preprocess output (headings → *bold*) stays bold.
-  const src = preprocessMarkdown(convertCommonMarkEmphasis(text));
+  const src = convertCommonMarkBold(preprocessMarkdown(text));
   let result = '';
   let i = 0;
   let atLineStart = true;
@@ -230,17 +213,11 @@ export function sanitizeMarkdownV2(text: string): string {
       result += '\\`'; atLineStart = false; i++; continue;
     }
 
-    // Bold: *...* (convertCommonMarkEmphasis has already normalised **x** → *x*)
+    // Bold: *...* (convertCommonMarkBold has already normalised **x** → *x*)
     if (ch === '*') {
       const closeIdx = findClosingMarker(src, i + 1, '*', false);
       if (closeIdx !== -1 && closeIdx > i + 1) {
-        // Nested _italic_ spans inside bold — restore their underscores so
-        // Telegram renders bold+italic instead of literal \_ characters.
-        const content = escapeInner(src.slice(i + 1, closeIdx), '*').replace(
-          /\\_([^_\n]+?)\\_/g,
-          '_$1_',
-        );
-        result += '*' + content + '*';
+        result += '*' + escapeInner(src.slice(i + 1, closeIdx), '*') + '*';
         i = closeIdx + 1; atLineStart = false; continue;
       }
       result += '\\*'; atLineStart = false; i++; continue;
@@ -255,20 +232,10 @@ export function sanitizeMarkdownV2(text: string): string {
       }
     }
 
-    // Italic: _..._ — CommonMark-style boundaries only: no intraword
-    // underscores (snake_case stays literal) and no space-adjacent markers.
+    // Italic: _..._
     if (ch === '_') {
-      const prev = i > 0 ? src[i - 1]! : '\n';
       const closeIdx = findClosingMarker(src, i + 1, '_', false);
-      const intraword = /[A-Za-z0-9]/.test(prev) || (closeIdx !== -1 && closeIdx + 1 < src.length && /[A-Za-z0-9]/.test(src[closeIdx + 1]!));
-      if (
-        closeIdx !== -1 &&
-        closeIdx > i + 1 &&
-        src[closeIdx + 1] !== '_' &&
-        !intraword &&
-        src[i + 1] !== ' ' &&
-        src[closeIdx - 1] !== ' '
-      ) {
+      if (closeIdx !== -1 && closeIdx > i + 1 && src[closeIdx + 1] !== '_') {
         result += '_' + escapeInner(src.slice(i + 1, closeIdx), '_') + '_';
         i = closeIdx + 1; atLineStart = false; continue;
       }

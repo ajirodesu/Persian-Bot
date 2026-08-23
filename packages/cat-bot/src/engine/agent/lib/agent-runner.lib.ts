@@ -760,7 +760,7 @@ export async function runAgentTurn(cfg: AgentTurnConfig): Promise<AgentResult> {
     firstTool = false;
 
     try {
-      await cfg.context.onToolCall?.(name, isFirst, args);
+      await cfg.context.onToolCall?.(name, isFirst);
     } catch {
       // Tool status notifications are best-effort — never fail the turn.
     }
