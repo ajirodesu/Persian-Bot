@@ -893,6 +893,10 @@ const CommitBox = memo(function CommitBox({
 
 // ── GitHub identity card (commit/push authentication) ─────────────────────────
 
+/** Inline base transform of the token card — lifted by --git-kb-bottom. */
+const TOKEN_CARD_BASE_TRANSFORM =
+  'translate3d(0, calc(var(--git-kb-bottom, 0px) * -1), 0)'
+
 /**
  * Collects the admin's GitHub personal access token. Commit and push are
  * authenticated with this key, and commits are authored by the GitHub user it
@@ -951,7 +955,7 @@ function GithubIdentityCard({
         // layout pass on every keyboard-follow frame; a transform does not,
         // so the ride stays perfectly smooth on phones.
         bottom: 'env(safe-area-inset-bottom)',
-        transform: 'translate3d(0, calc(var(--git-kb-bottom, 0px) * -1), 0)',
+        transform: TOKEN_CARD_BASE_TRANSFORM,
       }}
       className={cn(
         'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
@@ -1031,6 +1035,12 @@ function GithubIdentityCard({
                 type="text"
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
+                onBlur={() => {
+                  // Leaving the field empty reverts it fully to its original
+                  // state — including the mask, so a revealed (empty) input
+                  // never stays exposed after dismissal.
+                  if (!tokenInput.trim()) setShowToken(false)
+                }}
                 placeholder="ghp_… personal access token"
                 autoComplete="off"
                 autoCapitalize="none"
@@ -1177,21 +1187,6 @@ function GitPanel({
     // viewport), so a keyboard can never pollute it.
     let maxInnerHeight = window.innerHeight
 
-    // Fully unpin the identity card and reset every pin-cycle flag. One
-    // code path for release = one consistent, jump-free default state.
-    const releaseTokenPin = () => {
-      const root = panelRef.current
-      if (!root) return
-      setVar('--git-kb-bottom', '0px')
-      setVar('--git-token-h', '0px')
-      if (root.dataset.gitKbMode === 'token') delete root.dataset.gitKbMode
-      tokenCardH = 0
-      tokenKbSeen = false
-      tokenDirty = false
-      tokenReleasePending = false
-      tokenPendingSince = 0
-    }
-
     // Write-coalescing: every setProperty invalidates style for the whole
     // panel subtree, and viewport events arrive in bursts where the values
     // usually have NOT changed (iOS pan frames, keyboard-settle frames).
@@ -1215,6 +1210,80 @@ function GitPanel({
           ) ?? null
       }
       return tokenCardEl
+    }
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    // Teardown for an in-flight release glide — invoked when the card is
+    // re-pinned mid-animation so a refocus can never inherit stale inline
+    // transition/transform styles.
+    let flipCancel: (() => void) | null = null
+
+    // Fully unpin the identity card and reset every pin-cycle flag. The card
+    // glides back to its flow slot (FLIP) instead of teleporting: FIRST its
+    // docked rect is captured, then unpinning happens, then LAST/INVERT/PLAY
+    // animates the short journey home. Surrounding layout needs no animation
+    // — the card re-enters the exact space the reserved padding frees, so
+    // nothing below ever shifts. Respects prefers-reduced-motion.
+    const releaseTokenPin = () => {
+      const root = panelRef.current
+      if (!root) return
+      if (flipCancel) flipCancel()
+
+      const card = getTokenCard()
+      const wasPinned = root.dataset.gitKbMode === 'token'
+      const firstRect =
+        wasPinned && card && mq.matches && !reduceMotion.matches
+          ? card.getBoundingClientRect()
+          : null
+
+      setVar('--git-kb-bottom', '0px')
+      setVar('--git-token-h', '0px')
+      if (root.dataset.gitKbMode === 'token') delete root.dataset.gitKbMode
+      tokenCardH = 0
+      tokenKbSeen = false
+      tokenDirty = false
+      tokenReleasePending = false
+      tokenPendingSince = 0
+
+      if (!firstRect || !card) return
+      const lastRect = card.getBoundingClientRect()
+      const dx = Math.round(firstRect.left - lastRect.left)
+      const dy = Math.round(firstRect.top - lastRect.top)
+      if (dx === 0 && dy === 0) return
+
+      const style = card.style
+      style.setProperty('transition', 'none')
+      style.setProperty('transform', `translate3d(${dx}px, ${dy}px, 0)`)
+      // Commit the inverted position before enabling the transition.
+      void card.offsetWidth
+      style.setProperty(
+        'transition',
+        'transform 260ms cubic-bezier(0.2, 0, 0, 1)',
+      )
+      style.setProperty('transform', TOKEN_CARD_BASE_TRANSFORM)
+
+      const onEnd = (e: TransitionEvent) => {
+        if (e.propertyName !== 'transform' || e.target !== card) return
+        finish()
+      }
+      let timer = 0
+      const finish = () => {
+        window.clearTimeout(timer)
+        card.removeEventListener('transitionend', onEnd)
+        // Drop the transition so later var-driven transforms stay instant.
+        style.setProperty('transition', 'none')
+        if (flipCancel === cancel) flipCancel = null
+      }
+      const cancel = () => {
+        window.clearTimeout(timer)
+        card.removeEventListener('transitionend', onEnd)
+        style.setProperty('transition', 'none')
+        style.setProperty('transform', TOKEN_CARD_BASE_TRANSFORM)
+        if (flipCancel === cancel) flipCancel = null
+      }
+      timer = window.setTimeout(finish, 320)
+      card.addEventListener('transitionend', onEnd)
+      flipCancel = cancel
     }
 
     const update = () => {
@@ -1316,6 +1385,9 @@ function GitPanel({
       const pinned = mode === 'token' || riding
 
       if (pinned && card) {
+        // Re-pinning mid-glide (fast refocus): tear down the release
+        // animation first so no stale inline transform fights the dock.
+        if (flipCancel) flipCancel()
         // Dock the identity card above the keyboard: reserve its flow height
         // ONCE per pin cycle (measured in flow, before the fixed class
         // applies), then keep following kbCovered each frame without further
@@ -1422,6 +1494,7 @@ function GitPanel({
     return () => {
       if (raf) cancelAnimationFrame(raf)
       window.clearInterval(reconcileTimer)
+      if (flipCancel) flipCancel()
       vv?.removeEventListener('resize', onEvent)
       vv?.removeEventListener('scroll', onEvent)
       window.removeEventListener('resize', onEvent)
