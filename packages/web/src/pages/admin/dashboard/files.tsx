@@ -1122,6 +1122,14 @@ function GitPanel({
     const vv = window.visualViewport
     let raf = 0
     let mode: 'composer' | 'token' | null = null
+    // Token revert bookkeeping: tokenKbSeen — has the keyboard been observed
+    // OPEN since the token card took focus (guards against the pre-keyboard
+    // frames right after focusin); tokenDirty — has anything been typed into
+    // it since. Dismissing the keyboard (back button, dismiss gesture) does
+    // NOT blur the field on many browsers, so without this the card would
+    // stay pinned above a keyboard that is no longer there.
+    let tokenKbSeen = false
+    let tokenDirty = false
     // Highest innerHeight ever seen this session. On Android/Chrome the app's
     // interactive-widget=resizes-content meta shrinks window.innerHeight when
     // the keyboard opens — the deficit against this high-water mark is the
@@ -1149,6 +1157,27 @@ function GitPanel({
       const kbReflow = mq.matches
         ? Math.max(0, maxInnerHeight - window.innerHeight)
         : 0
+      const kbOpen = kbCovered > 0 || kbReflow > 0
+
+      // Keyboard dismissed while the token field still holds focus and the
+      // user never typed anything into it: deselect the field so the identity
+      // card reverts to its normal/default in-flow state instead of staying
+      // pinned above a keyboard that is gone.
+      if (mq.matches && mode === 'token') {
+        if (kbOpen) {
+          tokenKbSeen = true
+        } else if (tokenKbSeen && !tokenDirty) {
+          const active = document.activeElement
+          if (
+            active instanceof HTMLElement &&
+            active.closest('[data-git-token-card]')
+          ) {
+            active.blur()
+          }
+          mode = null
+          tokenKbSeen = false
+        }
+      }
 
       // Mode attribute drives the pinned-token card (group/git variants) and
       // must be cleared whenever no git input owns the keyboard.
@@ -1200,8 +1229,23 @@ function GitPanel({
       return null
     }
     const onFocusIn = (e: FocusEvent) => {
-      mode = classify(e.target as Element | null)
+      const next = classify(e.target as Element | null)
+      // Fresh entry into the token card starts a clean session: the field is
+      // untouched and the keyboard has not been seen yet. Moving focus within
+      // the card (input ⇄ eye toggle) keeps the flags.
+      if (next === 'token' && mode !== 'token') {
+        tokenDirty = false
+        tokenKbSeen = false
+      }
+      mode = next
       onEvent()
+    }
+    // Any edit inside the token card marks it dirty so a keyboard dismissal
+    // after typing keeps the card pinned (the user may be about to connect).
+    const onInput = (e: Event) => {
+      if ((e.target as Element | null)?.closest?.('[data-git-token-card]')) {
+        tokenDirty = true
+      }
     }
     // focusout fires before the next focusin — re-check in a microtask so
     // tabbing between the panel's inputs never flashes back to "no mode".
@@ -1219,6 +1263,7 @@ function GitPanel({
     const root = panelRef.current
     root?.addEventListener('focusin', onFocusIn)
     root?.addEventListener('focusout', onFocusOut)
+    root?.addEventListener('input', onInput)
     return () => {
       if (raf) cancelAnimationFrame(raf)
       vv?.removeEventListener('resize', onEvent)
@@ -1226,6 +1271,7 @@ function GitPanel({
       window.removeEventListener('resize', onEvent)
       root?.removeEventListener('focusin', onFocusIn)
       root?.removeEventListener('focusout', onFocusOut)
+      root?.removeEventListener('input', onInput)
     }
   }, [])
 
