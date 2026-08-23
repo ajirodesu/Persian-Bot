@@ -49,6 +49,33 @@ function toDto(s: McpServerConfig): McpServerDto {
   };
 }
 
+/**
+ * The built-in MCP server — "cat-bot-agent" (engine/agent/lib/mcp-tools.lib.ts)
+ * is an always-on IN-PROCESS server created fresh on every agent turn, so it
+ * has no registry record and no network URL. It is still surfaced in the admin
+ * list like any added server (same DTO shape) so admins can see where the
+ * agent's own tools come from. It cannot be updated, tested, or removed.
+ */
+const BUILTIN_MCP_SERVER_ID = 'builtin-cat-bot-agent';
+const PROCESS_STARTED_AT = new Date().toISOString();
+
+function isBuiltinMcpServerId(id: string): boolean {
+  return id === BUILTIN_MCP_SERVER_ID;
+}
+
+function builtinMcpServerDto(): McpServerDto {
+  return {
+    id: BUILTIN_MCP_SERVER_ID,
+    name: 'cat-bot-agent',
+    url: 'in-process (always connected)',
+    enabled: true,
+    role: 0,
+    headerKeys: [],
+    createdAt: PROCESS_STARTED_AT,
+    updatedAt: PROCESS_STARTED_AT,
+  };
+}
+
 /** Validates an optional role gate (RoleLevel 0-4). null when invalid. */
 function validateRole(value: unknown): number | undefined | null {
   if (value === undefined) return undefined;
@@ -116,7 +143,11 @@ class McpServersController {
     if (!(await requireAdmin(req, res))) return;
     try {
       const servers = await listMcpServers();
-      res.status(200).json({ servers: servers.map(toDto) });
+      // The built-in in-process server leads the list — it powers the agent's
+      // own tools and is always present.
+      res
+        .status(200)
+        .json({ servers: [builtinMcpServerDto(), ...servers.map(toDto)] });
     } catch (err) {
       console.error('[McpServersController.listServers]', err);
       res.status(500).json({ error: 'Failed to fetch MCP servers' });
@@ -177,6 +208,10 @@ class McpServersController {
     const id = String(Array.isArray(rawId) ? rawId[0] ?? '' : rawId ?? '').trim();
     if (!id) {
       res.status(400).json({ error: 'Missing server id' });
+      return;
+    }
+    if (isBuiltinMcpServerId(id)) {
+      res.status(400).json({ error: 'The built-in MCP server cannot be modified' });
       return;
     }
     const body = (req.body ?? {}) as {
@@ -259,6 +294,10 @@ class McpServersController {
       res.status(400).json({ error: 'Missing server id' });
       return;
     }
+    if (isBuiltinMcpServerId(id)) {
+      res.status(400).json({ error: 'The built-in MCP server cannot be deleted' });
+      return;
+    }
     try {
       const removed = await removeMcpServer(id);
       if (!removed) {
@@ -276,21 +315,55 @@ class McpServersController {
   // POST /api/v1/admin/mcp-servers/test — one-shot connectivity + tool probe
   async testServer(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
-    const body = (req.body ?? {}) as { url?: unknown; headers?: unknown };
-    const url = validateUrl(body.url);
+    const body = (req.body ?? {}) as {
+      id?: unknown;
+      url?: unknown;
+      headers?: unknown;
+    };
+    // Resolve by id first: stored header VALUES are encrypted at rest and
+    // never sent to the dashboard, so a saved server can only be probed with
+    // its auth headers when the SERVER attaches them here.
+    let url: string | null = null;
+    let headers: Record<string, string> | undefined;
+    if (body.id !== undefined && body.id !== null) {
+      if (typeof body.id !== 'string' || !body.id.trim()) {
+        res.status(400).json({ error: 'id must be a non-empty server id' });
+        return;
+      }
+      const wantedId = body.id.trim();
+      const servers = await listMcpServers();
+      const stored = servers.find((s) => s.id === wantedId);
+      if (!stored) {
+        res.status(404).json({ error: 'MCP server not found' });
+        return;
+      }
+      url = stored.url;
+      headers = { ...stored.headers };
+    }
+    if (body.url !== undefined) {
+      const parsed = validateUrl(body.url);
+      if (!parsed) {
+        res.status(400).json({ error: 'url must be a valid absolute http(s) URL' });
+        return;
+      }
+      // Explicit url overrides the stored one (ad-hoc probes / edited URLs).
+      url = parsed;
+    }
     if (!url) {
-      res.status(400).json({ error: 'url must be a valid absolute http(s) URL' });
+      res.status(400).json({ error: 'url or id is required' });
       return;
     }
-    const headers = validateHeaders(body.headers);
-    if (headers === null) {
-      res.status(400).json({ error: 'headers must be an object of string values' });
-      return;
+    if (body.headers !== undefined) {
+      const parsed = validateHeaders(body.headers);
+      if (parsed === null) {
+        res.status(400).json({ error: 'headers must be an object of string values' });
+        return;
+      }
+      headers = stripEmptyHeaderValues(parsed ?? {});
     }
     const result = await testMcpServerConnection({
       url,
-      // "" placeholders are a preserve-on-update concept, not sendable values.
-      ...(headers ? { headers: stripEmptyHeaderValues(headers) } : {}),
+      ...(headers && Object.keys(headers).length > 0 ? { headers } : {}),
     });
     res.status(200).json(result);
   }

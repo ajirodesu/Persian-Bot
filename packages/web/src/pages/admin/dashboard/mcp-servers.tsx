@@ -21,6 +21,7 @@ import Switch from '@/components/ui/forms/Switch'
 import Alert from '@/components/ui/feedback/Alert'
 import { useMcpServers } from '@/features/admin/hooks/useMcpServers'
 import {
+  isBuiltinMcpServer,
   mcpServersService,
   MCP_ROLE_OPTIONS,
 } from '@/features/admin/services/mcp-servers.service'
@@ -89,6 +90,8 @@ interface ServerForm {
   enabled: boolean
   role: number
   headersText: string
+  /** Dedicated API-key field — holds ONLY the raw key, never the header line. */
+  apiKey: string
 }
 
 const EMPTY_FORM: ServerForm = {
@@ -97,6 +100,7 @@ const EMPTY_FORM: ServerForm = {
   enabled: true,
   role: 0,
   headersText: '',
+  apiKey: '',
 }
 
 // ── Role selector (shared by editor + detail dialog) ───────────────────────────
@@ -213,8 +217,19 @@ const ServerDetailDialog = memo(function ServerDetailDialog({
                   >
                     {roleLabel(server.role)}
                   </Badge>
+                  {isBuiltinMcpServer(server) && (
+                    <Badge color="primary" size="sm" variant="outlined" pill>
+                      Built-in
+                    </Badge>
+                  )}
                   {server.headerKeys.length > 0 && (
-                    <Badge color="primary" size="sm" variant="tonal" pill>
+                    <Badge
+                      color="primary"
+                      size="sm"
+                      variant="tonal"
+                      pill
+                      leftIcon={<KeyRound className="h-3 w-3 shrink-0" />}
+                    >
                       {server.headerKeys.length}{' '}
                       header{server.headerKeys.length === 1 ? '' : 's'}
                     </Badge>
@@ -231,74 +246,85 @@ const ServerDetailDialog = memo(function ServerDetailDialog({
                   </p>
                 </div>
 
-                {/* Enable toggle */}
+                {/* Enable toggle — the built-in server is always connected, so
+                    its switch is shown checked but disabled. */}
                 <div className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-3">
                   <div className="min-w-0">
                     <p className="text-label-md font-medium text-on-surface">
                       Enabled
                     </p>
                     <p className="text-body-xs text-on-surface-variant">
-                      When on, the AI agent can use this server&apos;s tools.
+                      {isBuiltinMcpServer(server)
+                        ? 'Always connected — this server is part of the bot itself.'
+                        : 'When on, the AI agent can use this server&apos;s tools.'}
                     </p>
                   </div>
                   <Switch
                     checked={server.enabled}
                     onChange={(checked) => onToggle(server, checked)}
+                    disabled={isBuiltinMcpServer(server)}
                     size="sm"
                     className="shrink-0"
                   />
                 </div>
 
-                {/* Role gate */}
+                {/* Role gate — not configurable for the built-in server: its
+                    tools manage their own visibility per turn. */}
                 <div className="rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-3">
                   <p className="mb-0.5 text-label-md font-medium text-on-surface">
                     Minimum role
                   </p>
                   <p className="mb-2.5 text-body-xs text-on-surface-variant">
-                    Only chats whose sender meets this role see this
-                    server&apos;s tools.
+                    {isBuiltinMcpServer(server)
+                      ? 'Built-in tool visibility is managed by the agent itself.'
+                      : 'Only chats whose sender meets this role see this server&apos;s tools.'}
                   </p>
                   <RoleSelector
                     value={server.role}
                     onChange={(role) => onRoleChange(server, role)}
+                    disabled={isBuiltinMcpServer(server)}
                   />
                 </div>
               </>
             )}
           </Dialog.Body>
-          <Dialog.Footer className="flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              variant="tonal"
-              color="error"
-              size="sm"
-              onClick={() => server && onDelete(server)}
-              leftIcon={<Trash2 size={14} />}
-              className="w-full sm:w-auto"
-            >
-              Delete
-            </Button>
-            <Button
-              variant="tonal"
-              color="neutral"
-              size="sm"
-              onClick={() => server && onEdit(server)}
-              leftIcon={<Pencil size={14} />}
-              className="w-full sm:w-auto"
-            >
-              Edit
-            </Button>
-            <Button
-              variant="tonal"
-              color="primary"
-              size="sm"
-              isLoading={testing}
-              onClick={() => server && onTest(server)}
-              leftIcon={<RefreshCcw size={14} />}
-              className="w-full sm:w-auto"
-            >
-              Test
-            </Button>
-          </Dialog.Footer>
+          {/* The built-in server has no mutable aspects — no footer actions
+              (it cannot be deleted, edited, or connection-tested). */}
+          {server !== null && !isBuiltinMcpServer(server) && (
+            <Dialog.Footer className="flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="tonal"
+                color="error"
+                size="sm"
+                onClick={() => server && onDelete(server)}
+                leftIcon={<Trash2 size={14} />}
+                className="w-full sm:w-auto"
+              >
+                Delete
+              </Button>
+              <Button
+                variant="tonal"
+                color="neutral"
+                size="sm"
+                onClick={() => server && onEdit(server)}
+                leftIcon={<Pencil size={14} />}
+                className="w-full sm:w-auto"
+              >
+                Edit
+              </Button>
+              <Button
+                variant="tonal"
+                color="primary"
+                size="sm"
+                isLoading={testing}
+                onClick={() => server && onTest(server)}
+                leftIcon={<RefreshCcw size={14} />}
+                className="w-full sm:w-auto"
+              >
+                Test
+              </Button>
+            </Dialog.Footer>
+          )}
         </Dialog.Content>
       </Dialog.Positioner>
     </Dialog.Root>
@@ -343,6 +369,7 @@ export default function AdminMcpServersPage() {
   }
 
   function openEditDialog(server: AdminMcpServerDto) {
+    if (isBuiltinMcpServer(server)) return
     setEditing(server)
     setForm({
       name: server.name,
@@ -350,6 +377,8 @@ export default function AdminMcpServersPage() {
       enabled: server.enabled,
       role: server.role,
       headersText: headersToText(server.headerKeys),
+      // The stored key never comes back to this page — blank means unchanged.
+      apiKey: '',
     })
     setFormError(null)
     setDetailId(null)
@@ -375,6 +404,14 @@ export default function AdminMcpServersPage() {
       return
     }
     const headers = parseHeadersText(form.headersText)
+    // The dedicated API-key field takes ONLY the raw key and is sent as
+    // "Authorization: Bearer <key>" — it overrides any Authorization line
+    // typed in the Headers box. Left blank on edit, the stored key survives
+    // via the blank-value preserve rule (or the line simply stays absent).
+    const apiKey = form.apiKey.trim()
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
     if (!editing) {
       // Nothing to preserve on create — drop blank placeholders outright.
       for (const key of Object.keys(headers)) {
@@ -417,6 +454,8 @@ export default function AdminMcpServersPage() {
   }
 
   async function handleToggle(server: AdminMcpServerDto, enabled: boolean) {
+    // The built-in server is always on — its switch is disabled anyway.
+    if (isBuiltinMcpServer(server)) return
     try {
       await mcpServersService.updateServer(server.id, { enabled })
       await refetch()
@@ -426,6 +465,7 @@ export default function AdminMcpServersPage() {
   }
 
   async function handleRoleChange(server: AdminMcpServerDto, role: number) {
+    if (isBuiltinMcpServer(server)) return
     try {
       await mcpServersService.updateServer(server.id, { role })
       success(`Role gate set to ${roleLabel(role)}`)
@@ -452,9 +492,11 @@ export default function AdminMcpServersPage() {
   }
 
   async function handleTest(server: AdminMcpServerDto) {
+    // In-process server — there is no URL to probe.
+    if (isBuiltinMcpServer(server)) return
     setTestingId(server.id)
     try {
-      const result = await mcpServersService.testServer({ url: server.url })
+      const result = await mcpServersService.testServer({ id: server.id })
       if (result.ok) {
         const toolSummary =
           result.toolNames.length > 0
@@ -487,7 +529,8 @@ export default function AdminMcpServersPage() {
           <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
             Connect external MCP servers so the AI agent can use their tools.
             Tap a server to manage its role gate. Header values are encrypted
-            at rest.
+            at rest. The built-in cat-bot-agent server is always listed and
+            cannot be deleted.
           </p>
         </div>
         <Button
@@ -571,6 +614,11 @@ export default function AdminMcpServersPage() {
               </p>
 
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {isBuiltinMcpServer(server) && (
+                  <Badge color="primary" size="sm" variant="outlined" pill>
+                    Built-in
+                  </Badge>
+                )}
                 <Badge
                   color={server.enabled ? 'success' : 'secondary'}
                   size="sm"
@@ -588,8 +636,14 @@ export default function AdminMcpServersPage() {
                   {roleLabel(server.role)}
                 </Badge>
                 {server.headerKeys.length > 0 && (
-                  <Badge color="primary" size="sm" variant="tonal" pill>
-                    <KeyRound className="h-3 w-3" />
+                  <Badge
+                    color="primary"
+                    size="sm"
+                    variant="tonal"
+                    pill
+                    leftIcon={<KeyRound className="h-3 w-3 shrink-0" />}
+                    className="shrink-0"
+                  >
                     {server.headerKeys.length}
                   </Badge>
                 )}
@@ -608,7 +662,9 @@ export default function AdminMcpServersPage() {
         onRoleChange={handleRoleChange}
         onTest={handleTest}
         onEdit={openEditDialog}
-        onDelete={(server) => setDeleteTarget(server)}
+        onDelete={(server) => {
+          if (!isBuiltinMcpServer(server)) setDeleteTarget(server)
+        }}
       />
 
       {/* Add / Edit dialog */}
@@ -673,6 +729,32 @@ export default function AdminMcpServersPage() {
                 </Field.HelperText>
               </Field.Root>
 
+              {/* API key — ONLY the raw key goes here; the app wraps it as
+                  "Authorization: Bearer …" automatically when connecting,
+                  testing, and for the agent. */}
+              <Field.Root>
+                <Field.Label>API key (optional)</Field.Label>
+                <Input
+                  type="text"
+                  value={form.apiKey}
+                  onChange={(e) => {
+                    setForm({ ...form, apiKey: e.target.value })
+                    setFormError(null)
+                  }}
+                  placeholder="Paste just the provider's API key — e.g. ghp_… / sk-…"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  disabled={isSaving}
+                />
+                <Field.HelperText>
+                  Only the actual key is required — it is sent automatically
+                  as &ldquo;Authorization: Bearer …&rdquo;. When editing,
+                  leave blank to keep the stored key.
+                </Field.HelperText>
+              </Field.Root>
+
               <Field.Root>
                 <Field.Label>Headers</Field.Label>
                 <Textarea
@@ -688,12 +770,11 @@ export default function AdminMcpServersPage() {
                   rows={4}
                 />
                 <Field.HelperText>
-                  Optional request headers, one &ldquo;Key: Value&rdquo; per
-                  line — or paste a bare API key and it is sent as
-                  &ldquo;Authorization: Bearer …&rdquo;. Any key format is
-                  accepted. When editing, leave a value empty to keep the
-                  stored secret; remove the line to delete that header. Values
-                  are encrypted and never returned to this page.
+                  For custom headers beyond the API key: one &ldquo;Key:
+                  Value&rdquo; per line. When editing, leave a value empty to
+                  keep the stored secret; remove the line to delete that
+                  header. Values are encrypted and never returned to this
+                  page.
                 </Field.HelperText>
               </Field.Root>
 
