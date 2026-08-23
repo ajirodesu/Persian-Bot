@@ -956,10 +956,11 @@ function GithubIdentityCard({
       className={cn(
         'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
         // Pinned-token mode (mobile keyboard, token input focused): the card
-        // lifts out of flow and docks to the top edge of the keyboard.
-        // Desktop (lg) never pins — the attribute is mobile-only anyway, the
-        // lg: reset is belt-and-braces.
-        'group-data-[git-kb-mode=token]/git:fixed group-data-[git-kb-mode=token]/git:left-0 group-data-[git-kb-mode=token]/git:right-0 group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] group-data-[git-kb-mode=token]/git:border-t group-data-[git-kb-mode=token]/git:border-b-0 group-data-[git-kb-mode=token]/git:shadow-elevation-2 group-data-[git-kb-mode=token]/git:lg:static group-data-[git-kb-mode=token]/git:lg:shadow-none',
+        // lifts out of flow and docks to the top edge of the keyboard. The
+        // variants are scoped with max-lg so pinning is PHYSICALLY impossible
+        // above the mobile breakpoint — a stray attribute can never stick
+        // the card to the bottom of a desktop viewport.
+        'max-lg:group-data-[git-kb-mode=token]/git:fixed max-lg:group-data-[git-kb-mode=token]/git:left-0 max-lg:group-data-[git-kb-mode=token]/git:right-0 max-lg:group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] max-lg:group-data-[git-kb-mode=token]/git:border-t max-lg:group-data-[git-kb-mode=token]/git:border-b-0 max-lg:group-data-[git-kb-mode=token]/git:shadow-elevation-2',
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -1091,7 +1092,7 @@ function GithubIdentityCard({
           {/* Hidden while the card is pinned above the keyboard so the bar
               stays compact — the full note returns as soon as the keyboard
               closes. */}
-          <p className="text-body-xs text-on-surface-variant group-data-[git-kb-mode=token]/git:hidden">
+          <p className="text-body-xs text-on-surface-variant max-lg:group-data-[git-kb-mode=token]/git:hidden">
             This is the bot&apos;s single GitHub token: it is stored encrypted on
             the server and used by /push, /installer, /update, the agent tools,
             and this File Manager. Commits are attributed to this account.
@@ -1161,6 +1162,9 @@ function GitPanel({
     // only once the viewport has settled. Releasing instantly makes the card
     // snap back into flow and the column below jump — visible stutter.
     let tokenReleasePending = false
+    // When the deferred release started — the ride-down has a HARD deadline
+    // so a misbehaving event stream can never keep it alive indefinitely.
+    let tokenPendingSince = 0
     // The token card's flow height, measured ONCE per pin cycle while still
     // in flow (before the fixed class applies). Never re-read while pinned:
     // a forced offsetHeight read on every keyboard-follow frame thrashes
@@ -1185,6 +1189,7 @@ function GitPanel({
       tokenKbSeen = false
       tokenDirty = false
       tokenReleasePending = false
+      tokenPendingSince = 0
     }
 
     // Write-coalescing: every setProperty invalidates style for the whole
@@ -1217,6 +1222,21 @@ function GitPanel({
       const root = panelRef.current
       if (!root) return
       if (window.innerHeight > maxInnerHeight) maxInnerHeight = window.innerHeight
+
+      // Off-mobile escape (resized desktop window, touch-laptop, emulation
+      // without a coarse pointer): the keyboard choreography below must never
+      // run, and any token/composer keyboard state is torn down instantly.
+      // The pinned CSS itself is max-lg-scoped — this is the JS mirror.
+      if (!mq.matches && (mode !== null || tokenReleasePending)) {
+        mode = null
+        tokenReleasePending = false
+        tokenPendingSince = 0
+        tokenKbSeen = false
+        tokenDirty = false
+        releaseTokenPin()
+        setVar('--git-kb-offset', '0px')
+        return
+      }
 
       // Two keyboard models, whichever applies:
       //  • kbCovered — iOS Safari: the layout viewport NEVER resizes for the
@@ -1261,6 +1281,7 @@ function GitPanel({
             }
             mode = null
             tokenReleasePending = true
+            tokenPendingSince = performance.now()
           }
         }
       }
@@ -1284,9 +1305,15 @@ function GitPanel({
       }
 
       // Pinned while the card owns the keyboard, or while riding a closing
-      // one out after focus moved away. The moment the keyboard is fully
-      // gone, the pending release completes.
-      const pinned = mode === 'token' || (tokenReleasePending && kbOpen)
+      // one out after focus moved away. Two hard terminators: the keyboard
+      // reading zero, or the ride deadline expiring — either way the pending
+      // release completes and nothing can stay pinned indefinitely.
+      const RIDE_MAX_MS = 1200
+      const riding =
+        tokenReleasePending &&
+        kbOpen &&
+        performance.now() - tokenPendingSince < RIDE_MAX_MS
+      const pinned = mode === 'token' || riding
 
       if (pinned && card) {
         // Dock the identity card above the keyboard: reserve its flow height
@@ -1362,6 +1389,7 @@ function GitPanel({
         const next = classify(document.activeElement)
         if (mode === 'token' && next === null) {
           tokenReleasePending = true
+          tokenPendingSince = performance.now()
         }
         mode = next
         onEvent()
