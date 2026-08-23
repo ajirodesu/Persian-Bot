@@ -927,13 +927,9 @@ function GithubIdentityCard({
   }
 
   return (
-    // data-git-token-card routes mobile keyboard handling: when the token
-    // input inside this card is focused, the GitPanel's keyboard effect sets
-    // data-git-kb-mode="token" on the panel (a named group) and this card
-    // becomes a bar pinned to the viewport top — the same stable model as the
-    // timezone search bar, regardless of page scroll or keyboard resizing.
-    // The long helper paragraph is hidden while pinned so the bar stays
-    // compact; the column reserves the card's flow height so nothing jumps.
+    // The mobile GitHub key card is always fixed to the viewport top — the
+    // same stable model as the timezone search bar. Its flow height is
+    // reserved by the Git panel so the changes list never jumps underneath it.
     <div
       data-git-token-card=""
       style={{
@@ -943,9 +939,8 @@ function GithubIdentityCard({
       }}
       className={cn(
         'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
-        // Pinned-token mode mirrors the timezone search bar: fixed to the
-        // viewport's top edge, never repositioned by keyboard follow frames.
-        'max-lg:group-data-[git-kb-mode=token]/git:fixed max-lg:group-data-[git-kb-mode=token]/git:top-0 max-lg:group-data-[git-kb-mode=token]/git:left-0 max-lg:group-data-[git-kb-mode=token]/git:right-0 max-lg:group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] max-lg:group-data-[git-kb-mode=token]/git:border-t max-lg:group-data-[git-kb-mode=token]/git:border-b-0 max-lg:group-data-[git-kb-mode=token]/git:shadow-elevation-2',
+        // Fixed mobile top bar; desktop remains in normal panel flow.
+        'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:right-0 max-lg:z-[var(--z-sticky)] max-lg:border-t max-lg:border-b-0 max-lg:shadow-elevation-2',
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -1074,10 +1069,9 @@ function GithubIdentityCard({
               className="mt-1"
             />
           )}
-          {/* Hidden while the card is pinned above the keyboard so the bar
-              stays compact — the full note returns as soon as the keyboard
-              closes. */}
-          <p className="text-body-xs text-on-surface-variant group-data-[git-kb-mode=token]/git:hidden">
+          {/* Keep the fixed mobile bar compact; the full note remains visible
+              on desktop. */}
+          <p className="text-body-xs text-on-surface-variant max-lg:hidden">
             This is the bot&apos;s single GitHub token: it is stored encrypted on
             the server and used by /push, /installer, /update, the agent tools,
             and this File Manager. Commits are attributed to this account.
