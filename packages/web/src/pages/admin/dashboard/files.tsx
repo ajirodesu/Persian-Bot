@@ -1150,6 +1150,12 @@ function GitPanel({
     // stay pinned above a keyboard that is no longer there.
     let tokenKbSeen = false
     let tokenDirty = false
+    // Grace window for the "no keyboard ever appeared" case: right after
+    // focusin the soft keyboard has not resized the viewport YET (normal),
+    // but on devices with a hardware keyboard it NEVER will — pinning would
+    // then leave the card floating at the bottom forever.
+    const NO_KB_GRACE_MS = 1500
+    let tokenFocusClosedSince = 0
     // Set when focus leaves the token card while its keyboard is still
     // closing: the card STAYS pinned and rides the keyboard down, releasing
     // only once the viewport has settled. Releasing instantly makes the card
@@ -1228,25 +1234,34 @@ function GitPanel({
         : 0
       const kbOpen = kbCovered > 0 || kbReflow > 0
 
-      // Keyboard dismissed while the token field still holds focus and the
-      // user never typed anything into it: deselect the field so the identity
-      // card reverts to its normal/default in-flow state instead of staying
-      // pinned above a keyboard that is gone. The release itself goes through
-      // the deferred path below (the keyboard is already closed, so it lands
-      // in this same frame — one clean relayout, no animation to chase).
+      // Self-healing revert. Two stuck states are covered here, evaluated on
+      // every update() — including the 1 Hz reconcile tick below, so missed
+      // transitions (no event ever delivered) still recover within ~1s:
+      //  • dismissed untouched: keyboard closed while the empty field kept
+      //    focus (back button / dismiss gesture) — deselect + unpin;
+      //  • no keyboard at all: focus held but the viewport never resized
+      //    beyond the grace window (hardware-keyboard devices) — same.
       if (mq.matches && mode === 'token') {
         if (kbOpen) {
           tokenKbSeen = true
-        } else if (tokenKbSeen && !tokenDirty) {
-          const active = document.activeElement
-          if (
-            active instanceof HTMLElement &&
-            active.closest('[data-git-token-card]')
-          ) {
-            active.blur()
+          tokenFocusClosedSince = 0
+        } else {
+          const dismissedUntouched = tokenKbSeen && !tokenDirty
+          const noKeyboardEver =
+            !tokenKbSeen &&
+            tokenFocusClosedSince > 0 &&
+            performance.now() - tokenFocusClosedSince > NO_KB_GRACE_MS
+          if (dismissedUntouched || noKeyboardEver) {
+            const active = document.activeElement
+            if (
+              active instanceof HTMLElement &&
+              active.closest('[data-git-token-card]')
+            ) {
+              active.blur()
+            }
+            mode = null
+            tokenReleasePending = true
           }
-          mode = null
-          tokenReleasePending = true
         }
       }
 
@@ -1309,11 +1324,13 @@ function GitPanel({
       const next = classify(e.target as Element | null)
       if (next === 'token') {
         // Fresh entry into the token card starts a clean session: the field
-        // is untouched and the keyboard has not been seen yet. Moving focus
-        // within the card (input ⇄ eye toggle) keeps the flags.
+        // is untouched, the keyboard has not been seen yet, and the no-
+        // keyboard grace clock starts now. Moving focus within the card
+        // (input ⇄ eye toggle) keeps the flags.
         if (mode !== 'token') {
           tokenDirty = false
           tokenKbSeen = false
+          tokenFocusClosedSince = performance.now()
         }
         // Re-focused before a pending release completed (quick re-tap while
         // the keyboard is still closing): cancel the release seamlessly.
@@ -1351,21 +1368,37 @@ function GitPanel({
       })
     }
 
+    // Self-healing tick: the revert logic above only runs inside update(),
+    // and mobile browsers sometimes reach "keyboard gone" without delivering
+    // any viewport event (app backgrounded mid-edit, dismissal gesture
+    // swallowed, final resize coalesced away). A light 1 Hz tick plus the
+    // foreground hooks below re-run update() so a stuck pin always recovers;
+    // the write-coalescing in setVar makes no-op ticks free.
+    const reconcile = () => {
+      if (mode === 'token' || tokenReleasePending) onEvent()
+    }
+    const reconcileTimer = window.setInterval(reconcile, 1_000)
+
     update()
     vv?.addEventListener('resize', onEvent)
     // Passive: the handler never cancels scrolling — this lets the browser
     // keep visual-viewport panning on the compositor thread while pinned.
     vv?.addEventListener('scroll', onEvent, { passive: true })
     window.addEventListener('resize', onEvent)
+    document.addEventListener('visibilitychange', onEvent)
+    window.addEventListener('focus', onEvent)
     const root = panelRef.current
     root?.addEventListener('focusin', onFocusIn)
     root?.addEventListener('focusout', onFocusOut)
     root?.addEventListener('input', onInput)
     return () => {
       if (raf) cancelAnimationFrame(raf)
+      window.clearInterval(reconcileTimer)
       vv?.removeEventListener('resize', onEvent)
       vv?.removeEventListener('scroll', onEvent)
       window.removeEventListener('resize', onEvent)
+      document.removeEventListener('visibilitychange', onEvent)
+      window.removeEventListener('focus', onEvent)
       root?.removeEventListener('focusin', onFocusIn)
       root?.removeEventListener('focusout', onFocusOut)
       root?.removeEventListener('input', onInput)
