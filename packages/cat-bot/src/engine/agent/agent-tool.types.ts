@@ -20,6 +20,11 @@
 import type { BaseCtx } from '@/engine/types/controller.types.js';
 import type { UnifiedUserInfo } from '@/engine/adapters/models/user.model.js';
 import type { UnifiedThreadInfo } from '@/engine/adapters/models/thread.model.js';
+import type {
+  ButtonItem,
+  NamedStreamAttachment,
+  NamedUrlAttachment,
+} from '@/engine/adapters/models/interfaces/api.interfaces.js';
 
 /** JSON-schema tool contract exposed to the LLM (OpenAI-compatible shape). */
 export interface ToolMeta {
@@ -68,14 +73,30 @@ export interface ToolContext extends BaseCtx {
   /** Serialized command catalogue for the list_commands tool. */
   listCommands: (role: string) => Promise<string>;
   /**
-   * Executes a bot command and captures what it replied. Returns
-   * { ok, output } — output is the reply text when one was captured.
+   * Executes a bot command SILENTLY under the agent: every delivery
+   * side-effect is intercepted (nothing reaches the chat directly) so the
+   * caller can merge the whole output into one final message.
    */
   runBotCommand: (
     command: string,
-  ) => Promise<{ ok: boolean; output?: string; error?: string }>;
-  /** Called before each tool executes. isFirst=true on the first tool of the turn. */
-  onToolCall?: (toolName: string, isFirst: boolean) => Promise<void>;
+  ) => Promise<{
+    ok: boolean;
+    /** Combined captured text output of the command. */
+    output?: string;
+    error?: string;
+    /** Media/buttons the command tried to deliver, held for re-delivery. */
+    media?: CommandRunMedia;
+  }>;
+  /**
+   * Called before each tool executes (internal AND external MCP tools).
+   * isFirst=true on the first tool of the turn; args are the raw arguments
+   * so progress feedback can name concrete actions ("running /meme…").
+   */
+  onToolCall?: (
+    toolName: string,
+    isFirst: boolean,
+    args?: Record<string, unknown>,
+  ) => Promise<void>;
   /**
    * Set by send_result after a successful delivery. Guards against the model
    * calling send_result more than once in a single turn, which would post
@@ -83,4 +104,12 @@ export interface ToolContext extends BaseCtx {
    * second call). Reset per turn — the ToolContext is built fresh every turn.
    */
   agentReplyDelivered?: { message: string; deliveredAt: number };
+}
+
+/** Media/buttons a silently-run command produced, ready for re-delivery. */
+export interface CommandRunMedia {
+  hasMedia: boolean;
+  attachmentUrls: NamedUrlAttachment[];
+  binaries: NamedStreamAttachment[];
+  buttons: ButtonItem[][][];
 }

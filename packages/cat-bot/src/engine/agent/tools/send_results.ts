@@ -35,7 +35,6 @@ import type {
   ReplyMessageOptions,
 } from '@/engine/adapters/models/interfaces/api.interfaces.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
-import { containsMarkdown } from '../lib/markdown.util.js';
 import type { BinaryAttachment } from '../lib/command-result-store.lib.js';
 
 // ============================================================================
@@ -169,13 +168,12 @@ export async function deliverCombinedResult(
     }
   }
 
-  // Auto-markdown: only treat the reply as formatted when it actually contains
-  // supported Markdown syntax. Plain text goes out as TEXT so Telegram's
-  // MarkdownV2 parser never chokes on stray special characters (unescaped `!`,
-  // `-`, `*`, ...) in conversational replies.
+  // Always deliver as Markdown — the platform adapters sanitize the text for
+  // their parser (Telegram escapes MarkdownV2 reserved characters), so a
+  // constant MARKDOWN style is safe even for plain conversational replies.
   const replyOptions: ReplyMessageOptions = {
     message,
-    style: containsMarkdown(message) ? MessageStyle.MARKDOWN : MessageStyle.TEXT,
+    style: MessageStyle.MARKDOWN,
     ...(replyToID ? { reply_to_message_id: replyToID } : {}),
   };
   if (allAttachmentUrls.length > 0)

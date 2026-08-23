@@ -1,13 +1,13 @@
-/**
- * AI Agent — Handler
+﻿/**
+ * AI Agent â€” Handler
  *
  * Port of canis's src/components/ai/personalityHandler.ts + agentHandler.ts,
  * adapted to Cat-Bot's AppCtx. Responsibilities:
  *
- *   • runAgent(ctx)            — full agent turn (tools, files, bot commands)
- *   • maybeRunAgentOnChat(ctx) — natural-language activation on every message
+ *   â€¢ runAgent(ctx)            â€” full agent turn (tools, files, bot commands)
+ *   â€¢ maybeRunAgentOnChat(ctx) â€” natural-language activation on every message
  *                                (active session / trigger word / @mention)
- *   • generateSimpleText(...)  — cached, no-tools completion (canis agentHandler,
+ *   â€¢ generateSimpleText(...)  â€” cached, no-tools completion (canis agentHandler,
  *                                used by the roast command)
  *
  * The ToolContext is bound to the live cat-bot context: platform user/thread
@@ -16,14 +16,23 @@
  */
 
 import axios from 'axios';
+import type { Readable } from 'node:stream';
 import type { BaseCtx } from '@/engine/types/controller.types.js';
 import type { OnCommandCtx } from '@/engine/types/middleware.types.js';
-import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
+import type {
+  EditMessageOptions,
+  ButtonItem,
+  NamedUrlAttachment,
+} from '@/engine/adapters/models/interfaces/api.interfaces.js';
 import { dispatchCommand } from '@/engine/controllers/dispatchers/command.dispatcher.js';
 import { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
+import {
+  createChatContext,
+  createBotContext,
+} from '@/engine/adapters/models/context.model.js';
 import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { getBotNickname } from '@/engine/repos/session.repo.js';
@@ -59,7 +68,6 @@ import {
   buildTurnContextLine,
 } from './agent-prompt.lib.js';
 import { deliverCombinedResult } from '../tools/send_results.js';
-import { containsMarkdown } from './markdown.util.js';
 import {
   resolveAgentConfig,
   resolveStoredApiKey,
@@ -86,45 +94,53 @@ import {
   detectActivation,
   stripAgentTrigger,
 } from './agent-personalities.lib.js';
+import {
+  createAgentProgress,
+  type AgentProgress,
+} from './agent-progress.lib.js';
+import type { CommandRunMedia } from '../agent-tool.types.js';
 
-// ── Copy / status messages (ported from canis) ────────────────────────────────
+// â”€â”€ Copy / status messages (ported from canis) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
-// NOTE: no per-tool status posts ("executing... give me a sec 💻" etc.). Those
-// loader messages were separate chat messages on every platform, which read as
-// the bot "editing" its loader when the real reply followed. Processing feedback
-// is carried by the typing indicator alone (withTypingIndicator) so the final
-// answer arrives as the one new message.
+// Continuity model: a multi-step turn does NOT go silent while tools run.
+// The first tool call posts ONE status message ("â³ Checking my available
+// commandsâ€¦") and every subsequent step EDITS that same message in place â€”
+// see agent-progress.lib.ts. When the turn finishes, the final answer is
+// edited into that very message (plain-text answers), or the placeholder is
+// unsent when the real reply went out through its own channel (send_result /
+// command dispatch / media delivery). The typing indicator still runs for
+// the platforms/timings it covers; the status message is the visible spine.
 
 const GREETINGS = [
-  'Hey! 👋 What can I help you with?',
-  "Hey, I'm here! What's up? 😄",
-  'Hello! Ready when you are ✨',
-  'Yo! What do you need? 🤙',
+  'Hey! ðŸ‘‹ What can I help you with?',
+  "Hey, I'm here! What's up? ðŸ˜„",
+  'Hello! Ready when you are âœ¨',
+  'Yo! What do you need? ðŸ¤™',
 ];
 
 const ERROR_REPLIES = [
   'something went wrong on my end, try again?',
-  'ugh, ran into an issue. try again 😅',
+  'ugh, ran into an issue. try again ðŸ˜…',
   'that one broke on me, sorry. try again',
   'hit a snag, try again in a bit',
 ];
 
 const NO_KEY_REPLY =
-  '⚠️ No AI provider configured yet. Add your API key in the dashboard (AI Integration) ' +
-  'to enable AI features — there is no server-side key anymore.';
+  'âš ï¸ No AI provider configured yet. Add your API key in the dashboard (AI Integration) ' +
+  'to enable AI features â€” there is no server-side key anymore.';
 
 // The system-prompt template (agent/system_prompt.md) is loaded and rendered in
-// agent-prompt.lib.ts — a single source of truth for every text the LLM sees.
+// agent-prompt.lib.ts â€” a single source of truth for every text the LLM sees.
 // The prompt deliberately does NOT inline the command list; the model discovers
 // commands via list_commands/help (cheaper on tokens, and reused from history).
 
-// ── Automatic free/auto-model + rate-limit failover ───────────────────────────
+// â”€â”€ Automatic free/auto-model + rate-limit failover â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Providers with a free/auto tier (openrouter, groq, gemini, zen, orcarouter)
 // run on their free/auto model by default (see preferFreeModel in agent-config)
 // so turns don't instantly hit rate limits. If a turn is STILL rate-limited
 // (429, after the runner's own backoff retries), the turn is retried on another
 // provider that also has a saved key AND supports a free/auto model. OpenAI /
-// NVIDIA / FastRouter have no free/auto tier, so they never participate — their
+// NVIDIA / FastRouter have no free/auto tier, so they never participate â€” their
 // keys only run when the user selects them explicitly.
 
 /** A concrete provider/key/model combination a turn can run on. */
@@ -138,7 +154,7 @@ interface AgentRunPlan {
  * Builds the failover candidates for a rate-limited turn: every provider that
  * supports a free/auto model AND has a saved decryptable key, excluding the
  * provider that just got rate-limited. Empty when the user has no other
- * free-tier key — the rate-limit message is surfaced instead.
+ * free-tier key â€” the rate-limit message is surfaced instead.
  */
 async function buildFailoverPlans(
   userId: string | undefined,
@@ -148,9 +164,9 @@ async function buildFailoverPlans(
   for (const provider of AGENT_PROVIDER_IDS) {
     if (provider === activeProvider) continue;
     const freeModel = getFreeModelOf(provider);
-    if (!freeModel) continue; // no free/auto tier → never a candidate
+    if (!freeModel) continue; // no free/auto tier â†’ never a candidate
     const apiKey = await resolveStoredApiKey(userId, provider);
-    if (!apiKey) continue; // no saved key → never a candidate
+    if (!apiKey) continue; // no saved key â†’ never a candidate
     plans.push({ provider, apiKey, model: freeModel });
   }
   return plans;
@@ -159,10 +175,10 @@ async function buildFailoverPlans(
 /**
  * Runs an agent turn on the primary provider, auto-failovering to other
  * free/auto providers on a rate limit. The system prompt is STATIC across
- * attempts (deliberately — a byte-identical system prompt + tool schema prefix
+ * attempts (deliberately â€” a byte-identical system prompt + tool schema prefix
  * lets providers prompt-cache the input instead of re-billing it every turn);
  * the per-attempt model/provider identity rides in the turn context line
- * inside the user message instead. Never throws on rate limits — if every
+ * inside the user message instead. Never throws on rate limits â€” if every
  * candidate is rate-limited the turn resolves to the apology message.
  */
 async function runAgentTurnWithFailover(
@@ -194,7 +210,7 @@ async function runAgentTurnWithFailover(
   } catch (err) {
     if (!(err instanceof AgentRateLimitError)) throw err;
     logger.warn(
-      `[Agent] ${primary.provider} rate-limited — failover to another free/auto provider`,
+      `[Agent] ${primary.provider} rate-limited â€” failover to another free/auto provider`,
       { userId },
     );
     for (const plan of await buildFailoverPlans(userId, primary.provider)) {
@@ -229,7 +245,7 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
-// ── Key / helpers ─────────────────────────────────────────────────────────────
+// â”€â”€ Key / helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildAgentKey(ctx: BaseCtx): AgentThreadKey {
   return {
@@ -259,7 +275,7 @@ async function resolveBotNickname(ctx: BaseCtx): Promise<string | null> {
 
 /**
  * Formats the current time in the user's timezone, e.g.
- * "Tuesday, August 16, 2026 at 3:45 PM (Asia/Manila, GMT+8)" — so the agent
+ * "Tuesday, August 16, 2026 at 3:45 PM (Asia/Manila, GMT+8)" â€” so the agent
  * reasons about dates/times in the user's local zone, not the server's.
  */
 function formatLocalNow(timeZone: string): string {
@@ -278,7 +294,7 @@ function formatLocalNow(timeZone: string): string {
       minute: '2-digit',
       hour12: true,
     }).format(now);
-    // e.g. "GMT+8" or "PDT" — human-readable offset for the LLM.
+    // e.g. "GMT+8" or "PDT" â€” human-readable offset for the LLM.
     let zone = '';
     try {
       zone =
@@ -290,12 +306,12 @@ function formatLocalNow(timeZone: string): string {
     }
     return `${datePart} at ${timePart} (${timeZone}${zone ? `, ${zone}` : ''})`;
   } catch {
-    // Garbage zone (shouldn't happen — the repo validates) — degrade to UTC.
+    // Garbage zone (shouldn't happen â€” the repo validates) â€” degrade to UTC.
     return now.toUTCString();
   }
 }
 
-/** Title-cases a trigger name for display ("cat-bot" → "Cat-Bot", "miko" → "Miko"). */
+/** Title-cases a trigger name for display ("cat-bot" â†’ "Cat-Bot", "miko" â†’ "Miko"). */
 function displayName(name: string): string {
   return name.toLowerCase() === 'cat-bot'
     ? 'Cat-Bot'
@@ -328,7 +344,7 @@ async function resolveSenderName(
 }
 
 /**
- * Resolves the sender's role label for the system prompt — the same checks
+ * Resolves the sender's role label for the system prompt â€” the same checks
  * the upstream Cat-Bot uses: Bot Administrator > Thread Administrator >
  * Regular User. Fail-open to Regular User on DB errors. The auth checks are
  * memoized per request (auth-cache) and LRU-cached at the repo layer.
@@ -361,7 +377,7 @@ async function resolveUserRoleLabel(
     lruCache.set(cacheKey, role, IDENTITY_CACHE_TTL_MS);
     return role;
   } catch {
-    // Fail-open — a temporary DB outage defaults to Regular User.
+    // Fail-open â€” a temporary DB outage defaults to Regular User.
     return 'Regular User';
   }
 }
@@ -399,7 +415,7 @@ function collectCapturedMediaKeys(toolLog: ToolLogEntry[]): CapturedMediaKeys {
       if (typeof bKey === 'string' && bKey) keys.binaryKeys.push(bKey);
       if (typeof btnKey === 'string' && btnKey) keys.buttonKeys.push(btnKey);
     } catch {
-      // Not JSON (e.g. an error string) — nothing to collect.
+      // Not JSON (e.g. an error string) â€” nothing to collect.
     }
   }
   keys.hasMedia =
@@ -412,7 +428,7 @@ function collectCapturedMediaKeys(toolLog: ToolLogEntry[]): CapturedMediaKeys {
 /**
  * True when the model's reply text looks like the raw test_command JSON output
  * (a "calls"/"attachment_key" dump) rather than a synthesized caption. Such
- * dumps must never be shown to the user — media should be delivered instead.
+ * dumps must never be shown to the user â€” media should be delivered instead.
  */
 function looksLikeRawToolDump(text: string | null): boolean {
   if (!text) return false;
@@ -426,7 +442,7 @@ function looksLikeRawToolDump(text: string | null): boolean {
 }
 
 /**
- * Pulls a human-readable caption from the captured test_command calls — the
+ * Pulls a human-readable caption from the captured test_command calls â€” the
  * first replyMessage `message` the tested command itself would have sent. Used
  * as the fallback caption when the model only returned a raw JSON dump.
  */
@@ -444,7 +460,7 @@ function extractCapturedCaption(toolLog: ToolLogEntry[]): string | null {
         }
       }
     } catch {
-      // Not JSON — skip.
+      // Not JSON â€” skip.
     }
   }
   return null;
@@ -498,51 +514,61 @@ async function resolveImageData(ctx: BaseCtx): Promise<ImageData | undefined> {
   }
 }
 
-// ── ToolContext binding ────────────────────────────────────────────────────────
+// â”€â”€ ToolContext binding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** Wraps the API so command replies are captured for thread accuracy. */
-function withReplyCapture(
-  api: UnifiedApi,
-  capture: (text: string) => void,
-): UnifiedApi {
-  const wrappedReplyMessage = async (
-    threadID: string,
-    options: Parameters<UnifiedApi['replyMessage']>[1] = {},
-  ) => {
-    const m = options.message;
-    if (typeof m === 'string') capture(m);
-    else if (
-      m &&
-      typeof m === 'object' &&
-      typeof (m as { message?: unknown }).message === 'string'
-    ) {
-      capture((m as { message: string }).message);
+/**
+ * Extracts Buffer/Readable attachment payloads from raw UnifiedApi call args
+ * BEFORE any normalization can replace streams with sentinel strings — same
+ * contract as test_command's capture (replyMessage/editMessage keep options at
+ * args[1]; sendMessage carries the payload object at args[0]).
+ */
+function extractBinaryAttachments(
+  method: string,
+  args: unknown[],
+): Array<{ name: string; stream: Readable | Buffer }> {
+  let opts: Record<string, unknown> | null = null;
+  if (method === 'replyMessage' || method === 'editMessage') {
+    opts = (args[1] ?? {}) as Record<string, unknown>;
+  } else if (method === 'sendMessage') {
+    const p = args[0];
+    if (p !== null && typeof p === 'object' && !Array.isArray(p)) {
+      opts = p as Record<string, unknown>;
     }
-    return api.replyMessage(threadID, options);
-  };
-
-  // A Proxy (NOT Object.create): platform API classes hold private fields
-  // (#ctx on Telegram, etc.) that only exist on real instances. Method calls on
-  // an Object.create clone run with `this = clone`, so private-field access
-  // crashes ("Cannot read private member #ctx..."). Every forwarded method is
-  // bound to the ORIGINAL api so `this` stays a genuine instance.
-  return new Proxy(api, {
-    get(target, prop) {
-      if (prop === 'replyMessage') return wrappedReplyMessage;
-      const value = Reflect.get(target, prop, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  }
+  if (!opts || !Array.isArray(opts['attachment'])) return [];
+  const result: Array<{ name: string; stream: Readable | Buffer }> = [];
+  for (const a of opts['attachment'] as unknown[]) {
+    if (a !== null && typeof a === 'object') {
+      const entry = a as Record<string, unknown>;
+      const stream = entry['stream'];
+      const isReadable =
+        stream !== null &&
+        typeof stream === 'object' &&
+        typeof (stream as Record<string, unknown>)['pipe'] === 'function';
+      if (Buffer.isBuffer(stream)) {
+        result.push({ name: String(entry['name'] ?? 'attachment'), stream });
+      } else if (isReadable) {
+        result.push({
+          name: String(entry['name'] ?? 'attachment'),
+          stream: stream as Readable,
+        });
+      }
+    }
+  }
+  return result;
 }
 
-function buildToolContext(ctx: BaseCtx): ToolContext {
+function buildToolContext(
+  ctx: BaseCtx,
+  progress?: AgentProgress,
+): ToolContext {
   const threadID = (ctx.event['threadID'] as string) ?? '';
 
-  // Spread the live bot context into the tool context — ToolContext extends
+  // Spread the live bot context into the tool context â€” ToolContext extends
   // BaseCtx so command-aware tools (help, test_command, send_result) can reach
   // api, event, commands, prefix and native directly, while the helper surface
   // below stays available to the browser/command tools.
-  return {
+  const toolContext: ToolContext = {
     ...ctx,
 
     getUserInfo: async (userID: string) => {
@@ -578,11 +604,62 @@ function buildToolContext(ctx: BaseCtx): ToolContext {
         };
       }
 
-      const captured: string[] = [];
-      const captureApi = withReplyCapture(ctx.api, (t) => captured.push(t));
+      // Continuity: agent-run commands execute SILENTLY. A Proxy intercepts
+      // every delivery side-effect so nothing reaches the chat directly â€”
+      // the handler then merges texts + media + buttons into ONE final
+      // message (edited into the status bubble whenever one exists).
+      const sideEffects = new Set([
+        'replyMessage',
+        'sendMessage',
+        'editMessage',
+        'reactToMessage',
+        'unsendMessage',
+        'setNickname',
+        'setGroupName',
+        'setGroupImage',
+        'removeGroupImage',
+        'addUserToGroup',
+        'removeUserFromGroup',
+        'setGroupReaction',
+      ]);
+      const deliveries: Array<{ method: string; args: unknown[] }> = [];
+      // Binary payloads are held BEFORE any normalization can drop them.
+      const binaries: Array<{ name: string; stream: Readable | Buffer }> = [];
+
+      const silentApi = new Proxy(ctx.api, {
+        get(target, prop) {
+          if (typeof prop === 'string' && sideEffects.has(prop)) {
+            return async (...mArgs: unknown[]) => {
+              for (const b of extractBinaryAttachments(prop, mArgs)) {
+                binaries.push(b);
+              }
+              deliveries.push({ method: prop, args: mArgs });
+              return 'agent-silent';
+            };
+          }
+          const value = Reflect.get(target, prop);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+
+      // CRITICAL: commands deliver through ctx.chat / ctx.bot, and those
+      // contexts close over the api instance they were built with. Rebuild
+      // them on the silent proxy — otherwise chat-bound sends would bypass
+      // interception and post directly to the chat.
+      const silentChat = createChatContext(
+        silentApi,
+        ctx.event,
+        '',
+        null,
+        ctx.native.platform,
+      );
+      const silentBot = createBotContext(silentApi, ctx.event);
+
       const onCommandCtx: OnCommandCtx = {
         ...ctx,
-        api: captureApi,
+        api: silentApi,
+        chat: silentChat,
+        bot: silentBot,
         parsed: { name: key, args: rest },
         prefix: ctx.prefix ?? '',
         mod,
@@ -593,13 +670,62 @@ function buildToolContext(ctx: BaseCtx): ToolContext {
         await dispatchCommand(
           { name: key, args: rest },
           onCommandCtx,
-          captureApi,
+          silentApi,
           threadID,
           ctx.prefix ?? '',
         );
+
+        // Merge intercepted deliveries into a single combined payload.
+        const texts: string[] = [];
+        const attachmentUrls: NamedUrlAttachment[] = [];
+        const buttons: ButtonItem[][][] = [];
+        for (const call of deliveries) {
+          const opts =
+            call.method === 'replyMessage' || call.method === 'editMessage'
+              ? ((call.args[1] ?? {}) as Record<string, unknown>)
+              : call.method === 'sendMessage' &&
+                  call.args[0] !== null &&
+                  typeof call.args[0] === 'object'
+                ? (call.args[0] as Record<string, unknown>)
+                : null;
+          if (!opts) continue;
+          const rawText = opts['message'];
+          const text =
+            typeof rawText === 'string'
+              ? rawText
+              : ((rawText as { message?: string } | undefined)?.message ??
+                (rawText as { body?: string } | undefined)?.body);
+          if (typeof text === 'string' && text.trim()) {
+            texts.push(text.trim());
+          }
+          if (Array.isArray(opts['attachment_url'])) {
+            for (const u of opts['attachment_url'] as NamedUrlAttachment[]) {
+              if (u && typeof u.url === 'string') {
+                attachmentUrls.push(u);
+              }
+            }
+          }
+          if (
+            (call.method === 'replyMessage' || call.method === 'editMessage') &&
+            buttons.length === 0 &&
+            Array.isArray(opts['button']) &&
+            (opts['button'] as unknown[]).length > 0
+          ) {
+            buttons.push(opts['button'] as ButtonItem[][]);
+          }
+        }
+
+        const media: CommandRunMedia = {
+          hasMedia:
+            attachmentUrls.length > 0 || binaries.length > 0 || buttons.length > 0,
+          attachmentUrls,
+          binaries,
+          buttons,
+        };
         return {
           ok: true,
-          output: captured[captured.length - 1] ?? 'Done.',
+          output: texts.join('\n\n') || 'Done.',
+          media,
         };
       } catch (err: unknown) {
         return {
@@ -609,13 +735,24 @@ function buildToolContext(ctx: BaseCtx): ToolContext {
       }
     },
 
-    // No onToolCall status posts — see the header note. Processing feedback is
-    // the typing indicator (withTypingIndicator around the whole turn), so the
-    // final reply is the single new message and no loader message ever exists.
+    // Continuity: before EVERY tool (internal and external MCP alike) the
+    // progress reporter posts once and then edits its own message in place,
+    // narrating the turn step by step. Best-effort â€” never fails the turn.
+    // Assigned conditionally (exactOptionalPropertyTypes forbids `undefined`).
   };
+  if (progress) {
+    toolContext.onToolCall = async (toolName, isFirst, args) => {
+      try {
+        await progress.onToolCall(toolName, isFirst, args);
+      } catch {
+        // Cosmetic feedback only â€” swallow everything.
+      }
+    };
+  }
+  return toolContext;
 }
 
-// ── Agent turn (personalityHandler.runAgent) ──────────────────────────────────
+// â”€â”€ Agent turn (personalityHandler.runAgent) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Main entry point for the agent. Handles text replies, bot command execution,
@@ -638,14 +775,14 @@ export async function runAgent(
       await runAgentUnsafe(ctx, queryOverride);
     } catch (err) {
       // The command dispatcher and the natural-language path BOTH swallow thrown
-      // errors silently (command.dispatcher.ts logs and returns) — if anything
+      // errors silently (command.dispatcher.ts logs and returns) â€” if anything
       // unexpected fails mid-turn the user would see NOTHING. Reply with a
       // fallback so the agent can never go silent on an internal error.
       logger.error('[Agent] runAgent failed', { error: err });
       try {
         await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
       } catch {
-        // Even the fallback failed — nothing more we can do.
+        // Even the fallback failed â€” nothing more we can do.
       }
     }
   } finally {
@@ -662,13 +799,13 @@ async function runAgentUnsafe(
   if (!senderID || !threadID) return;
 
   // Kick the image download off FIRST so it overlaps the identity/config
-  // lookups below — the download (up to 10MB over HTTP) is the slowest
+  // lookups below â€” the download (up to 10MB over HTTP) is the slowest
   // independent piece of turn setup.
   const imageDataPromise = resolveImageData(ctx);
 
   // Resolve everything the turn needs up front, in parallel: the per-user
   // config (LRU-cached 30s) plus the identity context for the system prompt
-  // (nickname, sender name, sender role — all cached too). Nothing here
+  // (nickname, sender name, sender role â€” all cached too). Nothing here
   // depends on anything else, so a single Promise.all avoids four sequential
   // round-trips before the first LLM call.
   const [config, botNickname, userName, userRole] = await Promise.all([
@@ -699,11 +836,11 @@ async function runAgentUnsafe(
       : `[Quoted: ${replyEvent.message}]`;
   }
 
-  // Image attachment → passed to the LLM as vision input. The download was
+  // Image attachment â†’ passed to the LLM as vision input. The download was
   // started above so it already overlapped the identity lookups.
   const imageData = await imageDataPromise;
 
-  // Nothing to work with — greet and open a session.
+  // Nothing to work with â€” greet and open a session.
   if (!query && !imageData) {
     await ctx.chat.replyMessage({ message: pick(GREETINGS) });
     activateSession(key);
@@ -719,13 +856,13 @@ async function runAgentUnsafe(
 
   // Cat-Bot style personalization: fill the compact agentic system prompt with
   // the bot's name (session nickname or trigger word), the sender's name +
-  // role, and the command prefix. The command catalogue is NOT inlined here —
+  // role, and the command prefix. The command catalogue is NOT inlined here â€”
   // the model discovers it once via list_commands and reuses it from history.
   // The prompt is intentionally STATIC (no datetime/model/provider) so the
   // system prompt + tool schemas stay byte-identical across turns, letting
   // providers prompt-cache the prefix instead of re-billing it. Per-turn
   // context (datetime, model, provider, mention hint) rides as a short context
-  // line appended to the user message — failover attempts only change that
+  // line appended to the user message â€” failover attempts only change that
   // line, never the cached prefix.
   const systemPrompt = buildAgentSystemPrompt({
     botName: botNickname ?? displayName(config.agentName),
@@ -738,8 +875,9 @@ async function runAgentUnsafe(
     mentioned,
   });
 
-  const toolContext = buildToolContext(ctx);
-  // Spin up the in-process MCP server bound to this turn's context — the
+  const progress = createAgentProgress(ctx);
+  const toolContext = buildToolContext(ctx, progress);
+  // Spin up the in-process MCP server bound to this turn's context â€” the
   // runner lists schemas and executes tool calls through the MCP protocol.
   const tools = await createMcpToolSet(toolContext);
   const threadQuery = imageData
@@ -748,129 +886,203 @@ async function runAgentUnsafe(
       : '[Image]'
     : query;
 
-  logger.info('[Agent]', `${senderID} → ${query.slice(0, 80)}`);
+  logger.info('[Agent]', `${senderID} â†’ ${query.slice(0, 80)}`);
 
-  const result = await runAgentTurnWithFailover(
-    key.userId || undefined,
-    {
-      provider: config.provider,
-      apiKey: config.apiKey,
-      model: config.model,
-    },
-    {
-      history,
-      userQuery: `${query || '[Describe this image]'}\n\n${turnContext}`,
-      tools,
-      context: toolContext,
-      imageData,
-      maxToolIterations: config.maxToolIterations,
-    },
-    systemPrompt,
-  );
-
-  activateSession(key);
-  const threadLimits = {
-    maxHistory: config.maxHistory,
-    ttlSeconds: config.threadTtl,
-  };
-
-  // The send_result tool already delivered the reply (synthesized text +
-  // attachments/buttons) via its own platform call — never double-post the
-  // turn's final text on top of it. Only count calls that actually delivered:
-  // a failed delivery (or a repeat call that was skipped by the idempotency
-  // guard) must not suppress the fallback reply below.
-  const lastSendResult = [...result.toolLog]
-    .reverse()
-    .find((t) => t.name === 'send_result');
-  const deliveredViaSendResult =
-    !!lastSendResult && !lastSendResult.result.startsWith('Delivery failed');
-  if (deliveredViaSendResult) {
-    appendThread(key, threadQuery, buildThreadEntry(result.toolLog, result.text), threadLimits);
-    return;
-  }
-
-  // Priority 1: bot command — run it via the real dispatcher, capture output.
-  if (result.commandToExecute) {
-    const { ok, output, error } = await toolContext.runBotCommand(
-      result.commandToExecute,
-    );
-    const threadAssistant = ok
-      ? `[Executed command: ${result.commandToExecute} → ${output ?? 'Done.'}]`
-      : `[Command failed: ${result.commandToExecute} → ${error ?? 'unknown error'}]`;
-    if (ok) {
-      appendThread(key, threadQuery, threadAssistant, threadLimits);
-    } else {
-      await ctx.chat.replyMessage({
-        message: `hmm, couldn't run "${result.commandToExecute}" 🤔 try asking differently`,
-      });
-      appendThread(key, threadQuery, threadAssistant, threadLimits);
-    }
-    return;
-  }
-
-  // Priority 2: media fallback — the model ran test_command (capturing
-  // attachments/buttons) but never delivered via send_result or run_command,
-  // often because it returned the raw tool JSON as its reply text. Auto-deliver
-  // the captured media so a media command always sends the actual attachment
-  // instead of a JSON dump. Keys are single-use and consumed here.
-  const capturedMedia = collectCapturedMediaKeys(result.toolLog);
-  if (capturedMedia.hasMedia) {
-    const caption = looksLikeRawToolDump(result.text)
-      ? extractCapturedCaption(result.toolLog)
-      : result.text;
-    const status = await deliverCombinedResult(toolContext, {
-      message: caption ?? 'Here you go! 🎉',
-      attachment_url: capturedMedia.attachmentUrlKeys,
-      button: capturedMedia.buttonKeys,
-      attachment: capturedMedia.binaryKeys,
-    });
-    const threadAssistant = buildThreadEntry(
-      result.toolLog,
-      caption && !looksLikeRawToolDump(caption) ? caption : null,
-    );
-    appendThread(key, threadQuery, threadAssistant, threadLimits);
-    // Only short-circuit when delivery actually succeeded — a failed delivery
-    // falls through to the plain-text path so the user still gets a reply.
-    if (!status.startsWith('Delivery failed')) return;
-  }
-
-  if (!result.text) {
-    await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
-    return;
-  }
-
-  // Never surface a raw test_command JSON dump as the reply (e.g. when the model
-  // tested a text-only command but failed to deliver). Replace it with the
-  // command's own caption or a neutral fallback.
-  const replyText = looksLikeRawToolDump(result.text)
-    ? (extractCapturedCaption(result.toolLog) ?? 'Here you go! 🎉')
-    : result.text;
-
-  // Concise assistant thread entry: one-line tool summary + the delivered
-  // reply, so history stays small and the next turn keeps full context.
-  const threadAssistant = buildThreadEntry(result.toolLog, replyText);
-
-  // Auto-markdown: the model is prompted to format with bold/lists/code blocks,
-  // but only text that actually contains supported Markdown syntax is delivered
-  // as MARKDOWN. Plain conversational replies go out as TEXT so Telegram's
-  // MarkdownV2 parser never rejects stray special characters. If a styled send
-  // is rejected anyway (strict parsers, unbalanced model syntax), retry once as
-  // plain text so the content still reaches the user instead of going silent.
-  const finalStyle = containsMarkdown(replyText)
-    ? MessageStyle.MARKDOWN
-    : MessageStyle.TEXT;
   try {
-    await ctx.chat.replyMessage({ style: finalStyle, message: replyText });
-  } catch (sendErr) {
-    logger.debug('[Agent] styled reply rejected — retrying as plain text', {
-      error: sendErr,
-    });
-    await ctx.chat.replyMessage({
-      style: MessageStyle.TEXT,
-      message: replyText,
-    });
+    const result = await runAgentTurnWithFailover(
+      key.userId || undefined,
+      {
+        provider: config.provider,
+        apiKey: config.apiKey,
+        model: config.model,
+      },
+      {
+        history,
+        userQuery: `${query || '[Describe this image]'}\n\n${turnContext}`,
+        tools,
+        context: toolContext,
+        imageData,
+        maxToolIterations: config.maxToolIterations,
+      },
+      systemPrompt,
+    );
+
+    activateSession(key);
+    const threadLimits = {
+      maxHistory: config.maxHistory,
+      ttlSeconds: config.threadTtl,
+    };
+
+    // The send_result tool already delivered the reply (synthesized text +
+    // attachments/buttons) via its own platform call â€” never double-post the
+    // turn's final text on top of it. Only count calls that actually delivered:
+    // a failed delivery (or a repeat call that was skipped by the idempotency
+    // guard) must not suppress the fallback reply below.
+    const lastSendResult = [...result.toolLog]
+      .reverse()
+      .find((t) => t.name === 'send_result');
+    const deliveredViaSendResult =
+      !!lastSendResult && !lastSendResult.result.startsWith('Delivery failed');
+    if (deliveredViaSendResult) {
+      appendThread(key, threadQuery, buildThreadEntry(result.toolLog, result.text), threadLimits);
+      return;
+    }
+
+    // Priority 1: bot command â€” it already ran SILENTLY (runBotCommand
+    // intercepts every delivery), so the whole output â€” text, media, buttons â€”
+    // is merged into ONE message here. The status bubble is edited into that
+    // combined message; if the platform cannot edit it, one fresh combined
+    // message is sent instead and the placeholder is unsent by the finally.
+    if (result.commandToExecute) {
+      const rawCommand = result.commandToExecute.trim();
+      const cmdLabel = rawCommand.replace(/^\//, '').split(/\s+/)[0] || 'command';
+      const { ok, output, error, media } = await toolContext.runBotCommand(
+        rawCommand,
+      );
+      const threadAssistant = ok
+        ? `[Executed command: ${rawCommand} â†’ ${output ?? 'Done.'}]`
+        : `[Command failed: ${rawCommand} â†’ ${error ?? 'unknown error'}]`;
+      if (ok) {
+        const body = output?.trim() ?? '';
+        const message =
+          media?.hasMedia && body
+            ? `Here's your ${cmdLabel}:\n\n${body}`
+            : body || `âœ… Executed /${cmdLabel}`;
+        const totalAttachments =
+          (media?.attachmentUrls.length ?? 0) + (media?.binaries.length ?? 0);
+        const editOptions: EditMessageOptions = {
+          message,
+          ...(media?.attachmentUrls.length
+            ? { attachment_url: media.attachmentUrls }
+            : {}),
+          ...(media?.binaries.length ? { attachment: media.binaries } : {}),
+          ...(media && media.buttons.length > 0 && totalAttachments <= 1
+            ? { button: media.buttons[0] }
+            : {}),
+        };
+        const edited = await progress.editWithOptions(editOptions);
+        if (!edited) {
+          // Platform cannot edit the placeholder into media/text â€” send ONE
+          // fresh combined message instead; the placeholder is unsent by the
+          // finally below, so the user still sees exactly one reply.
+          try {
+            await ctx.api.replyMessage(threadID, {
+              style: MessageStyle.TEXT,
+              message,
+              ...(media?.attachmentUrls.length
+                ? { attachment_url: media.attachmentUrls }
+                : {}),
+              ...(media?.binaries.length
+                ? { attachment: media.binaries }
+                : {}),
+              ...(media && media.buttons.length > 0 && totalAttachments <= 1
+                ? { button: media.buttons[0] }
+                : {}),
+            });
+          } catch {
+            await ctx.chat.replyMessage({
+              style: MessageStyle.TEXT,
+              message,
+            });
+          }
+        }
+        appendThread(key, threadQuery, threadAssistant, threadLimits);
+      } else {
+        // The command never produced output â€” repurpose the status message
+        // into the failure note instead of posting a second bubble.
+        const edited = await progress.finishWithText(
+          `hmm, couldn't run "${rawCommand}" ðŸ¤” try asking differently`,
+          false,
+        );
+        if (!edited) {
+          await ctx.chat.replyMessage({
+            message: `hmm, couldn't run "${rawCommand}" ðŸ¤” try asking differently`,
+          });
+        }
+        appendThread(key, threadQuery, threadAssistant, threadLimits);
+      }
+      return;
+    }
+
+    // Priority 2: media fallback â€” the model ran test_command (capturing
+    // attachments/buttons) but never delivered via send_result or run_command,
+    // often because it returned the raw tool JSON as its reply text. Auto-deliver
+    // the captured media so a media command always sends the actual attachment
+    // instead of a JSON dump. Keys are single-use and consumed here.
+    const capturedMedia = collectCapturedMediaKeys(result.toolLog);
+    if (capturedMedia.hasMedia) {
+      const caption = looksLikeRawToolDump(result.text)
+        ? extractCapturedCaption(result.toolLog)
+        : result.text;
+      const status = await deliverCombinedResult(toolContext, {
+        message: caption ?? 'Here you go! ðŸŽ‰',
+        attachment_url: capturedMedia.attachmentUrlKeys,
+        button: capturedMedia.buttonKeys,
+        attachment: capturedMedia.binaryKeys,
+      });
+      const threadAssistant = buildThreadEntry(
+        result.toolLog,
+        caption && !looksLikeRawToolDump(caption) ? caption : null,
+      );
+      appendThread(key, threadQuery, threadAssistant, threadLimits);
+      // Only short-circuit when delivery actually succeeded â€” a failed delivery
+      // falls through to the plain-text path so the user still gets a reply.
+      if (!status.startsWith('Delivery failed')) return;
+    }
+
+    if (!result.text) {
+      // Nothing came back â€” clear the placeholder before the error reply so
+      // the user sees exactly one clean message.
+      await progress.dispose();
+      await ctx.chat.replyMessage({ message: pick(ERROR_REPLIES) });
+      return;
+    }
+
+    // Never surface a raw test_command JSON dump as the reply (e.g. when the model
+    // tested a text-only command but failed to deliver). Replace it with the
+    // command's own caption or a neutral fallback.
+    const replyText = looksLikeRawToolDump(result.text)
+      ? (extractCapturedCaption(result.toolLog) ?? 'Here you go! ðŸŽ‰')
+      : result.text;
+
+    // Concise assistant thread entry: one-line tool summary + the delivered
+    // reply, so history stays small and the next turn keeps full context.
+    const threadAssistant = buildThreadEntry(result.toolLog, replyText);
+
+    // Always deliver the final answer as Markdown. The Telegram adapter
+    // sanitizes the text into MarkdownV2 (escaping reserved characters), so a
+    // constant MARKDOWN style is safe even for plain conversational replies.
+    // If a styled send is rejected anyway (strict parsers, unbalanced model
+    // syntax), retry once as plain text so the content still reaches the user
+    // instead of going silent.
+    //
+    // Continuity: when a status message exists, the FINAL ANSWER is edited into
+    // that same message — the exact bubble that narrated each step becomes the
+    // answer. Only when there is nothing to edit (no tools ran) does this fall
+    // back to sending a fresh reply.
+    const editedIntoStatus = await progress.finishWithText(replyText, true);
+    if (!editedIntoStatus) {
+      try {
+        await ctx.chat.replyMessage({
+          style: MessageStyle.MARKDOWN,
+          message: replyText,
+        });
+      } catch (sendErr) {
+        logger.debug('[Agent] styled reply rejected â€” retrying as plain text', {
+          error: sendErr,
+        });
+        await ctx.chat.replyMessage({
+          style: MessageStyle.TEXT,
+          message: replyText,
+        });
+      }
+    }
+    appendThread(key, threadQuery, threadAssistant, threadLimits);
+  } finally {
+    // If anything above threw mid-turn (provider outage, dispatch crash), the
+    // placeholder must not linger as "â³ â€¦" forever.
+    void progress.dispose();
   }
-  appendThread(key, threadQuery, threadAssistant, threadLimits);
 }
 
 /** True when the message mentions anyone (any platform mention entity). */
@@ -885,20 +1097,20 @@ async function runAgentWithIndicator(ctx: BaseCtx): Promise<void> {
   await withTypingIndicator(ctx.api, threadID, () => runAgent(ctx));
 }
 
-// ── Access guard (maintenance / admin-only modes) ─────────────────────────────
+// â”€â”€ Access guard (maintenance / admin-only modes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Enforces the same restriction modes the command middleware applies, for the
  * natural-language agent path (which never passes through the dispatcher):
  *
- *   1. Maintenance Mode   (global)      → System Admins only
- *   2. Bot Admin Only     (session-wide) → bot admins only
- *   3. Group Admin Only   (per-thread)   → group / bot / system admins only
+ *   1. Maintenance Mode   (global)      â†’ System Admins only
+ *   2. Bot Admin Only     (session-wide) â†’ bot admins only
+ *   3. Group Admin Only   (per-thread)   â†’ group / bot / system admins only
  *
  * Mirrors enforceMaintenanceMode + enforceAdminOnly in on-command.middleware.ts
  * (same messages, same LRU fast-path caches, same 15s notification dedup) so
  * the AI respects these modes exactly like every command does. The per-command
- * ignore lists do NOT apply here — the natural-language agent is not a command,
+ * ignore lists do NOT apply here â€” the natural-language agent is not a command,
  * so when a mode is on, non-privileged users get no AI. Fail-open on DB errors.
  *
  * Returns true when the turn may proceed, false when it was blocked (a notice
@@ -912,7 +1124,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
   const threadID = (ctx.event['threadID'] ?? '') as string;
   const now = Date.now();
 
-  // ── 1. Maintenance Mode — global, System Admins only ───────────────────────
+  // â”€â”€ 1. Maintenance Mode â€” global, System Admins only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   try {
     const maintenance = await getMaintenanceModeEnabled();
     if (maintenance) {
@@ -924,7 +1136,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
         if (cooldownStore.check(key, now) === null) {
           await ctx.chat.replyMessage({
             message:
-              '🚫 The bot is under maintenance — only System Admins may use commands right now.',
+              'ðŸš« The bot is under maintenance â€” only System Admins may use commands right now.',
             attachment_url: [
               {
                 name: 'maintenance-mode.png',
@@ -942,7 +1154,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
   }
 
   // Fast-path: skip all async DB reads when both admin-only modes are
-  // known-off (populated on the first check per session/thread) — the common
+  // known-off (populated on the first check per session/thread) â€” the common
   // case, and this guard runs on every non-command message.
   if (sessionUserId && sessionId) {
     const sessOff =
@@ -958,7 +1170,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
     if (sessOff && threadOff) return true;
   }
 
-  // ── 2. Session-wide Bot Admin Only (db.bot → session_settings) ─────────────
+  // â”€â”€ 2. Session-wide Bot Admin Only (db.bot â†’ session_settings) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (sessionUserId && sessionId) {
     try {
       const botColl = ctx.db.bot;
@@ -998,7 +1210,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
               if (cooldownStore.check(key, now) === null) {
                 await ctx.chat.replyMessage({
                   message:
-                    '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
+                    'ðŸš« The bot is currently in admin-only mode. Only bot admins may use commands.',
                 });
                 cooldownStore.record(key, now, 15000);
               }
@@ -1014,7 +1226,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
     }
   }
 
-  // ── 3. Per-thread Group Admin Only (db.threads → adminbox_settings) ────────
+  // â”€â”€ 3. Per-thread Group Admin Only (db.threads â†’ adminbox_settings) â”€â”€â”€â”€â”€â”€â”€â”€
   if (threadID) {
     try {
       const threadColl = ctx.db.threads.collection(threadID);
@@ -1054,7 +1266,7 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
               const key = `adminbox_noti:${sessionUserId}:${platform}:${sessionId}:${threadID}:${senderID}`;
               if (cooldownStore.check(key, now) === null) {
                 await ctx.chat.replyMessage({
-                  message: '🚫 Only group admins can use the bot in this thread.',
+                  message: 'ðŸš« Only group admins can use the bot in this thread.',
                 });
                 cooldownStore.record(key, now, 15000);
               }
@@ -1079,11 +1291,11 @@ export async function enforceAgentAccess(ctx: BaseCtx): Promise<boolean> {
   return true;
 }
 
-// ── Natural-language activation (canis message.ts) ────────────────────────────
+// â”€â”€ Natural-language activation (canis message.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Runs on every non-command message (onChat). Continues an active session,
- * then triggers on the agent name word or a bot @mention — mirroring canis's
+ * then triggers on the agent name word or a bot @mention â€” mirroring canis's
  * message.ts AI routing. The maintenance / admin-only guards run first, so a
  * restricted bot never answers natural-language messages.
  */
@@ -1091,7 +1303,7 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
   const body = (ctx.event['message'] ?? ctx.event['body'] ?? '') as string;
   if (!body) return;
 
-  // Never answer the bot's OWN messages — platforms that echo the bot's posts
+  // Never answer the bot's OWN messages â€” platforms that echo the bot's posts
   // back through the message pipeline (e.g. userbot setups) would otherwise
   // re-trigger the agent on its own reply and double-respond.
   try {
@@ -1099,10 +1311,10 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
     const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
     if (botID && senderID && String(senderID) === String(botID)) return;
   } catch {
-    // Bot ID unavailable — fail-open and continue.
+    // Bot ID unavailable â€” fail-open and continue.
   }
 
-  // Skip command invocations — commands are handled by the dispatcher and
+  // Skip command invocations â€” commands are handled by the dispatcher and
   // must never be hijacked by natural-language activation.
   const prefix = ctx.prefix ?? '';
   if (prefix && body.trim().startsWith(prefix)) return;
@@ -1110,18 +1322,18 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
   const key = buildAgentKey(ctx);
   if (!key.senderID || !key.threadID) return;
 
-  // Maintenance / Bot Admin Only / Group Admin Only gates — when any is on,
+  // Maintenance / Bot Admin Only / Group Admin Only gates â€” when any is on,
   // non-privileged senders are blocked (with a throttled notice) before the
   // session continuation, trigger word, or @mention can fire.
   if (!(await enforceAgentAccess(ctx))) return;
 
-  // 1. Active session → continue the conversation without a trigger word.
+  // 1. Active session â†’ continue the conversation without a trigger word.
   if (isSessionActive(key)) {
     await runAgentWithIndicator(ctx);
     return;
   }
 
-  // 2. Trigger word in the body (whole-word match) — the web-configured agent
+  // 2. Trigger word in the body (whole-word match) â€” the web-configured agent
   //    name ("cat" default), or the bot's configured nickname (e.g. "Miko" set
   //    via the dashboard).
   const botNickname = await resolveBotNickname(ctx);
@@ -1141,7 +1353,7 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
   const mentions = ctx.event['mentions'] as Record<string, string> | undefined;
   if (mentions && Object.keys(mentions).length > 0) {
     const keys = Object.keys(mentions);
-    // Telegram: bot is mentioned by @username (mention entity) — compare to
+    // Telegram: bot is mentioned by @username (mention entity) â€” compare to
     // the bot's own username from the grammY context.
     if (ctx.native.platform === Platforms.Telegram) {
       const botUsername = (
@@ -1165,7 +1377,7 @@ export async function maybeRunAgentOnChat(ctx: BaseCtx): Promise<void> {
         return;
       }
     } catch {
-      // Bot ID unavailable — fall through.
+      // Bot ID unavailable â€” fall through.
     }
   }
 }
@@ -1177,13 +1389,13 @@ export async function forgetAgent(ctx: BaseCtx): Promise<void> {
     clearThread(key);
     deactivateSession(key);
   }
-  await ctx.chat.replyMessage({ message: 'done, fresh start 🧹' });
+  await ctx.chat.replyMessage({ message: 'done, fresh start ðŸ§¹' });
 }
 
-// ── Simple completion with caching (canis agentHandler) ───────────────────────
+// â”€â”€ Simple completion with caching (canis agentHandler) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * One-shot, no-tools completion with prompt caching — the canis agentHandler
+ * One-shot, no-tools completion with prompt caching â€” the canis agentHandler
  * equivalent (used by roast.ts and other simple AI commands). Uses the user's
  * per-user provider config and returns null on failure.
  */
@@ -1211,14 +1423,14 @@ export async function generateSimpleText(
       {
         history: [],
         userQuery: prompt,
-        // No tools — an empty MCP tool set (schemas: [] means the LLM gets no
+        // No tools â€” an empty MCP tool set (schemas: [] means the LLM gets no
         // function declarations, and callTool is never reached).
         tools: {
           schemas: [],
           callTool: async () => '(no tools available)',
         },
         // No tools are passed to this completion, so the context is never used
-        // for tool execution — only the helper surface matters here.
+        // for tool execution â€” only the helper surface matters here.
         context: {
           getUserInfo: async () => null,
           getThreadInfo: async () => null,

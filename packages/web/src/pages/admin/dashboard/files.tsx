@@ -937,12 +937,15 @@ function GithubIdentityCard({
   return (
     // data-git-token-card routes mobile keyboard handling: when the token
     // input inside this card is focused, the GitPanel's keyboard effect sets
-    // data-git-kb-mode="token" on the panel (a named group) and this card
-    // becomes a bar PINNED TO THE TOP of the viewport — above the keyboard's
-    // reach entirely, so the field is visible and typable regardless of
-    // scroll position or how the platform treats the keyboard. The long
-    // helper paragraph is hidden while pinned so the bar stays compact; the
-    // column reserves the card's flow height so nothing jumps.
+    // data-git-kb-mode="token" on the panel (a named group) and this
+    // card becomes a bar PINNED TO THE TOP of the viewport — the exact
+    // stability model as the timezone search's mobile sheet: the bar is
+    // anchored once against the VisualViewport and never re-anchors while
+    // typing, so the field stays perfectly still and is always above the
+    // on-screen keyboard (iOS Safari never resizes the layout viewport, so
+    // the dock at the top edge never needs a keyboard-follow translate).
+    // The long helper paragraph is hidden while pinned so the bar stays
+    // compact; the column reserves the card's flow height so nothing jumps.
     <div
       data-git-token-card=""
       style={{
