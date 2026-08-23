@@ -2,7 +2,7 @@
   "name": "cat-bot",
   "version": "1.0.6",
   "description": "",
-  "main": "index.js",
+  "main": "dist/engine/app.js",
   "private": true,
   "scripts": {
     "dev": "tsx watch --conditions source src/engine/app.ts",
@@ -25,10 +25,14 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/adm-zip": "^0.5.8",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.2.0",
     "eslint": "^10.8.1",
     "globals": "^17.11.0",
     "prettier": "^3.9.6",
+    "tsc-alias": "^1.9.2",
     "tsx": "^4.23.12",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.11"
   },
@@ -38,8 +42,6 @@
     "@google/genai": "^2.17.1",
     "@grammyjs/runner": "^2.0.3",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/express": "^5.0.6",
-    "@types/node": "^26.2.0",
     "adm-zip": "^0.6.0",
     "axios": "^1.19.0",
     "better-auth": "^1.7.1",
@@ -54,8 +56,6 @@
     "lru-cache": "^11.5.2",
     "openai": "^7.5.0",
     "socket.io": "^4.8.3",
-    "tsc-alias": "^1.9.2",
-    "typescript": "^6.0.3",
     "winston": "^3.19.0"
   }
 }

@@ -824,6 +824,11 @@ const CommitBox = memo(function CommitBox({
         'lg:static lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
       )}
       style={{
+        // --git-kb-offset is signed by the GitPanel keyboard effect:
+        //  • positive (iOS, composer focused) — lifts the bar above the keyboard
+        //  • negative (Android, token/other input focused) — cancels the native
+        //    resizes-content lift so the bar stays exactly where it was
+        //  • 0 — no keyboard / desktop.
         transform: 'translate3d(0, calc(var(--git-kb-offset, 0px) * -1), 0)',
       }}
     >
@@ -1102,27 +1107,51 @@ function GitPanel({
     let raf = 0
     let mode: 'composer' | 'token' | null = null
     let prevTokenShift = 0
+    // Highest innerHeight ever seen this session. On Android/Chrome the app's
+    // interactive-widget=resizes-content meta shrinks window.innerHeight when
+    // the keyboard opens — the deficit against this high-water mark is the
+    // reflow keyboard height. It only ever grows (rotation to a taller
+    // viewport), so a keyboard can never pollute it.
+    let maxInnerHeight = window.innerHeight
 
     const update = () => {
       raf = 0
       const root = panelRef.current
       if (!root) return
-      const kb =
+      if (window.innerHeight > maxInnerHeight) maxInnerHeight = window.innerHeight
+
+      // Two keyboard models, whichever applies:
+      //  • kbCovered — iOS Safari: the layout viewport NEVER resizes for the
+      //    keyboard; the covered band below the visual viewport is the keyboard.
+      //  • kbReflow  — Android/Chrome (resizes-content): the layout viewport
+      //    itself shrinks, so the covered band reads ~0 — the deficit against
+      //    the high-water mark is the keyboard, and the browser NATIVELY lifts
+      //    fixed-position elements (like the commit composer) with it.
+      const kbCovered =
         mq.matches && vv
           ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop))
           : 0
+      const kbReflow = mq.matches
+        ? Math.max(0, maxInnerHeight - window.innerHeight)
+        : 0
 
       if (mode === 'composer') {
-        // Only the commit composer lifts, by the full covered height.
-        root.style.setProperty('--git-kb-offset', `${kb}px`)
+        // Only the commit composer lifts. On iOS that is the covered band
+        // (translate); on Android the native reflow already lifted it, so the
+        // translate stays 0 — never both, or the bar would double-rise.
+        root.style.setProperty('--git-kb-offset', `${kbCovered}px`)
         root.style.setProperty('--git-token-offset', '0px')
         prevTokenShift = 0
         return
       }
 
-      root.style.setProperty('--git-kb-offset', '0px')
-
       if (mode === 'token') {
+        // The composer must stay EXACTLY where it was. On Android the native
+        // reflow lifts the fixed bar with the keyboard, so it is pushed back
+        // down by the same amount (behind the keyboard, invisible — but
+        // perfectly still). On iOS kbReflow is 0 and nothing moves.
+        root.style.setProperty('--git-kb-offset', `${-kbReflow}px`)
+
         // Shift the identity card up by exactly the amount its bottom is
         // clipped by the keyboard (plus a small breathing margin) — never
         // more, so the card (and everything else) barely moves. The shift is
@@ -1145,6 +1174,11 @@ function GitPanel({
           prevTokenShift = 0
         }
       } else {
+        // No git input owns the keyboard (or it closed). If a keyboard is
+        // open for something else on Android, still cancel the native lift so
+        // the composer stays put; when the keyboard closes kbReflow is 0 and
+        // this is just the reset to rest.
+        root.style.setProperty('--git-kb-offset', `${-kbReflow}px`)
         root.style.setProperty('--git-token-offset', '0px')
         prevTokenShift = 0
       }
@@ -1513,7 +1547,9 @@ function GitPanel({
               onClick={() => void files.loadHistory()}
             />
           </div>
-          <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
+          {/* Slightly shorter on phones so the change list keeps more of the
+              viewport; grows back once width allows. */}
+          <div className="max-h-28 overflow-y-auto overscroll-contain px-1 pb-2 sm:max-h-40">
             {files.history.length === 0 ? (
               <p className="px-2 py-1 text-body-xs text-on-surface-variant">
                 No commits yet.

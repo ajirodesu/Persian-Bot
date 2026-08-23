@@ -8,6 +8,13 @@
 
 import { logger } from '@/engine/modules/logger/logger.lib.js'; // Relocated module
 
+// Both thread maps grow one entry per thread the bot ever sees. Threads are
+// effectively unbounded over a long-lived process, so they are capped: past
+// the cap the oldest entries are evicted (Map preserves insertion order), and
+// a checked-flag eviction simply costs one extra DB read for that thread the
+// next time it is seen — correctness is never affected.
+const THREAD_MAP_MAX = 10_000;
+
 class PrefixManager {
   // Key format: `${userId}:${platform}:${sessionId}` (e.g. "cuid123:discord:uuid456")
   private prefixes = new Map<string, string>();
@@ -18,7 +25,16 @@ class PrefixManager {
   // the DB at boot, or set/cleared in-process). Lets restoreThreadPrefix skip the DB lookup
   // entirely for the common case (threads WITHOUT a custom prefix) — that lookup previously
   // ran on every single message, costing two DB round-trips on the hot path.
-  private threadPrefixesChecked = new Set<string>();
+  private threadPrefixesChecked = new Map<string, true>();
+
+  /** Bounded insert for the thread-keyed stores (evicts oldest past the cap). */
+  private boundedThreadSet<K, V>(map: Map<K, V>, key: K, value: V): void {
+    if (!map.has(key) && map.size >= THREAD_MAP_MAX) {
+      const oldest = map.keys().next().value;
+      if (oldest !== undefined) map.delete(oldest);
+    }
+    map.set(key, value);
+  }
 
   private getKey(userId: string, platform: string, sessionId: string): string {
     return `${userId}:${platform}:${sessionId}`;
@@ -53,9 +69,9 @@ class PrefixManager {
    * the trigger character for a specific group without affecting other threads.
    */
   setThreadPrefix(threadId: string, prefix: string): void {
-    this.threadPrefixes.set(threadId, prefix);
+    this.boundedThreadSet(this.threadPrefixes, threadId, prefix);
     // The authoritative state is now known in-process — no DB re-check needed.
-    this.threadPrefixesChecked.add(threadId);
+    this.boundedThreadSet(this.threadPrefixesChecked, threadId, true);
     logger.debug(
       `[prefix-manager] Thread prefix for ${threadId} set to "${prefix}"`,
     );
@@ -77,7 +93,7 @@ class PrefixManager {
   clearThreadPrefix(threadId: string): void {
     this.threadPrefixes.delete(threadId);
     // Same rationale as setThreadPrefix: the cleared state is authoritative.
-    this.threadPrefixesChecked.add(threadId);
+    this.boundedThreadSet(this.threadPrefixesChecked, threadId, true);
     logger.debug(
       `[prefix-manager] Thread prefix cleared for ${threadId} — reverting to session default`,
     );
@@ -90,7 +106,7 @@ class PrefixManager {
 
   /** Records that the thread's custom-prefix state was just resolved (found or not). */
   markThreadPrefixChecked(threadId: string): void {
-    this.threadPrefixesChecked.add(threadId);
+    this.boundedThreadSet(this.threadPrefixesChecked, threadId, true);
   }
 
   /**

@@ -8,3 +8,4 @@ packages/database/dist
 packages/web/dist
 packages/cat-bot/.env
 .compile-cache
+tsconfig.tsbuildinfo

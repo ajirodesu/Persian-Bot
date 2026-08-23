@@ -26,5 +26,8 @@
     "packages/database/adapters/mongodb",
     "packages/database/adapters/turso",
     "packages/web"
-  ]
+  ],
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
 }

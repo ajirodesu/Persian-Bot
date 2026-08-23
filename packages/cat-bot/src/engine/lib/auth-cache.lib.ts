@@ -5,7 +5,11 @@
  * The shared LRU cache (repo layer) provides cross-request deduplication; this layer eliminates
  * redundant async calls within the SAME middleware chain run.
  *
- * Sequential middleware guarantees: no concurrent call risk — a synchronous Map lookup suffices.
+ * The cache stores in-flight PROMISES, not resolved values — middleware now fans
+ * checks out concurrently (e.g. Promise.all), so two concurrent calls with the
+ * same key share one underlying repo read instead of both missing and doubling
+ * the DB round trip. Rejections are evicted so a transient failure is retried
+ * on the next call rather than cached as an error.
  */
 
 import type { BaseCtx } from '@/engine/types/controller.types.js';
@@ -15,12 +19,26 @@ import { isUserBanned, isThreadBanned } from '@/engine/repos/banned.repo.js';
 import { isThreadAdmin } from '@/engine/repos/threads.repo.js';
 
 async function memo(ctx: BaseCtx, key: string, fn: () => Promise<boolean>): Promise<boolean> {
-  if (!ctx._authCache) ctx._authCache = new Map<string, boolean>();
-  const hit = ctx._authCache.get(key);
+  const valueCache = (ctx._authCache ??= new Map<string, boolean>());
+  const hit = valueCache.get(key);
   if (hit !== undefined) return hit;
-  const result = await fn();
-  ctx._authCache.set(key, result);
-  return result;
+
+  // Cross-call dedupe store (separate from the resolved-value cache above so
+  // its type stays Map<string, boolean>).
+  const inflightCache = (ctx._authInflight ??= new Map<string, Promise<boolean>>());
+  const inflight = inflightCache.get(key);
+  if (inflight) return inflight;
+
+  const p = fn()
+    .then((result) => {
+      valueCache.set(key, result);
+      return result;
+    })
+    .finally(() => {
+      inflightCache.delete(key);
+    });
+  inflightCache.set(key, p);
+  return p;
 }
 
 /** Memoized isSystemAdmin — global check, keyed on adminId only. */

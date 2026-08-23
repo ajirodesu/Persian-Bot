@@ -41,7 +41,6 @@ let cachedTools: AgentTool[] | null = null;
 export async function loadAgentTools(): Promise<AgentTool[]> {
   if (cachedTools) return cachedTools;
 
-  const tools: AgentTool[] = [];
   const files = (await fs.promises.readdir(TOOLS_DIR)).filter(
     (f) =>
       (f.endsWith('.js') || f.endsWith('.ts')) &&
@@ -49,19 +48,31 @@ export async function loadAgentTools(): Promise<AgentTool[]> {
       !NON_TOOLS.has(f),
   );
 
-  for (const file of files) {
-    try {
+  // Fan the dynamic imports out in parallel (Promise.allSettled semantics:
+  // one broken tool file never blocks the rest) — the sequential loop paid
+  // each import's latency serially on the first agent turn / warm-up.
+  const settled = await Promise.allSettled(
+    files.map(async (file) => {
       const mod = (await import(
         pathToFileURL(path.join(TOOLS_DIR, file)).href
       )) as Partial<AgentTool>;
-      // Ensure the module implements the AgentTool interface properly.
-      if (mod.meta && typeof mod.initialize === 'function') {
-        tools.push(mod as AgentTool);
-      } else {
-        logger.warn('[AgentTool] Skipping non-tool module', { file });
-      }
-    } catch (err) {
-      logger.error('[AgentTool] Failed to load tool', { file, err });
+      return { file, mod };
+    }),
+  );
+  const tools: AgentTool[] = [];
+  for (const result of settled) {
+    if (result.status === 'rejected') {
+      logger.error('[AgentTool] Failed to load tool', {
+        error: result.reason,
+      });
+      continue;
+    }
+    const { file, mod } = result.value;
+    // Ensure the module implements the AgentTool interface properly.
+    if (mod.meta && typeof mod.initialize === 'function') {
+      tools.push(mod as AgentTool);
+    } else {
+      logger.warn('[AgentTool] Skipping non-tool module', { file });
     }
   }
 

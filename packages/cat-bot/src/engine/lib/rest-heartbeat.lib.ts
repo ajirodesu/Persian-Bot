@@ -31,11 +31,15 @@ export function startHeartbeat(
     logger.warn(`${label} keep-alive initial ping failed (non-fatal)`, { error: err });
   });
 
-  return setInterval(() => {
+  // unref'd so an unstopped heartbeat can never keep the process alive on
+  // shutdown — matching every other long-lived timer in the app.
+  const timer = setInterval(() => {
     ping().catch((err: unknown) => {
       logger.warn(`${label} keep-alive heartbeat failed (non-fatal)`, { error: err });
     });
   }, intervalMs);
+  timer.unref();
+  return timer;
 }
 
 export function stopHeartbeat(handle: NodeJS.Timeout | null): void {

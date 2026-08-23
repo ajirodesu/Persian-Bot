@@ -61,6 +61,12 @@ export interface BaseCtx {
    * at the end of each request — no cross-request state leaks.
    */
   _authCache?: Map<string, boolean>;
+  /**
+   * In-flight auth-check dedupe (see auth-cache.lib.ts): concurrent calls
+   * with the same key share one promise so parallelized middleware fan-outs
+   * never double-hit the repo layer. Same request lifecycle as _authCache.
+   */
+  _authInflight?: Map<string, Promise<boolean>>;
   api: UnifiedApi;
   event: Record<string, unknown>;
   commands: CommandMap;

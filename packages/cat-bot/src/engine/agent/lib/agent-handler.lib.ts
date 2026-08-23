@@ -661,6 +661,11 @@ async function runAgentUnsafe(
   const { threadID, senderID } = key;
   if (!senderID || !threadID) return;
 
+  // Kick the image download off FIRST so it overlaps the identity/config
+  // lookups below — the download (up to 10MB over HTTP) is the slowest
+  // independent piece of turn setup.
+  const imageDataPromise = resolveImageData(ctx);
+
   // Resolve everything the turn needs up front, in parallel: the per-user
   // config (LRU-cached 30s) plus the identity context for the system prompt
   // (nickname, sender name, sender role — all cached too). Nothing here
@@ -694,8 +699,9 @@ async function runAgentUnsafe(
       : `[Quoted: ${replyEvent.message}]`;
   }
 
-  // Image attachment → passed to the LLM as vision input.
-  const imageData = await resolveImageData(ctx);
+  // Image attachment → passed to the LLM as vision input. The download was
+  // started above so it already overlapped the identity lookups.
+  const imageData = await imageDataPromise;
 
   // Nothing to work with — greet and open a session.
   if (!query && !imageData) {
