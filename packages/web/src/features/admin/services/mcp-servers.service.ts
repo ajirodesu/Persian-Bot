@@ -33,7 +33,11 @@ export interface McpServerInput {
   enabled?: boolean
   /** Minimum role required to use this server's tools (0-4). */
   role?: number
-  /** Optional request headers (e.g. { Authorization: 'Bearer …' }) — encrypted at rest. */
+  /**
+   * Optional request headers (e.g. { Authorization: 'Bearer …' }) — encrypted
+   * at rest. On update an empty-string value preserves the stored secret for
+   * that key, and a previously-set key omitted from the map is deleted.
+   */
   headers?: Record<string, string>
 }
 

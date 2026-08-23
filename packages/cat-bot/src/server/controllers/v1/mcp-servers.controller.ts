@@ -80,7 +80,12 @@ function validateName(value: unknown): string | null {
   return trimmed;
 }
 
-/** Validates an optional headers object ({ k: v }). null when structurally bad. */
+/**
+ * Validates an optional headers object ({ k: v }). null when structurally bad.
+ * Values may be empty strings — on update these mean "preserve the stored
+ * secret" (resolved by updateMcpServer); they are dropped everywhere else via
+ * stripEmptyHeaderValues().
+ */
 function validateHeaders(
   value: unknown,
 ): Record<string, string> | undefined | null {
@@ -89,7 +94,18 @@ function validateHeaders(
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     if (typeof v !== 'string') return null;
-    if (k.trim() && v.trim()) out[k.trim()] = v;
+    if (k.trim()) out[k.trim()] = v;
+  }
+  return out;
+}
+
+/** Drops empty-string placeholder values ("preserve stored" markers). */
+function stripEmptyHeaderValues(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (v !== '') out[k] = v;
   }
   return out;
 }
@@ -143,7 +159,8 @@ class McpServersController {
         url,
         enabled: body.enabled !== false,
         role: role ?? 0,
-        ...(headers ? { headers } : {}),
+        // Create has no stored secrets to preserve — drop "" placeholders.
+        ...(headers ? { headers: stripEmptyHeaderValues(headers) } : {}),
       });
       invalidateMcpServersCache();
       res.status(201).json({ server: toDto(server) });
@@ -272,7 +289,8 @@ class McpServersController {
     }
     const result = await testMcpServerConnection({
       url,
-      ...(headers ? { headers } : {}),
+      // "" placeholders are a preserve-on-update concept, not sendable values.
+      ...(headers ? { headers: stripEmptyHeaderValues(headers) } : {}),
     });
     res.status(200).json(result);
   }

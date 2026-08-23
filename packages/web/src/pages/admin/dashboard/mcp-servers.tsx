@@ -30,18 +30,32 @@ import { cn } from '@/utils/cn.util'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** Accepts "Header: value" lines; returns the parsed header map or null if malformed. */
-function parseHeadersText(text: string): Record<string, string> | null {
+/**
+ * Tolerant headers parser — never rejects the form, any API key is accepted.
+ *
+ *  • "Name: value" lines become { name: value }; everything after the first
+ *    colon is taken verbatim, so keys of any format work.
+ *  • A line WITHOUT a "Name:" prefix is treated as a bare API key and sent
+ *    as "Authorization: Bearer <key>" to the server being added/edited.
+ *  • An EMPTY value ("Name:") means "unchanged": on edit the stored secret is
+ *    preserved server-side (values are encrypted and never echoed here).
+ *    Delete the whole line to remove that header.
+ */
+function parseHeadersText(text: string): Record<string, string> {
   const headers: Record<string, string> = {}
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim()
     if (!line) continue
     const separatorIndex = line.indexOf(':')
-    if (separatorIndex <= 0) return null
-    const key = line.slice(0, separatorIndex).trim()
-    const value = line.slice(separatorIndex + 1).trim()
-    if (!key || !value) return null
-    headers[key] = value
+    if (separatorIndex > 0) {
+      const key = line.slice(0, separatorIndex).trim()
+      if (key) {
+        headers[key] = line.slice(separatorIndex + 1).trim()
+        continue
+      }
+    }
+    // No usable "Name:" prefix — send the whole line as a Bearer token.
+    headers['Authorization'] = `Bearer ${line.replace(/^:+/, '').trim()}`
   }
   return headers
 }
@@ -361,9 +375,11 @@ export default function AdminMcpServersPage() {
       return
     }
     const headers = parseHeadersText(form.headersText)
-    if (headers === null) {
-      setFormError('Each header must be one "Key: Value" per line.')
-      return
+    if (!editing) {
+      // Nothing to preserve on create — drop blank placeholders outright.
+      for (const key of Object.keys(headers)) {
+        if (headers[key] === '') delete headers[key]
+      }
     }
 
     setIsSaving(true)
@@ -665,27 +681,43 @@ export default function AdminMcpServersPage() {
                     setForm({ ...form, headersText: e.target.value })
                     setFormError(null)
                   }}
-                  placeholder={'Authorization: Bearer …\nX-API-Key: …'}
+                  placeholder={
+                    'Authorization: Bearer …\nX-API-Key: …\nor just paste an API key'
+                  }
                   disabled={isSaving}
                   rows={4}
                 />
                 <Field.HelperText>
                   Optional request headers, one &ldquo;Key: Value&rdquo; per
-                  line. Values are encrypted and never returned to this page.
+                  line — or paste a bare API key and it is sent as
+                  &ldquo;Authorization: Bearer …&rdquo;. Any key format is
+                  accepted. When editing, leave a value empty to keep the
+                  stored secret; remove the line to delete that header. Values
+                  are encrypted and never returned to this page.
                 </Field.HelperText>
               </Field.Root>
 
-              <div className="flex items-center gap-3">
+              {/* Enable/disable row — same layout as the bot command card's
+                  switch rows (commands page CommandDetailDialog): bordered
+                  container, min-w-0 text column, shrink-0 switch. The text
+                  column wraps instead of overflowing on phones. */}
+              <div className="flex items-start justify-between gap-2 rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-4">
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <p className="text-body-sm font-semibold text-on-surface leading-snug">
+                    Enabled
+                  </p>
+                  <p className="text-label-sm text-on-surface-variant leading-relaxed">
+                    When on, the AI agent can use this server&apos;s tools.
+                  </p>
+                </div>
                 <Switch
                   checked={form.enabled}
                   onChange={(checked) => {
                     setForm({ ...form, enabled: checked })
                   }}
                   disabled={isSaving}
+                  className="shrink-0"
                 />
-                <span className="text-body-md text-on-surface">
-                  Enabled (agent can use this server&apos;s tools)
-                </span>
               </div>
 
               {formError !== null && (
