@@ -893,10 +893,6 @@ const CommitBox = memo(function CommitBox({
 
 // ── GitHub identity card (commit/push authentication) ─────────────────────────
 
-/** Inline base transform of the token card — lifted by --git-kb-bottom. */
-const TOKEN_CARD_BASE_TRANSFORM =
-  'translate3d(0, calc(var(--git-kb-bottom, 0px) * -1), 0)'
-
 /**
  * Collects the admin's GitHub personal access token. Commit and push are
  * authenticated with this key, and commits are authored by the GitHub user it
@@ -942,29 +938,26 @@ function GithubIdentityCard({
     // data-git-token-card routes mobile keyboard handling: when the token
     // input inside this card is focused, the GitPanel's keyboard effect sets
     // data-git-kb-mode="token" on the panel (a named group) and this card
-    // becomes a bar PINNED above the on-screen keyboard — the exact model the
-    // commit composer uses, guaranteeing the field is visible and typable
-    // regardless of scroll position or how the platform treats the keyboard.
-    // The long helper paragraph is hidden while pinned so the bar stays
-    // compact; the column reserves the card's flow height so nothing jumps.
+    // becomes a bar PINNED TO THE TOP of the viewport — above the keyboard's
+    // reach entirely, so the field is visible and typable regardless of
+    // scroll position or how the platform treats the keyboard. The long
+    // helper paragraph is hidden while pinned so the bar stays compact; the
+    // column reserves the card's flow height so nothing jumps.
     <div
       data-git-token-card=""
       style={{
-        // Static dock + compositor-only lift — the exact model of the commit
-        // box's --git-kb-offset translate. Animating `bottom` would force a
-        // layout pass on every keyboard-follow frame; a transform does not,
-        // so the ride stays perfectly smooth on phones.
-        bottom: 'env(safe-area-inset-bottom)',
-        transform: TOKEN_CARD_BASE_TRANSFORM,
+        // Docked to the top edge (under the notch) — the on-screen keyboard
+        // can never cover it, so no keyboard-follow choreography is needed.
+        top: 'env(safe-area-inset-top)',
       }}
       className={cn(
         'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
-        // Pinned-token mode (mobile keyboard, token input focused): the card
-        // lifts out of flow and docks to the top edge of the keyboard. The
-        // variants are scoped with max-lg so pinning is PHYSICALLY impossible
-        // above the mobile breakpoint — a stray attribute can never stick
-        // the card to the bottom of a desktop viewport.
-        'max-lg:group-data-[git-kb-mode=token]/git:fixed max-lg:group-data-[git-kb-mode=token]/git:left-0 max-lg:group-data-[git-kb-mode=token]/git:right-0 max-lg:group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] max-lg:group-data-[git-kb-mode=token]/git:border-t max-lg:group-data-[git-kb-mode=token]/git:border-b-0 max-lg:group-data-[git-kb-mode=token]/git:shadow-elevation-2',
+        // Pinned-token mode (mobile, token input focused): the card lifts out
+        // of flow and docks to the TOP edge of the viewport. The variants are
+        // scoped with max-lg so pinning is PHYSICALLY impossible above the
+        // mobile breakpoint — a stray attribute can never pin the card on a
+        // desktop viewport.
+        'max-lg:group-data-[git-kb-mode=token]/git:fixed max-lg:group-data-[git-kb-mode=token]/git:top-0 max-lg:group-data-[git-kb-mode=token]/git:left-0 max-lg:group-data-[git-kb-mode=token]/git:right-0 max-lg:group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] max-lg:group-data-[git-kb-mode=token]/git:shadow-elevation-2',
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -1164,17 +1157,9 @@ function GitPanel({
     // Grace window for the "no keyboard ever appeared" case: right after
     // focusin the soft keyboard has not resized the viewport YET (normal),
     // but on devices with a hardware keyboard it NEVER will — pinning would
-    // then leave the card floating at the bottom forever.
+    // then linger pointlessly over content.
     const NO_KB_GRACE_MS = 1500
     let tokenFocusClosedSince = 0
-    // Set when focus leaves the token card while its keyboard is still
-    // closing: the card STAYS pinned and rides the keyboard down, releasing
-    // only once the viewport has settled. Releasing instantly makes the card
-    // snap back into flow and the column below jump — visible stutter.
-    let tokenReleasePending = false
-    // When the deferred release started — the ride-down has a HARD deadline
-    // so a misbehaving event stream can never keep it alive indefinitely.
-    let tokenPendingSince = 0
     // The token card's flow height, measured ONCE per pin cycle while still
     // in flow (before the fixed class applies). Never re-read while pinned:
     // a forced offsetHeight read on every keyboard-follow frame thrashes
@@ -1221,9 +1206,9 @@ function GitPanel({
     // Fully unpin the identity card and reset every pin-cycle flag. The card
     // glides back to its flow slot (FLIP) instead of teleporting: FIRST its
     // docked rect is captured, then unpinning happens, then LAST/INVERT/PLAY
-    // animates the short journey home. Surrounding layout needs no animation
-    // — the card re-enters the exact space the reserved padding frees, so
-    // nothing below ever shifts. Respects prefers-reduced-motion.
+    // animates the journey home. Surrounding layout needs no animation — the
+    // card re-enters the exact space the reserved padding frees, so nothing
+    // below ever shifts. Respects prefers-reduced-motion.
     const releaseTokenPin = () => {
       const root = panelRef.current
       if (!root) return
@@ -1236,14 +1221,11 @@ function GitPanel({
           ? card.getBoundingClientRect()
           : null
 
-      setVar('--git-kb-bottom', '0px')
       setVar('--git-token-h', '0px')
       if (root.dataset.gitKbMode === 'token') delete root.dataset.gitKbMode
       tokenCardH = 0
       tokenKbSeen = false
       tokenDirty = false
-      tokenReleasePending = false
-      tokenPendingSince = 0
 
       if (!firstRect || !card) return
       const lastRect = card.getBoundingClientRect()
@@ -1260,7 +1242,7 @@ function GitPanel({
         'transition',
         'transform 260ms cubic-bezier(0.2, 0, 0, 1)',
       )
-      style.setProperty('transform', TOKEN_CARD_BASE_TRANSFORM)
+      style.removeProperty('transform')
 
       const onEnd = (e: TransitionEvent) => {
         if (e.propertyName !== 'transform' || e.target !== card) return
@@ -1270,7 +1252,7 @@ function GitPanel({
       const finish = () => {
         window.clearTimeout(timer)
         card.removeEventListener('transitionend', onEnd)
-        // Drop the transition so later var-driven transforms stay instant.
+        // Drop the transition so later style changes stay instant.
         style.setProperty('transition', 'none')
         if (flipCancel === cancel) flipCancel = null
       }
@@ -1278,7 +1260,7 @@ function GitPanel({
         window.clearTimeout(timer)
         card.removeEventListener('transitionend', onEnd)
         style.setProperty('transition', 'none')
-        style.setProperty('transform', TOKEN_CARD_BASE_TRANSFORM)
+        style.removeProperty('transform')
         if (flipCancel === cancel) flipCancel = null
       }
       timer = window.setTimeout(finish, 320)
@@ -1296,10 +1278,8 @@ function GitPanel({
       // without a coarse pointer): the keyboard choreography below must never
       // run, and any token/composer keyboard state is torn down instantly.
       // The pinned CSS itself is max-lg-scoped — this is the JS mirror.
-      if (!mq.matches && (mode !== null || tokenReleasePending)) {
+      if (!mq.matches && mode !== null) {
         mode = null
-        tokenReleasePending = false
-        tokenPendingSince = 0
         tokenKbSeen = false
         tokenDirty = false
         releaseTokenPin()
@@ -1323,13 +1303,15 @@ function GitPanel({
         : 0
       const kbOpen = kbCovered > 0 || kbReflow > 0
 
-      // Self-healing revert. Two stuck states are covered here, evaluated on
-      // every update() — including the 1 Hz reconcile tick below, so missed
-      // transitions (no event ever delivered) still recover within ~1s:
+      // Self-healing revert. The card is docked at the TOP, so it is never
+      // covered by the keyboard — the only reasons to auto-release are:
       //  • dismissed untouched: keyboard closed while the empty field kept
       //    focus (back button / dismiss gesture) — deselect + unpin;
       //  • no keyboard at all: focus held but the viewport never resized
       //    beyond the grace window (hardware-keyboard devices) — same.
+      // Both are evaluated on every update() — including the 1 Hz reconcile
+      // tick below, so missed transitions (no event ever delivered) still
+      // recover within ~1s.
       if (mq.matches && mode === 'token') {
         if (kbOpen) {
           tokenKbSeen = true
@@ -1349,8 +1331,6 @@ function GitPanel({
               active.blur()
             }
             mode = null
-            tokenReleasePending = true
-            tokenPendingSince = performance.now()
           }
         }
       }
@@ -1373,32 +1353,20 @@ function GitPanel({
         setVar('--git-kb-offset', `${-kbReflow}px`)
       }
 
-      // Pinned while the card owns the keyboard, or while riding a closing
-      // one out after focus moved away. Two hard terminators: the keyboard
-      // reading zero, or the ride deadline expiring — either way the pending
-      // release completes and nothing can stay pinned indefinitely.
-      const RIDE_MAX_MS = 1200
-      const riding =
-        tokenReleasePending &&
-        kbOpen &&
-        performance.now() - tokenPendingSince < RIDE_MAX_MS
-      const pinned = mode === 'token' || riding
+      // Pinned exactly while the card owns the keyboard focus — the dock is
+      // at the TOP of the viewport, so keyboard height is irrelevant to it.
+      const pinned = mode === 'token'
 
       if (pinned && card) {
         // Re-pinning mid-glide (fast refocus): tear down the release
         // animation first so no stale inline transform fights the dock.
         if (flipCancel) flipCancel()
-        // Dock the identity card above the keyboard: reserve its flow height
-        // ONCE per pin cycle (measured in flow, before the fixed class
-        // applies), then keep following kbCovered each frame without further
-        // layout reads. On iOS the dock sits kbCovered above the viewport
-        // bottom; on Android the reflowed layout bottom already IS the
-        // keyboard's top, so the offset is 0.
+        // Reserve the card's flow height ONCE per pin cycle (measured in
+        // flow, before the fixed class applies) so nothing below shifts.
         if (tokenCardH === 0) {
           tokenCardH = card.offsetHeight
         }
         setVar('--git-token-h', `${tokenCardH}px`)
-        setVar('--git-kb-bottom', `${kbCovered}px`)
         if (root.dataset.gitKbMode !== 'token') root.dataset.gitKbMode = 'token'
       } else {
         releaseTokenPin()
@@ -1431,13 +1399,6 @@ function GitPanel({
           tokenKbSeen = false
           tokenFocusClosedSince = performance.now()
         }
-        // Re-focused before a pending release completed (quick re-tap while
-        // the keyboard is still closing): cancel the release seamlessly.
-        tokenReleasePending = false
-      } else if (next === 'composer') {
-        // Another git input owns the keyboard now — the card must return to
-        // flow immediately, not ride this keyboard out.
-        tokenReleasePending = false
       }
       mode = next
       onEvent()
@@ -1451,19 +1412,11 @@ function GitPanel({
     }
     // focusout fires before the next focusin — re-check in a microtask so
     // tabbing between the panel's inputs never flashes back to "no mode".
-    // When focus leaves the token card to NOTHING (tap-away, keyboard dismiss)
-    // while the card is pinned, defer the release: the card stays pinned and
-    // follows the closing keyboard down (tokenReleasePending), instead of
-    // snapping back into flow mid-animation. The next update() with the
-    // keyboard fully closed completes the release.
+    // The card docks at the TOP, independent of the keyboard, so release is
+    // immediate on blur — the FLIP glide handles the visual continuity.
     const onFocusOut = () => {
       queueMicrotask(() => {
-        const next = classify(document.activeElement)
-        if (mode === 'token' && next === null) {
-          tokenReleasePending = true
-          tokenPendingSince = performance.now()
-        }
-        mode = next
+        mode = classify(document.activeElement)
         onEvent()
       })
     }
@@ -1475,7 +1428,7 @@ function GitPanel({
     // foreground hooks below re-run update() so a stuck pin always recovers;
     // the write-coalescing in setVar makes no-op ticks free.
     const reconcile = () => {
-      if (mode === 'token' || tokenReleasePending) onEvent()
+      if (mode === 'token') onEvent()
     }
     const reconcileTimer = window.setInterval(reconcile, 1_000)
 
