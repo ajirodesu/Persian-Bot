@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { ComponentType, Ref, SVGProps } from 'react'
+import type { ComponentType, CSSProperties, Ref, SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import {
@@ -1016,7 +1016,13 @@ function GithubIdentityCard({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1">
               <input
-                type={showToken ? 'text' : 'password'}
+                // An API key, not a password: always rendered as a plain text
+                // input so mobile browsers never summon password managers /
+                // iCloud Keychain / "use strong password" suggestions over it.
+                // Masking is done with -webkit-text-security instead, so the
+                // show/hide eye toggle keeps working without password
+                // semantics (WebKit/Blink only; other engines show plaintext).
+                type="text"
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
                 placeholder="ghp_… personal access token"
@@ -1028,6 +1034,11 @@ function GithubIdentityCard({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void handleConnect()
                 }}
+                style={
+                  showToken
+                    ? undefined
+                    : ({ WebkitTextSecurity: 'disc' } as CSSProperties)
+                }
                 className="w-full rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-3 py-2.5 pr-11 font-mono text-[16px] leading-6 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:py-1.5 sm:text-label-sm"
               />
               <button
