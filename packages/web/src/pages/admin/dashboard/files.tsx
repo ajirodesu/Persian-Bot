@@ -946,7 +946,12 @@ function GithubIdentityCard({
     <div
       data-git-token-card=""
       style={{
-        bottom: 'calc(var(--git-kb-bottom, 0px) + env(safe-area-inset-bottom))',
+        // Static dock + compositor-only lift — the exact model of the commit
+        // box's --git-kb-offset translate. Animating `bottom` would force a
+        // layout pass on every keyboard-follow frame; a transform does not,
+        // so the ride stays perfectly smooth on phones.
+        bottom: 'env(safe-area-inset-bottom)',
+        transform: 'translate3d(0, calc(var(--git-kb-bottom, 0px) * -1), 0)',
       }}
       className={cn(
         'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
@@ -1164,14 +1169,41 @@ function GitPanel({
 
     // Fully unpin the identity card and reset every pin-cycle flag. One
     // code path for release = one consistent, jump-free default state.
-    const releaseTokenPin = (root: HTMLElement) => {
-      delete root.dataset.gitKbMode
-      root.style.setProperty('--git-kb-bottom', '0px')
-      root.style.setProperty('--git-token-h', '0px')
+    const releaseTokenPin = () => {
+      const root = panelRef.current
+      if (!root) return
+      setVar('--git-kb-bottom', '0px')
+      setVar('--git-token-h', '0px')
+      if (root.dataset.gitKbMode === 'token') delete root.dataset.gitKbMode
       tokenCardH = 0
       tokenKbSeen = false
       tokenDirty = false
       tokenReleasePending = false
+    }
+
+    // Write-coalescing: every setProperty invalidates style for the whole
+    // panel subtree, and viewport events arrive in bursts where the values
+    // usually have NOT changed (iOS pan frames, keyboard-settle frames).
+    // Skip identical writes so follow-up frames are pure no-ops.
+    const writtenVars = new Map<string, string>()
+    function setVar(name: string, value: string): void {
+      if (writtenVars.get(name) === value) return
+      writtenVars.set(name, value)
+      panelRef.current?.style.setProperty(name, value)
+    }
+
+    // The card element is stable across re-renders (React reuses the node),
+    // so resolve it once and only re-query if it left the DOM. Saves a
+    // querySelector on every keyboard-follow frame.
+    let tokenCardEl: HTMLElement | null = null
+    const getTokenCard = (): HTMLElement | null => {
+      if (!tokenCardEl || !tokenCardEl.isConnected) {
+        tokenCardEl =
+          panelRef.current?.querySelector<HTMLElement>(
+            '[data-git-token-card]',
+          ) ?? null
+      }
+      return tokenCardEl
     }
 
     const update = () => {
@@ -1219,20 +1251,21 @@ function GitPanel({
       }
 
       // Mode attribute drives the pinned-token card (group/git variants) and
-      // must be cleared whenever no git input owns the keyboard.
-      const card = root.querySelector<HTMLElement>('[data-git-token-card]')
+      // must be cleared whenever no git input owns the keyboard. The card
+      // node is cached — React reuses it, so this is not a per-frame query.
+      const card = getTokenCard()
 
       if (mode === 'composer') {
         // Only the commit composer lifts. On iOS that is the covered band
         // (translate); on Android the native reflow already lifted it, so the
         // translate stays 0 — never both, or the bar would double-rise.
-        root.style.setProperty('--git-kb-offset', `${kbCovered}px`)
+        setVar('--git-kb-offset', `${kbCovered}px`)
       } else {
         // The composer must stay EXACTLY where it was. On Android the native
         // reflow lifts the fixed bar with the keyboard, so it is pushed back
         // down by the same amount (behind the keyboard, invisible — but
         // perfectly still). On iOS kbReflow is 0 and nothing moves.
-        root.style.setProperty('--git-kb-offset', `${-kbReflow}px`)
+        setVar('--git-kb-offset', `${-kbReflow}px`)
       }
 
       // Pinned while the card owns the keyboard, or while riding a closing
@@ -1240,21 +1273,21 @@ function GitPanel({
       // gone, the pending release completes.
       const pinned = mode === 'token' || (tokenReleasePending && kbOpen)
 
-      if (pinned) {
+      if (pinned && card) {
         // Dock the identity card above the keyboard: reserve its flow height
         // ONCE per pin cycle (measured in flow, before the fixed class
         // applies), then keep following kbCovered each frame without further
         // layout reads. On iOS the dock sits kbCovered above the viewport
         // bottom; on Android the reflowed layout bottom already IS the
         // keyboard's top, so the offset is 0.
-        if (card && tokenCardH === 0) {
+        if (tokenCardH === 0) {
           tokenCardH = card.offsetHeight
         }
-        root.style.setProperty('--git-token-h', `${tokenCardH}px`)
-        root.style.setProperty('--git-kb-bottom', `${kbCovered}px`)
-        root.dataset.gitKbMode = 'token'
+        setVar('--git-token-h', `${tokenCardH}px`)
+        setVar('--git-kb-bottom', `${kbCovered}px`)
+        if (root.dataset.gitKbMode !== 'token') root.dataset.gitKbMode = 'token'
       } else {
-        releaseTokenPin(root)
+        releaseTokenPin()
       }
     }
 
@@ -1320,7 +1353,9 @@ function GitPanel({
 
     update()
     vv?.addEventListener('resize', onEvent)
-    vv?.addEventListener('scroll', onEvent)
+    // Passive: the handler never cancels scrolling — this lets the browser
+    // keep visual-viewport panning on the compositor thread while pinned.
+    vv?.addEventListener('scroll', onEvent, { passive: true })
     window.addEventListener('resize', onEvent)
     const root = panelRef.current
     root?.addEventListener('focusin', onFocusIn)

@@ -44,18 +44,43 @@ export function startServer(): void {
   httpServer.keepAliveTimeout = 65_000;
   httpServer.headersTimeout = 66_000;
 
-  const server = httpServer.listen(port, '0.0.0.0', () => {
-    logger.info(`Webhook & API server listening on port ${port}`);
-  });
+  // Restart-safe binding: when the previous instance is still shutting down
+  // (tsx-watch reloads, SIGTERM drains, a lingering dev server), the port can
+  // be briefly unavailable. Retry within a bounded window instead of dying on
+  // the first EADDRINUSE — a restart must not take the whole bot down.
+  // NOTE: httpServer.listen() returns the SAME server instance every time, so
+  // the error listener is attached ONCE here and reads the attempt counter —
+  // re-attaching per attempt would stack listeners and duplicate every log.
+  const BIND_RETRY_LIMIT = 5;
+  const BIND_RETRY_DELAY_MS = 1_000;
+  let bindAttempt = 0;
 
-  server.on('error', (err: NodeJS.ErrnoException) => {
+  function bindServer(): void {
+    bindAttempt += 1;
+    httpServer.listen(port, '0.0.0.0', () => {
+      logger.info(`Webhook & API server listening on port ${port}`);
+    });
+  }
+
+  httpServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE' && bindAttempt < BIND_RETRY_LIMIT) {
+      logger.warn(
+        `[server] Port ${port} busy — retrying in ${BIND_RETRY_DELAY_MS}ms (attempt ${bindAttempt}/${BIND_RETRY_LIMIT})`,
+      );
+      setTimeout(bindServer, BIND_RETRY_DELAY_MS);
+      return;
+    }
     if (err.code === 'EADDRINUSE') {
-      logger.error(`[server] Port ${port} is already in use`);
+      logger.error(
+        `[server] Port ${port} is still in use after ${BIND_RETRY_LIMIT} attempts — stop the process holding it or change PORT in packages/cat-bot/.env`,
+      );
     } else {
       logger.error('[server] Fatal server error:', err);
     }
     process.exit(1);
   });
+
+  bindServer();
 
   // Note: SIGTERM handling for graceful shutdown is managed globally by
   // the Cat-Bot orchestrator in packages/bot/src/app.ts.
