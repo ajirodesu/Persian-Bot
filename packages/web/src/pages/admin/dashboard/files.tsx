@@ -814,23 +814,15 @@ const CommitBox = memo(function CommitBox({
       ref={ref}
       data-git-composer=""
       className={cn(
-        // Mobile: fixed composer pinned to the bottom of the visual viewport
-        // (above the keyboard — the timezone sheet's stability model). It is
-        // anchored once and never re-anchors while typing; the translate lifts
-        // it by exactly the covered height when the keyboard opens.
+        // Mobile: the focused composer becomes a fixed, viewport-anchored bar
+        // like the timezone picker. It stays in one place while the keyboard
+        // opens and while the message is edited.
         'flex shrink-0 flex-col gap-2 border-t border-hairline bg-surface-container p-3',
-        'fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[var(--z-sticky)] shadow-elevation-2 transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none',
+        'fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[var(--z-sticky)] shadow-elevation-2',
+        'max-lg:group-data-[git-kb-mode=composer]/git:top-0 max-lg:group-data-[git-kb-mode=composer]/git:bottom-auto max-lg:group-data-[git-kb-mode=composer]/git:top-[env(safe-area-inset-top)]',
         // Desktop: normal in-flow box inside the left column.
-        'lg:static lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
+        'lg:static lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
       )}
-      style={{
-        // --git-kb-offset is signed by the GitPanel keyboard effect:
-        //  • positive (iOS, composer focused) — lifts the bar above the keyboard
-        //  • negative (Android, token/other input focused) — cancels the native
-        //    resizes-content lift so the bar stays exactly where it was
-        //  • 0 — no keyboard / desktop.
-        transform: 'translate3d(0, calc(var(--git-kb-offset, 0px) * -1), 0)',
-      }}
     >
       <textarea
         value={commitMsg}
@@ -938,28 +930,22 @@ function GithubIdentityCard({
     // data-git-token-card routes mobile keyboard handling: when the token
     // input inside this card is focused, the GitPanel's keyboard effect sets
     // data-git-kb-mode="token" on the panel (a named group) and this card
-    // becomes a bar PINNED above the on-screen keyboard — the exact model the
-    // commit composer uses, guaranteeing the field is visible and typable
-    // regardless of scroll position or how the platform treats the keyboard.
+    // becomes a bar pinned to the viewport top — the same stable model as the
+    // timezone search bar, regardless of page scroll or keyboard resizing.
     // The long helper paragraph is hidden while pinned so the bar stays
     // compact; the column reserves the card's flow height so nothing jumps.
     <div
       data-git-token-card=""
       style={{
-        // Static dock + compositor-only lift — the exact model of the commit
-        // box's --git-kb-offset translate. Animating `bottom` would force a
-        // layout pass on every keyboard-follow frame; a transform does not,
-        // so the ride stays perfectly smooth on phones.
-        bottom: 'env(safe-area-inset-bottom)',
-        transform: 'translate3d(0, calc(var(--git-kb-bottom, 0px) * -1), 0)',
+        // Dock to the top edge (under the notch) — the keyboard can never
+        // cover the field, and typing never causes the card to re-anchor.
+        top: 'env(safe-area-inset-top)',
       }}
       className={cn(
         'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
-        // Pinned-token mode (mobile keyboard, token input focused): the card
-        // lifts out of flow and docks to the top edge of the keyboard.
-        // Desktop (lg) never pins — the attribute is mobile-only anyway, the
-        // lg: reset is belt-and-braces.
-        'group-data-[git-kb-mode=token]/git:fixed group-data-[git-kb-mode=token]/git:left-0 group-data-[git-kb-mode=token]/git:right-0 group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] group-data-[git-kb-mode=token]/git:border-t group-data-[git-kb-mode=token]/git:border-b-0 group-data-[git-kb-mode=token]/git:shadow-elevation-2 group-data-[git-kb-mode=token]/git:lg:static group-data-[git-kb-mode=token]/git:lg:shadow-none',
+        // Pinned-token mode mirrors the timezone search bar: fixed to the
+        // viewport's top edge, never repositioned by keyboard follow frames.
+        'max-lg:group-data-[git-kb-mode=token]/git:fixed max-lg:group-data-[git-kb-mode=token]/git:top-0 max-lg:group-data-[git-kb-mode=token]/git:left-0 max-lg:group-data-[git-kb-mode=token]/git:right-0 max-lg:group-data-[git-kb-mode=token]/git:z-[var(--z-sticky)] max-lg:group-data-[git-kb-mode=token]/git:border-t max-lg:group-data-[git-kb-mode=token]/git:border-b-0 max-lg:group-data-[git-kb-mode=token]/git:shadow-elevation-2',
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -1127,18 +1113,14 @@ function GitPanel({
   // meta already reflows the layout, so the value reads ~0 there and the
   // composer never double-moves.
   //
-  // Focus-scoped: ONLY the focused input adjusts for the keyboard. Focusing
-  // the commit composer lifts the composer (--git-kb-offset); focusing the
-  // GitHub token input shifts just the identity card by exactly the amount it
-  // is clipped by the keyboard (--git-token-offset) — the composer and every
-  // other element stay put, so nothing else jumps around while typing.
+  // Focus-scoped: ONLY the focused Git surface is pinned to the viewport top.
+  // The inactive surface and the rest of the panel stay put while typing.
   const panelRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    // Coarse-pointer mobile gate: `lg` is this panel's mobile breakpoint, and
-    // the pointer check keeps desktop (including pinch/ctrl-zoom, where the
-    // visual viewport also shrinks) from ever moving the layout.
-    const mq = window.matchMedia('(max-width: 1023px) and (pointer: coarse)')
+    // Match the panel's `lg` mobile breakpoint, like the timezone picker does
+    // for its fixed mobile sheet. Desktop stays entirely in normal flow.
+    const mq = window.matchMedia('(max-width: 1023px)')
     const vv = window.visualViewport
     let raf = 0
     let mode: 'composer' | 'token' | null = null
@@ -1163,8 +1145,8 @@ function GitPanel({
     let tokenReleasePending = false
     // The token card's flow height, measured ONCE per pin cycle while still
     // in flow (before the fixed class applies). Never re-read while pinned:
-    // a forced offsetHeight read on every keyboard-follow frame thrashes
-    // layout right when the animation needs to be smooth.
+    // a forced offsetHeight read on every viewport frame thrashes layout right
+    // when the keyboard is opening.
     let tokenCardH = 0
     // Highest innerHeight ever seen this session. On Android/Chrome the app's
     // interactive-widget=resizes-content meta shrinks window.innerHeight when
@@ -1178,7 +1160,6 @@ function GitPanel({
     const releaseTokenPin = () => {
       const root = panelRef.current
       if (!root) return
-      setVar('--git-kb-bottom', '0px')
       setVar('--git-token-h', '0px')
       if (root.dataset.gitKbMode === 'token') delete root.dataset.gitKbMode
       tokenCardH = 0
@@ -1200,7 +1181,7 @@ function GitPanel({
 
     // The card element is stable across re-renders (React reuses the node),
     // so resolve it once and only re-query if it left the DOM. Saves a
-    // querySelector on every keyboard-follow frame.
+    // querySelector on every viewport frame.
     let tokenCardEl: HTMLElement | null = null
     const getTokenCard = (): HTMLElement | null => {
       if (!tokenCardEl || !tokenCardEl.isConnected) {
@@ -1266,21 +1247,14 @@ function GitPanel({
       }
 
       // Mode attribute drives the pinned-token card (group/git variants) and
-      // must be cleared whenever no git input owns the keyboard. The card
-      // node is cached — React reuses it, so this is not a per-frame query.
+      // the focused composer. React is not involved in these writes, so
+      // keyboard resize frames never cause the panel to re-render.
       const card = getTokenCard()
 
-      if (mode === 'composer') {
-        // Only the commit composer lifts. On iOS that is the covered band
-        // (translate); on Android the native reflow already lifted it, so the
-        // translate stays 0 — never both, or the bar would double-rise.
-        setVar('--git-kb-offset', `${kbCovered}px`)
+      if (mode === 'token' || mode === 'composer') {
+        root.dataset.gitKbMode = mode
       } else {
-        // The composer must stay EXACTLY where it was. On Android the native
-        // reflow lifts the fixed bar with the keyboard, so it is pushed back
-        // down by the same amount (behind the keyboard, invisible — but
-        // perfectly still). On iOS kbReflow is 0 and nothing moves.
-        setVar('--git-kb-offset', `${-kbReflow}px`)
+        delete root.dataset.gitKbMode
       }
 
       // Pinned while the card owns the keyboard, or while riding a closing
@@ -1299,8 +1273,6 @@ function GitPanel({
           tokenCardH = card.offsetHeight
         }
         setVar('--git-token-h', `${tokenCardH}px`)
-        setVar('--git-kb-bottom', `${kbCovered}px`)
-        if (root.dataset.gitKbMode !== 'token') root.dataset.gitKbMode = 'token'
       } else {
         releaseTokenPin()
       }
@@ -1559,7 +1531,7 @@ function GitPanel({
           card is pinned above the keyboard its flow slot is empty, so the
           card's measured height is reserved as top padding — nothing below
           shifts. */}
-      <div className="flex min-w-0 flex-col border-b border-hairline pt-[var(--git-token-h,0px)] pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] group-data-[git-kb-mode=token]/git:border-b-0 lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 lg:pt-0 xl:w-[26rem]">
+      <div className="flex min-w-0 flex-col border-b border-hairline pt-[var(--git-token-h,0px)] pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] max-lg:group-data-[git-kb-mode=composer]/git:pt-[var(--git-composer-h,0px)] group-data-[git-kb-mode=token]/git:border-b-0 lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 lg:pt-0 xl:w-[26rem]">
         <GithubIdentityCard files={files} configured={configured} />
 
         {/* Branch + sync actions */}
