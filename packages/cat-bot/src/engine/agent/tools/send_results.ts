@@ -106,6 +106,57 @@ export interface DeliverCombinedArgs {
   attachment?: string[];
 }
 
+function capturedCaptionFromCall(call: {
+  type: string;
+  args: unknown[];
+}): string | null {
+  const isReply = call.type === 'replyMessage' || call.type === 'editMessage';
+  const isSend =
+    call.type === 'sendMessage' &&
+    typeof call.args[0] === 'object' &&
+    call.args[0] !== null;
+  if (call.type === 'sendMessage' && typeof call.args[0] === 'string') {
+    return call.args[0].trim() || null;
+  }
+  const options = isReply ? call.args[1] : isSend ? call.args[0] : null;
+  if (!options || typeof options !== 'object') return null;
+  const message = (options as Record<string, unknown>)['message'];
+  return typeof message === 'string' && message.trim() ? message.trim() : null;
+}
+
+function getCapturedCaptions(keys: string[]): string[] {
+  const captions: string[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const baseKey = key.endsWith(':a') || key.endsWith(':b')
+      ? key.slice(0, -2)
+      : key.endsWith(':bin')
+        ? key.slice(0, -4)
+        : key;
+    for (const call of commandResultStore.get(baseKey) ?? []) {
+      const caption = capturedCaptionFromCall(call);
+      if (caption && !seen.has(caption)) {
+        seen.add(caption);
+        captions.push(caption);
+      }
+    }
+  }
+  return captions;
+}
+
+export function composeMediaMessage(
+  message: string,
+  captions: string[],
+): string {
+  const original = captions.map((caption) => caption.trim()).filter(Boolean);
+  let intro = message.trim();
+  for (const caption of original) intro = intro.replace(caption, '').trim();
+  if (!intro) intro = 'Here is your result, generated dynamically by AI.';
+  return original.length > 0
+    ? `${intro}\n\n${original.join('\n\n')}`
+    : intro;
+}
+
 /**
  * Delivers one unified platform reply from a synthesized message plus captured
  * URL attachments, binary attachments and button grids. Shared by the
@@ -169,13 +220,25 @@ export async function deliverCombinedResult(
     }
   }
 
+  const capturedKeys = [
+    ...(attachment_url ?? []),
+    ...(attachment ?? []),
+    ...(button ?? []),
+  ];
+  const finalMessage =
+    capturedKeys.length > 0
+      ? composeMediaMessage(message, getCapturedCaptions(capturedKeys))
+      : message.trim();
+
   // Auto-markdown: only treat the reply as formatted when it actually contains
   // supported Markdown syntax. Plain text goes out as TEXT so Telegram's
   // MarkdownV2 parser never chokes on stray special characters (unescaped `!`,
   // `-`, `*`, ...) in conversational replies.
   const replyOptions: ReplyMessageOptions = {
-    message,
-    style: containsMarkdown(message) ? MessageStyle.MARKDOWN : MessageStyle.TEXT,
+    message: finalMessage,
+    style: containsMarkdown(finalMessage)
+      ? MessageStyle.MARKDOWN
+      : MessageStyle.TEXT,
     ...(replyToID ? { reply_to_message_id: replyToID } : {}),
   };
   if (allAttachmentUrls.length > 0)
@@ -188,7 +251,7 @@ export async function deliverCombinedResult(
     await ctx.api.replyMessage(threadID, replyOptions);
     // Mark the turn as delivered so any further send_result call is a no-op
     // (see the idempotency guard at the top of this function).
-    ctx.agentReplyDelivered = { message, deliveredAt: Date.now() };
+    ctx.agentReplyDelivered = { message: finalMessage, deliveredAt: Date.now() };
 
     const parts: string[] = ['Message delivered.'];
     if (allAttachmentUrls.length > 0)

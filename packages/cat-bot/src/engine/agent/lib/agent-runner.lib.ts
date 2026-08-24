@@ -495,6 +495,11 @@ async function runOpenAILike(
           },
         }));
         msg.content = parsed.prose || null;
+        // Preserve the assistant/tool relationship even when this provider
+        // does not support native tool declarations. OpenAI-compatible
+        // endpoints still validate tool-role messages against the preceding
+        // assistant tool_calls array on the next request.
+        msg.tool_calls = funcCalls;
       }
     }
 
@@ -683,9 +688,25 @@ async function runGemini(
       throw err;
     }
 
-    const parts: any[] = response.candidates?.[0]?.content?.parts ?? [];
+    let parts: any[] = response.candidates?.[0]?.content?.parts ?? [];
     const textPart = parts.find((p: any) => typeof p.text === 'string');
-    const callParts = parts.filter((p: any) => p.functionCall);
+    let callParts = parts.filter((p: any) => p.functionCall);
+
+    // Gemini models that reject native function declarations can still emit
+    // the same text tool-call markup as router models. Normalize it into
+    // synthetic functionCall parts so every Gemini model keeps MCP access.
+    if (callParts.length === 0 && typeof textPart?.text === 'string') {
+      const parsed = parseTextToolCalls(textPart.text);
+      if (parsed.calls.length > 0) {
+        callParts = parsed.calls.map((call) => ({
+          functionCall: { name: call.name, args: call.args },
+        }));
+        parts = [
+          ...(parsed.prose ? [{ text: parsed.prose }] : []),
+          ...callParts,
+        ];
+      }
+    }
 
     if (callParts.length === 0) {
       return textPart?.text ?? null;
