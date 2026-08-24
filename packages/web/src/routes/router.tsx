@@ -21,78 +21,33 @@ import NotFound from '@/pages/errors/NotFound'
 import InternalServerError from '@/pages/errors/InternalServerError'
 
 // Page bundles — split per-route so the initial JS payload stays small.
-const CHUNK_RELOAD_FLAG = 'route-chunk-reload'
-
-/**
- * Lazy page loader that survives stale bundles. If the tab stays open across
- * a server restart/redeploy (or a long idle period while the dev server
- * rebuilt), navigating to a not-yet-loaded route requests a chunk URL that
- * may no longer exist — the import rejects and React Router would drop the
- * user onto the raw "500 Something went wrong" screen. One clean reload
- * fetches fresh HTML + chunk names and recovers transparently; the
- * sessionStorage flag prevents a reload loop if the failure is persistent.
- */
-function lazyPage(factory: () => Promise<{ default: React.ComponentType }>) {
-  return lazy(async () => {
-    try {
-      const page = await factory()
-      try {
-        sessionStorage.removeItem(CHUNK_RELOAD_FLAG)
-      } catch {
-        /* storage unavailable */
-      }
-      return page
-    } catch (err) {
-      let alreadyReloaded = false
-      try {
-        alreadyReloaded = sessionStorage.getItem(CHUNK_RELOAD_FLAG) === '1'
-        if (!alreadyReloaded) sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1')
-      } catch {
-        /* storage unavailable */
-      }
-      if (!alreadyReloaded) window.location.reload()
-      throw err
-    }
-  })
-}
-
-const HomePage = lazyPage(() => import('@/pages/Home'))
-const LoginPage = lazyPage(() => import('@/pages/Login'))
-const SignupPage = lazyPage(() => import('@/pages/Signup'))
-const ForgotPasswordPage = lazyPage(() => import('@/pages/ForgotPassword'))
-const ResetPasswordPage = lazyPage(() => import('@/pages/ResetPassword'))
-const AccountVerificationPage = lazyPage(() =>
-  import('@/pages/AccountVerification'),
-)
-const SettingsPage = lazyPage(() => import('@/pages/dashboard/settings'))
-const BotManagerPage = lazyPage(() => import('@/pages/dashboard'))
-const NewBotPage = lazyPage(() => import('@/pages/dashboard/create-new-bot'))
-const BotLayout = lazyPage(
+const HomePage = lazy(() => import('@/pages/Home'))
+const LoginPage = lazy(() => import('@/pages/Login'))
+const SignupPage = lazy(() => import('@/pages/Signup'))
+const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPassword'))
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPassword'))
+const AccountVerificationPage = lazy(() => import('@/pages/AccountVerification'))
+const SettingsPage = lazy(() => import('@/pages/dashboard/settings'))
+const BotManagerPage = lazy(() => import('@/pages/dashboard'))
+const NewBotPage = lazy(() => import('@/pages/dashboard/create-new-bot'))
+const BotLayout = lazy(
   () => import('@/features/users/components/DashboardBotLayout'),
 )
-const ChatRoomPage = lazyPage(() => import('@/pages/dashboard/chat-room'))
-const BotConsolePage = lazyPage(() => import('@/pages/dashboard/bot/index'))
-const BotCommandsPage = lazyPage(() => import('@/pages/dashboard/bot/commands'))
-const BotEventsPage = lazyPage(() => import('@/pages/dashboard/bot/events'))
-const BotSettingsPage = lazyPage(() => import('@/pages/dashboard/bot/settings'))
-const BotDatabasePage = lazyPage(() => import('@/pages/dashboard/bot/database'))
-const AdminLoginPage = lazyPage(() => import('@/pages/admin'))
-const AdminForgotPasswordPage = lazyPage(() =>
-  import('@/pages/admin/ForgotPassword'),
-)
-const AdminResetPasswordPage = lazyPage(() =>
-  import('@/pages/admin/ResetPassword'),
-)
-const AdminDashboardPage = lazyPage(() => import('@/pages/admin/dashboard'))
-const AdminUsersPage = lazyPage(() => import('@/pages/admin/dashboard/users'))
-const AdminBotsPage = lazyPage(() => import('@/pages/admin/dashboard/bots'))
-const AdminFilesPage = lazyPage(() => import('@/pages/admin/dashboard/files'))
-const AdminSettingsPage = lazyPage(() =>
-  import('@/pages/admin/dashboard/settings'),
-)
-const AdminMcpServersPage = lazyPage(() =>
-  import('@/pages/admin/dashboard/mcp-servers'),
-)
+const ChatRoomPage = lazy(() => import('@/pages/dashboard/chat-room'))
+const BotConsolePage = lazy(() => import('@/pages/dashboard/bot/index'))
+const BotCommandsPage = lazy(() => import('@/pages/dashboard/bot/commands'))
+const BotEventsPage = lazy(() => import('@/pages/dashboard/bot/events'))
+const BotSettingsPage = lazy(() => import('@/pages/dashboard/bot/settings'))
+const BotDatabasePage = lazy(() => import('@/pages/dashboard/bot/database'))
+const AdminLoginPage = lazy(() => import('@/pages/admin'))
+const AdminForgotPasswordPage = lazy(() => import('@/pages/admin/ForgotPassword'))
+const AdminResetPasswordPage = lazy(() => import('@/pages/admin/ResetPassword'))
+const AdminDashboardPage = lazy(() => import('@/pages/admin/dashboard'))
+const AdminUsersPage = lazy(() => import('@/pages/admin/dashboard/users'))
+const AdminBotsPage = lazy(() => import('@/pages/admin/dashboard/bots'))
+const AdminFilesPage = lazy(() => import('@/pages/admin/dashboard/files'))
+const AdminSettingsPage = lazy(() => import('@/pages/admin/dashboard/settings'))
+const AdminMcpServersPage = lazy(() => import('@/pages/admin/dashboard/mcp-servers'))
 
 /**
  * AdminLayout — scopes AdminAuthProvider to the admin route subtree.

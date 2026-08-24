@@ -127,30 +127,17 @@ export const chatPassthrough: MiddlewareFn<OnChatCtx> = async function (
         // For Discord, upsertThreadSession intelligently intercepts and routes to bot_discord_server_session
         // if the channel belongs to a guild, or bot_threads_session if it's a DM.
         if (threadUpdatedAt !== null) {
-          // Fire-and-forget with .catch — `void` alone makes a rejection land
-          // in the global unhandledRejection handler (the surrounding try/catch
-          // cannot see it), so every failed background sync becomes noise.
           void upsertThreadSession(
             sessionUserId,
             platform,
             sessionId,
             threadID,
-          ).catch((err: unknown) => {
-            logger.warn('⚠️ [on-chat] background upsertThreadSession failed', {
-              error: err,
-            });
-          });
+          );
         }
         // Fire-and-forget — bot pipeline advances immediately; the platform API fetch and
         // subsequent DB writes run in the background. syncThreadAndParticipants will call
         // upsertThreadSession again on completion, refreshing the timestamp a second time.
-        void syncThreadAndParticipants(ctx, threadID, sessionUserId, sessionId).catch(
-          (err: unknown) => {
-            logger.warn('⚠️ [on-chat] background thread sync failed', {
-              error: err,
-            });
-          },
-        );
+        void syncThreadAndParticipants(ctx, threadID, sessionUserId, sessionId);
       }
 
       // Always check the sender explicitly — they may not appear in participantIDs on
@@ -176,20 +163,10 @@ export const chatPassthrough: MiddlewareFn<OnChatCtx> = async function (
               platform,
               sessionId,
               senderID,
-            ).catch((err: unknown) => {
-              logger.warn('⚠️ [on-chat] background upsertUserSession failed', {
-                error: err,
-              });
-            });
+            );
           }
           // Fire-and-forget — syncUser calls upsertUserSession again on completion.
-          void syncUser(ctx, senderID, sessionUserId, sessionId).catch(
-            (err: unknown) => {
-              logger.warn('⚠️ [on-chat] background user sync failed', {
-                error: err,
-              });
-            },
-          );
+          void syncUser(ctx, senderID, sessionUserId, sessionId);
         }
       }
     } catch (err: unknown) {

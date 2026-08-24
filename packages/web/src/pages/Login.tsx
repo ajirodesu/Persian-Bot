@@ -11,12 +11,10 @@ import { useUserAuth } from '@/contexts/UserAuthContext'
 import Checkbox from '@/components/ui/forms/Checkbox'
 import Logo from '@/components/ui/Logo'
 import useEmailServiceEnabled from '@/hooks/useEmailServiceEnabled'
-import { useSessionFormDraft } from '@/hooks/useSessionFormDraft'
 
 interface LoginForm {
   email: string
   password: string
-  rememberMe: boolean
 }
 
 interface LoginErrors {
@@ -28,20 +26,11 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { login } = useUserAuth()
 
-  // The whole login form (including the remember-me checkbox) is a
-  // session-persisted draft: if the phone browser discards the backgrounded
-  // tab and reloads it when the user returns, every field reappears as typed.
-  // Cleared on successful login.
-  const [form, setForm, clearDraft] = useSessionFormDraft<LoginForm>(
-    'draft:login',
-    { email: '', password: '', rememberMe: false },
-  )
+  const [form, setForm] = useState<LoginForm>({ email: '', password: '' })
   const [errors, setErrors] = useState<LoginErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const rememberMe = form.rememberMe
-  const setRememberMe = (checked: boolean) =>
-    setForm((prev) => ({ ...prev, rememberMe: checked }))
+  const [rememberMe, setRememberMe] = useState(false)
 
   const { isEmailEnabled } = useEmailServiceEnabled()
 
@@ -57,8 +46,7 @@ export default function LoginPage() {
   const handleChange =
     (field: keyof LoginForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }))
-      if (field !== 'rememberMe' && errors[field])
-        setErrors((prev) => ({ ...prev, [field]: undefined }))
+      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,7 +60,6 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       await login(form.email, form.password, rememberMe)
-      clearDraft()
       navigate(ROUTES.DASHBOARD.ROOT)
     } catch (err) {
       const msg =

@@ -19,14 +19,6 @@ export interface GetMcpServersResponseDto {
   servers: AdminMcpServerDto[]
 }
 
-/** Sentinel id of the always-on built-in in-process agent MCP server. */
-export const BUILTIN_MCP_SERVER_ID = 'builtin-cat-bot-agent'
-
-/** True when the entry is the built-in server (visible, but not deletable). */
-export function isBuiltinMcpServer(server: Pick<AdminMcpServerDto, 'id'>) {
-  return server.id === BUILTIN_MCP_SERVER_ID
-}
-
 export interface TestMcpServerResponseDto {
   ok: boolean
   toolCount: number
@@ -41,11 +33,7 @@ export interface McpServerInput {
   enabled?: boolean
   /** Minimum role required to use this server's tools (0-4). */
   role?: number
-  /**
-   * Optional request headers (e.g. { Authorization: 'Bearer …' }) — encrypted
-   * at rest. On update an empty-string value preserves the stored secret for
-   * that key, and a previously-set key omitted from the map is deleted.
-   */
+  /** Optional request headers (e.g. { Authorization: 'Bearer …' }) — encrypted at rest. */
   headers?: Record<string, string>
 }
 
@@ -95,13 +83,9 @@ class McpServersService {
     await apiClient.delete(`/api/v1/admin/mcp-servers/${encodeURIComponent(id)}`)
   }
 
-  // POST /api/v1/admin/mcp-servers/test — one-shot connectivity + tool probe.
-  // Pass `id` to test a saved server WITH its stored auth headers (header
-  // values are encrypted at rest and never sent to this client, so the server
-  // must attach them itself). `url` (+ optional `headers`) probes ad-hoc.
+  // POST /api/v1/admin/mcp-servers/test — one-shot connectivity + tool probe
   async testServer(input: {
-    id?: string
-    url?: string
+    url: string
     headers?: Record<string, string>
   }): Promise<TestMcpServerResponseDto> {
     const response = await apiClient.post<TestMcpServerResponseDto>(

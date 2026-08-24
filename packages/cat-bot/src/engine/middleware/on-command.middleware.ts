@@ -33,7 +33,6 @@ import {
   formatGroupBanMessage,
 } from '@/engine/lib/ban-message.lib.js';
 import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
-import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { getPayment } from '@/engine/types/module-meta.types.js';
 import { createCurrenciesContext } from '@/engine/lib/currencies.lib.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
@@ -265,58 +264,47 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
     if (sessOff && threadOff) { await next(); return; }
   }
 
-  // The session-wide and per-thread gates are independent — running them in
-  // parallel halves the cold-cache latency (each gate costs an
-  // isCollectionExist + getAll round trip; serially that is up to 4 hops
-  // before the command even starts). Each helper resolves to false when it
-  // already blocked the command (notice sent); errors fail open (logged).
-  const checkSessionAdminOnly = async (): Promise<boolean> => {
-    try {
-      const botColl = ctx.db.bot;
-      if (await botColl.isCollectionExist('session_settings')) {
-        const h = await botColl.getCollection('session_settings');
-        const settings = await h.getAll();
-        const enabled = settings['adminOnlyEnabled'] as boolean | null;
-        if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
-          setCachedSessionAdminOnly(sessionUserId, platform, sessionId, enabled === true);
-        }
-        if (enabled === true) {
-          const isSysAdmin = senderID ? await cachedIsSystemAdmin(ctx, senderID) : false;
-          if (isSysAdmin) return true;
-          const isAdmin =
-            senderID && sessionUserId && sessionId
-              ? await cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID)
-              : false;
-          if (!isAdmin) {
-            const ignoreList = (settings['adminOnlyIgnoreList'] as string[] | null) ?? [];
-            if (!ignoreList.includes(cmdName)) {
-              const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
-              if (hideNoti !== true) {
-                const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
-                if (cooldownStore.check(key, now) === null) {
-                  await ctx.chat.replyMessage({
-                    message: '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
-                  });
-                  cooldownStore.record(key, now, 15000);
-                }
+  // ── Session-wide admin-only ─────────────────────────────────────────────────
+  try {
+    const botColl = ctx.db.bot;
+    if (await botColl.isCollectionExist('session_settings')) {
+      const h = await botColl.getCollection('session_settings');
+      const settings = await h.getAll();
+      const enabled = settings['adminOnlyEnabled'] as boolean | null;
+      if (enabled !== null && enabled !== undefined && sessionUserId && sessionId) {
+        setCachedSessionAdminOnly(sessionUserId, platform, sessionId, enabled === true);
+      }
+      if (enabled === true) {
+        const isSysAdmin = senderID ? await cachedIsSystemAdmin(ctx, senderID) : false;
+        if (isSysAdmin) { await next(); return; }
+        const isAdmin =
+          senderID && sessionUserId && sessionId
+            ? await cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID)
+            : false;
+        if (!isAdmin) {
+          const ignoreList = (settings['adminOnlyIgnoreList'] as string[] | null) ?? [];
+          if (!ignoreList.includes(cmdName)) {
+            const hideNoti = settings['adminOnlyHideNoti'] as boolean | null;
+            if (hideNoti !== true) {
+              const key = `adminonly_noti:${sessionUserId}:${platform}:${sessionId}:${senderID}`;
+              if (cooldownStore.check(key, now) === null) {
+                await ctx.chat.replyMessage({
+                  message: '🚫 The bot is currently in admin-only mode. Only bot admins may use commands.',
+                });
+                cooldownStore.record(key, now, 15000);
               }
-              return false;
             }
+            return;
           }
         }
-      } else if (sessionUserId && sessionId) {
-        setCachedSessionAdminOnly(sessionUserId, platform, sessionId, false);
       }
-      return true;
-    } catch (err) {
-      // Fail-open — but never silently: a broken DB should be diagnosable.
-      logger.debug('[enforceAdminOnly] session gate failed open', { error: err });
-      return true;
+    } else if (sessionUserId && sessionId) {
+      setCachedSessionAdminOnly(sessionUserId, platform, sessionId, false);
     }
-  };
+  } catch { /* fail-open */ }
 
-  const checkThreadAdminBox = async (): Promise<boolean> => {
-    if (!threadID) return true;
+  // ── Per-thread admin-only ───────────────────────────────────────────────────
+  if (threadID) {
     try {
       const threadColl = ctx.db.threads.collection(threadID);
       if (await threadColl.isCollectionExist('adminbox_settings')) {
@@ -346,25 +334,15 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
                   cooldownStore.record(key, now, 15000);
                 }
               }
-              return false;
+              return;
             }
           }
         }
       } else if (sessionUserId && sessionId) {
         setCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID, false);
       }
-      return true;
-    } catch (err) {
-      logger.debug('[enforceAdminOnly] thread gate failed open', { error: err });
-      return true;
-    }
-  };
-
-  const [sessionOk, threadOk] = await Promise.all([
-    checkSessionAdminOnly(),
-    checkThreadAdminBox(),
-  ]);
-  if (!sessionOk || !threadOk) return;
+    } catch { /* fail-open */ }
+  }
 
   await next();
 };
@@ -405,12 +383,7 @@ export const enforceMaintenanceMode: MiddlewareFn<OnCommandCtx> = async function
       });
       cooldownStore.record(key, Date.now(), 15000);
     }
-  } catch (err) {
-    // Fail-open — but leave a trace: a total DB outage would otherwise be
-    // completely invisible in the logs while every gate silently passes.
-    logger.debug('[enforceMaintenanceMode] maintenance check failed open', {
-      error: err,
-    });
+  } catch {
     await next();
   }
 };
@@ -438,13 +411,8 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = async function (
   const now = Date.now();
 
   if (senderID) {
-    // Both admin checks in parallel — the common case (a regular sender)
-    // misses both caches after TTL and would otherwise pay them serially;
-    // the OR short-circuit is preserved by checking results together.
-    const [isAdmin, isSysAdmin] = await Promise.all([
-      cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID),
-      cachedIsSystemAdmin(ctx, senderID),
-    ]);
+    const isAdmin = await cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID);
+    const isSysAdmin = isAdmin ? false : await cachedIsSystemAdmin(ctx, senderID);
     if (isAdmin || isSysAdmin) { await next(); return; }
   }
 

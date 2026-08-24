@@ -546,16 +546,11 @@ async function main(): Promise<void> {
   logger.info('Cat-Bot - starting all platforms...');
 
   // Bounded wait for the cache warm-up (8s cap) — the platform gateways won't
-  // accept the first message until the hot-path keys are in memory. The timer
-  // is cleared once the race settles so a fast prewarm doesn't leave a stray
-  // 8-second timer pinning the event loop after boot.
-  await new Promise<void>((resolve) => {
-    const cap = setTimeout(resolve, 8_000);
-    void Promise.resolve(prewarmPromise).finally(() => {
-      clearTimeout(cap);
-      resolve();
-    });
-  });
+  // accept the first message until the hot-path keys are in memory.
+  await Promise.race([
+    prewarmPromise,
+    new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
+  ]);
   platform.start(commands);
   logger.info('Cat-Bot — all platform listeners wired');
 
@@ -589,16 +584,10 @@ async function main(): Promise<void> {
 // Registered once here so N platform sessions never stack duplicate listeners.
 
 async function handleShutdown(signal: string, exitCode: number): Promise<void> {
-  // Guard against a second signal arriving while the first shutdown is still
-  // awaiting stopAll — without this, SIGINT + SIGTERM together run two
-  // concurrent stopAll passes over the same sessions.
-  if (shuttingDown) return;
-  shuttingDown = true;
   logger.info(`🛑 [app] Received ${signal} — stopping all platform sessions...`);
   await sessionManager.stopAll(signal);
   process.exit(exitCode);
 }
-let shuttingDown = false;
 
 process.once('SIGINT', () => { void handleShutdown('SIGINT', 0); });
 process.once('SIGTERM', () => { void handleShutdown('SIGTERM', 0); });

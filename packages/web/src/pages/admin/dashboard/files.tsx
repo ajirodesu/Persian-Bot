@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { ComponentType, CSSProperties, Ref, SVGProps } from 'react'
+import type { ComponentType, Ref, SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import {
@@ -814,15 +814,18 @@ const CommitBox = memo(function CommitBox({
       ref={ref}
       data-git-composer=""
       className={cn(
-        // Mobile: the focused composer becomes a fixed, viewport-anchored bar
-        // like the timezone picker. It stays in one place while the keyboard
-        // opens and while the message is edited.
+        // Mobile: fixed composer pinned to the bottom of the visual viewport
+        // (above the keyboard — the timezone sheet's stability model). It is
+        // anchored once and never re-anchors while typing; the translate lifts
+        // it by exactly the covered height when the keyboard opens.
         'flex shrink-0 flex-col gap-2 border-t border-hairline bg-surface-container p-3',
-        'fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[var(--z-sticky)] shadow-elevation-2',
-        'max-lg:group-data-[git-kb-mode=composer]/git:top-0 max-lg:group-data-[git-kb-mode=composer]/git:bottom-auto max-lg:group-data-[git-kb-mode=composer]/git:top-[env(safe-area-inset-top)]',
+        'fixed bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[var(--z-sticky)] shadow-elevation-2 transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none',
         // Desktop: normal in-flow box inside the left column.
-        'lg:static lg:top-auto lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
+        'lg:static lg:bottom-auto lg:left-auto lg:right-auto lg:z-auto lg:shadow-none',
       )}
+      style={{
+        transform: 'translate3d(0, calc(var(--git-kb-offset, 0px) * -1), 0)',
+      }}
     >
       <textarea
         value={commitMsg}
@@ -927,21 +930,14 @@ function GithubIdentityCard({
   }
 
   return (
-    // The mobile GitHub key card is always fixed to the viewport top — the
-    // same stable model as the timezone search bar. Its flow height is
-    // reserved by the Git panel so the changes list never jumps underneath it.
+    // data-git-token-card routes mobile keyboard handling: when the token
+    // input inside this card is focused, the GitPanel's VisualViewport effect
+    // shifts ONLY this card up by exactly the amount the keyboard clips it
+    // (--git-token-offset) — the commit composer and everything else in the
+    // panel stay perfectly still.
     <div
       data-git-token-card=""
-      style={{
-        // Dock to the top edge (under the notch) — the keyboard can never
-        // cover the field, and typing never causes the card to re-anchor.
-        top: 'env(safe-area-inset-top)',
-      }}
-      className={cn(
-        'flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 sm:py-2 lg:bg-transparent',
-        // Fixed mobile top bar; desktop remains in normal panel flow.
-        'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:right-0 max-lg:z-[var(--z-sticky)] max-lg:border-t max-lg:border-b-0 max-lg:shadow-elevation-2',
-      )}
+      className="flex shrink-0 flex-col gap-2 border-b border-hairline bg-surface px-3 py-2.5 transition-transform duration-200 ease-out will-change-transform [transform:translateY(calc(var(--git-token-offset,0px)*-1))] sm:py-2 lg:bg-transparent"
     >
       <div className="flex items-center gap-1.5">
         <KeyRound className="h-4 w-4 shrink-0 text-on-surface-variant" />
@@ -1002,13 +998,7 @@ function GithubIdentityCard({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1">
               <input
-                // An API key, not a password: always rendered as a plain text
-                // input so mobile browsers never summon password managers /
-                // iCloud Keychain / "use strong password" suggestions over it.
-                // Masking is done with -webkit-text-security instead, so the
-                // show/hide eye toggle keeps working without password
-                // semantics (WebKit/Blink only; other engines show plaintext).
-                type="text"
+                type={showToken ? 'text' : 'password'}
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
                 placeholder="ghp_… personal access token"
@@ -1020,19 +1010,10 @@ function GithubIdentityCard({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') void handleConnect()
                 }}
-                style={
-                  showToken
-                    ? undefined
-                    : ({ WebkitTextSecurity: 'disc' } as CSSProperties)
-                }
                 className="w-full rounded-[var(--radius-input)] border border-outline-variant bg-surface-container px-3 py-2.5 pr-11 font-mono text-[16px] leading-6 text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:py-1.5 sm:text-label-sm"
               />
               <button
                 type="button"
-                // Keep focus (and the on-screen keyboard) on the input while
-                // toggling visibility — letting the button take focus blurs
-                // the field and slams the keyboard shut mid-edit.
-                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setShowToken((v) => !v)}
                 disabled={!configured || verifyBusy}
                 aria-label={showToken ? 'Hide token' : 'Show token'}
@@ -1069,9 +1050,7 @@ function GithubIdentityCard({
               className="mt-1"
             />
           )}
-          {/* Keep the fixed mobile bar compact; the full note remains visible
-              on desktop. */}
-          <p className="text-body-xs text-on-surface-variant max-lg:hidden">
+          <p className="text-body-xs text-on-surface-variant">
             This is the bot&apos;s single GitHub token: it is stored encrypted on
             the server and used by /push, /installer, /update, the agent tools,
             and this File Manager. Commits are attributed to this account.
@@ -1107,168 +1086,67 @@ function GitPanel({
   // meta already reflows the layout, so the value reads ~0 there and the
   // composer never double-moves.
   //
-  // Focus-scoped: ONLY the focused Git surface is pinned to the viewport top.
-  // The inactive surface and the rest of the panel stay put while typing.
+  // Focus-scoped: ONLY the focused input adjusts for the keyboard. Focusing
+  // the commit composer lifts the composer (--git-kb-offset); focusing the
+  // GitHub token input shifts just the identity card by exactly the amount it
+  // is clipped by the keyboard (--git-token-offset) — the composer and every
+  // other element stay put, so nothing else jumps around while typing.
   const panelRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    // Match the panel's `lg` mobile breakpoint, like the timezone picker does
-    // for its fixed mobile sheet. Desktop stays entirely in normal flow.
-    const mq = window.matchMedia('(max-width: 1023px)')
+    // Coarse-pointer mobile gate: `lg` is this panel's mobile breakpoint, and
+    // the pointer check keeps desktop (including pinch/ctrl-zoom, where the
+    // visual viewport also shrinks) from ever moving the layout.
+    const mq = window.matchMedia('(max-width: 1023px) and (pointer: coarse)')
     const vv = window.visualViewport
     let raf = 0
     let mode: 'composer' | 'token' | null = null
-    // Token revert bookkeeping: tokenKbSeen — has the keyboard been observed
-    // OPEN since the token card took focus (guards against the pre-keyboard
-    // frames right after focusin); tokenDirty — has anything been typed into
-    // it since. Dismissing the keyboard (back button, dismiss gesture) does
-    // NOT blur the field on many browsers, so without this the card would
-    // stay pinned above a keyboard that is no longer there.
-    let tokenKbSeen = false
-    let tokenDirty = false
-    // Grace window for the "no keyboard ever appeared" case: right after
-    // focusin the soft keyboard has not resized the viewport YET (normal),
-    // but on devices with a hardware keyboard it NEVER will — pinning would
-    // then leave the card floating at the bottom forever.
-    const NO_KB_GRACE_MS = 1500
-    let tokenFocusClosedSince = 0
-    // Set when focus leaves the token card while its keyboard is still
-    // closing: the card STAYS pinned and rides the keyboard down, releasing
-    // only once the viewport has settled. Releasing instantly makes the card
-    // snap back into flow and the column below jump — visible stutter.
-    let tokenReleasePending = false
-    // The token card's flow height, measured ONCE per pin cycle while still
-    // in flow (before the fixed class applies). Never re-read while pinned:
-    // a forced offsetHeight read on every viewport frame thrashes layout right
-    // when the keyboard is opening.
-    let tokenCardH = 0
-    // Highest innerHeight ever seen this session. On Android/Chrome the app's
-    // interactive-widget=resizes-content meta shrinks window.innerHeight when
-    // the keyboard opens — the deficit against this high-water mark is the
-    // reflow keyboard height. It only ever grows (rotation to a taller
-    // viewport), so a keyboard can never pollute it.
-    let maxInnerHeight = window.innerHeight
-
-    // Fully unpin the identity card and reset every pin-cycle flag. One
-    // code path for release = one consistent, jump-free default state.
-    const releaseTokenPin = () => {
-      const root = panelRef.current
-      if (!root) return
-      setVar('--git-token-h', '0px')
-      if (root.dataset.gitKbMode === 'token') delete root.dataset.gitKbMode
-      tokenCardH = 0
-      tokenKbSeen = false
-      tokenDirty = false
-      tokenReleasePending = false
-    }
-
-    // Write-coalescing: every setProperty invalidates style for the whole
-    // panel subtree, and viewport events arrive in bursts where the values
-    // usually have NOT changed (iOS pan frames, keyboard-settle frames).
-    // Skip identical writes so follow-up frames are pure no-ops.
-    const writtenVars = new Map<string, string>()
-    function setVar(name: string, value: string): void {
-      if (writtenVars.get(name) === value) return
-      writtenVars.set(name, value)
-      panelRef.current?.style.setProperty(name, value)
-    }
-
-    // The card element is stable across re-renders (React reuses the node),
-    // so resolve it once and only re-query if it left the DOM. Saves a
-    // querySelector on every viewport frame.
-    let tokenCardEl: HTMLElement | null = null
-    const getTokenCard = (): HTMLElement | null => {
-      if (!tokenCardEl || !tokenCardEl.isConnected) {
-        tokenCardEl =
-          panelRef.current?.querySelector<HTMLElement>(
-            '[data-git-token-card]',
-          ) ?? null
-      }
-      return tokenCardEl
-    }
+    let prevTokenShift = 0
 
     const update = () => {
       raf = 0
       const root = panelRef.current
       if (!root) return
-      if (window.innerHeight > maxInnerHeight) maxInnerHeight = window.innerHeight
-
-      // Two keyboard models, whichever applies:
-      //  • kbCovered — iOS Safari: the layout viewport NEVER resizes for the
-      //    keyboard; the covered band below the visual viewport is the keyboard.
-      //  • kbReflow  — Android/Chrome (resizes-content): the layout viewport
-      //    itself shrinks, so the covered band reads ~0 — the deficit against
-      //    the high-water mark is the keyboard, and the browser NATIVELY lifts
-      //    fixed-position elements (like the commit composer) with it.
-      const kbCovered =
+      const kb =
         mq.matches && vv
           ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop))
           : 0
-      const kbReflow = mq.matches
-        ? Math.max(0, maxInnerHeight - window.innerHeight)
-        : 0
-      const kbOpen = kbCovered > 0 || kbReflow > 0
 
-      // Self-healing revert. Two stuck states are covered here, evaluated on
-      // every update() — including the 1 Hz reconcile tick below, so missed
-      // transitions (no event ever delivered) still recover within ~1s:
-      //  • dismissed untouched: keyboard closed while the empty field kept
-      //    focus (back button / dismiss gesture) — deselect + unpin;
-      //  • no keyboard at all: focus held but the viewport never resized
-      //    beyond the grace window (hardware-keyboard devices) — same.
-      if (mq.matches && mode === 'token') {
-        if (kbOpen) {
-          tokenKbSeen = true
-          tokenFocusClosedSince = 0
+      if (mode === 'composer') {
+        // Only the commit composer lifts, by the full covered height.
+        root.style.setProperty('--git-kb-offset', `${kb}px`)
+        root.style.setProperty('--git-token-offset', '0px')
+        prevTokenShift = 0
+        return
+      }
+
+      root.style.setProperty('--git-kb-offset', '0px')
+
+      if (mode === 'token') {
+        // Shift the identity card up by exactly the amount its bottom is
+        // clipped by the keyboard (plus a small breathing margin) — never
+        // more, so the card (and everything else) barely moves. The shift is
+        // clamped so the card's top never leaves the visible viewport, and
+        // the measurement compensates for any shift already applied.
+        const card = root.querySelector<HTMLElement>('[data-git-token-card]')
+        if (card && vv) {
+          const rect = card.getBoundingClientRect()
+          const visibleTop = vv.offsetTop
+          const visibleBottom = vv.height + vv.offsetTop
+          const rawBottom = rect.bottom + prevTokenShift
+          const rawTop = rect.top + prevTokenShift
+          const wanted = rawBottom - visibleBottom + 16
+          const maxShift = Math.max(0, rawTop - visibleTop)
+          const shift = Math.min(Math.max(0, wanted), maxShift)
+          prevTokenShift = shift
+          root.style.setProperty('--git-token-offset', `${shift}px`)
         } else {
-          const dismissedUntouched = tokenKbSeen && !tokenDirty
-          const noKeyboardEver =
-            !tokenKbSeen &&
-            tokenFocusClosedSince > 0 &&
-            performance.now() - tokenFocusClosedSince > NO_KB_GRACE_MS
-          if (dismissedUntouched || noKeyboardEver) {
-            const active = document.activeElement
-            if (
-              active instanceof HTMLElement &&
-              active.closest('[data-git-token-card]')
-            ) {
-              active.blur()
-            }
-            mode = null
-            tokenReleasePending = true
-          }
+          root.style.setProperty('--git-token-offset', '0px')
+          prevTokenShift = 0
         }
-      }
-
-      // Mode attribute drives the pinned-token card (group/git variants) and
-      // the focused composer. React is not involved in these writes, so
-      // keyboard resize frames never cause the panel to re-render.
-      const card = getTokenCard()
-
-      if (mode === 'token' || mode === 'composer') {
-        root.dataset.gitKbMode = mode
       } else {
-        delete root.dataset.gitKbMode
-      }
-
-      // Pinned while the card owns the keyboard, or while riding a closing
-      // one out after focus moved away. The moment the keyboard is fully
-      // gone, the pending release completes.
-      const pinned = mode === 'token' || (tokenReleasePending && kbOpen)
-
-      if (pinned && card) {
-        // Dock the identity card above the keyboard: reserve its flow height
-        // ONCE per pin cycle (measured in flow, before the fixed class
-        // applies), then keep following kbCovered each frame without further
-        // layout reads. On iOS the dock sits kbCovered above the viewport
-        // bottom; on Android the reflowed layout bottom already IS the
-        // keyboard's top, so the offset is 0.
-        if (tokenCardH === 0) {
-          tokenCardH = card.offsetHeight
-        }
-        setVar('--git-token-h', `${tokenCardH}px`)
-      } else {
-        releaseTokenPin()
+        root.style.setProperty('--git-token-offset', '0px')
+        prevTokenShift = 0
       }
     }
 
@@ -1287,87 +1165,32 @@ function GitPanel({
       return null
     }
     const onFocusIn = (e: FocusEvent) => {
-      const next = classify(e.target as Element | null)
-      if (next === 'token') {
-        // Fresh entry into the token card starts a clean session: the field
-        // is untouched, the keyboard has not been seen yet, and the no-
-        // keyboard grace clock starts now. Moving focus within the card
-        // (input ⇄ eye toggle) keeps the flags.
-        if (mode !== 'token') {
-          tokenDirty = false
-          tokenKbSeen = false
-          tokenFocusClosedSince = performance.now()
-        }
-        // Re-focused before a pending release completed (quick re-tap while
-        // the keyboard is still closing): cancel the release seamlessly.
-        tokenReleasePending = false
-      } else if (next === 'composer') {
-        // Another git input owns the keyboard now — the card must return to
-        // flow immediately, not ride this keyboard out.
-        tokenReleasePending = false
-      }
-      mode = next
+      mode = classify(e.target as Element | null)
       onEvent()
-    }
-    // Any edit inside the token card marks it dirty so a keyboard dismissal
-    // after typing keeps the card pinned (the user may be about to connect).
-    const onInput = (e: Event) => {
-      if ((e.target as Element | null)?.closest?.('[data-git-token-card]')) {
-        tokenDirty = true
-      }
     }
     // focusout fires before the next focusin — re-check in a microtask so
     // tabbing between the panel's inputs never flashes back to "no mode".
-    // When focus leaves the token card to NOTHING (tap-away, keyboard dismiss)
-    // while the card is pinned, defer the release: the card stays pinned and
-    // follows the closing keyboard down (tokenReleasePending), instead of
-    // snapping back into flow mid-animation. The next update() with the
-    // keyboard fully closed completes the release.
     const onFocusOut = () => {
       queueMicrotask(() => {
-        const next = classify(document.activeElement)
-        if (mode === 'token' && next === null) {
-          tokenReleasePending = true
-        }
-        mode = next
+        mode = classify(document.activeElement)
         onEvent()
       })
     }
 
-    // Self-healing tick: the revert logic above only runs inside update(),
-    // and mobile browsers sometimes reach "keyboard gone" without delivering
-    // any viewport event (app backgrounded mid-edit, dismissal gesture
-    // swallowed, final resize coalesced away). A light 1 Hz tick plus the
-    // foreground hooks below re-run update() so a stuck pin always recovers;
-    // the write-coalescing in setVar makes no-op ticks free.
-    const reconcile = () => {
-      if (mode === 'token' || tokenReleasePending) onEvent()
-    }
-    const reconcileTimer = window.setInterval(reconcile, 1_000)
-
     update()
     vv?.addEventListener('resize', onEvent)
-    // Passive: the handler never cancels scrolling — this lets the browser
-    // keep visual-viewport panning on the compositor thread while pinned.
-    vv?.addEventListener('scroll', onEvent, { passive: true })
+    vv?.addEventListener('scroll', onEvent)
     window.addEventListener('resize', onEvent)
-    document.addEventListener('visibilitychange', onEvent)
-    window.addEventListener('focus', onEvent)
     const root = panelRef.current
     root?.addEventListener('focusin', onFocusIn)
     root?.addEventListener('focusout', onFocusOut)
-    root?.addEventListener('input', onInput)
     return () => {
       if (raf) cancelAnimationFrame(raf)
-      window.clearInterval(reconcileTimer)
       vv?.removeEventListener('resize', onEvent)
       vv?.removeEventListener('scroll', onEvent)
       window.removeEventListener('resize', onEvent)
-      document.removeEventListener('visibilitychange', onEvent)
-      window.removeEventListener('focus', onEvent)
       root?.removeEventListener('focusin', onFocusIn)
       root?.removeEventListener('focusout', onFocusOut)
-      root?.removeEventListener('input', onInput)
     }
   }, [])
 
@@ -1515,17 +1338,12 @@ function GitPanel({
   )
 
   return (
-    // group/git — the keyboard effect sets data-git-kb-mode on this root;
-    // the token card and the column below style themselves off that state.
     <div
       ref={panelRef}
-      className="group/git flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
     >
-      {/* Left column — branch, changes, commit box, history. While the token
-          card is pinned above the keyboard its flow slot is empty, so the
-          card's measured height is reserved as top padding — nothing below
-          shifts. */}
-      <div className="flex min-w-0 flex-col border-b border-hairline pt-[var(--git-token-h,0px)] pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] max-lg:group-data-[git-kb-mode=composer]/git:pt-[var(--git-composer-h,0px)] group-data-[git-kb-mode=token]/git:border-b-0 lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 lg:pt-0 xl:w-[26rem]">
+      {/* Left column — branch, changes, commit box, history */}
+      <div className="flex min-w-0 flex-col border-b border-hairline pb-[calc(var(--git-composer-h,0px)+env(safe-area-inset-bottom))] lg:pb-0 lg:w-96 lg:border-r lg:border-b-0 xl:w-[26rem]">
         <GithubIdentityCard files={files} configured={configured} />
 
         {/* Branch + sync actions */}
@@ -1695,9 +1513,7 @@ function GitPanel({
               onClick={() => void files.loadHistory()}
             />
           </div>
-          {/* Slightly shorter on phones so the change list keeps more of the
-              viewport; grows back once width allows. */}
-          <div className="max-h-28 overflow-y-auto overscroll-contain px-1 pb-2 sm:max-h-40">
+          <div className="max-h-40 overflow-y-auto overscroll-contain px-1 pb-2">
             {files.history.length === 0 ? (
               <p className="px-2 py-1 text-body-xs text-on-surface-variant">
                 No commits yet.

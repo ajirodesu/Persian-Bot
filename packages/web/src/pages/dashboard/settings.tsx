@@ -164,7 +164,7 @@ const EMPTY_AI_STATUS: AiSettingsStatus = {
 
 function SettingsPageSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pb-12" aria-busy="true">
+    <div className="flex flex-col gap-6 max-w-2xl pb-12" aria-busy="true">
       {/* Page header */}
       <div className="flex flex-col gap-1.5">
         <Skeleton variant="text" textSize="headline-sm" width="140px" />
@@ -628,7 +628,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 pb-12">
+    <div className="flex flex-col gap-6 max-w-2xl pb-12">
       <Helmet>
         <title>Settings · Cat-Bot</title>
       </Helmet>

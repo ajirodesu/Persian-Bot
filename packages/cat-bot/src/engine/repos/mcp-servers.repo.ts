@@ -53,12 +53,7 @@ interface StoredMcpServerRecord {
   updatedAt: string;
 }
 
-/**
- * Payload accepted when adding/updating a server (headers are optional).
- * On update, an empty-string header value means "preserve the stored secret"
- * and a key absent from the map is removed — the dashboard always sends the
- * full desired key set since it never sees the encrypted values.
- */
+/** Payload accepted when adding/updating a server (headers are optional). */
 export interface McpServerInput {
   name: string;
   url: string;
@@ -169,27 +164,16 @@ export async function updateMcpServer(
   if (idx === -1) return null;
 
   const current = servers[idx]!;
-  // Resolve the headers patch: "" values preserve the stored secret (the
-  // dashboard never sees plaintext values), absent keys are removed, and
-  // concrete values replace or add headers.
-  let headers = current.headers;
-  if (patch.headers !== undefined) {
-    headers = {};
-    for (const [k, v] of Object.entries(patch.headers)) {
-      if (v === '') {
-        if (k in current.headers) headers[k] = current.headers[k]!;
-      } else {
-        headers[k] = v;
-      }
-    }
-  }
   const updated: McpServerConfig = {
     ...current,
     name: patch.name !== undefined ? patch.name.trim() : current.name,
     url: patch.url !== undefined ? patch.url.trim() : current.url,
     enabled: patch.enabled !== undefined ? patch.enabled : current.enabled,
     role: patch.role !== undefined ? patch.role : current.role,
-    headers,
+    headers:
+      patch.headers !== undefined
+        ? patch.headers
+        : current.headers,
     updatedAt: nowIso(),
   };
   const next = [...servers];

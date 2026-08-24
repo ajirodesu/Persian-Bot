@@ -24,7 +24,5 @@
       "@cat-bot/*": ["./src/*"]
     }
   },
-  "include": ["src"],
-  /* Tests run from src via vitest — they never ship in dist. */
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src"]
 }

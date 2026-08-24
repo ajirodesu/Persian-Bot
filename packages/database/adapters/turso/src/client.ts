@@ -27,14 +27,13 @@ function toWebSocketUrl(rawUrl: string): string | null {
 }
 
 // Try the persistent WebSocket transport first; fall back to HTTP if the host
-// blocks outbound WebSocket upgrades. Set TURSO_FORCE_HTTP=1 to skip the probe
-// entirely (recommended when boot latency matters — the probe costs up to
-// 500ms on every process start, because TURSO_TRANSPORT only caches within
-// the current process and cannot survive a restart).
+// blocks outbound WebSocket upgrades. Set TURSO_FORCE_HTTP=1 to skip the probe.
+// Once resolved, the result is written to TURSO_TRANSPORT so subsequent process
+// restarts (same machine) skip the probe entirely and connect immediately.
 async function createTursoClient(): Promise<Client> {
   const clientOpts = authToken ? { authToken } : {};
 
-  // Honour an explicit override from deployment config.
+  // Honour an explicit override from a previous successful probe (or manual config).
   const resolved = process.env['TURSO_TRANSPORT'];
   const forceHttp = process.env['TURSO_FORCE_HTTP'] === '1' || resolved === 'http';
   const wsUrl = forceHttp ? null : toWebSocketUrl(url!);
@@ -51,7 +50,7 @@ async function createTursoClient(): Promise<Client> {
           setTimeout(() => reject(new Error('WS probe timed out')), 500),
         ),
       ]);
-      // Remember the winning transport for the lifetime of this process.
+      // Cache the successful transport so future restarts skip the probe.
       process.env['TURSO_TRANSPORT'] = 'ws';
       return wsClient;
     } catch (err) {

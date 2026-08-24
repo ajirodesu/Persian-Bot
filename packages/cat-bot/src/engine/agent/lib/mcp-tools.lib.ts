@@ -187,26 +187,23 @@ async function buildExternalRoleGate(
     }
   };
 
-  // All four role lookups fan out in parallel — cached hits are instant, and
-  // on a cold cache (first turn / after TTL) this saves up to 3 sequential DB
-  // round trips per agent turn.
-  const [systemAdmin, botAdmin, premium, threadAdmin] = await Promise.all([
-    check(() => cachedIsSystemAdmin(ctx, senderID)),
-    sessionUserId
-      ? check(() =>
-          cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID),
-        )
-      : Promise.resolve(false),
-    sessionUserId
-      ? check(() =>
-          cachedIsBotPremium(ctx, sessionUserId, platform, sessionId, senderID),
-        )
-      : Promise.resolve(false),
-    threadID
-      ? check(() => cachedIsThreadAdmin(ctx, threadID, senderID))
-      : Promise.resolve(false),
-  ]);
-  const results = { systemAdmin, botAdmin, premium, threadAdmin };
+  const results = {
+    systemAdmin: await check(() => cachedIsSystemAdmin(ctx, senderID)),
+    botAdmin: false,
+    premium: false,
+    threadAdmin: false,
+  };
+  if (!results.systemAdmin) {
+    results.botAdmin = await check(() =>
+      cachedIsBotAdmin(ctx, sessionUserId, platform, sessionId, senderID),
+    );
+    results.premium = await check(() =>
+      cachedIsBotPremium(ctx, sessionUserId, platform, sessionId, senderID),
+    );
+    results.threadAdmin = threadID
+      ? await check(() => cachedIsThreadAdmin(ctx, threadID, senderID))
+      : false;
+  }
 
   return (server) => {
     const role = typeof server.role === 'number' ? server.role : 0;
