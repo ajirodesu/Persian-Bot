@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- icon components plus plain lookup helpers live here by design */
 import type { ComponentType } from 'react'
 import { Bot } from 'lucide-react'
 import { Platforms } from '@/constants/platform.constants'

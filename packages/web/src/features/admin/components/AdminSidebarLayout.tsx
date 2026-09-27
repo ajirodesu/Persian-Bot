@@ -32,6 +32,7 @@ import {
   H_DROPDOWN_ITEM,
   H_DROPDOWN_ICON,
   H_ICON_BTN_MOBILE,
+  H_SEPARATOR,
 } from '@/constants/header.constants'
 
 // ============================================================================
@@ -42,8 +43,8 @@ const NAV_ITEMS = [
   { path: ROUTES.ADMIN.DASHBOARD, label: 'Overview',      icon: LayoutDashboard },
   { path: ROUTES.ADMIN.USERS,     label: 'Users',         icon: Users },
   { path: ROUTES.ADMIN.BOTS,      label: 'Bot Sessions',  icon: Bot },
-  { path: ROUTES.ADMIN.FILES,     label: 'Files',         icon: Files },
   { path: ROUTES.ADMIN.GIT,       label: 'Git',           icon: GitBranch },
+  { path: ROUTES.ADMIN.FILES,     label: 'Files',         icon: Files },
   { path: ROUTES.ADMIN.SETTINGS,  label: 'Settings',      icon: Settings },
 ] as const
 
@@ -74,7 +75,8 @@ function SidebarNav({
       {/* Identity row — h-14, Lucide Cat 28px accent + 17px brand */}
       <div
         className={cn(
-          'flex items-center h-14 px-6 border-b border-[#242930]/40 shrink-0',
+          'flex items-center h-14 px-6 border-b shrink-0',
+          H_SEPARATOR,
           collapsed && 'justify-center px-0',
         )}
       >
@@ -85,20 +87,20 @@ function SidebarNav({
             if (collapsed) onToggleCollapsed?.()
           }}
           title={collapsed ? 'Cat-Bot Admin' : undefined}
-          className="flex items-center gap-3.5 text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg font-semibold tracking-tight"
+          className="flex items-center gap-3.5 text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg font-semibold tracking-tight"
         >
-          <span className="flex items-center justify-center flex-shrink-0 text-[#10B981]">
+          <span className="flex items-center justify-center flex-shrink-0 text-primary">
             <Logo className="h-7 w-7" />
           </span>
           {!collapsed && <span className="text-[17px] leading-none">Cat-Bot Admin</span>}
         </Link>
       </div>
 
-      {/* Primary nav — px-3.5 pt-5 space-y-1.5 drawer spec */}
+      {/* Primary nav — px-3 pt-4 space-y-1 drawer spec */}
       <nav
         className={cn(
           'flex-1 flex flex-col gap-0 overflow-y-auto',
-          collapsed ? 'items-center px-0 py-3 space-y-1.5' : 'px-3.5 pt-5 space-y-1.5',
+          collapsed ? 'items-center px-0 py-3 space-y-1.5' : 'px-3 pt-4 space-y-1',
         )}
         aria-label="Admin navigation"
       >
@@ -131,14 +133,19 @@ function SidebarNav({
                 H_SIDEBAR_NAV,
                 collapsed && 'justify-center !gap-0 !px-0',
                 isActive
-                  ? 'bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.2)] font-semibold text-[#10B981]'
-                  : 'border border-transparent font-medium text-[#8B95A2] hover:bg-[#191D22] hover:text-[#F1F4F8] active:bg-[#1E232A] active:opacity-[0.85]',
+                  ? // Collapsed (desktop icon rail): highlight only the
+                    // icon itself — no row box. Expanded: normal full-row
+                    // highlight.
+                    collapsed
+                    ? 'bg-transparent border border-transparent font-semibold text-primary'
+                    : 'bg-primary/10 border border-primary/20 font-semibold text-primary'
+                  : 'border border-transparent font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:bg-surface-container-highest active:opacity-[0.85]',
               )}
             >
               <span
                 className={cn(
                   'flex items-center justify-center flex-shrink-0 transition-colors duration-100',
-                  isActive ? 'text-[#10B981]' : 'text-[#8B95A2]',
+                  isActive ? 'text-primary' : 'text-on-surface-variant',
                 )}
               >
                 <Icon className={H_SIDEBAR_ICON} />
@@ -150,7 +157,7 @@ function SidebarNav({
       </nav>
 
       {/* Footer — ADMIN scope label + live dot, collapse toggle */}
-      <div className="border-t border-[#242930]/60">
+      <div className="border-t border-separator">
         <div
           className={cn(
             'py-4 flex items-center',
@@ -159,11 +166,11 @@ function SidebarNav({
         >
           {!collapsed && (
             <>
-              <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#5D6775] font-medium">
+              <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-surface-variant font-medium">
                 Admin Panel
               </span>
               <span className="flex items-center space-x-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               </span>
             </>
           )}
@@ -350,14 +357,6 @@ export default function AdminSidebarLayout() {
     })
   }, [])
   const activePath = location.pathname
-  // The Files page is a full-viewport IDE workspace: it owns its own height
-  // (no page-level scrolling) so the file tree and editor panes scroll
-  // independently, exactly like Replit. Apply the same h-dvh treatment the
-  // Chat Room uses on the user dashboard. The Git page is the same kind of
-  // pane-scrolling workspace (changes list + diff viewer), so it gets the
-  // identical treatment.
-  const isFilesWorkspace =
-    activePath === ROUTES.ADMIN.FILES || activePath === ROUTES.ADMIN.GIT
 
   const [prevPath, setPrevPath] = useState(activePath)
   if (activePath !== prevPath) {
@@ -434,16 +433,12 @@ export default function AdminSidebarLayout() {
       </aside>
 
       {/* Main content column */}
-      <div
-        className={cn(
-          'flex-1 flex flex-col min-w-0',
-          isFilesWorkspace && 'h-dvh sticky top-0 overflow-hidden',
-        )}
-      >
+      <div className={cn('flex-1 flex flex-col min-w-0')}>
         {/* Content header — Bot Manager bar */}
         <div
           className={cn(
-            'sticky top-0 z-[100] flex items-center bg-[#0A0C0E] border-b border-[#242930]',
+            'sticky top-0 z-[100] flex items-center bg-surface border-b',
+            H_SEPARATOR,
             H_HEIGHT,
             H_PX,
           )}
@@ -490,14 +485,7 @@ export default function AdminSidebarLayout() {
           </div>
         </div>
 
-        <main
-          className={cn(
-            'flex-1',
-            isFilesWorkspace
-              ? 'min-h-0 overflow-hidden'
-              : 'p-4 md:p-6 max-w-7xl w-full mx-auto',
-          )}
-        >
+        <main className={cn('flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto')}>
           <Outlet />
         </main>
       </div>

@@ -357,7 +357,6 @@ function FieldValidationIcon({
  * </Field.Root>
  * ```
  */
-// eslint-disable-next-line react-refresh/only-export-components
 export const Field = {
   Root: FieldRoot,
   Label: FieldLabel,

@@ -26,6 +26,11 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Captured at module evaluation (process boot) — exposed via /api/v1/health so
+// the dashboard's uptime card ticks from the real backend startup time instead
+// of a hardcoded baseline.
+const bootTime = Date.now();
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -96,9 +101,10 @@ export function createApp(): Application {
   // Mount API endpoints for bot administration
   app.use('/api/v1', apiV1Router);
 
-  // Health check
+  // Health check — startedAt is the backend process boot time (ms epoch);
+  // the dashboard uptime card derives live uptime from it.
   app.get('/api/v1/health', (_req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', startedAt: bootTime });
   });
 
   // Serve SPA if the built dist folder exists — fallback for React Router

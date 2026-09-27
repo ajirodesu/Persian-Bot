@@ -7,7 +7,7 @@ import type { AppTheme } from '../contexts/ThemeContext'
  * The favicon is served as its own document by the browser, so it has no
  * access to the app's CSS custom properties (--color-primary) or the
  * data-theme attribute on <html>. To keep it in sync with the app theme,
- * this fetches the base SVG once, swaps every fill color for the current
+ * this fetches the base SVG once, swaps every fill/stroke color for the current
  * theme's primary hex, and points the <link rel="icon"> at a Blob URL.
  *
  * Hex values mirror --aqua-color-primary / --burnt-color-primary /
@@ -24,11 +24,11 @@ const FAVICON_PRIMARY_HEX: Record<AppTheme, string> = {
 
 let svgTemplatePromise: Promise<string> | null = null
 
-/** Fetches /favicon.svg once and normalizes every fill color to a placeholder. */
+/** Fetches /favicon.svg once and normalizes every paint color to a placeholder. */
 function getSvgTemplate(): Promise<string> {
   svgTemplatePromise ??= fetch('/favicon.svg')
     .then((res) => res.text())
-    .then((raw) => raw.replace(/fill="#[0-9a-fA-F]{3,8}"/g, 'fill="__COLOR__"'))
+    .then((raw) => raw.replace(/(fill|stroke)="#[0-9a-fA-F]{3,8}"/g, '$1="__COLOR__"'))
   return svgTemplatePromise
 }
 

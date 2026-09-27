@@ -74,7 +74,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="bg-[#0A0C0E] text-[#F1F4F8] min-h-[calc(100vh-48px)] flex flex-col">
+    <div className="bg-surface text-on-surface min-h-[calc(100vh-56px)] flex flex-col">
       <Helmet>
         <title>Log In · Cat-Bot</title>
       </Helmet>
@@ -83,24 +83,24 @@ export default function LoginPage() {
         <div className="flex flex-col w-full my-auto py-10">
           {/* Hero */}
           <div className="flex flex-col items-center text-center mb-8">
-            <div className="relative w-16 h-16 rounded-xl bg-[#13161A] border border-[#242930] flex items-center justify-center mb-4">
-              <div className="absolute inset-0 rounded-xl bg-[#10B981]/10" />
-              <Logo className="w-8 h-8 text-[#10B981] relative z-10" />
+            <div className="relative w-16 h-16 rounded-xl bg-surface-container-low border border-hairline flex items-center justify-center mb-4">
+              <div className="absolute inset-0 rounded-xl bg-primary/10" />
+              <Logo className="w-8 h-8 text-primary relative z-10" />
             </div>
-            <h1 className="text-[32px] font-bold text-[#F1F4F8] tracking-tight mb-1">
+            <h1 className="text-[32px] font-bold text-on-surface tracking-tight mb-1">
               Welcome back
             </h1>
-            <p className="text-sm text-[#8B95A2] max-w-xs leading-relaxed">
+            <p className="text-sm text-on-surface-variant max-w-xs leading-relaxed">
               Sign in to manage your bots across Discord, Telegram, and Fluxer.
             </p>
           </div>
 
           {/* Form card */}
-          <div className="w-full bg-[#13161A] border border-[#242930] rounded-xl p-6 flex flex-col gap-5">
+          <div className="w-full bg-surface-container-low border border-hairline rounded-xl p-6 flex flex-col gap-5">
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
               <Field.Root invalid={!!errors.email} required>
                 <Field.Label>
-                  Email <span className="text-[#EF4444]">*</span>
+                  Email
                 </Field.Label>
                 <Input
                   type="email"
@@ -116,12 +116,12 @@ export default function LoginPage() {
               <Field.Root invalid={!!errors.password} required>
                 <div className="flex items-center justify-between mb-1.5">
                   <Field.Label className="mb-0">
-                    Password <span className="text-[#EF4444]">*</span>
+                    Password
                   </Field.Label>
                   {isEmailEnabled && (
                     <Link
                       to={ROUTES.FORGOT_PASSWORD}
-                      className="text-xs text-[#10B981] hover:underline"
+                      className="text-xs text-primary hover:underline"
                     >
                       Forgot password?
                     </Link>
@@ -162,7 +162,7 @@ export default function LoginPage() {
 
           {/* Redirect */}
           <div className="flex items-center justify-center py-6 text-center">
-            <p className="text-sm text-[#8B95A2]">
+            <p className="text-sm text-on-surface-variant">
               Don&apos;t have an account?
               <Button
                 as={Link}
@@ -175,17 +175,6 @@ export default function LoginPage() {
                 Sign up free
               </Button>
             </p>
-          </div>
-
-          {/* Mini footer */}
-          <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <div className="flex items-center gap-1.5 text-[#8B95A2]">
-              <Logo className="w-4 h-4" />
-              <span className="text-[15px] font-semibold">Cat-Bot</span>
-            </div>
-            <span className="text-xs text-[#5D6775]">
-              Multi-platform bot management — open source
-            </span>
           </div>
         </div>
       </main>

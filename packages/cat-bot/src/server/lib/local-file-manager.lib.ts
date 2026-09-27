@@ -16,8 +16,9 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import {
   getCurrentBranch,
+  getDirLastCommits,
+  getDirTrackedShas,
   getGitMeta,
-  getPathLastCommit,
   getRepoRootOrThrow,
   getTrackedSha,
   listBranches,
@@ -134,9 +135,12 @@ function guardCriticalPath(repoPath: string): void {
 async function entrySha(repoPath: string): Promise<string> {
   const tracked = await getTrackedSha(repoPath);
   if (tracked) return tracked;
+  // Stat-derived (never reads file contents) — cheap even for huge files.
   try {
-    const content = await fsp.readFile(absPath(repoPath), 'utf8');
-    return createHash('sha1').update(content, 'utf8').digest('hex');
+    const stat = await fsp.stat(absPath(repoPath));
+    return createHash('sha1')
+      .update(`${repoPath}:${stat.size}:${stat.mtimeMs}`, 'utf8')
+      .digest('hex');
   } catch {
     return '';
   }
@@ -205,25 +209,35 @@ export async function listDirectory(raw: string): Promise<RepoDirectoryListing> 
     return a.name.localeCompare(b.name);
   });
 
-  // Enrich with size + sha + last-commit — bounded so huge folders stay snappy.
+  // Enrich with size + sha + last-commit — two batched git calls for the
+  // whole folder (one ls-tree, one log) plus parallel stats, so huge
+  // folders stay snappy and cold git doesn't multiply subprocess spawns.
   const enrichable = entries.filter((e) => e.type === 'file').slice(0, 60);
-  await Promise.all(
-    enrichable.map(async (entry) => {
-      try {
-        const stat = await fsp.stat(absPath(entry.path));
-        entry.size = stat.size;
-      } catch {
-        entry.size = null;
-      }
-      entry.sha = await entrySha(entry.path);
-    }),
-  );
-  if (entries.length <= 60) {
-    await Promise.all(
-      entries.slice(0, 60).map(async (entry) => {
-        entry.lastCommit = await getPathLastCommit(entry.path);
-      }),
-    );
+  const committable = entries.slice(0, 60);
+  const [stats, shaMap, commitMap] = await Promise.all([
+    Promise.all(
+      enrichable.map((e) => fsp.stat(absPath(e.path)).catch(() => null)),
+    ),
+    getDirTrackedShas(repoPath),
+    getDirLastCommits(
+      repoPath,
+      committable.map((e) => e.path),
+    ),
+  ]);
+  enrichable.forEach((entry, i) => {
+    const stat = stats[i] ?? null;
+    entry.size = stat ? stat.size : null;
+    entry.sha =
+      shaMap.get(entry.path) ??
+      createHash('sha1')
+        .update(
+          `${entry.path}:${stat ? stat.size : 0}:${stat ? stat.mtimeMs : 0}`,
+          'utf8',
+        )
+        .digest('hex');
+  });
+  for (const entry of committable) {
+    entry.lastCommit = commitMap.get(entry.path) ?? null;
   }
 
   return { path: repoPath, entries };

@@ -23,16 +23,25 @@
 // ─── Structural ────────────────────────────────────────────────────────────
 
 /**
- * Bot Manager app-bar: 48px content height on every viewport.
- * Desktop keeps the same bar and adds contextual actions inline —
- * never a taller/different header.
+ * Page header content height — h-14 (56px), identical to the sidebar identity
+ * row. Both bars carry the same 1px H_SEPARATOR line, so every header
+ * separator across sidebar and content sits at exactly 57px and all divider
+ * lines align on one horizontal plane.
  */
-export const H_HEIGHT = 'h-12' as const
+export const H_HEIGHT = 'h-14' as const
 
 /**
  * Bot Manager horizontal inset: 20px on every viewport.
  */
 export const H_PX = 'px-5' as const
+
+/**
+ * Header separator — the sidebar header's 1px line style, shared by every
+ * page header (public shell, dashboard content bar, admin content bar,
+ * chat-room bar) so all top bars divide from content with identical weight.
+ * Theme-aware: each theme defines --color-separator in its own register.
+ */
+export const H_SEPARATOR = 'border-separator' as const
 
 /**
  * Desktop sidebar width (admin).
@@ -90,12 +99,12 @@ export const H_CHEVRON = 'h-4 w-4 3xl:h-5 3xl:w-5' as const
 
 // ─── Sidebar Navigation (Admin) ────────────────────────────────────────────
 
-/** Sidebar nav item — bot_manager drawer spec: h-14, px-4, rounded-2xl, 17px. */
+/** Sidebar nav item — compact standard scale: h-11 rows, 14px labels. */
 export const H_SIDEBAR_NAV =
-  'flex items-center gap-4 px-4 h-14 rounded-2xl text-[17px] tracking-tight transition-colors duration-100' as const
+  'flex items-center gap-3 px-3 h-11 rounded-xl text-sm tracking-tight transition-colors duration-100' as const
 
-/** Icon size inside sidebar nav items — 24px drawer spec. */
-export const H_SIDEBAR_ICON = 'h-6 w-6 shrink-0' as const
+/** Icon size inside sidebar nav items — 20px standard. */
+export const H_SIDEBAR_ICON = 'h-5 w-5 shrink-0' as const
 
 // ─── Dropdown Panel ────────────────────────────────────────────────────────
 

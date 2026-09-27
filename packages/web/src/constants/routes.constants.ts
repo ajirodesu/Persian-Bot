@@ -37,6 +37,7 @@ export const ROUTES = {
     BOTS: '/admin/dashboard/bots',
     FILES: '/admin/dashboard/files',
     GIT: '/admin/dashboard/git',
+    FILES_EDIT: '/admin/dashboard/files/edit',
     SETTINGS: '/admin/dashboard/settings',
   },
 } as const

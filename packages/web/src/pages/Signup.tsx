@@ -145,7 +145,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="bg-[#0A0C0E] text-[#F1F4F8] min-h-[calc(100vh-48px)] flex flex-col">
+    <div className="bg-surface text-on-surface min-h-[calc(100vh-56px)] flex flex-col">
       <Helmet>
         <title>Sign Up · Cat-Bot</title>
       </Helmet>
@@ -154,25 +154,25 @@ export default function SignupPage() {
         <div className="flex flex-col w-full my-auto py-10">
           {/* Hero — 72px double-well mark per create_account.html */}
           <section className="flex flex-col items-center text-center mb-8">
-            <div className="w-[72px] h-[72px] rounded-xl bg-[#13161A] border border-[#242930] flex items-center justify-center mb-5">
-              <div className="w-12 h-12 rounded-lg bg-[#191D22] border border-[#242930] flex items-center justify-center text-[#10B981]">
+            <div className="w-[72px] h-[72px] rounded-xl bg-surface-container-low border border-hairline flex items-center justify-center mb-5">
+              <div className="w-12 h-12 rounded-lg bg-surface-container-high border border-hairline flex items-center justify-center text-primary">
                 <Logo className="w-[30px] h-[30px]" />
               </div>
             </div>
-            <h1 className="text-[32px] font-bold text-[#F1F4F8] tracking-tight mb-1">
+            <h1 className="text-[32px] font-bold text-on-surface tracking-tight mb-1">
               Create your account
             </h1>
-            <p className="text-sm text-[#8B95A2] max-w-[280px] leading-relaxed">
+            <p className="text-sm text-on-surface-variant max-w-[280px] leading-relaxed">
               Deploy bots across Discord, Telegram, and Fluxer in minutes.
             </p>
           </section>
 
           {/* Form card */}
-          <div className="w-full bg-[#13161A] border border-[#242930] rounded-xl p-6 mb-8">
+          <div className="w-full bg-surface-container-low border border-hairline rounded-xl p-6 mb-8">
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
               <Field.Root invalid={!!errors.name} required>
                 <Field.Label>
-                  Full name <span className="text-[#EF4444]">*</span>
+                  Full name
                 </Field.Label>
                 <Input
                   type="text"
@@ -187,7 +187,7 @@ export default function SignupPage() {
 
               <Field.Root invalid={!!errors.email} required>
                 <Field.Label>
-                  Email <span className="text-[#EF4444]">*</span>
+                  Email
                 </Field.Label>
                 <Input
                   type="email"
@@ -202,7 +202,7 @@ export default function SignupPage() {
 
               <Field.Root invalid={!!errors.password} required>
                 <Field.Label>
-                  Password <span className="text-[#EF4444]">*</span>
+                  Password
                 </Field.Label>
                 <PasswordInput
                   placeholder="At least 8 characters"
@@ -216,7 +216,7 @@ export default function SignupPage() {
 
               <Field.Root invalid={!!errors.confirmPassword} required>
                 <Field.Label>
-                  Confirm password <span className="text-[#EF4444]">*</span>
+                  Confirm password
                 </Field.Label>
                 <PasswordInput
                   placeholder="Repeat your password"
@@ -255,7 +255,7 @@ export default function SignupPage() {
 
           {/* Redirect */}
           <div className="flex items-center justify-center gap-1.5 mb-8">
-            <span className="text-sm text-[#8B95A2]">Already have an account?</span>
+            <span className="text-sm text-on-surface-variant">Already have an account?</span>
             <Button
               as={Link}
               to={ROUTES.LOGIN}
@@ -267,17 +267,6 @@ export default function SignupPage() {
               Log in
             </Button>
           </div>
-
-          {/* Mini footer */}
-          <footer className="mt-auto flex flex-col items-center justify-center text-center gap-1 py-4">
-            <div className="flex items-center gap-1.5 text-[#8B95A2]">
-              <Logo className="w-4 h-4" />
-              <span className="text-xs font-medium">Cat-Bot</span>
-            </div>
-            <p className="font-mono text-xs text-[#8B95A2]">
-              Multi-platform bot management — open source
-            </p>
-          </footer>
         </div>
       </main>
     </div>

@@ -360,7 +360,22 @@ async function main(): Promise<void> {
   logger.info('Cat-Bot - loading modules...');
   logger.info(`Environment: ${env.NODE_ENV}`);
 
-  if (dbReady !== undefined) await dbReady;
+  // dbReady is the first outbound network call of the boot sequence
+  // (Turso/Neon connect over HTTPS via fetch; platform sessions start later
+  // and can never throw fatally — they retry per-session in the background).
+  // A timeout here means this machine cannot reach the database host at all,
+  // so say so explicitly instead of surfacing the bare undici "fetch failed".
+  if (dbReady !== undefined) {
+    try {
+      await dbReady;
+    } catch (err) {
+      logger.error(
+        '[app] Could not reach the database. Check your internet connection, firewall/VPN/proxy rules, and that DATABASE_TYPE plus TURSO_DATABASE_URL (or the Neon equivalent) points at a live, reachable database.',
+        { error: err },
+      );
+      throw err;
+    }
+  }
 
   // DB query and disk imports are independent — run all three concurrently.
   const [commands, eventModules, sessionConfigs] = await Promise.all([

@@ -1,19 +1,17 @@
 import { useState, useCallback } from 'react'
-import { Search, ChevronRight, ShieldOff, Terminal } from 'lucide-react'
-import Card from '@/components/ui/data-display/Card'
-import Badge from '@/components/ui/data-display/Badge'
-import DataList from '@/components/ui/data-display/DataList'
+import { Search, ShieldOff, Terminal, ChevronRight } from 'lucide-react'
 import Alert from '@/components/ui/feedback/Alert'
 import Switch from '@/components/ui/forms/Switch'
 import Input from '@/components/ui/forms/Input'
-import Divider from '@/components/ui/layout/Divider'
 import Dialog from '@/components/ui/overlay/Dialog'
+import DataList from '@/components/ui/data-display/DataList'
 import { useBotContext } from '@/features/users/components/DashboardBotLayout'
 import { useBotCommands } from '@/features/users/hooks/useBotCommands'
 import type { BotCommandItemDto } from '@/features/users/dtos/bot.dto'
 import Pagination from '@/components/ui/navigation/Pagination'
 import { useDebounce } from '@/hooks/useDebounce'
 import Skeleton from '@/components/ui/feedback/Skeleton'
+import { cn } from '@/utils/cn.util'
 
 const ROLE_LABEL: Record<number, string> = {
   0: 'Anyone',
@@ -23,16 +21,74 @@ const ROLE_LABEL: Record<number, string> = {
   4: 'System Admin',
 }
 
+// ============================================================================
+// Small presentational pieces matching dashboard settings
+// ============================================================================
+
+function RowChevron({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        'flex items-center pl-3 flex-shrink-0',
+        className ?? 'text-surface-variant',
+      )}
+    >
+      <ChevronRight className="w-4 h-4" strokeWidth={2} />
+    </div>
+  )
+}
+
+function IconWell({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+}) {
+  return (
+    <div
+      className={cn(
+        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        tone === 'accent' &&
+          'bg-primary/10 border-primary/30 text-primary',
+        tone === 'danger' &&
+          'bg-error/10 border-error/30 text-error',
+        tone === 'default' && 'bg-surface-container-high border-hairline text-on-surface-variant',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function MonoChip({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger' | 'warning'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border',
+        tone === 'accent' && 'bg-surface-container-high text-primary border-primary/30',
+        tone === 'danger' && 'bg-surface-container-high text-error border-error/30',
+        tone === 'warning' && 'bg-surface-container-high text-warning border-warning/30',
+        tone === 'default' && 'bg-surface-container-high text-on-surface-variant border-hairline',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
 // ── Command Detail Popup ─────────────────────────────────────────────────────
 //
 // Every command's full detail (description, usage, aliases, cooldown, author)
-// plus both of its live switches now live here, behind a click, instead of being
-// crammed onto the grid tile. Keeps the grid scannable while still surfacing
+// plus both of its live switches now live here, behind a click, instead of
+// being crammed onto the row. Keeps the list scannable while still surfacing
 // everything one click away — consistent with the Database panel's DetailDialog.
-//
-// The dialog is wrapped in React.memo so it only re-renders when its own props
-// change, preventing the grid from forcing a repaint on every keystroke or page
-// flip while the dialog happens to be closed.
 
 interface CommandDetailDialogProps {
   command: BotCommandItemDto | null
@@ -61,54 +117,33 @@ function CommandDetailDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
-      {/*
-       * POSITIONER
-       * Standard centered modal with default perimeter padding on every
-       * viewport — matches the Database panel's DetailDialog and every
-       * other dialog in the app, so the command popup no longer expands
-       * to a full-screen sheet on mobile.
-       */}
       <Dialog.Positioner position="center">
         <Dialog.Backdrop />
-
-        {/*
-         * CONTENT
-         * Standard sm-width centered modal, max 90 vh tall, flex-col so
-         * the body can scroll independently of the fixed header/footer —
-         * same treatment on mobile and desktop.
-         */}
         <Dialog.Content size="sm" className="flex flex-col max-h-[90dvh]">
           {command && (
             <>
-              {/* ── Header ──────────────────────────────────────────────────── */}
+              {/* ── Header ──────────────────────────────────────────────── */}
               <Dialog.Header className="items-start gap-3 pb-3 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-[var(--radius-input)] bg-primary/10 shrink-0">
-                    <Terminal className="w-4 h-4 text-primary" />
-                  </span>
+                  <IconWell tone={command.isEnable ? 'accent' : 'default'}>
+                    <Terminal className="w-4 h-4" strokeWidth={2} />
+                  </IconWell>
                   <div className="min-w-0">
                     <Dialog.Title className="font-mono text-base leading-tight truncate">
                       {prefix}
                       {command.commandName}
                     </Dialog.Title>
                     <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                      <Badge
-                        color={command.isEnable ? 'success' : 'secondary'}
-                        size="sm"
-                        variant="tonal"
-                        pill
-                      >
+                      <MonoChip tone={command.isEnable ? 'accent' : 'default'}>
                         {command.isEnable ? 'Enabled' : 'Disabled'}
-                      </Badge>
+                      </MonoChip>
                       {command.role !== undefined && (
-                        <Badge color="primary" size="sm" variant="outlined" pill>
+                        <MonoChip tone="accent">
                           {ROLE_LABEL[command.role] ?? 'Unknown'}
-                        </Badge>
+                        </MonoChip>
                       )}
                       {command.ignoresAdminOnly && (
-                        <Badge color="warning" size="sm" variant="tonal" pill>
-                          Admin-Only Exempt
-                        </Badge>
+                        <MonoChip tone="warning">Admin-Only Exempt</MonoChip>
                       )}
                     </div>
                   </div>
@@ -116,19 +151,10 @@ function CommandDetailDialog({
                 <Dialog.CloseTrigger />
               </Dialog.Header>
 
-              {/*
-               * BODY
-               * `flex-1`      — fills all remaining height between header and footer.
-               * `!max-h-none` — overrides DialogBody's hardcoded max-h-[70vh] so the
-               *                 flex layout (not a fixed cap) controls the scroll area.
-               * `overflow-y-auto` — scrolls on both mobile and desktop.
-               * `-webkit-overflow-scrolling: touch` is applied via inline style for
-               *  smooth momentum scrolling on iOS/Brave.
-               */}
               <Dialog.Body className="flex flex-col gap-0 pt-0 pb-2 flex-1 !max-h-none overflow-y-auto">
                 {/* Description */}
                 {command.description && (
-                  <p className="text-body-sm text-on-surface-variant leading-relaxed mb-4">
+                  <p className="text-sm text-on-surface-variant leading-relaxed mb-4">
                     {command.description}
                   </p>
                 )}
@@ -182,53 +208,53 @@ function CommandDetailDialog({
                   </div>
                 )}
 
-                {/* ── Settings section ──────────────────────────────────────── */}
-                <Divider spacing="none" />
-
+                {/* ── Settings section ──────────────────────────────────── */}
                 <div className="pt-4 pb-1">
-                  <p className="text-label-sm font-semibold text-on-surface-variant uppercase tracking-wider mb-3 px-0.5">
+                  <p className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-3 px-0.5">
                     Settings
                   </p>
 
-                  {/* Switch row 1 — Commands (matches Events switch row style) */}
-                  <div className="flex items-start justify-between gap-2 rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-4 mb-2.5">
-                    <div className="flex flex-col gap-1.5 min-w-0">
-                      <p className="text-body-sm font-semibold text-on-surface leading-snug">
+                  {/* Switch row 1 — Commands */}
+                  <div className="p-3.5 flex items-center justify-between space-x-3 bg-surface-container-low border border-hairline rounded-xl mb-2.5">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-semibold text-on-surface leading-snug">
                         Commands
-                      </p>
-                      <p className="text-label-sm text-on-surface-variant leading-relaxed">
+                      </span>
+                      <span className="text-xs text-on-surface-variant mt-0.5">
                         Enable or disable this command during dispatch.
-                      </p>
+                      </span>
                     </div>
-                    <Switch
-                      checked={command.isEnable}
-                      onChange={() =>
-                        onToggleEnabled(command.commandName, !command.isEnable)
-                      }
-                      className="shrink-0"
-                    />
+                    <div className="flex-shrink-0">
+                      <Switch
+                        checked={command.isEnable}
+                        onChange={() =>
+                          onToggleEnabled(command.commandName, !command.isEnable)
+                        }
+                      />
+                    </div>
                   </div>
 
-                  {/* Switch row 2 — Bot Admin Only (matches Events switch row style) */}
-                  <div className="flex items-start justify-between gap-2 rounded-[var(--radius-card)] border border-outline-variant bg-surface-container-low p-4">
-                    <div className="flex flex-col gap-1.5 min-w-0">
-                      <p className="text-body-sm font-semibold text-on-surface leading-snug">
+                  {/* Switch row 2 — Bot Admin Only */}
+                  <div className="p-3.5 flex items-center justify-between space-x-3 bg-surface-container-low border border-hairline rounded-xl">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-semibold text-on-surface leading-snug">
                         Bot Admin Only
-                      </p>
-                      <p className="text-label-sm text-on-surface-variant leading-relaxed">
+                      </span>
+                      <span className="text-xs text-on-surface-variant mt-0.5">
                         Exempt this command from session-wide admin-only mode.
-                      </p>
+                      </span>
                     </div>
-                    <Switch
-                      checked={command.ignoresAdminOnly}
-                      onChange={() =>
-                        onToggleIgnoreAdminOnly(
-                          command.commandName,
-                          !command.ignoresAdminOnly,
-                        )
-                      }
-                      className="shrink-0"
-                    />
+                    <div className="flex-shrink-0">
+                      <Switch
+                        checked={command.ignoresAdminOnly}
+                        onChange={() =>
+                          onToggleIgnoreAdminOnly(
+                            command.commandName,
+                            !command.ignoresAdminOnly,
+                          )
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               </Dialog.Body>
@@ -240,8 +266,23 @@ function CommandDetailDialog({
   )
 }
 
-// Memoized so the grid re-renders don't repaint a closed dialog.
+// Memoized so list re-renders don't repaint a closed dialog.
 const CommandDetailDialogMemo = CommandDetailDialog
+
+function CommandRowSkeleton() {
+  return (
+    <div className="p-3.5 flex items-center justify-between" aria-hidden="true">
+      <div className="flex items-center space-x-3 min-w-0">
+        <Skeleton variant="input" width={36} height={36} />
+        <div className="flex flex-col gap-2">
+          <Skeleton textSize="body-sm" width="128px" />
+          <Skeleton textSize="body-sm" width="64px" />
+        </div>
+      </div>
+      <Skeleton variant="pill" width={16} height={16} />
+    </div>
+  )
+}
 
 /**
  * Commands Page — /dashboard/bot/commands?id=xxx
@@ -276,7 +317,7 @@ export default function BotCommandsPage() {
     commands.find((c) => c.commandName === selectedName) ?? null
 
   // Stable callback refs — prevent CommandDetailDialog re-rendering on every
-  // grid keystroke or pagination update when the dialog is open.
+  // list keystroke or pagination update when the dialog is open.
   const handleClose = useCallback(() => setSelectedName(null), [])
   const handleToggleEnabled = useCallback(
     (name: string, isEnable: boolean) => void toggleCommand(name, isEnable),
@@ -289,145 +330,115 @@ export default function BotCommandsPage() {
   )
 
   return (
-    <div className="flex flex-col gap-4">
-      {error && (
-        <Alert variant="tonal" color="error" title="Error" message={error} />
-      )}
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-title-md font-semibold text-on-surface">
+    <div className="flex flex-col max-w-[400px] md:max-w-2xl w-full mx-auto">
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
             Commands
-          </h3>
-          <p className="text-body-sm text-on-surface-variant mt-0.5">
-            Tap a command to view its details and switches.
-          </p>
+          </h2>
+          <span className="text-[11px] font-mono font-medium text-surface-variant">
+            {isLoading
+              ? 'Loading…'
+              : query.trim()
+                ? `${total} matched`
+                : `${total} total`}
+          </span>
         </div>
-        <Badge color="secondary" size="sm" variant="tonal">
-          {isLoading
-            ? 'Loading...'
-            : query.trim()
-              ? `${total} matched`
-              : `${total} total`}
-        </Badge>
-      </div>
 
-      <div className="bg-surface p-2 rounded-full">
+        {error && (
+          <Alert variant="tonal" color="error" title="Error" message={error} size="sm" />
+        )}
+
         <Input
           placeholder="Search commands…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          leftIcon={<Search className="h-4 w-4 text-on-surface-variant" />}
-          pill
+          leftIcon={<Search className="h-4 w-4" />}
+          aria-label="Search commands"
+          className="h-11 text-sm"
         />
+
+        {/* Keep the search bar visible; swap only the list for skeletons while fetching */}
+        {isLoading ? (
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CommandRowSkeleton key={i} />
+            ))}
+          </div>
+        ) : commands.length === 0 ? (
+          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+            <p className="p-6 text-sm text-on-surface-variant italic text-center">
+              {query.trim()
+                ? `No commands match "${query}"`
+                : 'No commands synced yet — start the bot to populate this list.'}
+            </p>
+          </div>
+        ) : (
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            {commands.map((cmd) => (
+              <article
+                key={cmd.commandName}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedName(cmd.commandName)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedName(cmd.commandName)
+                  }
+                }}
+                className="p-3.5 flex items-center justify-between hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+              >
+                <div className="flex items-center space-x-3 min-w-0">
+                  <IconWell tone={cmd.isEnable ? 'accent' : 'default'}>
+                    <Terminal className="w-4 h-4" strokeWidth={2} />
+                  </IconWell>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-on-surface truncate leading-snug font-mono">
+                      {bot.prefix}
+                      {cmd.commandName}
+                    </span>
+                    <span className="flex items-center space-x-1.5 mt-1 flex-wrap gap-y-1">
+                      <MonoChip tone={cmd.isEnable ? 'accent' : 'default'}>
+                        {cmd.isEnable ? 'ON' : 'OFF'}
+                      </MonoChip>
+                      {cmd.role !== undefined && (
+                        <MonoChip tone="accent">
+                          {ROLE_LABEL[cmd.role] ?? 'Unknown'}
+                        </MonoChip>
+                      )}
+                      {cmd.ignoresAdminOnly && (
+                        <MonoChip tone="warning">
+                          <ShieldOff className="h-3 w-3 mr-0.5" />
+                          Exempt
+                        </MonoChip>
+                      )}
+                    </span>
+                    {cmd.description && (
+                      <span className="text-xs text-on-surface-variant truncate mt-0.5">
+                        {cmd.description}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <RowChevron />
+              </article>
+            ))}
+          </div>
+        )}
+
+        {/* Hide pagination while loading to prevent stale total counts from rendering */}
+        {!isLoading && total > 0 && (
+          <div className="pt-2 flex justify-center">
+            <Pagination
+              currentPage={page}
+              totalItems={total}
+              itemsPerPage={12}
+              onPageChange={setPage}
+            />
+          </div>
+        )}
       </div>
-
-      {/* Keep contextual search bar visible; swap only the grid for skeletons while fetching */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <Card.Root
-              key={i}
-              padding="sm"
-              bordered
-              className="flex flex-col gap-2.5"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Skeleton variant="input" width="16px" height="16px" />
-                  <Skeleton variant="text" width="55%" height="22px" />
-                </div>
-                <Skeleton variant="input" width="16px" height="16px" />
-              </div>
-              <Skeleton variant="text" width="70%" />
-              <div className="flex gap-1.5 pt-0.5">
-                <Skeleton variant="rounded" width="52px" height="20px" />
-                <Skeleton variant="rounded" width="68px" height="20px" />
-              </div>
-            </Card.Root>
-          ))}
-        </div>
-      ) : commands.length === 0 ? (
-        <Card.Root padding="lg">
-          <p className="text-body-md text-on-surface-variant italic text-center">
-            {query.trim()
-              ? `No commands match "${query}"`
-              : 'No commands synced yet — start the bot to populate this list.'}
-          </p>
-        </Card.Root>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {commands.map((cmd) => (
-            <Card.Root
-              key={cmd.commandName}
-              padding="sm"
-              bordered
-              interactive
-              onClick={() => setSelectedName(cmd.commandName)}
-              className={[
-                'group flex flex-col gap-2 text-left transition-all duration-fast',
-                !cmd.isEnable ? 'opacity-60' : '',
-              ].join(' ')}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Terminal className="h-4 w-4 text-on-surface-variant shrink-0" />
-                  <span className="font-mono text-label-lg font-semibold text-on-surface truncate">
-                    {bot.prefix}
-                    {cmd.commandName}
-                  </span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-on-surface-variant shrink-0 transition-transform duration-fast group-hover:translate-x-0.5" />
-              </div>
-
-              {cmd.description && (
-                <p className="text-body-sm text-on-surface-variant leading-relaxed line-clamp-2">
-                  {cmd.description}
-                </p>
-              )}
-
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                <Badge
-                  color={cmd.isEnable ? 'success' : 'secondary'}
-                  size="sm"
-                  variant="tonal"
-                  pill
-                >
-                  {cmd.isEnable ? 'ON' : 'OFF'}
-                </Badge>
-                {cmd.role !== undefined && (
-                  <Badge color="primary" size="sm" variant="outlined" pill>
-                    {ROLE_LABEL[cmd.role] ?? 'Unknown'}
-                  </Badge>
-                )}
-                {cmd.ignoresAdminOnly && (
-                  <Badge
-                    color="warning"
-                    size="sm"
-                    variant="tonal"
-                    pill
-                    leftIcon={<ShieldOff className="h-3 w-3" />}
-                  >
-                    Exempt
-                  </Badge>
-                )}
-              </div>
-            </Card.Root>
-          ))}
-        </div>
-      )}
-
-      {/* Hide pagination while loading to prevent stale total counts from rendering */}
-      {!isLoading && total > 0 && (
-        <div className="pt-4 flex justify-center">
-          <Pagination
-            currentPage={page}
-            totalItems={total}
-            itemsPerPage={12}
-            onPageChange={setPage}
-          />
-        </div>
-      )}
 
       <CommandDetailDialogMemo
         command={selectedCommand}

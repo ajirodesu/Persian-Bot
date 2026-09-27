@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="bg-[#0A0C0E] text-[#F1F4F8] min-h-screen flex flex-col">
+    <div className="bg-surface text-on-surface min-h-screen flex flex-col">
       <Helmet>
         <title>Admin · Cat-Bot</title>
       </Helmet>
@@ -79,24 +79,24 @@ export default function AdminLoginPage() {
           <div className="w-full max-w-sm flex flex-col items-center my-auto">
             {/* Lock hero with live indicator */}
             <div className="flex flex-col items-center text-center mb-8">
-              <div className="w-16 h-16 rounded-xl bg-[#13161A] border border-[#242930] flex items-center justify-center mb-4 relative">
-                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#10B981] ring-4 ring-[#0A0C0E]" />
-                <Lock className="text-[#10B981] w-8 h-8" strokeWidth={2} />
+              <div className="w-16 h-16 rounded-xl bg-surface-container-low border border-hairline flex items-center justify-center mb-4 relative">
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary ring-4 ring-surface" />
+                <Lock className="text-primary w-8 h-8" strokeWidth={2} />
               </div>
-              <h1 className="text-[28px] font-bold text-[#F1F4F8] tracking-tight mb-1">
+              <h1 className="text-[28px] font-bold text-on-surface tracking-tight mb-1">
                 Admin Access
               </h1>
-              <p className="text-sm text-[#8B95A2] max-w-[260px] leading-relaxed">
+              <p className="text-sm text-on-surface-variant max-w-[260px] leading-relaxed">
                 Restricted to authorised administrators only.
               </p>
             </div>
 
             {/* Form card */}
-            <div className="w-full bg-[#13161A] border border-[#242930] p-6 rounded-xl flex flex-col gap-4">
+            <div className="w-full bg-surface-container-low border border-hairline p-6 rounded-xl flex flex-col gap-4">
               <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
                 <Field.Root invalid={!!errors.email} required>
                   <Field.Label>
-                    Email <span className="text-[#EF4444]">*</span>
+                    Email
                   </Field.Label>
                   <Input
                     type="email"
@@ -112,12 +112,12 @@ export default function AdminLoginPage() {
                 <Field.Root invalid={!!errors.password} required>
                   <div className="flex items-center justify-between mb-1.5">
                     <Field.Label className="mb-0">
-                      Password <span className="text-[#EF4444]">*</span>
+                      Password
                     </Field.Label>
                     {isEmailEnabled && (
                       <Link
                         to={ROUTES.ADMIN.FORGOT_PASSWORD}
-                        className="text-xs text-[#10B981] hover:underline"
+                        className="text-xs text-primary hover:underline"
                       >
                         Forgot password?
                       </Link>
@@ -135,9 +135,9 @@ export default function AdminLoginPage() {
 
                 {/* Live verification indicator */}
                 {isLoading && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0A0C0E]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
-                    <span className="font-mono text-[#8B95A2] text-[11px]">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    <span className="font-mono text-on-surface-variant text-[11px]">
                       Verifying credentials...
                     </span>
                   </div>
@@ -170,7 +170,7 @@ export default function AdminLoginPage() {
 
           {/* Dedicated admin footer */}
           <footer className="w-full flex flex-col items-center justify-center pt-6 pb-2 text-center">
-            <p className="font-mono text-[#5D6775] text-[11px] tracking-widest uppercase">
+            <p className="font-mono text-surface-variant text-[11px] tracking-widest uppercase">
               Cat-Bot Admin Portal
             </p>
           </footer>

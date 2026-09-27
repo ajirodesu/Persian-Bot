@@ -40,9 +40,12 @@ export interface UseAdminFileManagerReturn {
   isExpanded: (path: string) => boolean
   toggleFolder: (path: string) => void
   refresh: (path: string) => Promise<void>
-  // Full-repository index — powers search across every directory
+  // Full-repository index — powers search across every directory.
+  // Loaded lazily on first search interaction (not on mount) so the
+  // browser view paints after two requests instead of three plus a walk.
   treeIndex: RepoTreeNodeDto[] | undefined
   treeError: string | null
+  treeLoading: boolean
   refreshTree: () => Promise<void>
 
   // Open files / editor — `openFileEntry`/`content`/… reflect the ACTIVE tab
@@ -162,6 +165,11 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
 
   const [treeIndex, setTreeIndex] = useState<RepoTreeNodeDto[] | undefined>(undefined)
   const [treeError, setTreeError] = useState<string | null>(null)
+  const [treeLoading, setTreeLoading] = useState(false)
+  // Mirror for mutation paths — refreshes the search index after a
+  // create/rename/delete only when it was actually loaded.
+  const treeIndexRef = useRef<RepoTreeNodeDto[] | undefined>(undefined)
+  treeIndexRef.current = treeIndex
 
   const [tabs, setTabs] = useState<OpenTab[]>(initialState?.tabs ?? [])
   const [activePath, setActivePath] = useState<string | null>(
@@ -287,12 +295,11 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     }
   }, [])
 
-  const isExpanded = useCallback((path: string) => expanded.has(path), [expanded])
-
   /** Re-fetches the full-repo index used by search (files + folders, any dir). */
   const refreshTree = useCallback(async (): Promise<void> => {
     const id = (treeFetchRef.current += 1)
     setTreeError(null)
+    setTreeLoading(true)
     try {
       const data = await adminFileManagerService.getTree()
       if (id !== treeFetchRef.current) return
@@ -300,31 +307,43 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     } catch (err) {
       if (id !== treeFetchRef.current) return
       setTreeError(err instanceof Error ? err.message : 'Failed to load repository tree')
+    } finally {
+      if (id === treeFetchRef.current) setTreeLoading(false)
     }
   }, [])
 
+  // Ref mirrors so folder toggling never depends on (or invalidates) the
+  // cached children identity — memoized tree rows stay memoized.
+  const childrenRef = useRef(children)
+  childrenRef.current = children
+  const expandedRef = useRef(expanded)
+  expandedRef.current = expanded
+
+  const isExpanded = useCallback((path: string) => expandedRef.current.has(path), [])
+
   const toggleFolder = useCallback(
     (path: string) => {
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        if (next.has(path)) {
+      if (expandedRef.current.has(path)) {
+        setExpanded((prev) => {
+          const next = new Set(prev)
           next.delete(path)
-        } else {
-          next.add(path)
-          if (children[path] === undefined) {
-            void refresh(path)
-          }
-        }
-        return next
-      })
+          return next
+        })
+        return
+      }
+      setExpanded((prev) => new Set(prev).add(path))
+      if (childrenRef.current[path] === undefined) {
+        void refresh(path)
+      }
     },
-    [children, refresh],
+    [refresh],
   )
 
-  // Load the repository root + full-repo index once on mount.
+  // Load the repository root once on mount. The full-repo search index
+  // resolves lazily on first search interaction so first paint never waits
+  // for the walk.
   useEffect(() => {
     void refresh('')
-    void refreshTree()
 
     // Re-fetch any folders that were expanded in the persisted session so the
     // restored tree renders with its cached children populated again.
@@ -777,7 +796,9 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         setLastMutation(data)
         void refresh(parentOf(path))
         if (type === 'folder') setExpanded((prev) => new Set(prev).add(path))
-        void refreshTree()
+        // Keep the search index fresh only when it was actually loaded —
+        // otherwise a mutation would pay for a full walk nobody asked for.
+        if (treeIndexRef.current !== undefined) void refreshTree()
         void refreshGit()
         return data
       })
@@ -821,7 +842,9 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
           ),
         )
         setActivePath((prev) => (prev === from ? to : prev))
-        void refreshTree()
+        // Keep the search index fresh only when it was actually loaded —
+        // otherwise a mutation would pay for a full walk nobody asked for.
+        if (treeIndexRef.current !== undefined) void refreshTree()
         void refreshGit()
         return data
       })
@@ -843,7 +866,9 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         })
         void refresh(parent)
         closeTab(path)
-        void refreshTree()
+        // Keep the search index fresh only when it was actually loaded —
+        // otherwise a mutation would pay for a full walk nobody asked for.
+        if (treeIndexRef.current !== undefined) void refreshTree()
         void refreshGit()
         return data
       })
@@ -863,6 +888,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     refresh,
     treeIndex,
     treeError,
+    treeLoading,
     refreshTree,
     tabs,
     activePath,

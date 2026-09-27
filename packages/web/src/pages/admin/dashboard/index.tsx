@@ -2,10 +2,65 @@ import { Helmet } from '@dr.pogodin/react-helmet'
 import React from 'react'
 import { Users, Bot, ShieldBan, AlertCircle } from 'lucide-react'
 import { PLATFORM_LABELS } from '@/constants/platform.constants'
-import Badge from '@/components/ui/data-display/Badge'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import { useAdminBots } from '@/features/admin/hooks/useAdminBots'
 import { useAdminUsers } from '@/features/admin/hooks/useAdminUsers'
+import { cn } from '@/utils/cn.util'
+
+// ============================================================================
+// Small presentational pieces matching dashboard settings
+// ============================================================================
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-1">
+      <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+        {children}
+      </h2>
+    </div>
+  )
+}
+
+function IconWell({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+}) {
+  return (
+    <div
+      className={cn(
+        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        tone === 'accent' && 'bg-primary/10 border-primary/30 text-primary',
+        tone === 'danger' && 'bg-error/10 border-error/30 text-error',
+        tone === 'default' && 'bg-surface-container-high border-hairline text-on-surface-variant',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function MonoChip({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border',
+        tone === 'accent' && 'bg-surface-container-high text-primary border-primary/30',
+        tone === 'default' && 'bg-surface-container-high text-on-surface-variant border-hairline',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
 
 // ── Shared subcomponents ──────────────────────────────────────────────────────
 
@@ -13,23 +68,23 @@ function StatCard({
   label,
   value,
   icon: Icon,
-  colorClass,
+  tone = 'default',
 }: {
   label: string
   value: string
   icon: React.ComponentType<{ className?: string }>
-  colorClass: string
+  tone?: 'default' | 'accent' | 'danger'
 }) {
   return (
-    <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 flex flex-col gap-3 shadow-elevation-1">
-      <div
-        className={`h-10 w-10 rounded-[var(--radius-input)] flex items-center justify-center ${colorClass}`}
-      >
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="text-headline-sm font-bold text-on-surface">{value}</p>
-        <p className="text-body-sm text-on-surface-variant">{label}</p>
+    <div className="bg-surface-container-low border border-hairline rounded-xl p-3.5 flex items-center space-x-3">
+      <IconWell tone={tone}>
+        <Icon className="w-4 h-4" />
+      </IconWell>
+      <div className="flex flex-col min-w-0">
+        <span className="text-lg font-bold text-on-surface leading-snug">
+          {value}
+        </span>
+        <span className="text-xs text-on-surface-variant mt-0.5">{label}</span>
       </div>
     </div>
   )
@@ -37,11 +92,14 @@ function StatCard({
 
 function StatCardSkeleton() {
   return (
-    <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 flex flex-col gap-3 shadow-elevation-1">
-      <Skeleton variant="input" width={40} height={40} />
-      <div className="flex flex-col gap-1.5">
-        <Skeleton variant="text" textSize="headline-sm" width="56%" />
-        <Skeleton variant="text" textSize="body-sm" width="72%" />
+    <div
+      className="bg-surface-container-low border border-hairline rounded-xl p-3.5 flex items-center space-x-3"
+      aria-hidden="true"
+    >
+      <Skeleton variant="input" width={36} height={36} />
+      <div className="flex flex-col gap-2">
+        <Skeleton textSize="body-sm" width="56px" />
+        <Skeleton textSize="body-sm" width="96px" />
       </div>
     </div>
   )
@@ -78,168 +136,139 @@ export default function AdminDashboardPage() {
       <Helmet>
         <title>Admin Overview · Cat-Bot</title>
       </Helmet>
-      <div>
-        <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
-          Overview
-        </h1>
-        <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
-          Platform health and activity at a glance.
-        </p>
-      </div>
 
       {/* ── Stat grid ── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        {isUsersLoading ? (
-          <StatCardSkeleton />
-        ) : (
-          <StatCard
-            label="Registered Users"
-            value={String(totalUsers)}
-            icon={Users}
-            colorClass="bg-primary-container text-on-primary-container"
-          />
-        )}
-        {isBotsLoading ? (
-          <StatCardSkeleton />
-        ) : (
-          <StatCard
-            label="Active Bots"
-            value={`${activeBots} / ${totalBots}`}
-            icon={Bot}
-            colorClass="bg-tertiary-container text-on-tertiary-container"
-          />
-        )}
-        {isUsersLoading ? (
-          <StatCardSkeleton />
-        ) : (
-          <StatCard
-            label="Admin Accounts"
-            value={String(adminCount)}
-            icon={ShieldBan}
-            colorClass="bg-secondary-container text-on-secondary-container"
-          />
-        )}
-        {isUsersLoading ? (
-          <StatCardSkeleton />
-        ) : (
-          <StatCard
-            label="Banned Accounts"
-            value={String(bannedCount)}
-            icon={AlertCircle}
-            colorClass="bg-error-container text-on-error-container"
-          />
-        )}
-      </div>
+      <section aria-label="Platform totals" className="space-y-2">
+        <SectionTitle>Totals</SectionTitle>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+          {isUsersLoading ? (
+            <StatCardSkeleton />
+          ) : (
+            <StatCard
+              label="Registered Users"
+              value={String(totalUsers)}
+              icon={Users}
+              tone="accent"
+            />
+          )}
+          {isBotsLoading ? (
+            <StatCardSkeleton />
+          ) : (
+            <StatCard
+              label="Active Bots"
+              value={`${activeBots} / ${totalBots}`}
+              icon={Bot}
+              tone="accent"
+            />
+          )}
+          {isUsersLoading ? (
+            <StatCardSkeleton />
+          ) : (
+            <StatCard label="Admin Accounts" value={String(adminCount)} icon={ShieldBan} />
+          )}
+          {isUsersLoading ? (
+            <StatCardSkeleton />
+          ) : (
+            <StatCard
+              label="Banned Accounts"
+              value={String(bannedCount)}
+              icon={AlertCircle}
+              tone="danger"
+            />
+          )}
+        </div>
+      </section>
 
-      {/* ── Detail cards ── */}
+      {/* ── Detail sections ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Platform distribution — real data from useAdminBots */}
-        <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 shadow-elevation-1">
-          <h2 className="text-title-md font-semibold text-on-surface mb-4">
-            Bot Platform Distribution
-          </h2>
-          {isBotsLoading ? (
-            <div className="flex flex-col">
-              {[1, 2, 3, 4].map((i) => (
+        <section aria-label="Bot platform distribution" className="space-y-2">
+          <SectionTitle>Bot Platform Distribution</SectionTitle>
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            {isBotsLoading ? (
+              [1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between py-3 border-b border-outline-variant/50 last:border-0"
+                  className="p-3.5 flex items-center justify-between"
+                  aria-hidden="true"
                 >
-                  <Skeleton variant="text" textSize="body-sm" width="45%" />
+                  <Skeleton textSize="body-sm" width="45%" />
                   <div className="flex flex-col items-end gap-1">
-                    <Skeleton variant="text" textSize="body-sm" width="72px" />
-                    <Skeleton variant="text" textSize="label-sm" width="52px" />
+                    <Skeleton textSize="body-sm" width="72px" />
+                    <Skeleton textSize="body-sm" width="52px" />
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {Object.entries(platformDist).map(([platform, count]) => {
+              ))
+            ) : Object.keys(platformDist).length === 0 ? (
+              <p className="p-6 text-sm text-on-surface-variant italic text-center">
+                No bot sessions registered yet.
+              </p>
+            ) : (
+              Object.entries(platformDist).map(([platform, count]) => {
                 // Extract active running count to show alongside the total
                 const running = botStats?.platformActiveDist?.[platform] ?? 0
                 return (
                   <div
                     key={platform}
-                    className="flex items-center justify-between py-3 border-b border-outline-variant/50 last:border-0"
+                    className="p-3.5 flex items-center justify-between space-x-3"
                   >
-                    <span className="text-body-sm font-medium text-on-surface">
+                    <span className="text-sm font-semibold text-on-surface truncate">
                       {PLATFORM_LABELS[platform] ?? platform}
                     </span>
-                    <div className="text-right">
-                      <p className="text-body-sm font-semibold text-on-surface">
-                        {count} session{count !== 1 ? 's' : ''}
-                      </p>
-                      <p className="text-label-sm text-on-surface-variant">
-                        {running} running
-                      </p>
-                    </div>
+                    <span className="text-[11px] font-mono text-on-surface-variant flex-shrink-0">
+                      {count} total · {running} running
+                    </span>
                   </div>
                 )
-              })}
-              {Object.keys(platformDist).length === 0 && (
-                <p className="text-body-sm text-on-surface-variant text-center py-6">
-                  No bot sessions registered yet.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+              })
+            )}
+          </div>
+        </section>
 
         {/* Recent registrations */}
-        <div className="rounded-[var(--radius-card)] bg-surface border border-hairline p-5 shadow-elevation-1">
-          <h2 className="text-title-md font-semibold text-on-surface mb-4">
-            Recent Registrations
-          </h2>
-          {isUsersLoading ? (
-            <div className="flex flex-col">
-              {[1, 2, 3, 4].map((i) => (
+        <section aria-label="Recent registrations" className="space-y-2">
+          <SectionTitle>Recent Registrations</SectionTitle>
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            {isUsersLoading ? (
+              [1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between py-2.5 border-b border-outline-variant/50 last:border-0"
+                  className="p-3.5 flex items-center space-x-3 min-w-0"
+                  aria-hidden="true"
                 >
-                  <div className="min-w-0 flex-1 mr-3">
-                    <Skeleton variant="text" textSize="body-sm" width="55%" />
-                    <Skeleton variant="text" textSize="label-sm" width="80%" />
+                  <Skeleton variant="input" width={36} height={36} />
+                  <div className="flex flex-col gap-2 min-w-0 flex-1">
+                    <Skeleton textSize="body-sm" width="55%" />
+                    <Skeleton textSize="body-sm" width="80%" />
                   </div>
-                  <Skeleton variant="pill" width={48} height={22} />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {users.slice(0, 6).map((u) => (
+              ))
+            ) : users.length === 0 ? (
+              <p className="p-6 text-sm text-on-surface-variant italic text-center">
+                No users registered yet.
+              </p>
+            ) : (
+              users.slice(0, 6).map((u) => (
                 <div
                   key={u.id}
-                  className="flex items-center justify-between py-2.5 border-b border-outline-variant/50 last:border-0"
+                  className="p-3.5 flex items-center justify-between space-x-3"
                 >
-                  <div className="min-w-0">
-                    <p className="text-body-sm font-medium text-on-surface truncate">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-on-surface truncate leading-snug">
                       {u.name}
-                    </p>
-                    <p className="text-label-sm text-on-surface-variant truncate">
+                    </span>
+                    <span className="text-xs text-on-surface-variant truncate mt-0.5">
                       {u.email}
-                    </p>
+                    </span>
                   </div>
-                  <Badge
-                    variant="tonal"
-                    color={u.role === 'admin' ? 'primary' : 'default'}
-                    size="sm"
-                    pill
-                    className="ml-3 shrink-0"
-                  >
+                  <MonoChip tone={u.role === 'admin' ? 'accent' : 'default'}>
                     {u.role ?? 'user'}
-                  </Badge>
+                  </MonoChip>
                 </div>
-              ))}
-              {users.length === 0 && (
-                <p className="text-body-sm text-on-surface-variant text-center py-6">
-                  No users registered yet.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+              ))
+            )}
+          </div>
+        </section>
       </div>
     </div>
   )

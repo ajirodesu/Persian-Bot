@@ -13,16 +13,15 @@ import { applyFaviconTheme } from '../utils/favicon.util'
 
 /**
  * Available UI themes.
- * - 'aqua'   — the default theme (formerly labeled "Winter"): dark
- *              near-black + cyan/mint accent, iOS-style shape/glass/
- *              glow tokens.
- * - 'burnt'  — the warm amber-orange theme (formerly labeled
- *              "Summer"), kept for anyone who prefers a warmer look.
- * - 'indigo' — the midnight-purple theme (formerly labeled "Night"),
- *              a nocturnal amethyst/magenta register.
+ * - 'aqua'   — the default theme: flat precision-system dark with an
+ *              emerald accent (the Bot Manager look).
+ * - 'burnt'  — Claude dark mode: warm charcoal surfaces with the
+ *              signature terracotta-orange accent.
+ * - 'indigo' — midnight-purple: nocturnal amethyst surfaces with a
+ *              violet accent.
  *
  * Every theme shares identical shape, spacing, and typography tokens
- * (see tokens.css) — only color, glow, and blur values differ, so
+ * (see tokens.css) — only color and finish values differ, so
  * switching themes never changes the size or layout of cards,
  * buttons, or text.
  */

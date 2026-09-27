@@ -79,7 +79,7 @@ export default function BotLayout() {
     return (
       <div className="flex flex-col gap-6">
         {/* Segmented switcher placeholder — mirrors the pill container below */}
-        <div className="flex w-fit max-w-full items-center gap-1 rounded-[var(--radius-input)] border border-hairline bg-surface-container-low/80 p-1">
+        <div className="flex w-fit max-w-full items-center gap-1 rounded-[var(--radius-input)] border border-hairline bg-surface-container-low/80 p-1 md:mx-auto">
           {BOT_TABS.map((tab) => (
             <Skeleton
               key={tab.value}
@@ -161,7 +161,7 @@ export default function BotLayout() {
       <div
         role="tablist"
         aria-label="Bot sections"
-        className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--radius-input)] border border-hairline bg-surface-container-low/80 p-1"
+        className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--radius-input)] border border-hairline bg-surface-container-low/80 p-1 md:mx-auto md:w-fit"
       >
         {BOT_TABS.map(({ value, label, Icon }) => {
           const active = currentTab === value

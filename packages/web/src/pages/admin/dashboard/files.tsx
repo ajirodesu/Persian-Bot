@@ -9,48 +9,32 @@ import {
 import type { ComponentType, SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
+import { useNavigate } from 'react-router-dom'
 import {
   Folder,
   FolderPlus,
   FilePlus2,
-  FileText,
-  FileCode2,
-  FileJson,
-  FileTerminal,
-  FileArchive,
-  FileImage,
-  FileType2,
-  Palette,
-  Hash,
   Pencil,
   Trash2,
-  Save,
   Loader2,
   X,
-  CircleDot,
-  Files,
-  FolderGit2,
   RefreshCw,
   Copy,
-  Maximize,
-  Minimize,
   Search,
   MoreVertical,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
-import IconButton from '@/components/ui/buttons/IconButton'
-import Badge from '@/components/ui/data-display/Badge'
-import EmptyState from '@/components/ui/data-display/EmptyState'
+import { FileTypeIcon, fileTypeStyle } from '@/components/icons/FileTypeIcons'
 import Alert from '@/components/ui/feedback/Alert'
 import Input from '@/components/ui/forms/Input'
 import Field from '@/components/ui/forms/Field'
 import Dialog from '@/components/ui/overlay/Dialog'
 import Skeleton from '@/components/ui/feedback/Skeleton'
-import CodeEditor from '@/components/editor/CodeEditor'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
 import { useSnackbar } from '@/contexts/SnackbarContext'
+import { ROUTES } from '@/constants/routes.constants'
 import type {
   RepoEntryDto,
   RepoTreeNodeDto,
@@ -61,70 +45,33 @@ const FOLDER_STORAGE_KEY = 'admin-file-manager:folder:v1'
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
-/** Extension → icon + tint used for Replit-style typed file rows. */
-const FILE_TYPE_MAP: Record<
+/** Git working-tree status → single-letter row marker (reference M/A/D badges). */
+const GIT_MARKERS: Record<
   string,
-  { icon: ComponentType<SVGProps<SVGSVGElement>>; className: string }
+  { text: string; className: string }
 > = {
-  ts: { icon: FileCode2, className: 'text-primary' },
-  tsx: { icon: FileCode2, className: 'text-primary' },
-  js: { icon: FileCode2, className: 'text-warning' },
-  jsx: { icon: FileCode2, className: 'text-warning' },
-  json: { icon: FileJson, className: 'text-warning' },
-  md: { icon: FileText, className: 'text-info' },
-  mdx: { icon: FileText, className: 'text-info' },
-  css: { icon: Palette, className: 'text-info' },
-  scss: { icon: Palette, className: 'text-info' },
-  sass: { icon: Palette, className: 'text-info' },
-  html: { icon: FileCode2, className: 'text-tertiary' },
-  yml: { icon: Hash, className: 'text-tertiary' },
-  yaml: { icon: Hash, className: 'text-tertiary' },
-  toml: { icon: Hash, className: 'text-tertiary' },
-  sh: { icon: FileTerminal, className: 'text-success' },
-  bash: { icon: FileTerminal, className: 'text-success' },
-  zsh: { icon: FileTerminal, className: 'text-success' },
-  py: { icon: FileTerminal, className: 'text-success' },
-  python: { icon: FileTerminal, className: 'text-success' },
-  tsconfig: { icon: FileJson, className: 'text-warning' },
-  env: { icon: FileType2, className: 'text-secondary' },
-  lock: { icon: FileArchive, className: 'text-secondary' },
-  go: { icon: FileCode2, className: 'text-info' },
-  rs: { icon: FileCode2, className: 'text-tertiary' },
-  java: { icon: FileCode2, className: 'text-tertiary' },
-  php: { icon: FileCode2, className: 'text-primary' },
-  rb: { icon: FileCode2, className: 'text-error' },
-  c: { icon: FileCode2, className: 'text-info' },
-  h: { icon: FileCode2, className: 'text-info' },
-  cpp: { icon: FileCode2, className: 'text-info' },
-  svg: { icon: FileImage, className: 'text-warning' },
-  png: { icon: FileImage, className: 'text-warning' },
-  jpg: { icon: FileImage, className: 'text-warning' },
-  jpeg: { icon: FileImage, className: 'text-warning' },
-  gif: { icon: FileImage, className: 'text-warning' },
-  ico: { icon: FileImage, className: 'text-warning' },
-  webp: { icon: FileImage, className: 'text-warning' },
+  modified: { text: 'M', className: 'text-primary' },
+  added: { text: 'A', className: 'text-success' },
+  deleted: { text: 'D', className: 'text-error' },
+  renamed: { text: 'R', className: 'text-secondary' },
+  untracked: { text: 'U', className: 'text-secondary' },
 }
 
-/** Returns the typed icon+tint for a file (defaults to a neutral document). */
-function fileTypeStyle(name: string) {
-  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : ''
-  const fallback: (typeof FILE_TYPE_MAP)[string] = {
-    icon: FileText,
-    className: 'text-on-surface-variant/70',
-  }
-  return ext ? (FILE_TYPE_MAP[ext] ?? fallback) : fallback
+function GitMarker({ marker }: { marker: { text: string; className: string } | null }) {
+  if (!marker) return null
+  return (
+    <span className={cn('font-mono text-[12px] font-semibold', marker.className)}>
+      {marker.text}
+    </span>
+  )
 }
 
-/** Renders the Replit-style typed icon for a filename with its tint applied. */
-function FileTypeIcon({
-  name,
-  className,
-}: {
-  name: string
-  className?: string
-}) {
-  const { icon: Icon, className: tint } = fileTypeStyle(name)
-  return <Icon className={cn(tint, className)} />
+function CountChip({ count }: { count: number }) {
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-surface-container-high text-on-surface-variant border border-hairline">
+      {count}
+    </span>
+  )
 }
 
 interface RowMenuAction {
@@ -274,9 +221,6 @@ function searchTreeIndex(
   return matches
 }
 
-// ── Discard-confirm request ───────────────────────────────────────────────────
-
-type DiscardRequest = { kind: 'close'; path?: string } | null
 
 // ── File tree (recursive, lazy, GitHub-style) ─────────────────────────────────
 
@@ -291,6 +235,8 @@ interface FileTreeProps {
   onRename: (entry: RepoEntryDto) => void
   onDelete: (entry: RepoEntryDto) => void
   onCopyPath: (path: string) => void
+  // Reference file-browser markers — maps a repo path to its git marker.
+  getGitMarker: (path: string) => { text: string; className: string } | null
   // From the hook
   children: Record<string, RepoEntryDto[]>
   expanded: Set<string>
@@ -312,6 +258,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
     onRename,
     onDelete,
     onCopyPath,
+    getGitMarker,
     children,
     expanded,
     loadingPaths,
@@ -351,20 +298,20 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
           }
         }}
         className={[
-          'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
+          'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-2 pr-1 text-left ' +
             'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
           isSelected
-            ? 'bg-primary/10 text-primary'
+            ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/40'
             : 'text-on-surface hover:bg-on-surface/5',
         ].join(' ')}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
         {isLoading && !entryChildren ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-on-surface-variant" />
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-on-surface-variant" />
         ) : (
           <Folder
             className={cn(
-              'h-4 w-4 shrink-0',
+              'h-5 w-5 shrink-0',
               isSelected || isOpen
                 ? 'fill-[rgb(var(--color-primary)/0.15)] text-primary'
                 : 'text-on-surface-variant',
@@ -379,7 +326,10 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
         {isPending && (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-on-surface-variant" />
         )}
-        <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-fast group-hover:opacity-100 group-focus-within:opacity-100">
+        {entryChildren !== undefined && (
+          <CountChip count={entryChildren.length} />
+        )}
+        <span className="flex shrink-0 items-center gap-0.5">
           <RowMenu
             label={`Actions for ${name}`}
             compact
@@ -441,6 +391,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
                   onRename={onRename}
                   onDelete={onDelete}
                   onCopyPath={onCopyPath}
+                  getGitMarker={getGitMarker}
                   children={children}
                   expanded={expanded}
                   loadingPaths={loadingPaths}
@@ -458,6 +409,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
                   onRename={onRename}
                   onDelete={onDelete}
                   onCopyPath={onCopyPath}
+                  getGitMarker={getGitMarker}
                 />
               ),
             )
@@ -476,6 +428,7 @@ const TreeFileRow = memo(function TreeFileRow({
   onRename,
   onDelete,
   onCopyPath,
+  getGitMarker,
 }: {
   entry: RepoEntryDto
   depth: number
@@ -484,9 +437,11 @@ const TreeFileRow = memo(function TreeFileRow({
   onRename: (entry: RepoEntryDto) => void
   onDelete: (entry: RepoEntryDto) => void
   onCopyPath: (path: string) => void
+  getGitMarker: (path: string) => { text: string; className: string } | null
 }) {
   const { icon: FileIcon, className: iconClass } = fileTypeStyle(entry.name)
   const selected = selectedPath === entry.path
+  const marker = getGitMarker(entry.path)
 
   return (
     <div
@@ -495,10 +450,10 @@ const TreeFileRow = memo(function TreeFileRow({
       onClick={() => onOpenFile(entry)}
       onKeyDown={(e) => e.key === 'Enter' && onOpenFile(entry)}
       className={cn(
-        'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-1.5 pr-1 text-left ' +
+        'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-2 pr-1 text-left ' +
           'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
         selected
-          ? 'bg-primary/10 text-primary'
+          ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/40'
           : 'text-on-surface-variant hover:bg-on-surface/5',
       )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -506,7 +461,7 @@ const TreeFileRow = memo(function TreeFileRow({
     >
       <FileIcon
         className={cn(
-          'h-4 w-4 shrink-0',
+          'h-5 w-5 shrink-0',
           selected ? 'text-primary' : iconClass,
         )}
       />
@@ -518,7 +473,8 @@ const TreeFileRow = memo(function TreeFileRow({
       >
         {entry.name}
       </span>
-      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-fast group-hover:opacity-100 group-focus-within:opacity-100">
+      <GitMarker marker={marker} />
+      <span className="flex shrink-0 items-center gap-0.5">
         <RowMenu
           label={`Actions for ${entry.name}`}
           compact
@@ -609,6 +565,7 @@ const SearchResultRow = memo(function SearchResultRow({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminFilesPage() {
+  const navigate = useNavigate()
   const { success, error } = useSnackbar()
 
   const files = useAdminFileManager()
@@ -621,18 +578,14 @@ export default function AdminFilesPage() {
     }
   })
   // Single source of truth for the highlighted row — exactly ONE file OR folder
-  // may be selected at a time. Restored open files win over the persisted
-  // folder so a refreshed session never shows two highlights.
+  // may be selected at a time.
   const [selectedPath, setSelectedPath] = useState<string | null>(() => {
-    if (files.openFileEntry) return files.openFileEntry.path
     try {
       return localStorage.getItem(FOLDER_STORAGE_KEY) ?? null
     } catch {
       return null
     }
   })
-  const [saving, setSaving] = useState(false)
-  const [discardRequest, setDiscardRequest] = useState<DiscardRequest>(null)
   const [treeQuery, setTreeQuery] = useState('')
 
   // Persist the selected folder so a refresh resumes the same directory.
@@ -647,28 +600,6 @@ export default function AdminFilesPage() {
   // Copy-to-clipboard feedback for tree rows + the folder path actions.
   const { copy: copyPath } = useCopyToClipboard()
 
-  // Fullscreen editor overlay.
-  const [fullscreen, setFullscreen] = useState(false)
-
-  // Mobile file-explorer drawer.
-  const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
-
-  // Lock page scroll + handle Escape while the mobile file drawer is open.
-  const closeFilesDrawer = useCallback(() => setMobileFilesOpen(false), [])
-  useEffect(() => {
-    if (!mobileFilesOpen) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeFilesDrawer()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [mobileFilesOpen, closeFilesDrawer])
-
   // Dialog state
   const [createDialog, setCreateDialog] = useState<'file' | 'folder' | null>(
     null,
@@ -676,10 +607,7 @@ export default function AdminFilesPage() {
   const [renameTarget, setRenameTarget] = useState<RepoEntryDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RepoEntryDto | null>(null)
 
-  const openEntry = files.openFileEntry
   const configured = files.meta?.configured ?? true
-  const isDirty = files.isDirty
-  const saveFile = files.saveFile
 
   const notifyMutation = useCallback(
     (label: string, result: { synced: boolean; commitSha?: string }) => {
@@ -692,20 +620,18 @@ export default function AdminFilesPage() {
     [success],
   )
 
-  // files.openFile identity changes when the dirty state flips, so hold the
-  // latest reference in a ref to keep handleOpenFile stable for the memoized
-  // tree rows (otherwise every keystroke re-renders the whole tree).
-  const openFileRef = useRef(files.openFile)
-  useEffect(() => {
-    openFileRef.current = files.openFile
-  }, [files.openFile])
-
-  const handleOpenFile = useCallback(async (entry: RepoEntryDto) => {
-    await openFileRef.current(entry)
-    setSelectedFolder(parentOf(entry.path))
-    setSelectedPath(entry.path)
-    setMobileFilesOpen(false)
-  }, [])
+  // File taps navigate to the dedicated editor route (Ajiro flow:
+  // project-files → project/code-editor) instead of an inline pane.
+  const handleOpenFile = useCallback(
+    (entry: RepoEntryDto) => {
+      setSelectedFolder(parentOf(entry.path))
+      setSelectedPath(entry.path)
+      navigate(
+        `${ROUTES.ADMIN.FILES_EDIT}?path=${encodeURIComponent(entry.path)}`,
+      )
+    },
+    [navigate],
+  )
 
   const handleSelectFolder = useCallback((path: string) => {
     setSelectedFolder(path)
@@ -717,9 +643,8 @@ export default function AdminFilesPage() {
       if (node.type === 'folder') {
         handleSelectFolder(node.path)
         if (!files.isExpanded(node.path)) files.toggleFolder(node.path)
-        setMobileFilesOpen(false)
       } else {
-        void handleOpenFile({
+        handleOpenFile({
           name: node.path.split('/').pop() ?? node.path,
           path: node.path,
           type: 'file',
@@ -732,19 +657,6 @@ export default function AdminFilesPage() {
     [files, handleOpenFile, handleSelectFolder],
   )
 
-  const handleSave = useCallback(async () => {
-    if (!isDirty || saving) return
-    setSaving(true)
-    try {
-      const result = await saveFile()
-      notifyMutation('Saved to working tree', result)
-    } catch (err) {
-      error(err instanceof Error ? err.message : 'Failed to save file')
-    } finally {
-      setSaving(false)
-    }
-  }, [isDirty, saveFile, saving, notifyMutation, error])
-
   const handleCreate = async (name: string) => {
     if (!createDialog) return
     const path = joinPath(selectedFolder, name)
@@ -754,22 +666,15 @@ export default function AdminFilesPage() {
         createDialog === 'folder' ? 'Folder created' : 'File created',
         result,
       )
-      if (createDialog === 'file') {
-        // Open the freshly created file for editing.
-        await files.forceOpenFile({
-          name,
-          path,
-          type: 'file',
-          size: 0,
-          sha: '',
-          lastCommit: null,
-        })
-        setSelectedPath(path)
-        // On mobile, dismiss the file drawer so the new file is immediately
-        // visible in the editor (no-op on desktop, where the panel is static).
-        setMobileFilesOpen(false)
-      }
+      const createdKind = createDialog
       setCreateDialog(null)
+      if (createdKind === 'file') {
+        // Direct to the editor route for the freshly created file.
+        setSelectedPath(path)
+        navigate(
+          `${ROUTES.ADMIN.FILES_EDIT}?path=${encodeURIComponent(path)}`,
+        )
+      }
     } catch (err) {
       error(err instanceof Error ? err.message : 'Failed to create entry')
     }
@@ -799,21 +704,36 @@ export default function AdminFilesPage() {
     }
   }
 
-  const handleCloseTab = (path: string) => {
-    const tab = files.tabs.find((t) => t.entry.path === path)
-    const dirty = tab ? tab.content !== tab.savedContent : false
-    if (dirty) {
-      setDiscardRequest({ kind: 'close', path })
-      return
-    }
-    files.closeTab(path)
-  }
-
   const rootEntries = files.rootEntries
   const treeQueryActive = treeQuery.trim().length > 0
   const searchResults = useMemo(
     () => searchTreeIndex(files.treeIndex, treeQuery),
     [files.treeIndex, treeQuery],
+  )
+
+  // Reference file-browser git markers — refresh working-tree status once
+  // on mount (best-effort; rows simply show no marker until it arrives).
+  // `files` is a fresh object identity every render, so it must stay out of
+  // deps (refreshGit itself is a stable useCallback).
+  useEffect(() => {
+    void files.refreshGit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const changedMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const change of files.gitStatus?.changes ?? []) {
+      if (!map.has(change.path)) map.set(change.path, change.status)
+    }
+    return map
+  }, [files.gitStatus])
+
+  const getGitMarker = useCallback(
+    (path: string) => {
+      const status = changedMap.get(path)
+      return status ? (GIT_MARKERS[status] ?? null) : null
+    },
+    [changedMap],
   )
 
   const openCreateDialog = useCallback(
@@ -835,7 +755,7 @@ export default function AdminFilesPage() {
           variant="tonal"
           color="warning"
           title="GitHub not configured"
-          message="Connect a GitHub personal access token (ghp_…) on the Git page to enable commits and pushes. The repo (GITHUB_REPO_OWNER / GITHUB_REPO_NAME) is set in the server environment."
+          message="Connect a GitHub personal access token (ghp_…) to enable commits and pushes. The repo (GITHUB_REPO_OWNER / GITHUB_REPO_NAME) is set in the server environment."
         />
       )}
 
@@ -847,103 +767,67 @@ export default function AdminFilesPage() {
         className={files.directoryError ? '' : 'hidden'}
       />
 
-      {/* ── Workspace ──────────────────────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Workspace toolbar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-surface-container/70 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {selectedFolder && (
-              <Badge
-                color="secondary"
-                size="sm"
-                variant="tonal"
-                className="max-w-[10rem]"
-                title={selectedFolder}
-              >
-                {selectedFolder}
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:items-stretch">
-              {/* Mobile backdrop for the file drawer */}
-              <div
-                className={cn(
-                  'fixed inset-0 z-[var(--z-fixed)] bg-black/40 lg:hidden',
-                  'transition-opacity duration-200',
-                  mobileFilesOpen
-                    ? 'opacity-100'
-                    : 'pointer-events-none opacity-0',
-                )}
-                onClick={() => setMobileFilesOpen(false)}
+      {/* ── File browser (full page — tapping a file navigates to the editor route) ── */}
+      <div className="flex flex-col max-w-2xl lg:max-w-4xl w-full mx-auto">
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+              Files
+            </h2>
+            <div className="flex items-center gap-2">
+              {rootEntries && (
+                <span className="text-[11px] font-mono font-medium text-surface-variant">
+                  {rootEntries.length} items
+                </span>
+              )}
+              <RowMenu
+                label="Files actions"
+                actions={[
+                  {
+                    icon: FilePlus2,
+                    label: 'New file',
+                    onClick: () => openCreateDialog('file'),
+                    disabled: !configured,
+                  },
+                  {
+                    icon: FolderPlus,
+                    label: 'New folder',
+                    onClick: () => openCreateDialog('folder'),
+                    disabled: !configured,
+                  },
+                  {
+                    icon: Copy,
+                    label: 'Copy directory path',
+                    onClick: () => void copyPath(selectedFolder || '/'),
+                  },
+                  {
+                    icon: RefreshCw,
+                    label: 'Refresh folder',
+                    onClick: () => {
+                      void files.refresh(selectedFolder)
+                      if (selectedFolder !== '') void files.refresh('')
+                    },
+                  },
+                ]}
               />
-
-              {/* ── Files panel (drawer on mobile, static column on desktop) ────── */}
-              <div
-                className={cn(
-                  'flex min-w-0 shrink-0 flex-col bg-surface-container',
-                  // Mobile drawer behaviour
-                  'fixed inset-y-0 left-0 z-[var(--z-drawer)] w-80 max-w-[86vw] transform border-r border-hairline shadow-elevation-3',
-                  'transition-transform duration-200 ease-out lg:transition-none',
-                  mobileFilesOpen ? 'translate-x-0' : '-translate-x-full',
-                  // Desktop static column
-                  'lg:static lg:z-auto lg:w-72 lg:max-w-none lg:translate-x-0 lg:shadow-none lg:border-r xl:w-80',
-                )}
-              >
-                <div className="flex items-center gap-2 px-3 pt-3">
-                  <Files className="h-4 w-4 text-primary" />
-                  <span className="text-label-md font-semibold text-on-surface">
-                    Files
-                  </span>
-                  <div className="ml-auto flex items-center">
-                    <RowMenu
-                      label="Files panel actions"
-                      actions={[
-                        {
-                          icon: FilePlus2,
-                          label: 'New file',
-                          onClick: () => openCreateDialog('file'),
-                          disabled: !configured,
-                        },
-                        {
-                          icon: FolderPlus,
-                          label: 'New folder',
-                          onClick: () => openCreateDialog('folder'),
-                          disabled: !configured,
-                        },
-                        {
-                          icon: Copy,
-                          label: 'Copy directory path',
-                          onClick: () => void copyPath(selectedFolder || '/'),
-                        },
-                        {
-                          icon: RefreshCw,
-                          label: 'Refresh folder',
-                          onClick: () => {
-                            void files.refresh(selectedFolder)
-                            if (selectedFolder !== '') void files.refresh('')
-                          },
-                        },
-                      ]}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Close files"
-                      title="Close files"
-                      onClick={() => setMobileFilesOpen(false)}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/70 transition-colors duration-fast hover:bg-on-surface/10 hover:text-on-surface lg:hidden"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
+            </div>
+          </div>
                 <div className="px-3 pb-2 pt-2">
                   <Input
                     value={treeQuery}
-                    onChange={(e) => setTreeQuery(e.target.value)}
+                    onChange={(e) => {
+                      setTreeQuery(e.target.value)
+                      // Lazy-load the full-repo index on first search
+                      // interaction — never on page mount.
+                      if (files.treeIndex === undefined && !files.treeLoading) {
+                        void files.refreshTree()
+                      }
+                    }}
+                    onFocus={() => {
+                      if (files.treeIndex === undefined && !files.treeLoading) {
+                        void files.refreshTree()
+                      }
+                    }}
                     leftIcon={<Search className="h-4 w-4" />}
                     rightIcon={
                       treeQuery ? (
@@ -959,11 +843,12 @@ export default function AdminFilesPage() {
                     }
                     placeholder="Search files…"
                     aria-label="Search files"
-                    inputSize="sm"
+                    pill
+                    className="h-11 text-sm"
                   />
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto p-2 [padding-bottom:max(0.5rem,env(safe-area-inset-bottom))]">
+          <div>
                   {treeQueryActive ? (
                     searchResults === undefined ? (
                       files.treeError ? (
@@ -1027,6 +912,7 @@ export default function AdminFilesPage() {
                           onRename={(entry) => setRenameTarget(entry)}
                           onDelete={(entry) => setDeleteTarget(entry)}
                           onCopyPath={(path) => void copyPath(path)}
+                          getGitMarker={getGitMarker}
                           children={files.children}
                           expanded={files.expanded}
                           loadingPaths={files.loadingPaths}
@@ -1044,167 +930,15 @@ export default function AdminFilesPage() {
                           onRename={(entry) => setRenameTarget(entry)}
                           onDelete={(entry) => setDeleteTarget(entry)}
                           onCopyPath={(path) => void copyPath(path)}
+                          getGitMarker={getGitMarker}
                         />
                       ),
                     )
                   )}
                 </div>
-              </div>
-
-              {/* ── Editor pane ─────────────────────────────────────────────────── */}
-              <div className="flex min-w-0 min-h-0 flex-1 flex-col">
-                {/* Tab bar */}
-                <div className="flex min-h-[2.5rem] items-center gap-1 overflow-x-auto border-b border-hairline bg-surface-container/70 px-2 py-1 scrollbar-hidden">
-                  {/* Mobile-only: open the file explorer drawer */}
-                  <IconButton
-                    variant="text"
-                    size="sm"
-                    className="shrink-0 lg:hidden"
-                    icon={<FolderGit2 className="h-4 w-4" />}
-                    aria-label="Browse files"
-                    title="Browse files"
-                    onClick={() => setMobileFilesOpen(true)}
-                  />
-                  {files.tabs.length > 0 ? (
-                    files.tabs.map((tab) => {
-                      const active = tab.entry.path === openEntry?.path
-                      const tabDirty = tab.content !== tab.savedContent
-                      return (
-                        <button
-                          key={tab.entry.path}
-                          type="button"
-                          onClick={() => {
-                            setSelectedFolder(parentOf(tab.entry.path))
-                            setSelectedPath(tab.entry.path)
-                            void files.activateTab(tab.entry.path)
-                          }}
-                          title={tab.entry.path}
-                          className={cn(
-                            'group/tab flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-md px-2 text-left transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                            active
-                              ? 'bg-surface-container-high text-on-surface'
-                              : 'text-on-surface-variant hover:bg-on-surface/5 hover:text-on-surface',
-                          )}
-                        >
-                          <FileTypeIcon
-                            name={tab.entry.name}
-                            className="h-3.5 w-3.5 shrink-0"
-                          />
-                          <span className="max-w-[12rem] truncate font-mono text-label-sm">
-                            {tab.entry.name}
-                          </span>
-                          <span
-                            role="button"
-                            tabIndex={-1}
-                            aria-label={`Close ${tab.entry.name}`}
-                            title={`Close ${tab.entry.name}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleCloseTab(tab.entry.path)
-                            }}
-                            className={cn(
-                              'flex h-5 w-5 items-center justify-center rounded text-on-surface-variant/60 transition-colors duration-fast',
-                              active
-                                ? 'opacity-80 hover:bg-on-surface/10 hover:text-on-surface hover:opacity-100'
-                                : 'opacity-0 group-hover/tab:opacity-100 hover:bg-on-surface/10 hover:text-on-surface',
-                            )}
-                          >
-                            {tabDirty ? (
-                              <CircleDot className="h-3 w-3 text-warning" />
-                            ) : (
-                              <X className="h-3.5 w-3.5" />
-                            )}
-                          </span>
-                        </button>
-                      )
-                    })
-                  ) : (
-                    <span className="px-1 text-body-sm text-on-surface-variant">
-                      No file open
-                    </span>
-                  )}
-
-                  <span className="hidden min-w-0 flex-1 truncate text-body-xs text-on-surface-variant lg:block">
-                    {openEntry?.path ?? ''}
-                  </span>
-
-                  {openEntry && (
-                    <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-1">
-                      <IconButton
-                        variant="text"
-                        size="sm"
-                        className="shrink-0 [&>svg]:text-primary"
-                        isLoading={saving}
-                        icon={<Save className="h-4 w-4" />}
-                        aria-label="Save to working tree"
-                        title="Save to working tree"
-                        disabled={!files.isDirty || !configured}
-                        onClick={handleSave}
-                      />
-                      <IconButton
-                        variant="text"
-                        size="sm"
-                        className="shrink-0"
-                        icon={<Maximize className="h-4 w-4" />}
-                        aria-label="Full screen"
-                        title="Full screen"
-                        onClick={() => setFullscreen(true)}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Editor body */}
-                <div className="flex min-h-0 flex-1 flex-col">
-                  {!openEntry ? (
-                    <div className="p-3">
-                      <EmptyState
-                        icon={Files}
-                        title="No file open"
-                        description="Select a file from the repository tree to start editing."
-                      />
-                      <p className="mt-3 px-1 text-body-xs text-on-surface-variant">
-                        New files are created inside{' '}
-                        <code className="font-mono">
-                          {selectedFolder || 'the repository root'}
-                        </code>
-                        .
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {files.fileError && (
-                        <div className="px-3 pt-2">
-                          <Alert
-                            variant="tonal"
-                            color="error"
-                            title="Failed to read file"
-                            message={files.fileError}
-                          />
-                        </div>
-                      )}
-
-                      <div className="min-h-0 flex-1">
-                        {files.fileLoading ? (
-                          <Skeleton variant="rectangular" className="h-full" />
-                        ) : (
-                          <CodeEditor
-                            value={files.content}
-                            onChange={files.setContent}
-                            language={openEntry.language}
-                            onSave={handleSave}
-                            placeholder={`// Editing ${openEntry.path}`}
-                            fillHeight
-                          />
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
         </div>
       </div>
+
 
       {/* ── Create file/folder dialog ─────────────────────────────────────── */}
       <CreateEntryDialog
@@ -1227,100 +961,7 @@ export default function AdminFilesPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
-
-      {/* ── Discard unsaved changes ───────────────────────────────────────── */}
-      <DiscardDialog
-        request={discardRequest}
-        onConfirm={() => {
-          if (discardRequest?.path) {
-            files.closeTab(discardRequest.path)
-          } else {
-            files.closeFile()
-          }
-          setDiscardRequest(null)
-        }}
-        onCancel={() => setDiscardRequest(null)}
-      />
-
-      {/* ── Fullscreen editor ─────────────────────────────────────────────── */}
-      <FullscreenEditor
-        open={fullscreen}
-        entry={openEntry}
-        content={files.content}
-        onChange={files.setContent}
-        onSave={handleSave}
-        onClose={() => setFullscreen(false)}
-      />
     </div>
-  )
-}
-
-// ── Fullscreen editor overlay ─────────────────────────────────────────────────
-
-function FullscreenEditor({
-  open,
-  entry,
-  content,
-  onChange,
-  onSave,
-  onClose,
-}: {
-  open: boolean
-  entry: RepoEntryDto | null
-  content: string
-  onChange: (value: string) => void
-  onSave: () => void
-  onClose: () => void
-}) {
-  // Lock page scroll + handle Escape while the overlay is open.
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [open, onClose])
-
-  if (!open || !entry) return null
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Editing ${entry.path}`}
-      className="fixed inset-0 z-overlay overflow-hidden bg-surface-container-lowest [height:100dvh]"
-    >
-      {/* Edge-to-edge editor — no chrome, padding, border, or surrounding UI. */}
-      <CodeEditor
-        value={content}
-        onChange={onChange}
-        language={entry.language}
-        onSave={onSave}
-        placeholder={`// Editing ${entry.path}`}
-        fillHeight
-        autoFocus
-        borderless
-      />
-      {/* Floating exit control — the only affordance; keeps mobile usable
-          (no Escape key) without taking any space away from the editor. */}
-      <div className="absolute right-3 z-[2] [top:max(0.75rem,env(safe-area-inset-top))]">
-        <IconButton
-          variant="text"
-          size="sm"
-          icon={<Minimize className="h-4 w-4" />}
-          aria-label="Exit fullscreen"
-          title="Exit fullscreen (Esc)"
-          onClick={onClose}
-        />
-      </div>
-    </div>,
-    document.body,
   )
 }
 
@@ -1501,7 +1142,7 @@ function DeleteDialog({
               <p className="text-body-md text-on-surface">
                 Delete <code className="font-mono">{target?.path}</code> from
                 the working tree? It will still show as a deletion until staged
-                and committed from the Git page.
+                and committed.
               </p>
             </div>
           </Dialog.Body>
@@ -1518,52 +1159,3 @@ function DeleteDialog({
     </Dialog.Root>
   )
 }
-
-// ── Discard unsaved dialog ────────────────────────────────────────────────────
-
-function DiscardDialog({
-  request,
-  onConfirm,
-  onCancel,
-}: {
-  request: DiscardRequest
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  const open = request !== null
-
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onCancel()
-      }}
-    >
-      <Dialog.Positioner position="center">
-        <Dialog.Backdrop />
-        <Dialog.Content size="sm">
-          <Dialog.Header>
-            <Dialog.Title>Discard changes?</Dialog.Title>
-            <Dialog.CloseTrigger />
-          </Dialog.Header>
-          <Dialog.Body>
-            <p className="text-body-md text-on-surface">
-              {request?.path
-                ? 'This file has unsaved changes. Closing the tab will discard them.'
-                : 'The open file has unsaved changes. Closing will discard them.'}
-            </p>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <Button variant="text" color="neutral" onClick={onCancel}>
-              Keep editing
-            </Button>
-            <Button variant="filled" color="error" onClick={onConfirm}>
-              Discard
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
-  )
-}
-

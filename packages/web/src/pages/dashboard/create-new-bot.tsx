@@ -231,7 +231,7 @@ export default function NewBotPage() {
   const filledAdmins = form.botAdmins.filter((a) => a.trim())
 
   return (
-    <div className="w-full max-w-[520px] mx-auto min-w-0">
+    <div className="w-full max-w-[520px] md:max-w-2xl mx-auto min-w-0">
       <Helmet>
         <title>Create New Bot · Cat-Bot</title>
       </Helmet>

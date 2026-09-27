@@ -57,8 +57,8 @@ const FEATURES = [
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-      <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#10B981]">
+      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+      <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-primary">
         {children}
       </span>
     </div>
@@ -71,7 +71,7 @@ export default function HomePage() {
   const { isAuthenticated } = useUserAuth()
 
   return (
-    <div className="flex flex-col bg-[#0A0C0E]">
+    <div className="flex flex-col bg-surface">
       <Helmet>
         <title>Cat-Bot</title>
       </Helmet>
@@ -81,12 +81,12 @@ export default function HomePage() {
           {/* ── Hero ─────────────────────────────────────────────────── */}
           <section className="flex flex-col gap-5 pt-2">
             <Eyebrow>Multi-Platform • Multi-Bot • Open Source</Eyebrow>
-            <h1 className="text-3xl font-bold tracking-tight text-[#F1F4F8] leading-[1.18] lg:text-[42px]">
+            <h1 className="text-3xl font-bold tracking-tight text-on-surface leading-[1.18] lg:text-[42px]">
               Write once.
               <br />
-              Deploy <span className="text-[#10B981]">everywhere.</span>
+              Deploy <span className="text-primary">everywhere.</span>
             </h1>
-            <p className="text-[14px] text-[#8B95A2] leading-relaxed tracking-normal max-w-lg">
+            <p className="text-[14px] text-on-surface-variant leading-relaxed tracking-normal max-w-lg">
               Cat-Bot is a unified chatbot framework that runs across Discord, Telegram, and
               Fluxer — all from a single codebase. Manage multiple independent bot sessions from
               one powerful dashboard.
@@ -97,7 +97,7 @@ export default function HomePage() {
               {PLATFORMS.map((p) => (
                 <div
                   key={p.name}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#191D22] border border-[#242930] text-[12px] font-medium text-[#8B95A2]"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-container-high border border-hairline text-[12px] font-medium text-on-surface-variant"
                 >
                   <p.Icon className="w-3.5 h-3.5" />
                   <span>{p.name}</span>
@@ -152,24 +152,24 @@ export default function HomePage() {
 
           {/* ── Grouped session card (desktop companion, Bot Manager rows) ── */}
           <div className="hidden lg:block">
-            <div className="rounded-xl overflow-hidden border border-[#242930] bg-[#13161A]">
-              <div className="flex items-center gap-3 border-b border-[#1C2026] px-4 py-3">
-                <span className="font-mono text-xs text-[#5D6775] select-none">
+            <div className="rounded-xl overflow-hidden border border-hairline bg-surface-container-low">
+              <div className="flex items-center gap-3 border-b border-outline-variant px-4 py-3">
+                <span className="font-mono text-xs text-surface-variant select-none">
                   cat-bot — bot manager
                 </span>
-                <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-[#10B981] font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+                <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-primary font-medium">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                   Online
                 </span>
               </div>
               <div className="flex flex-col p-4">
-                <p className="mb-2 px-1 text-[11px] font-semibold text-[#5D6775] uppercase tracking-wider">
+                <p className="mb-2 px-1 text-[11px] font-semibold text-surface-variant uppercase tracking-wider">
                   Active Sessions
                 </p>
                 {PLATFORMS.map((p) => (
                   <div
                     key={p.name}
-                    className="flex items-center justify-between py-2.5 px-1 border-b border-[#1C2026] last:border-b-0"
+                    className="flex items-center justify-between py-2.5 px-1 border-b border-outline-variant last:border-b-0"
                   >
                     <div className="flex items-center gap-3">
                       <span
@@ -178,16 +178,16 @@ export default function HomePage() {
                         <p.Icon className="h-4 w-4" />
                       </span>
                       <div>
-                        <p className="text-sm font-semibold text-[#F1F4F8]">
+                        <p className="text-sm font-semibold text-on-surface">
                           {p.name === 'Chat Room' ? 'Chat Room' : `${p.name} Bot`}
                         </p>
-                        <p className="text-xs text-[#5D6775] font-mono">
+                        <p className="text-xs text-surface-variant font-mono">
                           {p.name === 'Chat Room' ? 'built-in test console' : 'prefix: /'}
                         </p>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[#10B981] font-medium">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+                    <span className="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                       Online
                     </span>
                   </div>
@@ -201,28 +201,28 @@ export default function HomePage() {
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5 pb-1">
             <Eyebrow>Capabilities</Eyebrow>
-            <h2 className="text-[22px] font-bold text-[#F1F4F8] tracking-tight">
+            <h2 className="text-[22px] font-bold text-on-surface tracking-tight">
               Everything you need to run bots at scale
             </h2>
-            <p className="text-[13px] text-[#8B95A2] leading-normal max-w-xl">
+            <p className="text-[13px] text-on-surface-variant leading-normal max-w-xl">
               Built for developers and operators who want one framework for every major chat
               platform — without compromises.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {FEATURES.map((f) => (
               <article
                 key={f.title}
-                className="bg-[#13161A] border border-[#242930] rounded-xl p-4 flex gap-3.5 items-start active:bg-[#1E232A] active:opacity-[0.85] transition-colors duration-100"
+                className="bg-surface-container-low border border-hairline rounded-xl p-4 flex gap-3.5 items-start active:bg-surface-container-highest active:opacity-[0.85] transition-colors duration-100"
               >
-                <div className="w-10 h-10 rounded-lg bg-[#191D22] border border-[#242930] flex items-center justify-center shrink-0">
-                  <f.Icon className="w-5 h-5 text-[#10B981]" strokeWidth={2} />
+                <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-hairline flex items-center justify-center shrink-0">
+                  <f.Icon className="w-5 h-5 text-primary" strokeWidth={2} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <h3 className="text-[15px] font-semibold text-[#F1F4F8] tracking-tight">
+                  <h3 className="text-[15px] font-semibold text-on-surface tracking-tight">
                     {f.title}
                   </h3>
-                  <p className="text-[13px] text-[#8B95A2] leading-snug">{f.description}</p>
+                  <p className="text-[13px] text-on-surface-variant leading-snug">{f.description}</p>
                 </div>
               </article>
             ))}
@@ -230,18 +230,18 @@ export default function HomePage() {
         </section>
 
         {/* ── CTA card ───────────────────────────────────────────────── */}
-        <section className="bg-[#13161A] border border-[#242930] rounded-2xl p-5 flex flex-col gap-4 text-center">
+        <section className="bg-surface-container-low border border-hairline rounded-2xl p-5 flex flex-col gap-4 text-center">
           <div className="flex items-center justify-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-[#10B981]">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-primary">
               Get Started
             </span>
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-xl font-bold text-[#F1F4F8] tracking-tight">
+            <h2 className="text-xl font-bold text-on-surface tracking-tight">
               Ready to deploy your first bot?
             </h2>
-            <p className="text-[13px] text-[#8B95A2] leading-relaxed">
+            <p className="text-[13px] text-on-surface-variant leading-relaxed">
               Create your account and go from zero to a live multi-platform bot session in
               minutes.
             </p>

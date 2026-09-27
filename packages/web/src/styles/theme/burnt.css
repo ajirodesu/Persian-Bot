@@ -126,6 +126,11 @@ html[data-theme='burnt'] {
      Warm cream at 8% opacity — mirrors Aqua's hairline treatment */
   --color-hairline-border: rgba(250, 249, 245, 0.1);
 
+  /* ==================== HEADER SEPARATOR ====================
+     The sidebar header's 1px line style — every page header uses
+     this same token so all top bars divide with identical weight */
+  --color-separator: rgba(232, 218, 200, 0.14);
+
   /* ==================== FROSTED GLASS ==================== */
   --glass-bg: rgba(32, 32, 30, 0.55);
   --glass-blur: 20px;

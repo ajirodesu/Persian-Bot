@@ -81,21 +81,30 @@
   }
 
   /**
-   * Tactile press utility — a restrained iOS-style scale-down on
-   * :active, respecting reduced-motion preferences. Intended for
-   * buttons, cards, and other primary tap targets.
+   * Tactile press utility — a premium spring press for tappable rows
+   * and cards: dips fast on press-down, releases with a soft
+   * overshoot spring. Transform-only, so it stays theme-agnostic
+   * and never fights background/hover treatments. Respects
+   * reduced-motion preferences.
    */
   .tactile-press {
-    transition: transform var(--duration-short3) var(--easing-standard);
+    transition:
+      transform 260ms cubic-bezier(0.22, 1.2, 0.36, 1),
+      background-color 120ms ease;
   }
 
   .tactile-press:active {
-    transform: scale(0.97);
+    transform: scale(0.98);
+    transition:
+      transform 110ms ease-out,
+      background-color 100ms ease;
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .tactile-press,
     .tactile-press:active {
       transform: none;
+      transition: background-color 100ms ease;
     }
   }
 

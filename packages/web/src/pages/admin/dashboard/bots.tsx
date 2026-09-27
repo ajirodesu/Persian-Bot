@@ -1,11 +1,10 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { useState } from 'react'
-import { PLATFORM_LABELS } from '@/constants/platform.constants'
+import { PLATFORM_LABELS, Platforms } from '@/constants/platform.constants'
 import Table from '@/components/ui/data-display/Table'
 import EmptyState from '@/components/ui/data-display/EmptyState'
 import Input from '@/components/ui/forms/Input'
 import { Bot, Search } from 'lucide-react'
-import Badge from '@/components/ui/data-display/Badge'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import { useAdminBots } from '@/features/admin/hooks/useAdminBots'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -14,6 +13,59 @@ import Button from '@/components/ui/buttons/Button'
 import Alert from '@/components/ui/feedback/Alert'
 import adminService from '@/features/admin/services/admin.service'
 import type { AdminBotItemDto } from '@/features/admin/services/admin.service'
+import { getPlatformIcon } from '@/components/icons/platform-icon.util'
+import { cn } from '@/utils/cn.util'
+
+// ============================================================================
+// Small presentational pieces matching dashboard settings
+// ============================================================================
+
+function MonoChip({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border',
+        tone === 'accent' && 'bg-surface-container-high text-primary border-primary/30',
+        tone === 'danger' && 'bg-surface-container-high text-error border-error/30',
+        tone === 'default' && 'bg-surface-container-high text-on-surface-variant border-hairline',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+function platformTileClasses(platform: string): string {
+  switch (platform) {
+    case Platforms.Discord:
+      return 'bg-[#5865F2]/15 border-[#5865F2]/30 text-[#5865F2]'
+    case Platforms.Telegram:
+      return 'bg-[#24A1DE]/15 border-[#24A1DE]/30 text-[#24A1DE]'
+    default:
+      return 'bg-primary/10 border-primary/30 text-primary'
+  }
+}
+
+function BotRowSkeleton() {
+  return (
+    <div className="p-3.5 flex items-center justify-between" aria-hidden="true">
+      <div className="flex items-center space-x-3 min-w-0">
+        <Skeleton variant="input" width={36} height={36} />
+        <div className="flex flex-col gap-2">
+          <Skeleton textSize="body-sm" width="128px" />
+          <Skeleton textSize="body-sm" width="64px" />
+        </div>
+      </div>
+      <Skeleton variant="pill" width={52} height={24} />
+    </div>
+  )
+}
 
 /**
  * AdminBotsPage
@@ -32,7 +84,7 @@ export default function AdminBotsPage() {
     setPage(1)
   }
 
-  // refetch drives table refresh after delete without a full page reload
+  // refetch drives list refresh after delete without a full page reload
   const { bots, total, stats, isLoading, error, refetch } = useAdminBots(
     page,
     10,
@@ -77,231 +129,178 @@ export default function AdminBotsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col max-w-2xl lg:max-w-4xl w-full mx-auto">
       <Helmet>
         <title>Admin Bot Sessions · Cat-Bot</title>
       </Helmet>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
+
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
             Bot Sessions
-          </h1>
-          <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
-            All registered sessions across platforms.
-          </p>
+          </h2>
+          {!isLoading && (
+            <span className="text-[11px] font-mono font-medium text-surface-variant">
+              {searchQuery.trim()
+                ? `${total} of ${totalBots} matched`
+                : `${activeBots} / ${totalBots} running`}
+            </span>
+          )}
         </div>
-        {!isLoading && (
-          <Badge
-            variant="tonal"
-            color="primary"
-            size="md"
-            pill
-            className="shrink-0"
-          >
-            {searchQuery.trim()
-              ? `${total} of ${totalBots} matched`
-              : `${activeBots} / ${totalBots} running`}
-          </Badge>
+
+        {error !== null && (
+          <Alert variant="tonal" color="error" title="Error" message={error} size="sm" />
         )}
-      </div>
 
-      {error !== null && (
-        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
-          {error}
-        </div>
-      )}
-
-      {/* Per-platform summary cards — skeleton while loading matches the
-          card shape (label / big number / running line) so the grid never
-          flashes placeholder zeros */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {isLoading ? (
-          [0, 1, 2].map((i) => (
-            <div
-              key={`plat-skeleton-${i}`}
-              className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-hairline bg-surface p-4 shadow-elevation-1"
-            >
-              <Skeleton variant="text" width="55%" />
-              <Skeleton variant="text" width={36} textSize="headline-sm" />
-              <Skeleton variant="text" width="45%" />
-            </div>
-          ))
-        ) : (
-          (
-            [
-              'discord',
-              'fluxer',
-              'telegram',
-            ] as const
-          ).map((platform) => {
-            // Stat derived from server's global knowledge
-            const platTotal = stats?.platformDist?.[platform] ?? 0
-            const platRunning = stats?.platformActiveDist?.[platform] ?? 0
-            return (
+        {/* Per-platform summary — skeleton while loading matches the row
+            shape so the list never flashes placeholder zeros */}
+        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          {isLoading ? (
+            [0, 1, 2].map((i) => (
               <div
-                key={platform}
-                className="rounded-[var(--radius-card)] bg-surface border border-hairline p-4 shadow-elevation-1 flex flex-col gap-2"
+                key={`plat-skeleton-${i}`}
+                className="p-3.5 flex items-center justify-between"
+                aria-hidden="true"
               >
-                <span className="text-body-sm font-medium text-on-surface">
-                  {PLATFORM_LABELS[platform] ?? platform}
-                </span>
-                <p className="text-headline-sm font-bold text-on-surface">
-                  {platTotal}
-                </p>
-                <p className="text-label-sm text-on-surface-variant">
-                  {platRunning} running
-                </p>
+                <Skeleton textSize="body-sm" width="45%" />
+                <Skeleton textSize="body-sm" width="72px" />
               </div>
-            )
-          })
-        )}
-      </div>
+            ))
+          ) : (
+            (['discord', 'fluxer', 'telegram'] as const).map((platform) => {
+              // Stat derived from server's global knowledge
+              const platTotal = stats?.platformDist?.[platform] ?? 0
+              const platRunning = stats?.platformActiveDist?.[platform] ?? 0
+              return (
+                <div
+                  key={platform}
+                  className="p-3.5 flex items-center justify-between space-x-3"
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div
+                      className={cn(
+                        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+                        platformTileClasses(platform),
+                      )}
+                    >
+                      {getPlatformIcon(platform, 'w-4 h-4')}
+                    </div>
+                    <span className="text-sm font-semibold text-on-surface truncate">
+                      {PLATFORM_LABELS[platform] ?? platform}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-on-surface-variant flex-shrink-0">
+                    {platTotal} total · {platRunning} running
+                  </span>
+                </div>
+              )
+            })
+          )}
+        </div>
 
-      <div className="bg-surface p-2 rounded-full">
         <Input
-          placeholder="Search bot sessions by nickname, owner, or platform..."
+          placeholder="Search bot sessions by nickname, owner, or platform…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          leftIcon={<Search className="h-4 w-4 text-on-surface-variant" />}
-          pill
+          leftIcon={<Search className="h-4 w-4" />}
+          aria-label="Search bot sessions"
+          className="h-11 text-sm"
         />
-      </div>
 
-      {/* Only show global empty state if there are truly no bots in the system AND no active search */}
-      {!isLoading &&
-      bots.length === 0 &&
-      error === null &&
-      totalBots === 0 &&
-      !searchQuery.trim() ? (
-        <EmptyState
-          icon={Bot}
-          title="No bot sessions"
-          description="There are currently no registered bot sessions across any platform."
-        />
-      ) : (
-        <>
-          <Table.ScrollArea className="bg-surface">
-            <Table.Root variant="glass" fullWidth>
-              <Table.Header>
-                <Table.Row>
-                  <Table.Head>Nickname</Table.Head>
-                  <Table.Head>Owner</Table.Head>
-                  <Table.Head>Platform</Table.Head>
-                  <Table.Head>Prefix</Table.Head>
-                  <Table.Head>Status</Table.Head>
-                  <Table.Head align="right">Actions</Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {isLoading &&
-                  // Row skeletons mirror the real session rows: nickname,
-                  // stacked owner name/email, platform, mono prefix, status
-                  // dot-badge, right-aligned Delete button.
-                  [0, 1, 2, 3, 4].map((i) => (
-                    <Table.Row key={`skeleton-${i}`}>
-                      <Table.Cell>
-                        <Skeleton variant="text" width="60%" />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex flex-col gap-1.5">
-                          <Skeleton variant="text" width="70%" />
-                          <Skeleton variant="text" width="85%" />
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Skeleton variant="text" width={64} />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Skeleton variant="text" width={32} />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Skeleton variant="pill" width={72} height={20} />
-                      </Table.Cell>
-                      <Table.Cell align="right">
-                        <Skeleton variant="pill" width={56} height={24} />
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                {!isLoading &&
-                  bots.map((session) => (
-                    <Table.Row key={`${session.userId}:${session.sessionId}`}>
-                      <Table.Cell className="font-medium">
-                        {session.nickname}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {session.userName || session.userEmail ? (
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-medium text-on-surface truncate">
-                              {session.userName || 'Unknown User'}
-                            </span>
-                            <span className="text-label-sm text-on-surface-variant truncate">
-                              {session.userEmail}
-                            </span>
-                          </div>
-                        ) : (
-                          // Fall back to raw cuid2 when the user row was deleted from the auth DB.
-                          <span className="text-on-surface-variant text-label-sm font-mono">
-                            {session.userId}
-                          </span>
+        {/* Only show global empty state if there are truly no bots in the system AND no active search */}
+        {!isLoading &&
+        bots.length === 0 &&
+        error === null &&
+        totalBots === 0 &&
+        !searchQuery.trim() ? (
+          <EmptyState
+            icon={Bot}
+            title="No bot sessions"
+            description="There are currently no registered bot sessions across any platform."
+          />
+        ) : (
+          <>
+            {isLoading ? (
+              <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <BotRowSkeleton key={`skeleton-${i}`} />
+                ))}
+              </div>
+            ) : bots.length === 0 ? (
+              <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+                <p className="p-6 text-sm text-on-surface-variant italic text-center">
+                  {searchQuery.trim()
+                    ? `No bot sessions match "${searchQuery}"`
+                    : 'No bot sessions found.'}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+                {bots.map((session) => (
+                  <div
+                    key={`${session.userId}:${session.sessionId}`}
+                    className="p-3.5 flex items-center justify-between space-x-3"
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div
+                        className={cn(
+                          'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+                          platformTileClasses(session.platform),
                         )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="font-medium">
-                          {PLATFORM_LABELS[session.platform] ??
-                            session.platform}
+                      >
+                        {getPlatformIcon(session.platform, 'w-4 h-4')}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-semibold text-on-surface truncate leading-snug">
+                          {session.nickname}
                         </span>
-                      </Table.Cell>
-                      <Table.Cell className="font-mono text-on-surface-variant">
-                        {session.prefix}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge
-                          variant="tonal"
-                          color={session.isRunning ? 'success' : 'default'}
-                          size="sm"
-                          dot
-                          pill
-                        >
-                          {session.isRunning ? 'Running' : 'Stopped'}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell align="right">
-                        <Button
-                          variant="tonal"
-                          color="error"
-                          size="xs"
-                          onClick={() => openDeleteDialog(session)}
-                        >
-                          Delete
-                        </Button>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                {!isLoading &&
-                  bots.length === 0 &&
-                  (totalBots > 0 || searchQuery.trim() !== '') && (
-                    <Table.Empty
-                      colSpan={6}
-                      message={
-                        searchQuery.trim()
-                          ? `No bot sessions match "${searchQuery}"`
-                          : 'No bot sessions found.'
-                      }
-                    />
-                  )}
-              </Table.Body>
-            </Table.Root>
-          </Table.ScrollArea>
-          {total > 0 && (
-            <Table.Pagination
-              currentPage={page}
-              totalItems={total}
-              itemsPerPage={10}
-              onPageChange={setPage}
-            />
-          )}
-        </>
-      )}
+                        <span className="text-xs text-on-surface-variant truncate mt-0.5">
+                          {session.userName || session.userEmail ? (
+                            <>
+                              {session.userName || 'Unknown User'}
+                              {session.userEmail
+                                ? ` · ${session.userEmail}`
+                                : ''}
+                            </>
+                          ) : (
+                            // Fall back to raw cuid2 when the user row was deleted from the auth DB.
+                            <span className="font-mono">{session.userId}</span>
+                          )}
+                        </span>
+                        <span className="flex items-center space-x-1.5 mt-1 flex-wrap gap-y-1">
+                          <MonoChip tone="default">
+                            {PLATFORM_LABELS[session.platform] ?? session.platform}
+                          </MonoChip>
+                          <MonoChip tone="default">{session.prefix}</MonoChip>
+                          <MonoChip tone={session.isRunning ? 'accent' : 'default'}>
+                            {session.isRunning ? 'Running' : 'Stopped'}
+                          </MonoChip>
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openDeleteDialog(session)}
+                      aria-label={`Delete ${session.nickname}`}
+                      className="px-2.5 py-1 text-xs font-semibold rounded bg-error/10 hover:bg-error/15 border border-error/30 text-error transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40 flex-shrink-0"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {total > 0 && (
+              <Table.Pagination
+                currentPage={page}
+                totalItems={total}
+                itemsPerPage={10}
+                onPageChange={setPage}
+              />
+            )}
+          </>
+        )}
+      </div>
 
       {/* Delete dialog — controlled by deleteTarget state; no Trigger needed.
           closeOnEsc / closeOnOverlayClick disabled mid-request to prevent abandoning
@@ -322,7 +321,7 @@ export default function AdminBotsPage() {
               <Dialog.CloseTrigger />
             </Dialog.Header>
             <Dialog.Body>
-              <p className="text-body-md text-on-surface-variant mb-4">
+              <p className="text-sm text-on-surface-variant mb-4">
                 Are you sure you want to permanently delete{' '}
                 <span className="font-semibold text-on-surface">
                   {deleteTarget?.nickname}
@@ -358,9 +357,6 @@ export default function AdminBotsPage() {
                   Cancel
                 </Button>
               </Dialog.CloseTrigger>
-              {/* Was a hardcoded !bg-[#e7000b] override; use Button's own
-                  semantic error color (same --color-error token every other
-                  destructive control in the app already reads from). */}
               <Button
                 color="error"
                 size="sm"

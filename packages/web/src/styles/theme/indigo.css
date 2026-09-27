@@ -103,6 +103,11 @@ html[data-theme='indigo'] {
      Cool white at 8% opacity — mirrors Aqua/Burnt's hairline treatment */
   --color-hairline-border: rgba(232, 225, 255, 0.08);
 
+  /* ==================== HEADER SEPARATOR ====================
+     The sidebar header's 1px line style — every page header uses
+     this same token so all top bars divide with identical weight */
+  --color-separator: rgba(232, 225, 255, 0.14);
+
   /* ==================== FROSTED GLASS ==================== */
   --glass-bg: rgba(20, 15, 35, 0.55);
   --glass-blur: 20px;

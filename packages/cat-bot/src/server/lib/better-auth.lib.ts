@@ -34,6 +34,20 @@ import {
 const isMongo = env.DATABASE_TYPE === 'mongodb';
 const isTurso = env.DATABASE_TYPE === 'turso';
 
+// Trusted browser origins for better-auth's origin check (POST /api/auth/*).
+// The dev frontend (vite) serves on :5000 while the API listens on :3000, so the
+// browser origin NEVER matches BETTER_AUTH_URL on its own — without this list
+// every sign-in/sign-up POST fails with INVALID_ORIGIN. Both localhost spellings
+// are covered because browsers treat http://localhost and http://127.0.0.1 as
+// distinct origins. VITE_URL (production frontend / custom dev URL) leads.
+const trustedOrigins = [
+  ...new Set([
+    ...(env.VITE_URL ? [env.VITE_URL] : []),
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+  ]),
+];
+
 // Email services are only enabled when BOTH the feature toggle is 'true' AND the
 // Brevo credentials are configured. Without credentials, verification is
 // neither required nor available, and forgot-password flows stay hidden.
@@ -154,7 +168,7 @@ export const auth = betterAuth({
     },
   },
   // Trust the dynamic dev server URL if provided. In production, same-origin is inherently trusted.
-  trustedOrigins: env.VITE_URL ? [env.VITE_URL] : undefined,
+  trustedOrigins,
   // Admin plugin provides /api/auth/admin/* endpoints (createUser, setRole, banUser, etc.).
   // Admin and user sessions are always independent: impersonation creates a new session row
   // with impersonatedBy = adminId while the admin's original session is never modified or revoked.
@@ -280,7 +294,7 @@ emailVerification: {
       },
     }),
   },
-  trustedOrigins: env.VITE_URL ? [env.VITE_URL] : undefined,
+  trustedOrigins,
   advanced: {
     // 'ba-admin' prefix → browser stores 'ba-admin.session_token'; completely separate from
     // the user auth cookie 'better-auth.session_token'. A person simultaneously logged in to

@@ -147,6 +147,57 @@ function getOptionalEnv(key: string): string | undefined {
 }
 
 /**
+ * Validates that a value is a well-formed absolute http(s) URL.
+ * @param key - Environment variable key (used in the error message)
+ * @param rawValue - Unvalidated value from the environment
+ * @returns The trimmed, validated URL
+ * @throws {Error} Quoting the offending value so typos — stray quotes,
+ * whitespace, missing protocol — are visible at a glance
+ */
+function assertHttpUrl(key: string, rawValue: string): string {
+  const value = rawValue.trim();
+  let valid = false;
+  try {
+    const protocol = new URL(value).protocol;
+    valid = protocol === 'http:' || protocol === 'https:';
+  } catch {
+    // new URL throws on malformed input — valid stays false.
+  }
+  if (!valid) {
+    throw new Error(
+      `[ENV] Invalid ${key} value: "${rawValue}"\n` +
+        `Expected a valid absolute http(s) URL, e.g. "http://localhost:3000". ` +
+        `Check for stray quotes or whitespace in your .env file.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Retrieves a required URL environment variable.
+ * Fails fast at import time with an actionable message instead of letting a
+ * downstream consumer (better-auth, CORS, fetch) throw a cryptic error much
+ * later in the boot sequence.
+ * @param key - Environment variable key
+ * @throws {Error} If the variable is missing, empty, or not a valid http(s) URL
+ */
+function getRequiredUrl(key: string): string {
+  return assertHttpUrl(key, getRequiredEnv(key));
+}
+
+/**
+ * Retrieves an optional URL environment variable — validated only when set.
+ * @param key - Environment variable key
+ * @returns The validated URL, or undefined when unset/empty
+ * @throws {Error} If set but not a valid http(s) URL
+ */
+function getOptionalUrl(key: string): string | undefined {
+  const value = getOptionalEnv(key);
+  if (value === undefined) return undefined;
+  return assertHttpUrl(key, value);
+}
+
+/**
  * Retrieves and validates NODE_ENV environment variable.
  * @returns Validated NodeEnv value
  * @throws {Error} If NODE_ENV is provided but not a valid value
@@ -235,8 +286,12 @@ export const env: EnvConfig = {
 
   // Bot Management API / Web
   BETTER_AUTH_SECRET: getRequiredEnv('BETTER_AUTH_SECRET'),
-  BETTER_AUTH_URL: getRequiredEnv('BETTER_AUTH_URL'),
-  VITE_URL: getOptionalEnv('VITE_URL'),
+  // Validated as a URL at import time — better-auth reads BETTER_AUTH_URL from
+  // process.env directly and throws a cryptic "Invalid base URL" deep in its
+  // own init if the value is malformed (e.g. a stray quote in .env).
+  BETTER_AUTH_URL: getRequiredUrl('BETTER_AUTH_URL'),
+  // Consumed as a CORS/trusted origin — must be a valid origin when set.
+  VITE_URL: getOptionalUrl('VITE_URL'),
   VITE_EMAIL_SERVICES_ENABLE: getOptionalEnv('VITE_EMAIL_SERVICES_ENABLE'),
 
   // Brevo transactional email — read at startup; absent vars produce undefined without throwing

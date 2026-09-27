@@ -12,9 +12,9 @@ import ScrollToTop from '@/components/ScrollToTop'
 import {
   H_HEIGHT,
   H_PX,
-  H_LOGO_ICON,
   H_BRAND_TEXT,
   H_ICON_BTN_MOBILE,
+  H_SEPARATOR,
 } from '@/constants/header.constants'
 
 /**
@@ -47,9 +47,9 @@ export default function Layout() {
   }, [mobileOpen])
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0A0C0E] text-[#F1F4F8]">
-      {/* ── Bot Manager AppHeader: h-12, px-5, 1px #242930 separator ── */}
-      <header className="sticky top-0 z-[100] bg-[#0A0C0E] border-b border-[#242930]">
+    <div className="min-h-screen flex flex-col bg-surface text-on-surface">
+      {/* ── Bot Manager AppHeader: h-14, px-5, sidebar-weight separator ── */}
+      <header className={cn('sticky top-0 z-[100] bg-surface border-b', H_SEPARATOR)}>
         <nav
           className={cn(
             'relative max-w-6xl mx-auto flex items-center',
@@ -64,18 +64,16 @@ export default function Layout() {
             to="/"
             variant="unstyled"
             aria-label="Cat-Bot home"
-            className="flex items-center gap-2 text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg"
+            className="flex items-center gap-2 text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.3)]">
-              <Logo className={H_LOGO_ICON} />
-            </span>
+            <Logo className="h-8 w-8 text-primary" />
           </UILink>
 
           {/* Desktop: brand text */}
           <Link
             to="/"
             className={cn(
-              'hidden md:inline-flex ml-2 text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg tracking-tight',
+              'hidden md:inline-flex ml-2 text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg tracking-tight',
               H_BRAND_TEXT,
             )}
           >
@@ -87,7 +85,7 @@ export default function Layout() {
             <Link
               to="/"
               className={cn(
-                'pointer-events-auto text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg tracking-tight',
+                'pointer-events-auto text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg tracking-tight',
                 H_BRAND_TEXT,
               )}
             >
@@ -155,7 +153,7 @@ export default function Layout() {
             role="navigation"
             aria-label="Mobile navigation"
             className={cn(
-              'md:hidden border-t border-[#1C2026] bg-[#13161A]',
+              'md:hidden border-t border-outline-variant bg-surface-container-low',
               '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
             )}
           >
@@ -206,15 +204,15 @@ export default function Layout() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-[#242930] bg-[#0A0C0E]">
+      <footer className="border-t border-hairline bg-surface">
         <div className="max-w-6xl mx-auto px-5 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Logo className="h-4 w-4 text-[#8B95A2]" />
-            <span className="text-label-sm text-[#8B95A2] font-medium tracking-tight">
+            <Logo className="h-4 w-4 text-on-surface-variant" />
+            <span className="text-label-sm text-on-surface-variant font-medium tracking-tight">
               Cat-Bot
             </span>
           </div>
-          <p className="text-label-sm text-[#5D6775]">
+          <p className="text-label-sm text-surface-variant">
             Multi-platform bot management — open source
           </p>
         </div>

@@ -4,17 +4,17 @@
  * Shows every user and group this bot session has interacted with.
  * Admins can search, filter, sort, inspect, ban/unban, or remove records.
  *
- * Design: mirrors the Admin → Users page exactly:
- *   • text-headline-md page title + text-body-md description
- *   • Pill search bar wrapped in a bg-surface rounded-full container
- *   • Glass-variant Table.Root inside a bg-surface Table.ScrollArea
- *   • Table.Loading / Table.Empty / Table.Pagination compound components
- *   • Pill Badges everywhere (variant="tonal", size="sm"/"md", pill)
- *   • Tonal, xs-size row-action buttons
+ * Design: Bot Manager grouped-row language —
+ *   • Section header counts, plain h-11 search inputs, Select filters,
+ *     raw icon refresh button, mono count text (DatabaseToolbar)
+ *   • Users / groups / channels as hairline grouped rows with IconWell
+ *     tiles, mono ID chips, mono status chips, and compact raw
+ *     Ban / Unban / Delete actions
+ *   • Table.Pagination for paging, grouped empty states
  *   • Dialog-scoped loading/error state, closeOnEsc/closeOnOverlayClick
  *     disabled mid-request, Dialog.CloseTrigger asChild Cancel buttons,
  *     Field + Textarea for the optional ban reason
- *   • Plain rounded-xl bg-error-container div for page-level fetch errors
+ *   • Alert size="sm" for page-level fetch errors
  *   • Snackbar toasts for success / warning feedback on actions
  */
 
@@ -32,12 +32,12 @@ import Select from '@/components/ui/forms/Select'
 import Textarea from '@/components/ui/forms/Textarea'
 import { Field } from '@/components/ui/forms/Field'
 import Button from '@/components/ui/buttons/Button'
-import Badge from '@/components/ui/data-display/Badge'
 import Alert from '@/components/ui/feedback/Alert'
 import Table from '@/components/ui/data-display/Table'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import Dialog from '@/components/ui/overlay/Dialog'
 import DataList from '@/components/ui/data-display/DataList'
+import { cn } from '@/utils/cn.util'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { useBotContext } from '@/features/users/components/DashboardBotLayout'
@@ -59,6 +59,81 @@ import type {
 import { formatDateTime } from '@/utils/datetime.util'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Small presentational pieces matching dashboard settings: IconWell tiles,
+// mono status chips, and compact raw action buttons.
+
+function IconWell({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+}) {
+  return (
+    <div
+      className={cn(
+        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        tone === 'accent' && 'bg-primary/10 border-primary/30 text-primary',
+        tone === 'danger' && 'bg-error/10 border-error/30 text-error',
+        tone === 'default' &&
+          'bg-surface-container-high border-hairline text-on-surface-variant',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function MonoChip({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border',
+        tone === 'accent' &&
+          'bg-surface-container-high text-primary border-primary/30',
+        tone === 'danger' &&
+          'bg-surface-container-high text-error border-error/30',
+        tone === 'default' &&
+          'bg-surface-container-high text-on-surface-variant border-hairline',
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+function RowSkeleton() {
+  return (
+    <div className="p-3.5 flex items-center justify-between" aria-hidden="true">
+      <div className="flex items-center space-x-3 min-w-0">
+        <Skeleton variant="input" width={36} height={36} />
+        <div className="flex flex-col gap-2">
+          <Skeleton textSize="body-sm" width="128px" />
+          <Skeleton textSize="body-sm" width="64px" />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Skeleton variant="pill" width={44} height={24} />
+        <Skeleton variant="pill" width={52} height={24} />
+      </div>
+    </div>
+  )
+}
+
+// Compact raw action buttons (settings vocabulary).
+const ROW_BTN =
+  'px-2.5 py-1 text-xs font-semibold rounded border transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0'
+const ROW_BTN_ACCENT =
+  'bg-primary/10 hover:bg-primary/15 border-primary/30 text-primary'
+const ROW_BTN_DANGER =
+  'bg-error/10 hover:bg-error/15 border-error/30 text-error'
 
 function formatDate(iso: string | null, timezone: string): string {
   return formatDateTime(iso, timezone)
@@ -119,18 +194,6 @@ function groupTypeLabel(group: { type: string | null; is_group: boolean }): stri
   return group.is_group ? 'Group' : '—'
 }
 
-function groupTypeColor(type: string | null): 'secondary' | 'tertiary' | 'info' {
-  switch (type) {
-    case 'supergroup':
-      return 'tertiary'
-    case 'channel':
-      return 'info'
-    case 'group':
-    default:
-      return 'secondary'
-  }
-}
-
 const typeFilterOptions = [
   { value: 'all', label: 'All types' },
   { value: 'group', label: 'Groups' },
@@ -165,14 +228,9 @@ function DetailDialog({ open, onClose, title, isBanned, fields }: DetailDialogPr
           </Dialog.Header>
           <Dialog.Body>
             <div className="mb-4">
-              <Badge
-                variant="tonal"
-                color={isBanned ? 'error' : 'success'}
-                size="sm"
-                pill
-              >
+              <MonoChip tone={isBanned ? 'danger' : 'accent'}>
                 {isBanned ? 'Banned' : 'Active'}
-              </Badge>
+              </MonoChip>
             </div>
             <DataList.Root size="sm" divideY>
               {fields.map((field) => (
@@ -205,6 +263,9 @@ function DatabaseToolbar({
   onRefresh,
   statusOptions = statusFilterOptions,
   typeOptions = typeFilterOptions,
+  sortBy,
+  sortDir,
+  onSortChange,
 }: {
   search: string
   onSearchChange: (v: string) => void
@@ -221,26 +282,32 @@ function DatabaseToolbar({
   statusOptions?: { value: string; label: string }[]
   /** Per-tab type filter options. */
   typeOptions?: { value: string; label: string }[]
+  /** Optional column sort (users tab) — selecting a column re-toggles direction. */
+  sortBy?: BotDatabaseSortBy
+  sortDir?: 'asc' | 'desc' | null
+  onSortChange?: (v: BotDatabaseSortBy) => void
 }) {
+  const sortArrow = (column: BotDatabaseSortBy) =>
+    sortBy === column ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-      <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
-        <Input
-          placeholder={searchPlaceholder}
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          leftIcon={<Search className="h-4 w-4 text-on-surface-variant" />}
-          pill
-        />
-      </div>
-      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
+    <div className="flex flex-col gap-3">
+      <Input
+        placeholder={searchPlaceholder}
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        leftIcon={<Search className="h-4 w-4" />}
+        aria-label={searchPlaceholder}
+        className="h-11 text-sm"
+      />
+      <div className="flex items-center gap-2 min-w-0">
         {onTypeChange && type && (
           <Select
             options={typeOptions}
             value={type}
             onChange={(v) => onTypeChange(v as BotDatabaseTypeFilter)}
             size="sm"
-            className="min-w-0 sm:min-w-[8.5rem]"
+            className="min-w-0 flex-1"
           />
         )}
         <Select
@@ -248,29 +315,40 @@ function DatabaseToolbar({
           value={status}
           onChange={(v) => onStatusChange(v as BotDatabaseStatusFilter)}
           size="sm"
-          className="min-w-0 sm:min-w-[9.5rem]"
+          className="min-w-0 flex-1"
         />
-        <Button
-          variant="tonal"
-          color="secondary"
-          size="sm"
-          iconOnly
-          leftIcon={<RefreshCw className="h-4 w-4" />}
-          aria-label="Refresh"
+        {onSortChange && sortBy && (
+          <Select
+            options={[
+              { value: 'name', label: `Name${sortArrow('name')}` },
+              { value: 'last_seen', label: `Seen${sortArrow('last_seen')}` },
+            ]}
+            value={sortBy}
+            onChange={(v) => onSortChange(v as BotDatabaseSortBy)}
+            size="sm"
+            className="min-w-0 flex-1"
+            aria-label="Sort by"
+          />
+        )}
+        <button
+          type="button"
           onClick={onRefresh}
-          isLoading={isLoading}
-        />
-        {isLoading ? (
-          /* Mirrors the count badge's footprint so the toolbar row never
-             reflows when results arrive. */
-          <Skeleton variant="pill" width={72} height={26} />
-        ) : (
-          <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
-            {search.trim() || status !== 'all' || (type && type !== 'all')
+          disabled={isLoading}
+          aria-label="Refresh"
+          className="p-2 rounded-lg border border-hairline bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+        >
+          <RefreshCw
+            className={cn('h-4 w-4', isLoading && 'animate-spin')}
+            strokeWidth={2}
+          />
+        </button>
+        <span className="text-[11px] font-mono font-medium text-surface-variant flex-shrink-0 ml-auto">
+          {isLoading
+            ? 'Loading…'
+            : search.trim() || status !== 'all' || (type && type !== 'all')
               ? `${total} matched`
               : matchedLabel}
-          </Badge>
-        )}
+        </span>
       </div>
     </div>
   )
@@ -399,8 +477,6 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
 
   const [detailUser, setDetailUser] = useState<BotDatabaseUser | null>(null)
 
-  const sortDirFor = (column: BotDatabaseSortBy) => (sortBy === column ? sortDir : null)
-
   return (
     <div className="flex flex-col gap-4">
       <DatabaseToolbar
@@ -409,6 +485,9 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
         searchPlaceholder="Search users by name, username, or ID…"
         status={status}
         onStatusChange={setStatus}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSortChange={toggleSort}
         total={total}
         matchedLabel={`${total} total`}
         isLoading={isLoading}
@@ -416,145 +495,89 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
       />
 
       {error !== null && (
-        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
-          {error}
-        </div>
+        <Alert variant="tonal" color="error" title="Error" message={error} size="sm" />
       )}
 
-      <Table.ScrollArea className="bg-surface">
-        <Table.Root variant="glass" fullWidth>
-          <Table.Header>
-            <Table.Row>
-              <Table.Head
-                sortable
-                sortDirection={sortDirFor('name')}
-                onClick={() => toggleSort('name')}
-              >
-                Name
-              </Table.Head>
-              <Table.Head>ID</Table.Head>
-              <Table.Head>Status</Table.Head>
-              <Table.Head
-                sortable
-                sortDirection={sortDirFor('last_seen')}
-                onClick={() => toggleSort('last_seen')}
-              >
-                Last Seen
-              </Table.Head>
-              <Table.Head align="right">Actions</Table.Head>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {isLoading &&
-              // Row skeletons mirror the real user rows: name, mono ID chip,
-              // status badge pill, last-seen date, and the right-aligned
-              // detail/ban/delete action cluster.
-              [0, 1, 2, 3, 4].map((i) => (
-                <Table.Row key={`user-skeleton-${i}`}>
-                  <Table.Cell>
-                    <Skeleton variant="text" width="60%" />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Skeleton variant="rounded" width={96} height={20} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Skeleton variant="pill" width={56} height={20} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Skeleton variant="text" width={80} />
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Skeleton variant="circular" width={24} height={24} />
-                      <Skeleton variant="pill" width={44} height={24} />
-                      <Skeleton variant="pill" width={52} height={24} />
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            {!isLoading &&
-              users.map((user) => (
-                <Table.Row key={user.id}>
-                  <Table.Cell className="font-medium">
-                    {userDisplayName(user)}
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
-                      {user.id}
-                    </code>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      variant="tonal"
-                      color={user.is_banned ? 'error' : 'success'}
-                      size="sm"
-                      pill
-                    >
+      {isLoading ? (
+        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <RowSkeleton key={`user-skeleton-${i}`} />
+          ))}
+        </div>
+      ) : users.length === 0 ? (
+        <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <p className="p-6 text-sm text-on-surface-variant italic text-center">
+            {search.trim()
+              ? `No users match "${search.trim()}"`
+              : status !== 'all'
+                ? `No ${status} users found`
+                : 'No users found.'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          {users.map((user) => (
+            <div
+              key={user.id}
+              className="p-3.5 flex items-center justify-between space-x-3"
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <IconWell>
+                  <Users className="h-4 w-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
+                    <span className="text-sm font-semibold text-on-surface truncate leading-snug">
+                      {userDisplayName(user)}
+                    </span>
+                    <MonoChip tone={user.is_banned ? 'danger' : 'accent'}>
                       {user.is_banned ? 'Banned' : 'Active'}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    {formatDate(user.last_seen, timezone)}
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="tonal"
-                        color="secondary"
-                        size="xs"
-                        iconOnly
-                        leftIcon={<Eye className="h-3.5 w-3.5" />}
-                        aria-label={`View details for ${userDisplayName(user)}`}
-                        onClick={() => setDetailUser(user)}
-                      />
-                      {user.is_banned ? (
-                        <Button
-                          variant="tonal"
-                          color="success"
-                          size="xs"
-                          isLoading={pending.has(user.id)}
-                          onClick={() => openUnbanDialog(user)}
-                        >
-                          Unban
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="tonal"
-                          color="error"
-                          size="xs"
-                          onClick={() => openBanDialog(user)}
-                        >
-                          Ban
-                        </Button>
-                      )}
-                      <Button
-                        variant="tonal"
-                        color="error"
-                        size="xs"
-                        onClick={() => openDeleteDialog(user)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            {!isLoading && users.length === 0 && (
-              <Table.Empty
-                colSpan={5}
-                icon={<Users className="h-8 w-8" />}
-                message={
-                  search.trim()
-                    ? `No users match "${search.trim()}"`
-                    : status !== 'all'
-                      ? `No ${status} users found`
-                      : 'No users found.'
-                }
-              />
-            )}
-          </Table.Body>
-        </Table.Root>
-      </Table.ScrollArea>
+                    </MonoChip>
+                  </div>
+                  <span className="text-[11px] font-mono text-on-surface-variant truncate mt-0.5">
+                    {user.id} · {formatDate(user.last_seen, timezone)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-1.5 flex-shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  aria-label={`View details for ${userDisplayName(user)}`}
+                  onClick={() => setDetailUser(user)}
+                  className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+                {user.is_banned ? (
+                  <button
+                    type="button"
+                    disabled={pending.has(user.id)}
+                    onClick={() => openUnbanDialog(user)}
+                    className={cn(ROW_BTN, ROW_BTN_ACCENT)}
+                  >
+                    Unban
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openBanDialog(user)}
+                    className={cn(ROW_BTN, ROW_BTN_DANGER)}
+                  >
+                    Ban
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openDeleteDialog(user)}
+                  className={cn(ROW_BTN, ROW_BTN_DANGER)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {total > 0 && (
         <Table.Pagination
@@ -885,161 +908,106 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
       />
 
       {error !== null && (
-        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
-          {error}
-        </div>
+        <Alert variant="tonal" color="error" title="Error" message={error} size="sm" />
       )}
 
       {/* Flat group list — Telegram-style platforms have no server hierarchy,
           so every group is a first-class row with its type, member count,
           activity, status, and per-row ban/unban/delete actions. This mirrors
-          the Users tab's table treatment instead of the Discord/Fluxer
+          the Users tab's row treatment instead of the Discord/Fluxer
           server → channels drill-down. */}
-      <Table.ScrollArea className="bg-surface">
-        <Table.Root variant="glass" fullWidth>
-          <Table.Header>
-            <Table.Row>
-              <Table.Head>Group</Table.Head>
-              <Table.Head className="hidden md:table-cell">Group ID</Table.Head>
-              <Table.Head>Members</Table.Head>
-              <Table.Head>Last Seen</Table.Head>
-              <Table.Head>Status</Table.Head>
-              <Table.Head align="right">Actions</Table.Head>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {isLoading &&
-              // Row skeletons mirror the real rows: name + type badge, mono
-              // ID chip, member count, date, status pill, action buttons.
-              [0, 1, 2, 3, 4].map((i) => (
-                <Table.Row key={`group-skeleton-${i}`}>
-                  <Table.Cell>
-                    <div className="flex items-center gap-2">
-                      <Skeleton variant="text" width="55%" />
-                      <Skeleton variant="pill" width={64} height={20} />
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell className="hidden md:table-cell">
-                    <Skeleton variant="rounded" width={96} height={20} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Skeleton variant="text" width={40} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Skeleton variant="text" width={80} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Skeleton variant="pill" width={56} height={20} />
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Skeleton variant="pill" width={44} height={24} />
-                      <Skeleton variant="pill" width={52} height={24} />
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            {!isLoading &&
-              groups.map((group) => (
-                <Table.Row key={group.id}>
-                  <Table.Cell>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate font-medium text-on-surface">
-                        {group.name}
-                      </span>
-                      <Badge
-                        variant="tonal"
-                        color={groupTypeColor(group.type)}
-                        size="sm"
-                        pill
-                      >
-                        {groupTypeLabel(group)}
-                      </Badge>
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell className="hidden md:table-cell">
-                    <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
-                      {group.id}
-                    </code>
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    {group.member_count != null
-                      ? group.member_count.toLocaleString()
-                      : '—'}
-                  </Table.Cell>
-                  <Table.Cell className="text-on-surface-variant">
-                    {formatDate(group.last_seen, timezone)}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      variant="tonal"
-                      color={group.is_banned ? 'error' : 'success'}
-                      size="sm"
-                      pill
-                    >
+      {isLoading ? (
+        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <RowSkeleton key={`group-skeleton-${i}`} />
+          ))}
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="p-6 flex flex-col items-center gap-3 text-center">
+            <MessageSquare className="h-8 w-8 text-on-surface-variant" />
+            <p className="text-sm text-on-surface-variant italic">
+              {search.trim() || status !== 'all' || type !== 'all'
+                ? 'No groups match the current search or filters.'
+                : 'No groups recorded yet. Send a message in a group, supergroup, or channel where this bot is present, then reload this page.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          {groups.map((group) => (
+            <div
+              key={group.id}
+              className="p-3.5 flex items-center justify-between space-x-3"
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <IconWell>
+                  <MessageSquare className="h-4 w-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
+                    <span className="text-sm font-semibold text-on-surface truncate leading-snug">
+                      {group.name}
+                    </span>
+                    <MonoChip tone="default">
+                      {groupTypeLabel(group)}
+                    </MonoChip>
+                    <MonoChip tone={group.is_banned ? 'danger' : 'accent'}>
                       {group.is_banned ? 'Banned' : 'Active'}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <div className="flex items-center justify-end gap-2">
-                      {group.is_banned ? (
-                        <Button
-                          variant="tonal"
-                          color="success"
-                          size="xs"
-                          onClick={() => {
-                            setActionTarget(group)
-                            setUnbanError(null)
-                            setUnbanOpen(true)
-                          }}
-                        >
-                          Unban
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="tonal"
-                          color="error"
-                          size="xs"
-                          onClick={() => {
-                            setActionTarget(group)
-                            setBanReason('')
-                            setBanError(null)
-                            setBanOpen(true)
-                          }}
-                        >
-                          Ban
-                        </Button>
-                      )}
-                      <Button
-                        variant="tonal"
-                        color="error"
-                        size="xs"
-                        onClick={() => {
-                          setActionTarget(group)
-                          setDeleteError(null)
-                          setDeleteOpen(true)
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            {!isLoading && groups.length === 0 && (
-              <Table.Empty
-                colSpan={6}
-                icon={<MessageSquare className="h-8 w-8" />}
-                message={
-                  search.trim() || status !== 'all' || type !== 'all'
-                    ? 'No groups match the current search or filters.'
-                    : 'No groups recorded yet. Send a message in a group, supergroup, or channel where this bot is present, then reload this page.'
-                }
-              />
-            )}
-          </Table.Body>
-        </Table.Root>
-      </Table.ScrollArea>
+                    </MonoChip>
+                  </div>
+                  <span className="text-[11px] font-mono text-on-surface-variant truncate mt-0.5">
+                    {group.id} ·{' '}
+                    {group.member_count != null
+                      ? `${group.member_count.toLocaleString()} members`
+                      : 'members unknown'}{' '}
+                    · {formatDate(group.last_seen, timezone)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-1.5 flex-shrink-0 flex-wrap">
+                {group.is_banned ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionTarget(group)
+                      setUnbanError(null)
+                      setUnbanOpen(true)
+                    }}
+                    className={cn(ROW_BTN, ROW_BTN_ACCENT)}
+                  >
+                    Unban
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionTarget(group)
+                      setBanReason('')
+                      setBanError(null)
+                      setBanOpen(true)
+                    }}
+                    className={cn(ROW_BTN, ROW_BTN_DANGER)}
+                  >
+                    Ban
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTarget(group)
+                    setDeleteError(null)
+                    setDeleteOpen(true)
+                  }}
+                  className={cn(ROW_BTN, ROW_BTN_DANGER)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Ban dialog */}
       <Dialog.Root
@@ -1351,201 +1319,173 @@ function ServerHierarchyGroupsTab({
   return (
     <div className="flex flex-col gap-4">
       {/* Server selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
-          <Select
-            options={serverOptions}
-            value={selectedServerId ?? ''}
-            onChange={(v) => setSelectedServerId(v as string)}
-            placeholder={
-              servers.length > 0 ? 'Select a server…' : 'No servers found'
-            }
-            pill
-          />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="tonal"
-            color="secondary"
-            size="sm"
-            iconOnly
-            leftIcon={<RefreshCw className="h-4 w-4" />}
+      <div className="flex flex-col gap-3">
+        <Select
+          options={serverOptions}
+          value={selectedServerId ?? ''}
+          onChange={(v) => setSelectedServerId(v as string)}
+          placeholder={
+            servers.length > 0 ? 'Select a server…' : 'No servers found'
+          }
+          aria-label="Select a server"
+        />
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
             aria-label="Refresh"
             onClick={() => {
               refetch()
               refetchChannels()
             }}
-            isLoading={isLoading}
-          />
-          <Badge variant="tonal" color="primary" size="md" pill className="shrink-0">
-            {total} total
-          </Badge>
+            disabled={isLoading}
+            className="p-2 rounded-lg border border-hairline bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+          >
+            <RefreshCw
+              className={cn('h-4 w-4', isLoading && 'animate-spin')}
+              strokeWidth={2}
+            />
+          </button>
+          <span className="text-[11px] font-mono font-medium text-surface-variant flex-shrink-0 ml-auto">
+            {isLoading ? 'Loading…' : `${total} total`}
+          </span>
         </div>
       </div>
 
       {error !== null && (
-        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
-          {error}
-        </div>
+        <Alert variant="tonal" color="error" title="Error" message={error} size="sm" />
       )}
 
       {/* Selected server header + actions */}
       {selectedServer !== null && (
-        <div className="bg-surface rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-body-lg font-semibold text-on-surface truncate">
-                  {selectedServer.name ?? selectedServer.id}
-                </p>
-                <Badge variant="tonal" color="secondary" size="sm" pill>
-                  Server
-                </Badge>
-                <Badge
-                  variant="tonal"
-                  color={selectedServer.is_banned ? 'error' : 'success'}
-                  size="sm"
-                  pill
-                >
-                  {selectedServer.is_banned ? 'Banned' : 'Active'}
-                </Badge>
+        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="p-3.5 flex items-center justify-between space-x-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              <IconWell>
+                <MessageSquare className="h-4 w-4" strokeWidth={2} />
+              </IconWell>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
+                  <span className="text-sm font-semibold text-on-surface truncate leading-snug">
+                    {selectedServer.name ?? selectedServer.id}
+                  </span>
+                  <MonoChip tone="default">Server</MonoChip>
+                  <MonoChip tone={selectedServer.is_banned ? 'danger' : 'accent'}>
+                    {selectedServer.is_banned ? 'Banned' : 'Active'}
+                  </MonoChip>
+                </div>
+                <span className="text-[11px] font-mono text-on-surface-variant truncate mt-0.5">
+                  {selectedServer.member_count != null
+                    ? `${selectedServer.member_count.toLocaleString()} members`
+                    : 'Member count unknown'}{' '}
+                  · {formatDate(selectedServer.last_seen, timezone)}
+                </span>
               </div>
-              <p className="mt-1 text-body-sm text-on-surface-variant">
-                {selectedServer.member_count != null
-                  ? `${selectedServer.member_count.toLocaleString()} members`
-                  : 'Member count unknown'}
-                {' · '}
-                {formatDate(selectedServer.last_seen, timezone)}
-              </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {selectedServer.is_banned ? (
-              <Button
-                variant="tonal"
-                color="success"
-                size="sm"
+            <div className="flex items-center justify-end gap-1.5 flex-shrink-0 flex-wrap">
+              {selectedServer.is_banned ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnbanError(null)
+                    setUnbanOpen(true)
+                  }}
+                  className={cn(ROW_BTN, ROW_BTN_ACCENT)}
+                >
+                  Unban
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBanReason('')
+                    setBanError(null)
+                    setBanOpen(true)
+                  }}
+                  className={cn(ROW_BTN, ROW_BTN_DANGER)}
+                >
+                  Ban
+                </button>
+              )}
+              <button
+                type="button"
                 onClick={() => {
-                  setUnbanError(null)
-                  setUnbanOpen(true)
+                  setDeleteError(null)
+                  setDeleteOpen(true)
                 }}
+                className={cn(ROW_BTN, ROW_BTN_DANGER)}
               >
-                Unban
-              </Button>
-            ) : (
-              <Button
-                variant="tonal"
-                color="error"
-                size="sm"
-                onClick={() => {
-                  setBanReason('')
-                  setBanError(null)
-                  setBanOpen(true)
-                }}
-              >
-                Ban
-              </Button>
-            )}
-            <Button
-              variant="tonal"
-              color="error"
-              size="sm"
-              onClick={() => {
-                setDeleteError(null)
-                setDeleteOpen(true)
-              }}
-            >
-              Delete
-            </Button>
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Channel search */}
       {selectedServer !== null && (
-        <div className="bg-surface p-2 rounded-full flex-1 min-w-0">
-          <Input
-            placeholder="Search channels by name or ID…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            leftIcon={<Search className="h-4 w-4 text-on-surface-variant" />}
-            pill
-          />
-        </div>
+        <Input
+          placeholder="Search channels by name or ID…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          leftIcon={<Search className="h-4 w-4" />}
+          aria-label="Search channels by name or ID"
+          className="h-11 text-sm"
+        />
       )}
 
       {/* Channels table */}
       {selectedServer !== null && (
-        <Table.ScrollArea className="bg-surface">
-          <Table.Root variant="glass" fullWidth>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Name</Table.Head>
-                <Table.Head>Type</Table.Head>
-                <Table.Head>ID</Table.Head>
-                <Table.Head>Status</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {channelsLoading &&
-                // Mirrors the real channel rows: name, type, mono ID chip,
-                // status badge pill.
-                [0, 1, 2, 3, 4].map((i) => (
-                  <Table.Row key={`channel-skeleton-${i}`}>
-                    <Table.Cell>
-                      <Skeleton variant="text" width="50%" />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Skeleton variant="text" width={64} />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Skeleton variant="rounded" width={96} height={20} />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Skeleton variant="pill" width={56} height={20} />
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              {!channelsLoading &&
-                channels.map((channel) => (
-                  <Table.Row key={channel.id}>
-                    <Table.Cell className="font-medium">
-                      {channel.name ?? 'Untitled channel'}
-                    </Table.Cell>
-                    <Table.Cell className="text-on-surface-variant">
-                      {channelTypeLabel(channel.type)}
-                    </Table.Cell>
-                    <Table.Cell className="text-on-surface-variant">
-                      <code className="text-xs bg-surface-container px-1.5 py-0.5 rounded">
+        <>
+          {channelsLoading ? (
+            <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <RowSkeleton key={`channel-skeleton-${i}`} />
+              ))}
+            </div>
+          ) : channels.length === 0 ? (
+            <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+              <div className="p-6 flex flex-col items-center gap-3 text-center">
+                <MessageSquare className="h-8 w-8 text-on-surface-variant" />
+                <p className="text-sm text-on-surface-variant italic">
+                  {search.trim()
+                    ? `No channels match "${search.trim()}"`
+                    : 'No channels recorded for this server yet.'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+              {channels.map((channel) => (
+                <div
+                  key={channel.id}
+                  className="p-3.5 flex items-center justify-between space-x-3"
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <IconWell>
+                      <MessageSquare className="h-4 w-4" strokeWidth={2} />
+                    </IconWell>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
+                        <span className="text-sm font-semibold text-on-surface truncate leading-snug">
+                          {channel.name ?? 'Untitled channel'}
+                        </span>
+                        <MonoChip tone="default">
+                          {channelTypeLabel(channel.type)}
+                        </MonoChip>
+                        <MonoChip tone={channel.is_banned ? 'danger' : 'accent'}>
+                          {channel.is_banned ? 'Banned' : 'Active'}
+                        </MonoChip>
+                      </div>
+                      <span className="text-[11px] font-mono text-on-surface-variant truncate mt-0.5">
                         {channel.id}
-                      </code>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Badge
-                        variant="tonal"
-                        color={channel.is_banned ? 'error' : 'success'}
-                        size="sm"
-                        pill
-                      >
-                        {channel.is_banned ? 'Banned' : 'Active'}
-                      </Badge>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              {!channelsLoading && channels.length === 0 && (
-                <Table.Empty
-                  colSpan={4}
-                  icon={<MessageSquare className="h-8 w-8" />}
-                  message={
-                    search.trim()
-                      ? `No channels match "${search.trim()}"`
-                      : 'No channels recorded for this server yet.'
-                  }
-                />
-              )}
-            </Table.Body>
-          </Table.Root>
-        </Table.ScrollArea>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {selectedServer !== null && channelTotal > 0 && (
@@ -1558,20 +1498,20 @@ function ServerHierarchyGroupsTab({
       )}
 
       {channelsError !== null && (
-        <div className="rounded-[var(--radius-card)] bg-error-container text-on-error-container px-4 py-3 text-body-md">
-          {channelsError}
-        </div>
+        <Alert variant="tonal" color="error" title="Error" message={channelsError} size="sm" />
       )}
 
       {selectedServer === null && !isLoading && servers.length === 0 && (
-        <div className="bg-surface rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
-          <MessageSquare className="h-8 w-8 text-on-surface-variant" />
-          <p className="text-body-md text-on-surface-variant">
-            {isFluxer
-              ? 'No Fluxer servers recorded yet. Send a message in a Fluxer server'
-              : 'No Discord servers recorded yet. Send a message in a Discord server'}{' '}
-            where this bot is present, then reload this page.
-          </p>
+        <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="p-6 flex flex-col items-center gap-3 text-center">
+            <MessageSquare className="h-8 w-8 text-on-surface-variant" />
+            <p className="text-sm text-on-surface-variant italic">
+              {isFluxer
+                ? 'No Fluxer servers recorded yet. Send a message in a Fluxer server'
+                : 'No Discord servers recorded yet. Send a message in a Discord server'}{' '}
+              where this bot is present, then reload this page.
+            </p>
+          </div>
         </div>
       )}
 
@@ -1764,16 +1704,7 @@ export default function BotDatabasePage() {
   const isServerHierarchy = bot?.platform === 'discord' || bot?.platform === 'fluxer'
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-headline-md font-semibold text-on-surface md:hidden">
-          Database
-        </h1>
-        <p className="mt-1 text-body-md text-on-surface-variant md:mt-0 md:text-headline-md md:font-semibold md:text-on-surface">
-          Manage users and groups this bot session has interacted with.
-        </p>
-      </div>
-
+    <div className="flex flex-col max-w-2xl lg:max-w-4xl w-full mx-auto">
       <Tabs.Root
         value={activeTab}
         onChange={(v) => setActiveTab(v as 'users' | 'groups')}

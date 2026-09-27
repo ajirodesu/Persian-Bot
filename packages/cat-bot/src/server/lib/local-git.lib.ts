@@ -300,11 +300,17 @@ function parseAheadBehind(stdout: string): { ahead: number; behind: number } {
 
 /** Repository identity from the origin remote (falls back to env defaults). */
 export async function getGitMeta(): Promise<GitMeta> {
-  const branch = await getCurrentBranch();
+  const [branch, remote] = await Promise.all([
+    getCurrentBranch(),
+    runGit(['remote', 'get-url', 'origin']).then(
+      (url) => url.trim(),
+      () => '',
+    ),
+  ]);
   let owner = env.GITHUB_REPO_OWNER ?? '';
   let repo = env.GITHUB_REPO_NAME ?? '';
-  try {
-    const url = (await runGit(['remote', 'get-url', 'origin'])).trim();
+  if (remote !== '') {
+    const url = remote;
     const ssh = /^git@([^:]+):([^/]+)\/(.+)\.git$/.exec(url);
     const https = /^https?:\/\/(?:[^@/]+@)?[^/]+\/([^/]+)\/(.+)\.git$/.exec(url);
     if (ssh) {
@@ -314,8 +320,6 @@ export async function getGitMeta(): Promise<GitMeta> {
       owner = https[1] ?? owner;
       repo = (https[2] ?? repo).replace(/\.git$/, '');
     }
-  } catch {
-    // Remote lookup is best-effort; env fallbacks remain.
   }
   return { owner, repo, branch };
 }
@@ -432,6 +436,102 @@ export async function getPathLastCommit(
   if (res.code !== 0) return null;
   const [message = '', author = '', date = ''] = res.stdout.trim().split('\x1f');
   return message === '' ? null : { message, author, date };
+}
+
+/**
+ * Batched blob SHAs for a directory's immediate children — ONE `ls-tree`
+ * instead of one `rev-parse` subprocess per file. Map keys are repo-rooted
+ * paths; only tracked files (blobs) appear.
+ */
+export async function getDirTrackedShas(
+  dirPath: string,
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  const res = await runGitProbe([
+    ...NO_QUOTE_CONFIG,
+    'ls-tree',
+    'HEAD',
+    '--',
+    dirPath === '' ? '.' : dirPath,
+  ]);
+  if (res.code !== 0) return result;
+  for (const line of res.stdout.split('\n')) {
+    const m = /^(\d+) (\w+) ([0-9a-f]{40})\t(.+)$/.exec(line);
+    if (!m || m[2] !== 'blob') continue;
+    result.set(m[4] as string, m[3] as string);
+  }
+  return result;
+}
+
+export interface PathLastCommit {
+  message: string;
+  author: string;
+  date: string;
+}
+
+/**
+ * Batched latest-commit lookup for a set of paths — ONE `git log` instead of
+ * one subprocess per file. Parses `-z` records: the header token carries the
+ * %H%x1f%s%x1f%an%x1f%aI fields, following tokens are filenames. The first
+ * commit mentioning each wanted path wins (newest-first log order).
+ */
+export async function getDirLastCommits(
+  dirPath: string,
+  paths: string[],
+): Promise<Map<string, PathLastCommit>> {
+  const normalized = paths.map((p) => normalizeRepoPath(p));
+  const wanted = new Set(normalized);
+  const result = new Map<string, PathLastCommit>();
+  if (wanted.size === 0) return result;
+  const res = await runGitProbe([
+    ...NO_QUOTE_CONFIG,
+    'log',
+    '--format=%H%x1f%s%x1f%an%x1f%aI',
+    '--name-only',
+    '-z',
+    '--',
+    dirPath === '' ? '.' : dirPath,
+  ]);
+  if (res.code !== 0) return result;
+  const clean = (file: string): string => file.trim().replace(/^"|"$/g, '');
+  const consider = (p: string, commit: PathLastCommit): void => {
+    if (result.has(p)) return;
+    if (wanted.has(p)) {
+      result.set(p, commit);
+      return;
+    }
+    // Folders never appear verbatim in --name-only output — only the files
+    // changed under them do. Newest-first stream: the first file seen under
+    // a wanted folder carries that folder's latest commit.
+    for (const folder of wanted) {
+      if (!result.has(folder) && p.startsWith(`${folder}/`)) {
+        result.set(folder, commit);
+        break;
+      }
+    }
+  };
+  let cur: PathLastCommit | null = null;
+  for (const record of res.stdout.split('\0')) {
+    const lines = record.split('\n');
+    const header = lines[0] ?? '';
+    if (header.includes('\x1f')) {
+      const [, message = '', author = '', date = ''] = header.split('\x1f');
+      cur = message === '' ? null : { message, author, date };
+      if (cur !== null) {
+        for (const file of lines.slice(1)) {
+          const p = clean(file);
+          if (p !== '') consider(p, cur);
+        }
+      }
+    } else if (cur !== null) {
+      for (const file of lines) {
+        const p = clean(file);
+        if (p !== '') consider(p, cur);
+      }
+    }
+    if (result.size === wanted.size) break;
+  }
+  return result;
 }
 
 /** Stages paths (or everything when no paths are given). */

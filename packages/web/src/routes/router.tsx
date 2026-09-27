@@ -47,6 +47,9 @@ const AdminUsersPage = lazy(() => import('@/pages/admin/dashboard/users'))
 const AdminBotsPage = lazy(() => import('@/pages/admin/dashboard/bots'))
 const AdminFilesPage = lazy(() => import('@/pages/admin/dashboard/files'))
 const AdminGitPage = lazy(() => import('@/pages/admin/dashboard/git'))
+const AdminFileEditorPage = lazy(
+  () => import('@/pages/admin/dashboard/file-editor'),
+)
 const AdminSettingsPage = lazy(() => import('@/pages/admin/dashboard/settings'))
 
 /**
@@ -195,12 +198,16 @@ export const router = createBrowserRouter([
                 element: withSuspense(<AdminBotsPage />),
               },
               {
+                path: ROUTES.ADMIN.GIT,
+                element: withSuspense(<AdminGitPage />),
+              },
+              {
                 path: ROUTES.ADMIN.FILES,
                 element: withSuspense(<AdminFilesPage />),
               },
               {
-                path: ROUTES.ADMIN.GIT,
-                element: withSuspense(<AdminGitPage />),
+                path: ROUTES.ADMIN.FILES_EDIT,
+                element: withSuspense(<AdminFileEditorPage />),
               },
               {
                 path: ROUTES.ADMIN.SETTINGS,

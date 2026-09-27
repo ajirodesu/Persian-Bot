@@ -10,6 +10,9 @@ export default {
         // shells and dividers use it so structural lines stay whisper-thin
         // and consistent instead of the heavier outline-variant borders.
         hairline: 'var(--color-hairline-border)',
+        // Header separator — the sidebar header's 1px line style, shared by
+        // every page header so all top bars divide with identical weight.
+        separator: 'var(--color-separator)',
         // Primary
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
         'on-primary': 'rgb(var(--color-on-primary) / <alpha-value>)',

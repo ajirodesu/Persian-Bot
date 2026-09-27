@@ -37,6 +37,7 @@ import {
   ChevronDown,
   Plus,
   FileText,
+  Check,
   CheckCheck,
   Sparkles,
   Zap,
@@ -67,6 +68,7 @@ import {
   H_BRAND_TEXT,
   H_CHEVRON,
   H_ICON_BTN_MOBILE,
+  H_SEPARATOR,
 } from '@/constants/header.constants'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1823,11 +1825,12 @@ function ChatSettingsMenu({
         aria-expanded={open}
         onClick={() => setOpen((p) => !p)}
         className={cn(
-          // Mobile: a bare 36px circle (matches the hamburger's shrunken
-          // mobile IconButton footprint — see H_ICON_BTN_MOBILE). Desktop:
-          // the same pill shape, padding, and hover treatment as the Bot
-          // Manager header's UserMenu trigger, so the two read as one
-          // consistent component.
+          // Mobile: a 28px avatar (same size as the dashboard UserMenu
+          // profile icon) inside the bare 36px tap target, matching the
+          // hamburger's shrunken mobile IconButton footprint — see
+          // H_ICON_BTN_MOBILE. Desktop: the same pill shape, padding, and
+          // hover treatment as the Bot Manager header's UserMenu trigger,
+          // so the two read as one consistent component.
           'relative flex items-center gap-1.5 rounded-full transition-colors duration-fast',
           'h-9 w-9 justify-center',
           'md:h-auto md:w-auto md:justify-start md:rounded-[var(--radius-input)] md:px-2 md:py-1.5',
@@ -1836,11 +1839,11 @@ function ChatSettingsMenu({
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
         )}
       >
-        <span className="relative h-9 w-9 md:h-10 md:w-10 rounded-full bg-primary-container flex items-center justify-center ring-2 ring-primary/20 shrink-0">
-          <Logo className="h-4 w-4 md:h-5 md:w-5 text-on-primary-container" />
+        <span className="relative h-7 w-7 rounded-full bg-primary-container flex items-center justify-center ring-2 ring-primary/20 shrink-0">
+          <Logo className="h-4 w-4 text-on-primary-container" />
           <span
             className={cn(
-              'absolute bottom-0 right-0 h-2.5 w-2.5 md:h-3 md:w-3 rounded-full border-2 border-surface transition-colors duration-500',
+              'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-surface transition-colors duration-500',
               isConnected ? 'bg-success' : 'bg-on-surface-variant/30',
             )}
           />
@@ -1923,7 +1926,7 @@ function DotsMenuItem({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-[var(--radius-input)] text-sm font-medium transition-colors',
+        'w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-[var(--radius-input)] text-sm font-medium transition-colors tactile-press cursor-pointer',
         'w-[calc(100%-8px)]',
         danger
           ? 'text-error hover:bg-error/10'
@@ -1932,11 +1935,13 @@ function DotsMenuItem({
     >
       <span
         className={cn(
-          'flex items-center justify-center h-7 w-7 rounded-[var(--radius-input)] shrink-0',
-          danger ? 'bg-error/10' : 'bg-primary/10',
+          'flex items-center justify-center h-9 w-9 rounded-lg border shrink-0',
+          danger
+            ? 'bg-error/10 border-error/30 text-error'
+            : 'bg-surface-container-high border-hairline text-primary',
         )}
       >
-        <Icon className={cn('h-3.5 w-3.5', danger ? 'text-error' : 'text-primary')} />
+        <Icon className="h-4 w-4" strokeWidth={2} />
       </span>
       {label}
     </button>
@@ -1988,7 +1993,7 @@ function NicknameModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-hairline px-3 py-2.5 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
+        <div className="flex items-center gap-2 bg-surface-container-high rounded-xl border border-hairline px-3.5 h-11 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
           <Tag className="h-4 w-4 text-primary shrink-0" />
           <input
             ref={inputRef}
@@ -2004,24 +2009,25 @@ function NicknameModal({
             className="flex-1 bg-transparent text-on-surface text-sm placeholder:text-on-surface-variant/40 focus:outline-none"
           />
           {value && value !== current && (
-            <span className="text-[10px] text-primary font-bold tracking-wide px-2 py-0.5 rounded-full bg-primary/10">NEW</span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-high text-primary border-primary/30 border">NEW</span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center gap-3 justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-[var(--radius-input)] text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
+            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest/60 border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 rounded-[var(--radius-input)] text-sm font-bold bg-primary text-on-primary hover:opacity-90 active:scale-95 transition-all"
+            className="flex-1 h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-xs flex items-center justify-center gap-1.5 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
           >
-            Save
+            <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>Save</span>
           </button>
         </div>
       </div>
@@ -2072,7 +2078,7 @@ function PrefixModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-[var(--radius-card)] border border-hairline px-3 py-2.5 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
+        <div className="flex items-center gap-2 bg-surface-container-high rounded-xl border border-hairline px-3.5 h-11 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
           <Hash className="h-4 w-4 text-primary shrink-0" />
           <input
             ref={inputRef}
@@ -2088,24 +2094,25 @@ function PrefixModal({
             className="flex-1 bg-transparent text-on-surface font-mono text-sm placeholder:text-on-surface-variant/40 focus:outline-none"
           />
           {value && value !== current && (
-            <span className="text-[10px] text-primary font-bold tracking-wide px-2 py-0.5 rounded-full bg-primary/10">NEW</span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-high text-primary border-primary/30 border">NEW</span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center gap-3 justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-[var(--radius-input)] text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
+            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest/60 border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 rounded-[var(--radius-input)] text-sm font-bold bg-primary text-on-primary hover:opacity-90 active:scale-95 transition-all"
+            className="flex-1 h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-xs flex items-center justify-center gap-1.5 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
           >
-            Save
+            <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>Save</span>
           </button>
         </div>
       </div>
@@ -2132,20 +2139,21 @@ function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: ()
         <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
           All messages in this session will be permanently removed.
         </p>
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center gap-3 justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-[var(--radius-input)] text-sm font-medium text-on-surface-variant hover:bg-on-surface/10 transition-colors"
+            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest/60 border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => { onConfirm(); onClose() }}
-            className="px-5 py-2 rounded-[var(--radius-input)] text-sm font-bold bg-error text-on-error hover:opacity-90 active:scale-95 transition-all"
+            className="flex-1 h-11 px-4 rounded-lg bg-error hover:brightness-110 active:brightness-90 text-on-error font-semibold text-xs flex items-center justify-center gap-1.5 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-error focus-visible:ring-offset-surface"
           >
-            Clear Chat
+            <Trash2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>Clear Chat</span>
           </button>
         </div>
       </div>
@@ -2166,26 +2174,22 @@ function GetStartedScreen({
 }) {
   const features = [
     {
-      icon: <Zap className="h-4 w-4 text-primary" />,
-      bg: 'bg-primary/10 border-primary/20',
+      icon: <Zap className="h-4 w-4 text-primary" strokeWidth={2} />,
       title: 'Instant Commands',
       desc: `Type ${prefix}help to explore everything the bot can do.`,
     },
     {
-      icon: <DollarSign className="h-4 w-4 text-info" />,
-      bg: 'bg-info/10 border-info/20',
+      icon: <DollarSign className="h-4 w-4 text-info" strokeWidth={2} />,
       title: 'Economy & Games',
       desc: 'Earn coins, check balance, play slots — economy commands tied to your account.',
     },
     {
-      icon: <MessageCircle className="h-4 w-4 text-success" />,
-      bg: 'bg-success/10 border-success/20',
+      icon: <MessageCircle className="h-4 w-4 text-success" strokeWidth={2} />,
       title: 'Rich Responses',
       desc: 'Markdown, buttons, images, and files — all supported.',
     },
     {
-      icon: <Shield className="h-4 w-4 text-tertiary" />,
-      bg: 'bg-tertiary/10 border-tertiary/20',
+      icon: <Shield className="h-4 w-4 text-tertiary" strokeWidth={2} />,
       title: 'Persistent History',
       desc: 'Your messages are saved — pick up right where you left off.',
     },
@@ -2214,33 +2218,32 @@ function GetStartedScreen({
       </div>
 
       {/* Feature cards */}
-      <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+      <div className="grid grid-cols-2 gap-2.5 w-full max-w-sm">
         {features.map((f, i) => (
           <div
             key={i}
-            className={cn(
-              'rounded-[var(--radius-card)] border p-3.5 flex flex-col gap-2',
-              f.bg,
-            )}
+            className="rounded-xl border border-hairline bg-surface-container-low p-3.5 flex flex-col gap-2.5"
           >
-            <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-lg border border-hairline bg-surface-container-high flex items-center justify-center shrink-0">
               {f.icon}
-              <span className="text-xs font-bold text-on-surface leading-tight">{f.title}</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant leading-relaxed">{f.desc}</p>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-on-surface leading-tight">{f.title}</span>
+              <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">{f.desc}</p>
+            </div>
           </div>
         ))}
       </div>
 
       {/* CTA */}
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-3 w-full max-w-sm">
         <button
           type="button"
           onClick={onStart}
-          className="flex items-center gap-2 px-8 py-3 rounded-[var(--radius-card)] bg-primary text-on-primary font-bold text-sm hover:opacity-90 active:scale-95 transition-all shadow-elevation-2"
+          className="w-full h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-sm flex items-center justify-center gap-2 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
         >
           <Sparkles className="h-4 w-4" />
-          Get Started
+          <span>Get Started</span>
         </button>
         <p className="text-[11px] text-on-surface-variant/50 select-none">
           Press <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded-[var(--radius-compact)] text-[10px]">Enter</kbd> to send &middot; <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded-[var(--radius-compact)] text-[10px]">Shift+Enter</kbd> for new line
@@ -2328,14 +2331,14 @@ function AttachmentPicker({
       className="absolute bottom-full mb-2 left-0 z-[120]"
       style={{ animation: 'cr-fadeIn 110ms ease both' }}
     >
-      <div className="rounded-[var(--radius-card)] border border-hairline bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
+      <div className="rounded-xl border border-hairline bg-surface-container-low shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
         {options.map((opt) => (
           <label
             key={opt.id}
             htmlFor={opt.id}
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--radius-input)] text-sm text-on-surface hover:bg-on-surface/8 transition-colors cursor-pointer"
+            className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm text-on-surface hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors"
           >
-            <span className="text-on-surface-variant">{opt.icon}</span>
+            <span className="w-9 h-9 rounded-lg border border-hairline bg-surface-container-high flex items-center justify-center shrink-0 text-on-surface-variant">{opt.icon}</span>
             {opt.label}
             <input
               id={opt.id}
@@ -2400,13 +2403,13 @@ function ReplyPreviewBar({
 function EmptyChatState({ prefix, botNickname }: { prefix: string; botNickname: string }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
-      <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
-        <Logo className="h-8 w-8 text-primary/60" />
+      <div className="w-11 h-11 rounded-lg border border-primary/30 bg-primary/10 flex items-center justify-center shrink-0">
+        <Logo className="h-5 w-5 text-primary" />
       </div>
       <div>
         <p className="text-sm font-semibold text-on-surface mb-1">Start chatting with {botNickname}</p>
         <p className="text-xs text-on-surface-variant">
-          Type <code className="font-mono text-primary">{prefix}help</code> to see all commands, or say its name to trigger the bot.
+          Type <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-high text-primary border-primary/30 border">{prefix}help</span> to see all commands, or say its name to trigger the bot.
         </p>
       </div>
     </div>
@@ -3503,7 +3506,8 @@ export default function ChatRoomPage() {
               differs: [hamburger, mobile-only] · [nickname, centred] · [profile icon]. */}
         <header
           className={cn(
-            'relative flex items-center shrink-0 z-[100] bg-[#0A0C0E] border-b border-[#242930]',
+            'relative flex items-center shrink-0 z-[100] bg-surface border-b',
+            H_SEPARATOR,
             H_HEIGHT,
             H_PX,
           )}
