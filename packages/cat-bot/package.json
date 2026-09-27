@@ -35,9 +35,7 @@
   "dependencies": {
     "@fluxerjs/core": "^2.2.0",
     "@getbrevo/brevo": "^6.0.3",
-    "@google/genai": "^2.17.1",
     "@grammyjs/runner": "^2.0.3",
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
     "adm-zip": "^0.6.0",
@@ -52,7 +50,6 @@
     "grammy": "^1.45.1",
     "logform": "^2.7.0",
     "lru-cache": "^11.5.2",
-    "openai": "^7.5.0",
     "socket.io": "^4.8.3",
     "tsc-alias": "^1.9.2",
     "typescript": "^6.0.3",

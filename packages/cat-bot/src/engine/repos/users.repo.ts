@@ -39,7 +39,7 @@ const userExistsKey = (userId: string): string => `user:exists:${userId}`;
 
 const userNameKey = (userId: string): string => `user:name:${userId}`;
 
-// Full-profile lookups used by the agent's get_user tool. Keyed by platform +
+// Full-profile lookups keyed by platform +
 // id/username; upsertUser invalidates both (a sync can change name/username).
 const userByIdKey = (platform: string, userId: string): string =>
   `user:byId:${platform}:${userId}`;

@@ -260,7 +260,7 @@ class AdminFileManagerController {
   // POST /api/v1/admin/files/git/identity {token} — verify a classic GitHub
   // personal access token (ghp_…) against GitHub, then store it as the single
   // global deployment token and return the account's identity. Connects the
-  // whole bot: /push, /installer, /update, the agent tools and this Git tab
+  // whole bot: /push, /installer, /update and this Git tab
   // all authenticate with this token from now on.
   async gitIdentity(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;

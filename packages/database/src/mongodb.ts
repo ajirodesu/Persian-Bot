@@ -127,15 +127,6 @@ export {
 // dbReady     — resolves once the initial connection is established (boot readiness gate).
 export { mongoClient, getMongoDb, dbReady } from '../adapters/mongodb/src/client.js';
 
-// --- USER AI PROVIDER KEY ---
-export {
-  getUserAiConfig,
-  saveUserAiKey,
-  updateUserAiModel,
-  deleteUserAiKey,
-  saveUserAgentSettings,
-} from '../adapters/mongodb/src/server/provider-key.repo.js';
-
 // --- USER TIMEZONE ---
 export {
   getUserTimezone,
@@ -155,9 +146,3 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/mongodb/src/server/github-config.repo.js';
-
-// --- MCP SERVERS ---
-export {
-  getMcpServersStore,
-  saveMcpServersStore,
-} from '../adapters/mongodb/src/server/mcp-servers.repo.js';

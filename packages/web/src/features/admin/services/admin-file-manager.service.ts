@@ -5,7 +5,7 @@
  * server (ADMIN_REPO_PATH, or the process's own checkout). File mutations edit
  * the working tree only — nothing is committed or pushed automatically. The
  * /git/* routes drive the explicit stage → commit → push workflow surfaced by
- * the Git tab, mirroring Replit's Git panel.
+ * the Git page, mirroring Replit's Git panel.
  */
 
 import apiClient from '@/lib/api-client.lib'
@@ -227,7 +227,7 @@ class AdminFileManagerService {
   }
 
   // POST /api/v1/admin/files/git/commit — commit the staged changes as the
-  // deployment's stored GitHub user (set once via the Git tab).
+  // deployment's stored GitHub user (set once via the Git page).
   async gitCommit(message: string): Promise<{ ok: boolean; sha?: string; author?: GitHubIdentityDto }> {
     const response = await apiClient.post<{ ok: boolean; sha?: string; author?: GitHubIdentityDto }>(
       '/api/v1/admin/files/git/commit',
@@ -239,7 +239,7 @@ class AdminFileManagerService {
   // POST /api/v1/admin/files/git/identity — verify a classic GitHub PAT
   // (ghp_…), store it as the single global deployment token on the server, and
   // return the account's identity. Connects the whole bot: /push, /installer,
-  // /update, the agent tools and this Git tab all use it from now on.
+  // /update and this Git page all use it from now on.
   async gitIdentity(token: string): Promise<GitHubIdentityDto> {
     const response = await apiClient.post<GitHubIdentityDto>(
       '/api/v1/admin/files/git/identity',

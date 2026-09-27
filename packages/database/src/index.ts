@@ -233,23 +233,9 @@ export const deleteUser = m.deleteUser;
 export const resetAllDatabase = m.resetAllDatabase;
 
 // --- USER AI PROVIDER KEY ---
-// Per-user AI provider config (OpenRouter/Groq API keys, AES-256-GCM encrypted
-// at rest, plus the active provider + per-provider model). Always scoped to a
-// single user's own account — never shared or reused across users.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const getUserAiConfig = m.getUserAiConfig;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const saveUserAiKey = m.saveUserAiKey;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const updateUserAiModel = m.updateUserAiModel;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const deleteUserAiKey = m.deleteUserAiKey;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const saveUserAgentSettings = m.saveUserAgentSettings;
-
 // --- USER TIMEZONE ---
 // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
-// Scoped to a single user's own account, same ownership model as the AI key above.
+// Scoped to a single user's own account.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getUserTimezone = m.getUserTimezone;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -268,22 +254,10 @@ export const setMaintenanceModeEnabled = m.setMaintenanceModeEnabled;
 // --- GLOBAL GITHUB CONFIG ---
 // Single deployment-level GitHub token (AES-256-GCM encrypted at rest) + the
 // identity of the account it belongs to. Set through the dashboard Git tab;
-// used by /push, /installer, /update, the admin_commit_push agent tool, and
-// the Admin File Manager's commit/push.
+// used by /push, /installer, /update, and the Admin File Manager's commit/push.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const getGitHubConfigStore = m.getGitHubConfigStore;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const saveGitHubConfigStore = m.saveGitHubConfigStore;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const clearGitHubConfigStore = m.clearGitHubConfigStore;
-
-// --- MCP SERVERS ---
-// Deployment-level custom MCP server registry — system administrators configure
-// MCP servers (name + URL + optional auth headers, headers AES-256-GCM
-// encrypted at rest) in the Admin dashboard. The AI agent loads these from the
-// database, connects to each enabled server over MCP Streamable HTTP, and
-// exposes its tools to the LLM.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const getMcpServersStore = m.getMcpServersStore;
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export const saveMcpServersStore = m.saveMcpServersStore;

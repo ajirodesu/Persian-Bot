@@ -9,7 +9,7 @@
  *   sanitizeMarkdownV2 — smart converter: keeps markers, escapes content, **→*
  *
  * sanitizeMarkdownV2 pipeline:
- *   1. preprocessMarkdown  — converts CommonMark/LLM constructs to Telegram equivalents
+ *   1. preprocessMarkdown  — converts CommonMark constructs to Telegram equivalents
  *   2. convertCommonMarkBold — **bold** → *bold*
  *   3. State machine — char-by-char span recognition and escaping
  *
@@ -30,7 +30,7 @@ function convertCommonMarkBold(text: string): string {
 }
 
 /**
- * Preprocesses CommonMark/LLM markdown into Telegram-compatible equivalents:
+ * Preprocesses CommonMark markdown into Telegram-compatible equivalents:
  *   <br> tags → newline
  *   Table separator rows → dropped
  *   Table data rows → bullet list items

@@ -131,15 +131,6 @@ export {
   resetAllDatabase,
 } from '../adapters/neondb/src/server/system-admin.repo.js';
 
-// --- USER AI PROVIDER KEY ---
-export {
-  getUserAiConfig,
-  saveUserAiKey,
-  updateUserAiModel,
-  deleteUserAiKey,
-  saveUserAgentSettings,
-} from '../adapters/neondb/src/server/provider-key.repo.js';
-
 // --- USER TIMEZONE ---
 export {
   getUserTimezone,
@@ -159,9 +150,3 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/neondb/src/server/github-config.repo.js';
-
-// --- MCP SERVERS ---
-export {
-  getMcpServersStore,
-  saveMcpServersStore,
-} from '../adapters/neondb/src/server/mcp-servers.repo.js';

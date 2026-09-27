@@ -135,15 +135,6 @@ export {
   resetAllDatabase,
 } from '../adapters/turso/src/server/system-admin.repo.js';
 
-// --- USER AI PROVIDER KEY ---
-export {
-  getUserAiConfig,
-  saveUserAiKey,
-  updateUserAiModel,
-  deleteUserAiKey,
-  saveUserAgentSettings,
-} from '../adapters/turso/src/server/provider-key.repo.js';
-
 // --- USER TIMEZONE ---
 export {
   getUserTimezone,
@@ -163,9 +154,3 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/turso/src/server/github-config.repo.js';
-
-// --- MCP SERVERS ---
-export {
-  getMcpServersStore,
-  saveMcpServersStore,
-} from '../adapters/turso/src/server/mcp-servers.repo.js';

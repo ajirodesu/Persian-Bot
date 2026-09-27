@@ -36,8 +36,8 @@ export const ROUTES = {
     USERS: '/admin/dashboard/users',
     BOTS: '/admin/dashboard/bots',
     FILES: '/admin/dashboard/files',
+    GIT: '/admin/dashboard/git',
     SETTINGS: '/admin/dashboard/settings',
-    MCP_SERVERS: '/admin/dashboard/mcp-servers',
   },
 } as const
 
@@ -69,6 +69,6 @@ export const ROUTE_SEGMENTS = {
   ADMIN_USERS: 'users',
   ADMIN_BOTS: 'bots',
   ADMIN_FILES: 'files',
+  ADMIN_GIT: 'git',
   ADMIN_SETTINGS: 'settings',
-  ADMIN_MCP_SERVERS: 'mcp-servers',
 } as const

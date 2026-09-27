@@ -4,7 +4,7 @@
  *
  * The File Manager edits a REAL git checkout on the server: reads come from
  * disk, mutations write to the working tree, and nothing is committed until the
- * operator explicitly stages/commits from the Git tab. This hook manages the
+ * operator explicitly stages/commits from the Git page. This hook manages the
  * lazily-expanded folder tree, multiple editor tabs, file mutations, and the
  * git working-tree status/diff/stage/commit/push state.
  */
@@ -183,7 +183,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const [branches, setBranches] = useState<string[]>([])
 
   // GitHub identity — the deployment's SINGLE global token lives on the server
-  // (set via the Git tab, encrypted in the DB); the client only holds the token
+  // (set via the Git page, encrypted in the DB); the client only holds the token
   // in the input field while connecting and never persists it. The identity is
   // restored from the server on mount so a refresh resumes as connected.
   const [githubToken, setGithubTokenState] = useState<string>('')
@@ -653,7 +653,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   /**
    * Verifies the token against GitHub and — on success — stores it on the
    * server as the single global deployment token. Connects the whole bot:
-   * /push, /installer, /update, the agent tools and this Git tab all use it
+   * /push, /installer, /update and this Git page all use it
    * from now on.
    */
   const verifyGithubIdentity = useCallback(
@@ -710,7 +710,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         if (!cancelled && data.identity) setGithubIdentity(data.identity)
       })
       .catch(() => {
-        // Best-effort — the Git tab works without a connected account.
+        // Best-effort — the Git page works without a connected account.
       })
     return () => {
       cancelled = true

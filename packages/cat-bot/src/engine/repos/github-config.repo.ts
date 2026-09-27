@@ -2,8 +2,8 @@
  * Global GitHub Config Repo — LRU-cached, encrypted single GitHub token.
  *
  * Holds the ONE deployment-level GitHub token that all GitHub authentication
- * shares: the bot commands (/push, /installer, /update), the admin_commit_push
- * agent tool, and the Admin File Manager Git tab all read their token + identity
+ * shares: the bot commands (/push, /installer, /update) and the Admin File
+ * Manager Git tab all read their token + identity
  * from here instead of a per-request header or an environment variable. Set
  * through the dashboard's Git tab (Admin → Files → Git → GitHub identity).
  *

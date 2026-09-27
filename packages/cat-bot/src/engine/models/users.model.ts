@@ -35,7 +35,7 @@ export interface BotUserData {
 
 /**
  * StoredUserProfile — the persisted user row shape returned by profile lookups
- * (getUserById / getUserByUsername). Used by the agent's get_user tool so a
+ * (getUserById / getUserByUsername). Keyed by platform + id/username; a
  * single query returns the user's full stored profile instead of N lookups.
  */
 export interface StoredUserProfile {

@@ -4,7 +4,7 @@
  * Streams an ephemeral (~30s preview) partial rich message to a PRIVATE chat.
  * Per Bot API docs this is the only method allowed to carry an
  * InputRichBlockThinking block (`<tg-thinking>`), and is otherwise used for
- * ChatGPT-style incremental rendering of AI output. Cat-Bot uses this for
+ * ChatGPT-style incremental rendering. Cat-Bot uses this for
  * "thinking…" placeholder drafts.
  *
  * Constraints enforced by the Bot API (not re-validated here beyond the
@@ -14,7 +14,7 @@
  *   - draft_id must be non-zero; repeated calls with the same draft_id are
  *     animated client-side rather than flashing a new message each time.
  *   - The draft is never persisted — callers MUST send a real
- *     sendRichMessage to finalize once generation completes.
+ *     sendRichMessage to finalize once the content is ready.
  */
 import type { Context } from 'grammy';
 import { callRawTelegramApi } from '../utils/raw-api.util.js';

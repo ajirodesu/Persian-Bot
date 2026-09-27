@@ -65,7 +65,7 @@ import {
   type GitHubFileInput,
 } from '@/server/lib/github-contents.lib.js';
 
-// ── Attachment shape (same convention as popcat-media.ts / agent-handler.lib.ts) ─
+// ── Attachment shape (same convention as popcat-media.ts) ─
 
 interface RawAttachment {
   type?: string;

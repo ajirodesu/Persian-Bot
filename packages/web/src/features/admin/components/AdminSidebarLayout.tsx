@@ -10,7 +10,7 @@ import {
   ChevronDown,
   X,
   Files,
-  Server,
+  GitBranch,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react'
@@ -44,8 +44,8 @@ const NAV_ITEMS = [
   { path: ROUTES.ADMIN.USERS,     label: 'Users',         icon: Users },
   { path: ROUTES.ADMIN.BOTS,      label: 'Bot Sessions',  icon: Bot },
   { path: ROUTES.ADMIN.FILES,     label: 'Files',         icon: Files },
+  { path: ROUTES.ADMIN.GIT,       label: 'Git',           icon: GitBranch },
   { path: ROUTES.ADMIN.SETTINGS,  label: 'Settings',      icon: Settings },
-  { path: ROUTES.ADMIN.MCP_SERVERS, label: 'MCP Servers', icon: Server },
 ] as const
 
 /** Width of the desktop sidebar when collapsed to an icon-only rail. */
@@ -343,8 +343,11 @@ export default function AdminSidebarLayout() {
   // The Files page is a full-viewport IDE workspace: it owns its own height
   // (no page-level scrolling) so the file tree and editor panes scroll
   // independently, exactly like Replit. Apply the same h-dvh treatment the
-  // Chat Room uses on the user dashboard.
-  const isFilesWorkspace = activePath === ROUTES.ADMIN.FILES
+  // Chat Room uses on the user dashboard. The Git page is the same kind of
+  // pane-scrolling workspace (changes list + diff viewer), so it gets the
+  // identical treatment.
+  const isFilesWorkspace =
+    activePath === ROUTES.ADMIN.FILES || activePath === ROUTES.ADMIN.GIT
   // Mobile only: false while the page is pinned to the top, so the content
   // header renders "invisible" (just the hamburger + avatar floating over
   // the page) until the user scrolls, at which point the surface, border,

@@ -81,40 +81,6 @@ export const intToBool = (
   value: number | bigint | null | undefined,
 ): boolean => value !== null && value !== undefined && Number(value) === 1;
 
-/** The providers the unified bot_user_ai_config schema stores columns for. */
-const AI_CONFIG_PROVIDERS = new Set([
-  'openrouter',
-  'groq',
-  'nvidia',
-  'openai',
-  'gemini',
-  'zen',
-  'orcarouter',
-  'fastrouter',
-]);
-
-function isSupportedAiProvider(value: string): boolean {
-  return AI_CONFIG_PROVIDERS.has(value);
-}
-
-/** Parses the agent_settings JSON text — never throws, always an object. */
-function parseAgentSettingsJson(raw: string): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // Fall through to {}.
-  }
-  return {};
-}
-
 /** Idempotent schema bootstrap. Safe to call on every boot. */
 export async function initDb(): Promise<void> {
   await tursoClient.execute('PRAGMA foreign_keys = ON;');
@@ -126,194 +92,9 @@ export async function initDb(): Promise<void> {
     `SELECT 1 FROM sqlite_master WHERE type='table' AND name='system_admin' LIMIT 1`,
   );
 
-  // bot_user_ai_config — idempotent table that must exist even when the
-  // fast-path above returns early (already-initialised databases would otherwise
-  // never receive new tables that are added after their initial bootstrap). Run
-  // unconditionally before the guard.
-  //
-  // Holds the per-user AI provider config with a dedicated key/hint/model column
-  // pair for EVERY provider (openrouter, groq, nvidia, openai, gemini), the
-  // active provider, and the per-user agent behavior blob. Renamed from
-  // bot_user_groq_key so no provider is implied to be primary. New columns are
-  // nullable so pre-existing rows stay insertable.
-  await tursoClient.execute(`
-    CREATE TABLE IF NOT EXISTS bot_user_ai_config (
-      user_id                  TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
-      openrouter_encrypted_key TEXT,
-      openrouter_key_hint      TEXT,
-      openrouter_model         TEXT,
-      groq_encrypted_key       TEXT,
-      groq_key_hint            TEXT,
-      groq_model               TEXT,
-      nvidia_encrypted_key     TEXT,
-      nvidia_key_hint          TEXT,
-      nvidia_model             TEXT,
-      openai_encrypted_key     TEXT,
-      openai_key_hint          TEXT,
-      openai_model             TEXT,
-      gemini_encrypted_key     TEXT,
-      gemini_key_hint          TEXT,
-      gemini_model             TEXT,
-      zen_encrypted_key        TEXT,
-      zen_key_hint             TEXT,
-      zen_model                TEXT,
-      orcarouter_encrypted_key TEXT,
-      orcarouter_key_hint      TEXT,
-      orcarouter_model         TEXT,
-      fastrouter_encrypted_key TEXT,
-      fastrouter_key_hint      TEXT,
-      fastrouter_model         TEXT,
-      provider                 TEXT DEFAULT 'openrouter',
-      agent_settings           TEXT,
-      created_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
-      updated_at               TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-  `);
-  // Idempotent column upgrade for pre-existing databases that predate the
-  // unified multi-provider schema — same PRAGMA introspection + ALTER TABLE ADD
-  // COLUMN pattern as bot_discord_channel below (SQLite has no ADD COLUMN IF
-  // NOT EXISTS).
-  const aiConfigCols = await tursoClient.execute(
-    `PRAGMA table_info(bot_user_ai_config)`,
-  );
-  const aiConfigColNames = new Set(
-    (aiConfigCols.rows as unknown as Array<{ name: string }>).map((r) => r.name),
-  );
-  const aiConfigNewCols: Array<[string, string]> = [
-    ['openrouter_encrypted_key', 'TEXT'],
-    ['openrouter_key_hint', 'TEXT'],
-    ['openrouter_model', 'TEXT'],
-    ['groq_encrypted_key', 'TEXT'],
-    ['groq_key_hint', 'TEXT'],
-    ['groq_model', 'TEXT'],
-    ['nvidia_encrypted_key', 'TEXT'],
-    ['nvidia_key_hint', 'TEXT'],
-    ['nvidia_model', 'TEXT'],
-    ['openai_encrypted_key', 'TEXT'],
-    ['openai_key_hint', 'TEXT'],
-    ['openai_model', 'TEXT'],
-    ['gemini_encrypted_key', 'TEXT'],
-    ['gemini_key_hint', 'TEXT'],
-    ['gemini_model', 'TEXT'],
-    ['zen_encrypted_key', 'TEXT'],
-    ['zen_key_hint', 'TEXT'],
-    ['zen_model', 'TEXT'],
-    ['orcarouter_encrypted_key', 'TEXT'],
-    ['orcarouter_key_hint', 'TEXT'],
-    ['orcarouter_model', 'TEXT'],
-    ['fastrouter_encrypted_key', 'TEXT'],
-    ['fastrouter_key_hint', 'TEXT'],
-    ['fastrouter_model', 'TEXT'],
-    ['provider', "TEXT DEFAULT 'openrouter'"],
-    // Per-user AI agent settings blob (JSON text): trigger word, behavior
-    // toggles/limits. Provider keys/models all live in their own columns now.
-    ['agent_settings', 'TEXT'],
-  ];
-  for (const [colName, colDef] of aiConfigNewCols) {
-    if (!aiConfigColNames.has(colName)) {
-      await tursoClient.execute({
-        sql: `ALTER TABLE bot_user_ai_config ADD COLUMN ${colName} ${colDef}`,
-      });
-    }
-  }
-
-  // One-time migration from the legacy bot_user_groq_key table (predates the
-  // multi-provider feature). Copies groq (encrypted_key/key_hint), openrouter
-  // and nvidia columns verbatim, promotes the openai/gemini key+model slots out
-  // of the agent_settings blob into their own columns, and folds the blob's
-  // activeProvider into the provider column. INSERT OR IGNORE + a final orphan
-  // check make the copy idempotent and safe to retry; the legacy table is
-  // dropped only once every row has been copied.
-  const legacyAiTable = await tursoClient.execute(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name='bot_user_groq_key'`,
-  );
-  if (legacyAiTable.rows.length > 0) {
-    const legacyAiRows = await tursoClient.execute(
-      `SELECT user_id, encrypted_key, key_hint, openrouter_encrypted_key,
-              openrouter_key_hint, nvidia_encrypted_key, nvidia_key_hint,
-              provider, groq_model, openrouter_model, nvidia_model,
-              agent_settings, created_at, updated_at
-       FROM bot_user_groq_key`,
-    );
-    const nowIso = () => new Date().toISOString();
-    for (const row of legacyAiRows.rows as Array<Record<string, unknown>>) {
-      const blob = parseAgentSettingsJson(String(row['agent_settings'] ?? ''));
-      const legacyProvider = row['provider'];
-      const blobProvider = blob['activeProvider'];
-      const provider =
-        typeof blobProvider === 'string' &&
-        isSupportedAiProvider(blobProvider) &&
-        String(blob[`${blobProvider}EncryptedKey`] ?? '').length > 0
-          ? blobProvider
-          : typeof legacyProvider === 'string' &&
-              isSupportedAiProvider(legacyProvider)
-            ? legacyProvider
-            : 'openrouter';
-      // Strip the provider slots out of the blob — agent behavior stays.
-      const cleanBlob: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(blob)) {
-        if (
-          k === 'activeProvider' ||
-          /^(openai|gemini)(EncryptedKey|KeyHint|Model)$/.test(k)
-        ) {
-          continue;
-        }
-        cleanBlob[k] = v;
-      }
-      await tursoClient.execute({
-        sql: `INSERT OR IGNORE INTO bot_user_ai_config
-                (user_id, openrouter_encrypted_key, openrouter_key_hint,
-                 openrouter_model, groq_encrypted_key, groq_key_hint,
-                 groq_model, nvidia_encrypted_key, nvidia_key_hint,
-                 nvidia_model, openai_encrypted_key, openai_key_hint,
-                 openai_model, gemini_encrypted_key, gemini_key_hint,
-                 gemini_model, provider, agent_settings, created_at, updated_at)
-              VALUES (:userId, :orKey, :orHint, :orModel, :gKey, :gHint,
-                      :gModel, :nvKey, :nvHint, :nvModel, :oaKey, :oaHint,
-                      :oaModel, :gmKey, :gmHint, :gmModel, :provider,
-                      :settings, :createdAt, :updatedAt)`,
-        args: {
-          userId: String(row['user_id']),
-          orKey: String(row['openrouter_encrypted_key'] ?? ''),
-          orHint: String(row['openrouter_key_hint'] ?? ''),
-          orModel: String(row['openrouter_model'] ?? ''),
-          gKey: String(row['encrypted_key'] ?? ''),
-          gHint: String(row['key_hint'] ?? ''),
-          gModel: String(row['groq_model'] ?? ''),
-          nvKey: String(row['nvidia_encrypted_key'] ?? ''),
-          nvHint: String(row['nvidia_key_hint'] ?? ''),
-          nvModel: String(row['nvidia_model'] ?? ''),
-          oaKey: String(blob['openaiEncryptedKey'] ?? ''),
-          oaHint: String(blob['openaiKeyHint'] ?? ''),
-          oaModel: String(blob['openaiModel'] ?? ''),
-          gmKey: String(blob['geminiEncryptedKey'] ?? ''),
-          gmHint: String(blob['geminiKeyHint'] ?? ''),
-          gmModel: String(blob['geminiModel'] ?? ''),
-          provider,
-          settings: JSON.stringify(cleanBlob),
-          createdAt: String(row['created_at'] ?? nowIso()),
-          updatedAt: String(row['updated_at'] ?? nowIso()),
-        },
-      });
-    }
-    // Drop the legacy table only once every row has been copied.
-    const orphanedAiRows = await tursoClient.execute(
-      `SELECT COUNT(*) AS cnt FROM bot_user_groq_key L
-       WHERE NOT EXISTS (
-         SELECT 1 FROM bot_user_ai_config N WHERE N.user_id = L.user_id
-       )`,
-    );
-    const orphanCount = Number(
-      (orphanedAiRows.rows[0] as unknown as { cnt: number }).cnt,
-    );
-    if (orphanCount === 0) {
-      await tursoClient.execute(`DROP TABLE IF EXISTS bot_user_groq_key`);
-    }
-  }
-
   // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
-  // Same idempotent-outside-the-fast-path pattern as bot_user_groq_key above, so
-  // already-initialised databases pick up this table without a manual migration.
+  // Idempotent table outside the fast-path so already-initialised databases
+  // pick it up without a manual migration.
   await tursoClient.execute(`
     CREATE TABLE IF NOT EXISTS bot_user_timezone (
       user_id     TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
@@ -402,7 +183,7 @@ export async function initDb(): Promise<void> {
   }
 
   // bot_credential_fluxer — same idempotent-outside-the-fast-path pattern as
-  // bot_user_groq_key above, so already-initialised databases pick up the Fluxer
+  // the tables above, so already-initialised databases pick up the Fluxer
   // credential table without a manual migration. Created unconditionally so every
   // database converges on the full schema regardless of when it was bootstrapped.
   await tursoClient.execute(`
