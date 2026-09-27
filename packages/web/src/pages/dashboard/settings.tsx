@@ -1,152 +1,126 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import {
+  User,
+  UserPen,
+  Mail,
+  Palette,
+  Globe,
+  ShieldCheck,
+  KeyRound,
+  LockKeyhole,
+  Trash2,
+  TriangleAlert,
+  Check,
+  ChevronRight,
+} from 'lucide-react'
 import Skeleton from '@/components/ui/feedback/Skeleton'
-import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
-import Badge from '@/components/ui/data-display/Badge'
 import Dialog from '@/components/ui/overlay/Dialog'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
-import DataList from '@/components/ui/data-display/DataList'
-import Divider from '@/components/ui/layout/Divider'
-import ThemeToggle from '@/components/ui/ThemeToggle'
 import TimezoneSelect from '@/components/ui/forms/TimezoneSelect'
+import { useTheme, type AppTheme } from '@/contexts/ThemeContext'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { useSnackbar } from '@/contexts/SnackbarContext'
 import { ROUTES } from '@/constants/routes.constants'
+import { cn } from '@/utils/cn.util'
 
 // ============================================================================
-// Page
+// Small presentational pieces matching bot_manager_settings.html
 // ============================================================================
 
-function SettingsPageSkeleton() {
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-6 max-w-2xl pb-12" aria-busy="true">
-      {/* Page header */}
-      <div className="flex flex-col gap-1.5">
-        <Skeleton variant="text" textSize="headline-sm" width="140px" />
-        <Skeleton variant="text" textSize="body-sm" width="280px" />
-      </div>
-
-      {/* ── Appearance ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div className="flex flex-col gap-1.5">
-            <Skeleton variant="text" textSize="title-md" width="120px" />
-            <Skeleton variant="text" textSize="body-sm" width="320px" />
-          </div>
-        </Card.Header>
-        <Skeleton variant="pill" height={48} className="w-full" />
-      </Card.Root>
-
-      {/* ── Timezone ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div className="flex flex-col gap-1.5">
-            <Skeleton variant="text" textSize="title-md" width="96px" />
-            <Skeleton variant="text" textSize="body-sm" width="280px" />
-          </div>
-        </Card.Header>
-        <Skeleton variant="input" height={44} className="w-full max-w-sm" />
-      </Card.Root>
-
-      {/* ── Profile ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div className="flex flex-col gap-1.5">
-            <Skeleton variant="text" textSize="title-md" width="80px" />
-            <Skeleton variant="text" textSize="body-sm" width="260px" />
-          </div>
-        </Card.Header>
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between py-2 border-b border-hairline">
-            <Skeleton variant="text" textSize="label-md" width="48px" />
-            <Skeleton variant="text" textSize="body-sm" width="55%" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Skeleton variant="text" textSize="label-md" width="88px" />
-            <Skeleton variant="input" height={44} className="w-full" />
-          </div>
-        </div>
-      </Card.Root>
-
-      {/* ── Unified save bar ── */}
-      <Skeleton variant="pill" height={40} width="140px" className="self-end" />
-
-      {/* ── Security ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div className="flex flex-col gap-1.5">
-            <Skeleton variant="text" textSize="title-md" width="96px" />
-            <Skeleton variant="text" textSize="body-sm" width="280px" />
-          </div>
-        </Card.Header>
-        <div className="flex flex-col gap-4">
-          <Skeleton variant="input" height={44} className="w-full" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Skeleton variant="input" height={44} className="w-full" />
-            <Skeleton variant="input" height={44} className="w-full" />
-          </div>
-          <div className="flex justify-end pt-1">
-            <Skeleton variant="pill" height={36} width="160px" />
-          </div>
-        </div>
-      </Card.Root>
-
-      {/* ── Danger Zone ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-error/50"
-      >
-        <Card.Header>
-          <div className="flex flex-col gap-1.5">
-            <Skeleton variant="text" textSize="title-md" width="112px" />
-            <Skeleton variant="text" textSize="body-sm" width="280px" />
-          </div>
-        </Card.Header>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <Skeleton variant="text" textSize="body-sm" width="70%" />
-          <Skeleton variant="pill" height={40} width="132px" />
-        </div>
-      </Card.Root>
+    <div className="flex items-center justify-between px-1">
+      <h2 className="text-xs font-semibold text-[#8B95A2] uppercase tracking-wider">
+        {children}
+      </h2>
     </div>
   )
 }
 
+function RowChevron({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex items-center pl-3 flex-shrink-0', className ?? 'text-[#5D6775]')}>
+      <ChevronRight className="w-4 h-4" strokeWidth={2} />
+    </div>
+  )
+}
+
+function IconWell({
+  children,
+  tone = 'default',
+  size = 'md',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+  size?: 'md' | 'lg'
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg border flex items-center justify-center flex-shrink-0',
+        size === 'lg' ? 'w-11 h-11' : 'w-9 h-9',
+        tone === 'accent' &&
+          'bg-[rgba(16,185,129,0.12)] border-[rgba(16,185,129,0.3)] text-[#10B981]',
+        tone === 'danger' &&
+          'bg-[rgba(239,68,68,0.12)] border-[rgba(239,68,68,0.28)] text-[#EF4444]',
+        tone === 'default' && 'bg-[#191D22] border-[#242930] text-[#8B95A2]',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function SettingsPageSkeleton() {
+  return (
+    <div className="flex flex-col gap-0 max-w-[420px] w-full mx-auto md:mx-0 pb-8" aria-busy="true">
+      <div className="px-5 pt-4 space-y-6">
+        {[0, 1, 2].map((s) => (
+          <section key={s} className="space-y-2">
+            <Skeleton textSize="body-sm" width="96px" />
+            <div className="bg-[#13161A] border border-[#242930] rounded-xl overflow-hidden">
+              <div className="p-3.5 flex items-center gap-3.5">
+                <Skeleton variant="input" width={36} height={36} />
+                <div className="flex flex-col gap-2">
+                  <Skeleton textSize="body-sm" width="140px" />
+                  <Skeleton textSize="body-sm" width="100px" />
+                </div>
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Page — bot_manager_settings.html structure, real application logic
+// ============================================================================
+
+const THEME_OPTIONS: { id: AppTheme; label: string; dot: string }[] = [
+  { id: 'aqua', label: 'Aqua', dot: 'bg-[#10B981]' },
+  { id: 'burnt', label: 'Burnt', dot: 'bg-amber-500/80' },
+  { id: 'indigo', label: 'Indigo', dot: 'bg-indigo-500/80' },
+]
+
 export default function SettingsPage() {
   const { isEmailEnabled } = useEmailServiceEnabled()
+  const { success, error: notifyError } = useSnackbar()
+  const { theme, setTheme } = useTheme()
 
-  const { data: session, isPending: sessionLoading } =
-    authUserClient.useSession()
+  const { data: session, isPending: sessionLoading } = authUserClient.useSession()
 
-  // ── Timezone state ──────────────────────────────────────────────────────────
+  // ── Timezone ──
   const {
     timezone: activeTimezone,
     savedTimezone,
@@ -155,25 +129,30 @@ export default function SettingsPage() {
     setTimezone: persistTimezone,
   } = useTimezone()
   const [timezoneDraft, setTimezoneDraft] = useState<string | null>(null)
-
   const timezoneValue = timezoneDraft ?? activeTimezone
   const timezoneDirty = timezoneDraft !== null && timezoneDraft !== savedTimezone
 
-  // ── Profile state ──────────────────────────────────────────────────────────
+  // ── Profile ──
   const [profileName, setProfileName] = useState('')
   const [nameInitialized, setNameInitialized] = useState(false)
-
+  const [nameEditorOpen, setNameEditorOpen] = useState(false)
   if (session?.user?.name && !nameInitialized) {
     setProfileName(session.user.name)
     setNameInitialized(true)
   }
-
   const profileDirty =
-    nameInitialized &&
-    profileName.trim() !== '' &&
-    profileName.trim() !== (session?.user?.name ?? '')
+    nameInitialized && profileName.trim() !== '' && profileName.trim() !== (session?.user?.name ?? '')
+  const displayName = nameInitialized ? profileName || session?.user?.name || '' : (session?.user?.name ?? '')
+  const email = session?.user?.email ?? ''
+  const verified = Boolean(session?.user?.emailVerified)
+  const initials = (displayName || email || 'U')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 
-  // ── Password state ─────────────────────────────────────────────────────────
+  // ── Password ──
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -181,11 +160,11 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
 
   const handleChangePassword = async (): Promise<void> => {
     setPasswordError(null)
     setPasswordSuccess(false)
-
     if (newPassword !== confirmPassword) {
       setPasswordError('New passwords do not match')
       return
@@ -194,14 +173,12 @@ export default function SettingsPage() {
       setPasswordError('New password must be at least 8 characters')
       return
     }
-
     setPasswordSaving(true)
     const { error } = await authUserClient.changePassword({
       currentPassword,
       newPassword,
       revokeOtherSessions: true,
     })
-
     if (error) {
       setPasswordError(error.message ?? 'Failed to change password')
     } else {
@@ -214,7 +191,31 @@ export default function SettingsPage() {
     setPasswordSaving(false)
   }
 
-  // ── Delete account state ───────────────────────────────────────────────────
+  const handleSendResetCode = async (): Promise<void> => {
+    setResetError(null)
+    try {
+      await apiClient.post('/api/v1/validate/reset-password/request', {
+        email: email || '',
+        adminOnly: false,
+      })
+      setResetSent(true)
+      success('Verification code sent to email')
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Failed to send reset code')
+    }
+  }
+
+  const handleRevokeSessions = async (): Promise<void> => {
+    try {
+      const { error } = await authUserClient.revokeOtherSessions()
+      if (error) throw new Error(error.message ?? 'Failed to sign out other sessions')
+      success('All other sessions signed out')
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : 'Failed to sign out other sessions')
+    }
+  }
+
+  // ── Delete account ──
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -227,27 +228,16 @@ export default function SettingsPage() {
     }
     setDeleteError(null)
     setIsDeleting(true)
-
-    // Password is required here because the /delete-user route only accepts
-    // the request without it when the session is younger than 1 day
-    // (sensitiveSessionMiddleware). The full data wipe runs server-side via
-    // the deleteUser beforeDelete hook.
-    const { error } = await authUserClient.deleteUser({
-      password: deletePassword,
-    })
-
+    const { error } = await authUserClient.deleteUser({ password: deletePassword })
     if (error) {
       setDeleteError(error.message ?? 'Failed to delete account')
       setIsDeleting(false)
       return
     }
-
-    // better-auth clears the session cookie on success — hard-redirect so the
-    // auth state provider re-mounts cleanly on the public route.
     window.location.assign(ROUTES.LOGIN)
   }
 
-  // ── Unified save — Timezone + Profile ────
+  // ── Unified save — Timezone + Profile ──
   const hasUnsavedChanges = timezoneDirty || profileDirty
   const [isSavingAll, setIsSavingAll] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -258,24 +248,18 @@ export default function SettingsPage() {
     setSaveSuccess(false)
     setIsSavingAll(true)
     try {
-      if (timezoneDirty && timezoneDraft) {
-        await persistTimezone(timezoneDraft)
-      }
+      if (timezoneDirty && timezoneDraft) await persistTimezone(timezoneDraft)
       if (profileDirty) {
-        const { error } = await authUserClient.updateUser({
-          name: profileName.trim(),
-        })
+        const { error } = await authUserClient.updateUser({ name: profileName.trim() })
         if (error) throw new Error(error.message ?? 'Failed to update profile')
       }
       setTimezoneDraft(null)
+      setNameEditorOpen(false)
       setSaveSuccess(true)
+      success('Settings saved successfully')
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      const e = err as { response?: { data?: { error?: string } } }
-      setSaveError(
-        e.response?.data?.error ??
-          (err instanceof Error ? err.message : 'Failed to save changes'),
-      )
+      setSaveError(err instanceof Error ? err.message : 'Failed to save changes')
     } finally {
       setIsSavingAll(false)
     }
@@ -284,379 +268,482 @@ export default function SettingsPage() {
   const handleCancelChanges = (): void => {
     setTimezoneDraft(null)
     setProfileName(session?.user?.name ?? '')
+    setNameEditorOpen(false)
     setSaveError(null)
     setSaveSuccess(false)
   }
 
-  const isPageLoading = sessionLoading || timezoneLoading
-
-  if (isPageLoading) {
-    return <SettingsPageSkeleton />
-  }
+  if (sessionLoading || timezoneLoading) return <SettingsPageSkeleton />
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl pb-12">
+    <div className="flex flex-col max-w-[420px] w-full mx-auto md:mx-0 pb-8">
       <Helmet>
         <title>Settings · Cat-Bot</title>
       </Helmet>
 
-      {/* Page header */}
-      <div>
-        <h1 className="text-headline-sm font-bold text-on-surface tracking-tight md:hidden">
-          Settings
-        </h1>
-        <p className="mt-1 text-body-sm text-on-surface-variant md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
-          Manage your profile and account security.
-        </p>
-      </div>
-
-      {/* ── Appearance ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div>
-            <Card.Title as="h2">Appearance</Card.Title>
-            <Card.Description>
-              Select the interface theme. Choose only one option: Aqua, Burnt, or Indigo.
-            </Card.Description>
-          </div>
-        </Card.Header>
-        <ThemeToggle />
-      </Card.Root>
-
-      {/* ── Timezone ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div className="flex items-start justify-between w-full">
-            <div>
-              <Card.Title as="h2">Timezone</Card.Title>
-              <Card.Description>
-                Used across the dashboard for timestamps, logs, and bot
-                notices — like ban messages sent on your behalf.
-              </Card.Description>
-            </div>
-            {timezoneDirty && (
-              <Badge color="primary" size="sm" variant="tonal" pill>
-                Unsaved
-              </Badge>
-            )}
-          </div>
-        </Card.Header>
-
-        {timezoneLoading ? (
-          <Skeleton variant="input" height={44} className="w-full max-w-sm" />
-        ) : (
-          <div className="flex flex-col gap-4">
-            <Field.Root className="max-w-sm">
-              <TimezoneSelect
-                value={timezoneValue}
-                onChange={(tz) => {
-                  setTimezoneDraft(tz)
-                }}
-              />
-            </Field.Root>
-
-            {!savedTimezone && !timezoneDirty && (
-              <p className="text-body-sm text-on-surface-variant">
-                No timezone saved yet — currently showing your browser's
-                timezone ({browserTimezone}). Pick one and click Save
-                Changes below.
-              </p>
-            )}
-          </div>
-        )}
-      </Card.Root>
-
-      {/* ── Profile ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div className="flex items-start justify-between w-full">
-            <div>
-              <Card.Title as="h2">Profile</Card.Title>
-              <Card.Description>
-                Update your display name and account information.
-              </Card.Description>
-            </div>
-            {profileDirty && (
-              <Badge color="primary" size="sm" variant="tonal" pill>
-                Unsaved
-              </Badge>
-            )}
-          </div>
-        </Card.Header>
-
-        <div className="flex flex-col gap-5">
-          {/* Email — display only */}
-          <DataList.Root size="sm">
-            <DataList.Item>
-              <DataList.ItemLabel>Email</DataList.ItemLabel>
-              <DataList.ItemValue>
-                {sessionLoading ? (
-                  <Skeleton textSize="body-sm" width="55%" />
-                ) : (
-                  <span className="text-body-sm font-medium text-on-surface">
-                    {session?.user?.email ?? '—'}
-                  </span>
-                )}
-              </DataList.ItemValue>
-            </DataList.Item>
-          </DataList.Root>
-
-          {/* Editable display name */}
-          <Field.Root>
-            <Field.Label>Display name</Field.Label>
-            <Input
-              value={profileName}
-              onChange={(e) => {
-                setProfileName(e.target.value)
-              }}
-              placeholder={sessionLoading ? 'Loading…' : 'Your name'}
-              disabled={sessionLoading}
-            />
-          </Field.Root>
-        </div>
-      </Card.Root>
-
-      {/* ── Unified save bar — Timezone + Profile ── */}
-      <div className="flex items-start gap-3">
-        <div className="flex-1">
-          {saveError && <p className="text-body-sm text-error">{saveError}</p>}
-          {saveSuccess && (
-            <p className="text-body-sm text-success">
-              Changes saved successfully.
-            </p>
-          )}
-        </div>
-        <Button
-          variant="outline"
-          color="neutral"
-          onClick={handleCancelChanges}
-          disabled={!hasUnsavedChanges || isSavingAll}
-        >
-          Cancel
-        </Button>
-        <Button
-          variant="filled"
-          color="primary"
-          onClick={() => void handleSaveChanges()}
-          disabled={!hasUnsavedChanges || isSavingAll}
-          isLoading={isSavingAll}
-        >
-          Save Changes
-        </Button>
-      </div>
-
-      <Divider spacing="sm" />
-
-      {/* ── Security ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-hairline"
-      >
-        <Card.Header>
-          <div>
-            <Card.Title as="h2">Security</Card.Title>
-            <Card.Description>
-              Change your password. All other sessions will be signed out on
-              success.
-            </Card.Description>
-          </div>
-        </Card.Header>
-
-        <div className="flex flex-col gap-4">
-          {isEmailEnabled && (
-            <>
-              {/* Quick reset code shortcut */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-surface-container-highest/40 rounded-[var(--radius-card)] border border-hairline">
-                <div>
-                  <p className="text-label-lg font-semibold text-on-surface">
-                    Password Reset
-                  </p>
-                  <p className="text-body-sm text-on-surface-variant">
-                    Send a 6-digit reset code to your email address.
-                  </p>
+      <div className="pt-4 space-y-6">
+        {/* ── PROFILE ── */}
+        <section aria-label="Account Settings" className="space-y-2">
+          <SectionTitle>Profile</SectionTitle>
+          <div className="bg-[#13161A] border border-[#242930] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            {/* Identity */}
+            <article className="p-3.5 flex items-center justify-between">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell tone="accent" size="lg">
+                  <User className="w-5 h-5 text-[#10B981]" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-semibold text-[#F1F4F8] truncate leading-snug">
+                      {displayName || '—'}
+                    </span>
+                    <span
+                      className={cn(
+                        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border',
+                        verified
+                          ? 'bg-[#191D22] text-[#10B981] border-[rgba(16,185,129,0.3)]'
+                          : 'bg-[#191D22] text-[#8B95A2] border-[#242930]',
+                      )}
+                    >
+                      {verified ? 'Verified' : 'Unverified'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[#8B95A2] truncate mt-0.5">{email || '—'}</span>
                 </div>
+              </div>
+              <span
+                className="flex items-center justify-center w-7 h-7 rounded-md bg-[#191D22] border border-[#242930] font-mono text-[11px] font-semibold text-[#F1F4F8] flex-shrink-0 ml-3"
+                aria-hidden="true"
+              >
+                {initials}
+              </span>
+            </article>
+
+            {/* Display name — expands inline editor */}
+            <article
+              role="button"
+              tabIndex={0}
+              aria-expanded={nameEditorOpen}
+              onClick={() => setNameEditorOpen((v) => !v)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setNameEditorOpen((v) => !v)
+                }
+              }}
+              className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/60 active:bg-[#1E232A] active:opacity-[0.82] cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 focus-visible:ring-inset"
+            >
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell>
+                  <UserPen className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-[#F1F4F8] truncate leading-snug">
+                    Display Name
+                  </span>
+                  <span className="text-xs text-[#8B95A2] truncate mt-0.5">
+                    {displayName || '—'}
+                    {profileDirty && <span className="text-[#10B981]"> · Unsaved</span>}
+                  </span>
+                </div>
+              </div>
+              <RowChevron />
+            </article>
+            {nameEditorOpen && (
+              <div className="p-3.5 pt-0">
+                <Field.Root>
+                  <Input
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    aria-label="Display name"
+                    className="h-11 text-sm"
+                  />
+                </Field.Root>
+              </div>
+            )}
+
+            {/* Email — display only */}
+            <article
+              role="button"
+              tabIndex={0}
+              onClick={() => success('Email address cannot be changed')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  success('Email address cannot be changed')
+                }
+              }}
+              className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/60 active:bg-[#1E232A] active:opacity-[0.82] cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 focus-visible:ring-inset"
+            >
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell>
+                  <Mail className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-[#F1F4F8] truncate leading-snug">
+                    Primary Email
+                  </span>
+                  <span className="text-xs text-[#8B95A2] truncate mt-0.5">{email || '—'}</span>
+                </div>
+              </div>
+              <RowChevron />
+            </article>
+          </div>
+        </section>
+
+        {/* ── APPEARANCE ── */}
+        <section aria-label="Appearance Settings" className="space-y-2">
+          <SectionTitle>Appearance</SectionTitle>
+          <div className="bg-[#13161A] border border-[#242930] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            <div className="p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3.5 min-w-0">
+                  <IconWell>
+                    <Palette className="w-4 h-4 text-[#10B981]" strokeWidth={2} />
+                  </IconWell>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#F1F4F8] leading-snug">
+                      Interface Theme
+                    </span>
+                    <span className="text-xs text-[#8B95A2] mt-0.5">
+                      Select active colorway: Aqua, Burnt, or Indigo
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-1" role="radiogroup" aria-label="Interface theme">
+                {THEME_OPTIONS.map((opt) => {
+                  const active = theme === opt.id
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => {
+                        setTheme(opt.id)
+                        success(`Interface theme set to: ${opt.label}`)
+                      }}
+                      className={cn(
+                        'flex items-center justify-center space-x-2 py-2 px-2.5 rounded-lg text-xs font-medium transition-colors duration-100 active:opacity-[0.82] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40',
+                        active
+                          ? 'bg-[rgba(16,185,129,0.12)] border-2 border-[#10B981] text-[#F1F4F8]'
+                          : 'bg-[#191D22] border border-[#242930] text-[#8B95A2] hover:text-[#F1F4F8]',
+                      )}
+                    >
+                      <span className={cn('w-3 h-3 rounded-full flex-shrink-0', opt.dot)} />
+                      <span className={cn(active && 'font-semibold text-[#10B981]')}>
+                        {opt.label}
+                      </span>
+                      {active && <Check className="w-3 h-3 text-[#10B981] ml-auto" strokeWidth={2.5} />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── REGIONAL ── */}
+        <section aria-label="Regional Settings" className="space-y-2">
+          <SectionTitle>Regional</SectionTitle>
+          <div className="bg-[#13161A] border border-[#242930] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            <div className="p-3.5 space-y-2.5">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell>
+                  <Globe className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-[#F1F4F8] leading-snug">Timezone</span>
+                  <span className="text-xs text-[#8B95A2] mt-0.5">
+                    Used across dashboard timestamps and logs
+                    {timezoneDirty && <span className="text-[#10B981]"> · Unsaved</span>}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-1">
+                <TimezoneSelect
+                  value={timezoneValue}
+                  onChange={(tz) => setTimezoneDraft(tz)}
+                />
+              </div>
+              {!savedTimezone && !timezoneDirty && (
+                <p className="text-[11px] text-[#5D6775] leading-normal px-0.5">
+                  Currently showing your browser's detected timezone ({browserTimezone}).
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ── SECURITY ── */}
+        <section aria-label="Security Settings" className="space-y-2">
+          <SectionTitle>Security</SectionTitle>
+          <div className="bg-[#13161A] border border-[#242930] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            {/* Sessions */}
+            <article
+              role="button"
+              tabIndex={0}
+              onClick={() => void handleRevokeSessions()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  void handleRevokeSessions()
+                }
+              }}
+              className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/60 active:bg-[#1E232A] active:opacity-[0.82] cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 focus-visible:ring-inset"
+            >
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell tone="accent">
+                  <ShieldCheck className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-[#F1F4F8] leading-snug">
+                    Two-Factor & Sessions
+                  </span>
+                  <span className="text-xs text-[#10B981] mt-0.5 flex items-center space-x-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] inline-block" />
+                    <span>Tap to sign out all other sessions</span>
+                  </span>
+                </div>
+              </div>
+              <RowChevron />
+            </article>
+
+            {/* Reset code */}
+            {isEmailEnabled && (
+              <article className="p-3.5 flex items-center justify-between">
+                <div className="flex items-center space-x-3.5 min-w-0">
+                  <IconWell>
+                    <KeyRound className="w-4 h-4" strokeWidth={2} />
+                  </IconWell>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#F1F4F8] leading-snug">
+                      Password Reset Code
+                    </span>
+                    <span className="text-xs text-[#8B95A2] mt-0.5">
+                      Send a 6-digit verification code to email
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={resetSent}
+                  onClick={() => void handleSendResetCode()}
+                  className="px-2.5 py-1 text-xs font-semibold rounded bg-[#191D22] hover:bg-[#1E232A] active:opacity-[0.82] border border-[#242930] text-[#F1F4F8] transition-colors duration-100 disabled:opacity-60 flex-shrink-0 ml-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
+                >
+                  {resetSent ? 'Code Sent' : 'Send Code'}
+                </button>
+              </article>
+            )}
+            {resetError && (
+              <div className="p-3.5">
+                <Alert variant="tonal" color="error" title={resetError} size="sm" />
+              </div>
+            )}
+            {resetSent && (
+              <div className="p-3.5 space-y-3">
+                <Alert
+                  variant="tonal"
+                  color="success"
+                  title="Check your email"
+                  message="We've sent you a 6-digit code to reset your password."
+                  size="sm"
+                />
                 <Button
+                  as={Link}
+                  to={`${ROUTES.RESET_PASSWORD}?email=${encodeURIComponent(email || '')}`}
                   variant="tonal"
                   color="primary"
                   size="sm"
-                  onClick={async () => {
-                    setResetSent(true)
-                    await apiClient.post(
-                      '/api/v1/validate/reset-password/request',
-                      {
-                        email: session?.user?.email || '',
-                        adminOnly: false,
-                      },
-                    )
-                  }}
-                  disabled={resetSent}
+                  className="self-start"
                 >
-                  {resetSent ? 'Code Sent' : 'Send Reset Code'}
+                  Enter the code
                 </Button>
               </div>
-              {resetSent && (
-                <div className="flex flex-col gap-3">
+            )}
+
+            {/* Change password inline form */}
+            <div className="p-3.5 space-y-3">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell>
+                  <LockKeyhole className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-[#F1F4F8] leading-snug">
+                    Change Password
+                  </span>
+                  <span className="text-xs text-[#8B95A2] mt-0.5">
+                    Requires verification of existing credential
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2 pt-1">
+                <div>
+                  <label
+                    htmlFor="settings-current-password"
+                    className="block text-[11px] font-medium text-[#8B95A2] mb-1"
+                  >
+                    Current Password
+                  </label>
+                  <PasswordInput
+                    id="settings-current-password"
+                    placeholder="Enter current password"
+                    value={currentPassword}
+                    onChange={(e) => {
+                      setCurrentPassword(e.target.value)
+                      setPasswordError(null)
+                    }}
+                    disabled={passwordSaving}
+                    autoComplete="current-password"
+                    className="h-11 text-xs"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="settings-new-password"
+                    className="block text-[11px] font-medium text-[#8B95A2] mb-1"
+                  >
+                    New Password
+                  </label>
+                  <PasswordInput
+                    id="settings-new-password"
+                    placeholder="At least 8 characters"
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value)
+                      setPasswordError(null)
+                    }}
+                    disabled={passwordSaving}
+                    autoComplete="new-password"
+                    className="h-11 text-xs"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="settings-confirm-password"
+                    className="block text-[11px] font-medium text-[#8B95A2] mb-1"
+                  >
+                    Confirm New Password
+                  </label>
+                  <PasswordInput
+                    id="settings-confirm-password"
+                    placeholder="Repeat new password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value)
+                      setPasswordError(null)
+                    }}
+                    disabled={passwordSaving}
+                    autoComplete="new-password"
+                    className="h-11 text-xs"
+                  />
+                </div>
+                {passwordError && (
+                  <Alert variant="tonal" color="error" title={passwordError} size="sm" />
+                )}
+                {passwordSuccess && (
                   <Alert
                     variant="tonal"
                     color="success"
-                    title="Check your email"
-                    message="We've sent you a 6-digit code to reset your password."
+                    title="Password changed successfully."
+                    message="All other sessions have been signed out."
                     size="sm"
                   />
-                  <Button
-                    as={Link}
-                    to={`${ROUTES.RESET_PASSWORD}?email=${encodeURIComponent(session?.user?.email || '')}`}
-                    variant="tonal"
-                    color="primary"
-                    size="sm"
-                    className="self-start"
+                )}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleChangePassword()}
+                    disabled={
+                      passwordSaving || !currentPassword || !newPassword || !confirmPassword
+                    }
+                    className="w-full h-9 px-3 rounded-lg bg-[#191D22] hover:bg-[#1E232A] active:opacity-[0.82] border border-[#242930] active:border-[#10B981] text-[#F1F4F8] font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
                   >
-                    Enter the code
-                  </Button>
+                    {passwordSaving ? 'Updating…' : 'Update Password'}
+                  </button>
                 </div>
-              )}
-              <Divider spacing="sm" />
-            </>
-          )}
-
-          <Field.Root>
-            <Field.Label>Current password</Field.Label>
-            <PasswordInput
-              value={currentPassword}
-              onChange={(e) => {
-                setCurrentPassword(e.target.value)
-                setPasswordError(null)
-              }}
-              placeholder="Enter current password"
-              disabled={passwordSaving}
-            />
-          </Field.Root>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field.Root>
-              <Field.Label>New password</Field.Label>
-              <PasswordInput
-                value={newPassword}
-                onChange={(e) => {
-                  setNewPassword(e.target.value)
-                  setPasswordError(null)
-                }}
-                placeholder="At least 8 characters"
-                disabled={passwordSaving}
-              />
-            </Field.Root>
-
-            <Field.Root>
-              <Field.Label>Confirm new password</Field.Label>
-              <PasswordInput
-                value={confirmPassword}
-                onChange={(e) => {
-                  setConfirmPassword(e.target.value)
-                  setPasswordError(null)
-                }}
-                placeholder="Repeat new password"
-                disabled={passwordSaving}
-              />
-            </Field.Root>
+              </div>
+            </div>
           </div>
+        </section>
 
-          {passwordError && (
-            <Alert
-              variant="tonal"
-              color="error"
-              title={passwordError}
-              size="sm"
-            />
-          )}
-          {passwordSuccess && (
-            <Alert
-              variant="tonal"
-              color="success"
-              title="Password changed successfully."
-              message="All other sessions have been signed out."
-              size="sm"
-            />
-          )}
-
-          <div className="flex justify-end pt-1">
-            <Button
-              variant="filled"
-              color="primary"
-              size="sm"
+        {/* ── DANGER ZONE ── */}
+        <section aria-label="Destructive Actions" className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs font-semibold text-[#EF4444]/90 uppercase tracking-wider flex items-center space-x-1.5">
+              <TriangleAlert className="w-3.5 h-3.5 text-[#EF4444]" strokeWidth={2} />
+              <span>Danger Zone</span>
+            </h2>
+          </div>
+          <div className="bg-[#13161A] border border-[rgba(239,68,68,0.28)] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            <article
+              role="button"
+              tabIndex={0}
               onClick={() => {
-                void handleChangePassword()
+                setDeletePassword('')
+                setDeleteError(null)
+                setDeleteDialogOpen(true)
               }}
-              disabled={
-                passwordSaving ||
-                !currentPassword ||
-                !newPassword ||
-                !confirmPassword
-              }
-              isLoading={passwordSaving}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setDeletePassword('')
+                  setDeleteError(null)
+                  setDeleteDialogOpen(true)
+                }
+              }}
+              className="p-3.5 flex items-center justify-between hover:bg-[rgba(239,68,68,0.12)]/40 active:bg-[rgba(239,68,68,0.12)] active:opacity-[0.82] cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444]/40 focus-visible:ring-inset"
             >
-              Change password
-            </Button>
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell tone="danger">
+                  <Trash2 className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-[#F1F4F8] leading-snug">
+                    Delete Account
+                  </span>
+                  <span className="text-xs text-[#8B95A2] mt-0.5">
+                    Permanently erase profile, bots, and chat logs
+                  </span>
+                </div>
+              </div>
+              <RowChevron className="text-[#EF4444]" />
+            </article>
           </div>
-        </div>
-      </Card.Root>
+        </section>
 
-      {/* ── Danger Zone ── */}
-      <Card.Root
-        variant="elevated"
-        shadowElevation={1}
-        padding="md"
-        className="border border-error/50"
-      >
-        <Card.Header>
-          <div>
-            <Card.Title as="h2">Danger Zone</Card.Title>
-            <Card.Description>
-              Permanently delete your account and all associated data.
-            </Card.Description>
+        {/* ── Cancel / Save ── */}
+        {(saveError || saveSuccess) && (
+          <div className="px-1">
+            {saveError && <p className="text-xs text-[#EF4444]">{saveError}</p>}
+            {saveSuccess && <p className="text-xs text-[#10B981]">Changes saved successfully.</p>}
           </div>
-        </Card.Header>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <p className="text-body-sm text-on-surface-variant">
-            Deleting your account permanently removes your profile, chats,
-            sessions, and connected bot credentials. This action cannot be
-            undone.
-          </p>
-          <Button
-            variant="tonal"
-            color="error"
-            size="md"
-            className="flex-shrink-0"
-            onClick={() => {
-              setDeletePassword('')
-              setDeleteError(null)
-              setDeleteDialogOpen(true)
-            }}
+        )}
+        <div className="pt-2 flex items-center space-x-3">
+          <button
+            type="button"
+            onClick={handleCancelChanges}
+            disabled={!hasUnsavedChanges || isSavingAll}
+            className="flex-1 h-11 px-4 rounded-lg bg-[#191D22] hover:bg-[#1E232A] active:opacity-[0.82] border border-[#242930] text-[#8B95A2] hover:text-[#F1F4F8] font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
           >
-            Delete Account
-          </Button>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSaveChanges()}
+            disabled={!hasUnsavedChanges || isSavingAll}
+            className="flex-1 h-11 px-4 rounded-lg bg-[#10B981] hover:bg-emerald-400 active:bg-emerald-600 active:opacity-[0.82] text-[#070B0E] font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-[#0A0C0E]"
+          >
+            <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>{isSavingAll ? 'Saving…' : 'Save Changes'}</span>
+          </button>
         </div>
-      </Card.Root>
+      </div>
 
-      {/* Delete account confirmation dialog — requires the current password
-          (the /delete-user route only skips it for sessions younger than 1 day). */}
+      {/* Delete confirmation dialog */}
       <Dialog.Root
         open={deleteDialogOpen}
         onOpenChange={(open) => {
@@ -673,9 +760,9 @@ export default function SettingsPage() {
               <Dialog.CloseTrigger />
             </Dialog.Header>
             <Dialog.Body>
-              <p className="text-body-sm text-on-surface-variant">
-                This permanently deletes your account, chat history, sessions,
-                and connected bot credentials. This action cannot be undone.
+              <p className="text-sm text-[#8B95A2]">
+                This permanently deletes your account, chat history, sessions, and connected bot
+                credentials. This action cannot be undone.
               </p>
               <Field.Root>
                 <Field.Label>Confirm password</Field.Label>
@@ -689,32 +776,18 @@ export default function SettingsPage() {
                   disabled={isDeleting}
                 />
               </Field.Root>
-              {deleteError && (
-                <Alert
-                  variant="tonal"
-                  color="error"
-                  title={deleteError}
-                  size="sm"
-                />
-              )}
+              {deleteError && <Alert variant="tonal" color="error" title={deleteError} size="sm" />}
             </Dialog.Body>
             <Dialog.Footer>
               <Dialog.CloseTrigger asChild>
-                <Button
-                  variant="text"
-                  color="neutral"
-                  size="sm"
-                  disabled={isDeleting}
-                >
+                <Button variant="text" color="neutral" size="sm" disabled={isDeleting}>
                   Cancel
                 </Button>
               </Dialog.CloseTrigger>
               <Button
                 color="error"
                 size="sm"
-                onClick={() => {
-                  void handleDeleteAccount()
-                }}
+                onClick={() => void handleDeleteAccount()}
                 isLoading={isDeleting}
                 disabled={isDeleting || !deletePassword}
               >

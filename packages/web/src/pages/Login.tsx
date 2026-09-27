@@ -1,6 +1,7 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
@@ -37,8 +38,7 @@ export default function LoginPage() {
   const validate = (): LoginErrors => {
     const e: LoginErrors = {}
     if (!form.email) e.email = 'Email is required.'
-    else if (!/\S+@\S+\.\S+/.test(form.email))
-      e.email = 'Enter a valid email address.'
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email address.'
     if (!form.password) e.password = 'Password is required.'
     return e
   }
@@ -62,12 +62,9 @@ export default function LoginPage() {
       await login(form.email, form.password, rememberMe)
       navigate(ROUTES.DASHBOARD.ROOT)
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Login failed. Please try again.'
+      const msg = err instanceof Error ? err.message : 'Login failed. Please try again.'
       if (msg.toLowerCase().includes('verif')) {
-        navigate(
-          `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`,
-        )
+        navigate(`${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`)
         return
       }
       setApiError(msg)
@@ -77,118 +74,121 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16 overflow-hidden">
+    <div className="bg-[#0A0C0E] text-[#F1F4F8] min-h-[calc(100vh-48px)] flex flex-col">
       <Helmet>
         <title>Log In · Cat-Bot</title>
       </Helmet>
 
-      {/* Ambient glow — same treatment as the marketing pages, so auth
-          never feels like a separate, less-considered surface */}
-      <div className="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/[0.06] blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-tertiary/[0.05] blur-[100px]" />
-
-      <div
-        className="relative z-10 w-full max-w-[400px] flex flex-col gap-7"
-        style={{ animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both' }}
-      >
-        {/* Brand mark */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <Logo className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-1.5">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
+      <main className="flex-1 flex flex-col w-full max-w-sm mx-auto px-5 pb-8">
+        <div className="flex flex-col w-full my-auto py-10">
+          {/* Hero */}
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="relative w-16 h-16 rounded-xl bg-[#13161A] border border-[#242930] flex items-center justify-center mb-4">
+              <div className="absolute inset-0 rounded-xl bg-[#10B981]/10" />
+              <Logo className="w-8 h-8 text-[#10B981] relative z-10" />
+            </div>
+            <h1 className="text-[32px] font-bold text-[#F1F4F8] tracking-tight mb-1">
               Welcome back
             </h1>
-            <p className="text-body-sm text-on-surface-variant">
+            <p className="text-sm text-[#8B95A2] max-w-xs leading-relaxed">
               Sign in to manage your bots across Discord, Telegram, and Fluxer.
             </p>
           </div>
-        </div>
 
-        {/* Form card — frosted glass with a top-edge specular catch */}
-        <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-5">
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-col gap-4"
-          >
-            <Field.Root invalid={!!errors.email} required>
-              <Field.Label>Email</Field.Label>
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={handleChange('email')}
-                autoComplete="email"
-              />
-              <Field.ErrorText>{errors.email}</Field.ErrorText>
-            </Field.Root>
+          {/* Form card */}
+          <div className="w-full bg-[#13161A] border border-[#242930] rounded-xl p-6 flex flex-col gap-5">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+              <Field.Root invalid={!!errors.email} required>
+                <Field.Label>
+                  Email <span className="text-[#EF4444]">*</span>
+                </Field.Label>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={handleChange('email')}
+                  autoComplete="email"
+                  className="h-14"
+                />
+                <Field.ErrorText>{errors.email}</Field.ErrorText>
+              </Field.Root>
 
-            <Field.Root invalid={!!errors.password} required>
-              <div className="flex items-center justify-between mb-1.5">
-                <Field.Label className="mb-0">Password</Field.Label>
-                {isEmailEnabled && (
-                  <Link
-                    to={ROUTES.FORGOT_PASSWORD}
-                    className="text-label-sm text-primary hover:opacity-80 transition-opacity duration-fast"
-                  >
-                    Forgot password?
-                  </Link>
-                )}
+              <Field.Root invalid={!!errors.password} required>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Field.Label className="mb-0">
+                    Password <span className="text-[#EF4444]">*</span>
+                  </Field.Label>
+                  {isEmailEnabled && (
+                    <Link
+                      to={ROUTES.FORGOT_PASSWORD}
+                      className="text-xs text-[#10B981] hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
+                </div>
+                <PasswordInput
+                  placeholder="Your password"
+                  value={form.password}
+                  onChange={handleChange('password')}
+                  autoComplete="current-password"
+                  className="h-14"
+                />
+                <Field.ErrorText>{errors.password}</Field.ErrorText>
+              </Field.Root>
+
+              <div className="flex items-center justify-between py-1">
+                <Checkbox label="Remember me" checked={rememberMe} onChange={setRememberMe} />
               </div>
-              <PasswordInput
-                placeholder="Your password"
-                value={form.password}
-                onChange={handleChange('password')}
-                autoComplete="current-password"
-              />
-              <Field.ErrorText>{errors.password}</Field.ErrorText>
-            </Field.Root>
 
-            <Checkbox
-              label="Remember me"
-              checked={rememberMe}
-              onChange={setRememberMe}
-            />
+              {apiError && (
+                <Alert variant="tonal" color="error" title="Login Failed" message={apiError} />
+              )}
 
-            {apiError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Login Failed"
-                message={apiError}
-              />
-            )}
+              <Button
+                type="submit"
+                variant="filled"
+                color="primary"
+                size="lg"
+                fullWidth
+                isLoading={isLoading}
+                rightIcon={<ArrowRight className="h-[18px] w-[18px]" />}
+                className="h-12 rounded-lg text-[15px] font-semibold"
+              >
+                Log in
+              </Button>
+            </form>
+          </div>
 
-            <Button
-              type="submit"
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isLoading}
-              className="mt-1"
-            >
-              Log in
-            </Button>
-          </form>
+          {/* Redirect */}
+          <div className="flex items-center justify-center py-6 text-center">
+            <p className="text-sm text-[#8B95A2]">
+              Don&apos;t have an account?
+              <Button
+                as={Link}
+                to={ROUTES.SIGNUP}
+                variant="link"
+                color="primary"
+                size="sm"
+                className="ml-1 font-semibold"
+              >
+                Sign up free
+              </Button>
+            </p>
+          </div>
+
+          {/* Mini footer */}
+          <div className="flex flex-col items-center justify-center gap-1 text-center">
+            <div className="flex items-center gap-1.5 text-[#8B95A2]">
+              <Logo className="w-4 h-4" />
+              <span className="text-[15px] font-semibold">Cat-Bot</span>
+            </div>
+            <span className="text-xs text-[#5D6775]">
+              Multi-platform bot management — open source
+            </span>
+          </div>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-body-sm text-on-surface-variant">
-          Don&apos;t have an account?{' '}
-          <Button
-            as={Link}
-            to={ROUTES.SIGNUP}
-            variant="link"
-            color="primary"
-            size="sm"
-          >
-            Sign up free
-          </Button>
-        </p>
-      </div>
+      </main>
     </div>
   )
 }

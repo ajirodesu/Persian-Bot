@@ -77,14 +77,11 @@
     background: rgb(var(--color-outline) / 0.8);
   }
 
-  /* Display serif for the big editorial headings only (h1–h3); small
-     headings (h4–h6) use the UI sans at a semibold weight so dense app
-     screens stay clean and neutral — a display serif at 14–16px reads
-     fussy and hurts scannability. */
+  /* Bot Manager: Inter everywhere — no serif display face. */
   h1,
   h2,
   h3 {
-    font-family: var(--font-family-brand);
+    font-family: var(--font-family-plain);
   }
 
   h4,

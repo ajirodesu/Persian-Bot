@@ -22,7 +22,6 @@ import { ROUTES } from '@/constants/routes.constants'
 import {
   H_HEIGHT,
   H_PX,
-  H_LOGO_ICON,
   H_BRAND_TEXT,
   H_SIDEBAR_WIDTH,
   H_SIDEBAR_NAV,
@@ -72,12 +71,11 @@ function SidebarNav({
 }) {
   return (
     <div className="flex h-full flex-col">
-      {/* Sidebar header — aligns with content header */}
+      {/* Identity row — h-14, Lucide Cat 28px accent + 17px brand */}
       <div
         className={cn(
-          'flex items-center border-b border-hairline shrink-0 transition-colors duration-normal',
-          H_HEIGHT,
-          collapsed ? 'justify-center px-0' : H_PX,
+          'flex items-center h-14 px-6 border-b border-[#242930]/40 shrink-0',
+          collapsed && 'justify-center px-0',
         )}
       >
         <Link
@@ -87,21 +85,20 @@ function SidebarNav({
             if (collapsed) onToggleCollapsed?.()
           }}
           title={collapsed ? 'Cat-Bot Admin' : undefined}
-          className={cn(
-            'flex items-center gap-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
-            H_BRAND_TEXT,
-          )}
+          className="flex items-center gap-3.5 text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg font-semibold tracking-tight"
         >
-          <Logo className={H_LOGO_ICON} />
-          {!collapsed && 'Cat-Bot Admin'}
+          <span className="flex items-center justify-center flex-shrink-0 text-[#10B981]">
+            <Logo className="h-7 w-7" />
+          </span>
+          {!collapsed && <span className="text-[17px] leading-none">Cat-Bot Admin</span>}
         </Link>
       </div>
 
-      {/* Primary nav */}
+      {/* Primary nav — px-3.5 pt-5 space-y-1.5 drawer spec */}
       <nav
         className={cn(
-          'flex-1 flex flex-col gap-0.5 overflow-y-auto',
-          collapsed ? 'items-center px-0 py-3' : 'px-2.5 py-3',
+          'flex-1 flex flex-col gap-0 overflow-y-auto',
+          collapsed ? 'items-center px-0 py-3 space-y-1.5' : 'px-3.5 pt-5 space-y-1.5',
         )}
         aria-label="Admin navigation"
       >
@@ -132,48 +129,61 @@ function SidebarNav({
               title={collapsed ? label : undefined}
               className={cn(
                 H_SIDEBAR_NAV,
-                'rounded-[var(--radius-input)] font-medium transition-colors duration-fast',
-                collapsed && 'justify-center gap-0 px-0',
+                collapsed && 'justify-center !gap-0 !px-0',
                 isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-on-surface-variant hover:bg-on-surface/[var(--state-hover-opacity)] hover:text-on-surface',
+                  ? 'bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.2)] font-semibold text-[#10B981]'
+                  : 'border border-transparent font-medium text-[#8B95A2] hover:bg-[#191D22] hover:text-[#F1F4F8] active:bg-[#1E232A] active:opacity-[0.85]',
               )}
             >
-              <Icon className={cn(H_SIDEBAR_ICON, 'shrink-0')} />
-              {!collapsed && label}
+              <span
+                className={cn(
+                  'flex items-center justify-center flex-shrink-0 transition-colors duration-100',
+                  isActive ? 'text-[#10B981]' : 'text-[#8B95A2]',
+                )}
+              >
+                <Icon className={H_SIDEBAR_ICON} />
+              </span>
+              {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           )
         })}
       </nav>
 
-      {/* Sidebar footer — collapse toggle + version hint */}
-      <div
-        className={cn(
-          'border-t border-hairline transition-colors duration-normal',
-          collapsed ? 'flex justify-center px-0 py-2' : 'flex items-center justify-between px-4 py-3',
-        )}
-      >
-        {!collapsed && (
-          <p className="text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
-            Admin Panel
-          </p>
-        )}
-        {onToggleCollapsed && (
-          <IconButton
-            variant="text"
-            size="sm"
-            icon={
-              collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )
-            }
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={onToggleCollapsed}
-          />
-        )}
+      {/* Footer — ADMIN scope label + live dot, collapse toggle */}
+      <div className="border-t border-[#242930]/60">
+        <div
+          className={cn(
+            'py-4 flex items-center',
+            collapsed ? 'justify-center px-0' : 'justify-between px-6',
+          )}
+        >
+          {!collapsed && (
+            <>
+              <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#5D6775] font-medium">
+                Admin Panel
+              </span>
+              <span className="flex items-center space-x-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+              </span>
+            </>
+          )}
+          {onToggleCollapsed && (
+            <IconButton
+              variant="text"
+              size="sm"
+              icon={
+                collapsed ? (
+                  <PanelLeftOpen className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )
+              }
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={onToggleCollapsed}
+            />
+          )}
+        </div>
       </div>
     </div>
   )
@@ -348,11 +358,6 @@ export default function AdminSidebarLayout() {
   // identical treatment.
   const isFilesWorkspace =
     activePath === ROUTES.ADMIN.FILES || activePath === ROUTES.ADMIN.GIT
-  // Mobile only: false while the page is pinned to the top, so the content
-  // header renders "invisible" (just the hamburger + avatar floating over
-  // the page) until the user scrolls, at which point the surface, border,
-  // and page title fade in. Desktop always shows the full header.
-  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false)
 
   const [prevPath, setPrevPath] = useState(activePath)
   if (activePath !== prevPath) {
@@ -375,13 +380,6 @@ export default function AdminSidebarLayout() {
       document.body.style.overflow = ''
     }
   }, [mobileOpen])
-
-  useEffect(() => {
-    const onScroll = () => setIsHeaderScrolled(window.scrollY > 4)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [activePath])
 
   const handleLogout = () => {
     logout()
@@ -442,18 +440,10 @@ export default function AdminSidebarLayout() {
           isFilesWorkspace && 'h-dvh sticky top-0 overflow-hidden',
         )}
       >
-        {/* Content header */}
+        {/* Content header — Bot Manager bar */}
         <div
           className={cn(
-            'sticky top-0 z-sticky flex items-center transition-colors duration-normal',
-            // Mobile only: no surface/border while pinned to the top — just
-            // the hamburger and avatar float over the page. Scrolling
-            // reveals the same surface/border every other dashboard header
-            // uses. Desktop always shows the full header, regardless of
-            // scroll position.
-            isHeaderScrolled
-              ? 'glass-surface border-b border-hairline'
-              : 'bg-transparent border-b border-transparent md:glass-surface md:border-hairline',
+            'sticky top-0 z-[100] flex items-center bg-[#0A0C0E] border-b border-[#242930]',
             H_HEIGHT,
             H_PX,
           )}
@@ -478,12 +468,10 @@ export default function AdminSidebarLayout() {
             {currentLabel}
           </span>
 
-          {/* Mobile: page title — absolutely centred, fades in with the
-              rest of the header chrome once scrolled */}
+          {/* Mobile: page title — centred Bot Manager title */}
           <div
             className={cn(
-              'absolute inset-0 flex items-center justify-center pointer-events-none md:hidden transition-opacity duration-normal',
-              isHeaderScrolled ? 'opacity-100' : 'opacity-0',
+              'absolute inset-0 flex items-center justify-center pointer-events-none md:hidden',
             )}
           >
             <span

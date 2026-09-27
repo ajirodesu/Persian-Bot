@@ -1,0 +1,138 @@
+/* ============================================================
+   BOT MANAGER — GLOBAL VISUAL SOURCE OF TRUTH
+   Overrides every theme with the unified Bot Manager tokens.
+   Imported LAST in globals.css so it wins over theme files.
+
+   Background  #0A0C0E | Elevated #13161A | Secondary #191D22
+   Hover       #1E232A | Border   #242930 | Divider   #1C2026
+   Text        #F1F4F8 | 2nd      #8B95A2 | 3rd       #5D6775
+   Accent      #10B981 | Muted    rgba(16,185,129,.12)
+   ============================================================ */
+
+:root,
+html[data-theme='aqua'],
+html[data-theme='burnt'],
+html[data-theme='indigo'] {
+  --font-family-brand: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-plain: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  /* Primary accent family → emerald */
+  --color-primary: 16 185 129;
+  --color-on-primary: 7 11 14;
+  --color-primary-container: 16 185 129;
+  --color-on-primary-container: 7 11 14;
+
+  /* Secondary / tertiary → Bot Manager grays */
+  --color-secondary: 139 149 162;
+  --color-on-secondary: 10 12 14;
+  --color-secondary-container: 25 29 34;
+  --color-on-secondary-container: 241 244 248;
+  --color-tertiary: 16 185 129;
+  --color-on-tertiary: 7 11 14;
+  --color-tertiary-container: 25 29 34;
+  --color-on-tertiary-container: 241 244 248;
+
+  /* Surfaces → Bot Manager */
+  --color-surface: 10 12 14;
+  --color-on-surface: 241 244 248;
+  --color-surface-variant: 93 103 117;
+  --color-on-surface-variant: 139 149 162;
+  --color-surface-container-lowest: 10 12 14;
+  --color-surface-container-low: 19 22 26;
+  --color-surface-container: 19 22 26;
+  --color-surface-container-high: 25 29 34;
+  --color-surface-container-highest: 30 35 42;
+  --color-surface-bright: 139 149 162;
+  --color-surface-dim: 10 12 14;
+
+  --color-inverse-surface: 241 244 248;
+  --color-inverse-on-surface: 10 12 14;
+  --color-inverse-primary: 16 185 129;
+
+  --color-outline: 36 41 48;
+  --color-outline-variant: 28 32 38;
+
+  --color-scrim: 0 0 0;
+  --color-shadow: 0 0 0;
+
+  /* Status: success → emerald, keep error/warning legible */
+  --color-success: 16 185 129;
+  --color-on-success: 7 11 14;
+  --color-success-container: 16 185 129;
+  --color-on-success-container: 7 11 14;
+  --color-error: 244 63 94;
+  --color-on-error: 255 255 255;
+  --color-error-container: 46 16 26;
+  --color-on-error-container: 253 164 175;
+  --color-warning: 245 158 11;
+  --color-on-warning: 38 22 0;
+  --color-warning-container: 46 32 10;
+  --color-on-warning-container: 252 211 120;
+  --color-info: 16 185 129;
+  --color-on-info: 7 11 14;
+  --color-info-container: 25 29 34;
+  --color-on-info-container: 241 244 248;
+
+  /* Kill decorative systems: hairline borders, flat surfaces, no glow */
+  --color-hairline-border: #242930;
+  --glass-bg: #13161a;
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-border: #242930;
+  --color-input-bg: #191d22;
+  --color-input-border: #242930;
+
+  --shadow-soft-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-soft-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-soft-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-card-rest: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-focus-ring: 0 0 0 2px rgba(16, 185, 129, 0.4);
+  --shadow-avatar-glow: none;
+
+  --ambient-glow-opacity: 0;
+  --ambient-glow-primary: transparent;
+  --ambient-glow-secondary: transparent;
+  --specular-highlight: transparent;
+
+  color-scheme: dark;
+}
+
+/* Restrained shape scale: 8 / 10-12 / 12-16 / 16-20 */
+:root {
+  --radius-card: 1rem;
+  --radius-card-lg: 1.25rem;
+  --radius-button: 0.625rem;
+  --radius-input: 0.625rem;
+  --radius-badge: 0.5rem;
+  --radius-compact: 0.5rem;
+}
+
+/* Neutralize vibe-code utilities globally */
+.glass-surface {
+  background-color: #13161a !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.surface-specular::before {
+  display: none !important;
+}
+.ambient-glow,
+.ambient-glow-primary,
+.ambient-glow-secondary {
+  display: none !important;
+}
+.glow-ring,
+.avatar-glow {
+  box-shadow: none !important;
+}
+.text-gradient-accent {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  color: #f1f4f8 !important;
+}
+.eyebrow-mono::before {
+  box-shadow: none !important;
+}

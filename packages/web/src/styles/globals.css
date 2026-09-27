@@ -28,7 +28,7 @@
   serif or proportional face would break alignment in code
   blocks and tabular data.
   ----------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@72..144,600;72..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* -----------------------------------------------------------
   Tailwind CSS v4 — CSS-first config.
@@ -83,3 +83,8 @@
   5. Keyframe Animations
   ----------------------------------------------------------- */
 @import './animations.css';
+
+/* -----------------------------------------------------------
+  6. Bot Manager — global visual source of truth (wins last)
+  ----------------------------------------------------------- */
+@import './bot-manager.css';

@@ -1,118 +1,262 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bot, Plus, ChevronRight } from 'lucide-react'
-import Button from '@/components/ui/buttons/Button'
-import Card from '@/components/ui/data-display/Card'
+import { Bot, Plus, ChevronRight, Check } from 'lucide-react'
 import Alert from '@/components/ui/feedback/Alert'
-import Badge from '@/components/ui/data-display/Badge'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import EmptyState from '@/components/ui/data-display/EmptyState'
-import Status from '@/components/ui/data-display/Status'
 import { ROUTES } from '@/constants/routes.constants'
 import { useBotList } from '@/features/users/hooks/useBotList'
 import { useBotStatus } from '@/features/users/hooks/useBotStatus'
 import type { GetBotListItemDto } from '@/features/users/dtos/bot.dto'
 import { getPlatformLabel } from '@/utils/bot.util'
 import { getPlatformIcon, getPlatformColors } from '@/components/icons/platform-icon.util'
+import { useSnackbar } from '@/contexts/SnackbarContext'
+import { cn } from '@/utils/cn.util'
 
 // ============================================================================
-// BotCard
+// Bot row — bot_manager_with_header_title.html grouped-row pattern
 // ============================================================================
 
-function BotCard({
+function BotRow({
   bot,
   onClick,
   isActive,
+  onCopyPrefix,
 }: {
   bot: GetBotListItemDto
   onClick: () => void
   isActive: boolean
+  onCopyPrefix: () => void
 }) {
-  const statusColor = isActive ? ('success' as const) : ('error' as const)
-  const statusLabel = isActive ? 'Online' : 'Offline'
   const platformColors = getPlatformColors(bot.platform)
 
   return (
-    <Card.Root
-      variant="elevated"
-      shadowElevation={1}
-      padding="md"
-      interactive
+    <article
+      role="button"
+      tabIndex={0}
+      aria-label={`Configure ${bot.nickname} bot`}
       onClick={onClick}
-      className="group hover:shadow-elevation-2 hover:border-outline-variant transition-all duration-normal border border-hairline"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/60 active:bg-[#1E232A] active:opacity-[0.82] cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 focus-visible:ring-inset"
     >
-      {/* Identity + live status */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-input)] ${platformColors}`}
-          >
-            {getPlatformIcon(bot.platform)}
-          </span>
-          <div className="min-w-0">
-            <p className="text-title-md font-semibold text-on-surface truncate tracking-tight">
+      <div className="flex items-center space-x-3 min-w-0">
+        {/* Platform icon — standard 36px optical square, original source SVG */}
+        <div
+          className={cn(
+            'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+            platformColors,
+          )}
+        >
+          {getPlatformIcon(bot.platform, 'h-4 w-4')}
+        </div>
+        {/* Title + prefix + status */}
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-semibold text-[#F1F4F8] truncate leading-snug">
               {bot.nickname}
-            </p>
-            <p className="mt-0.5 text-body-sm text-on-surface-variant">
-              {getPlatformLabel(bot.platform)}
-            </p>
+            </span>
+            <button
+              type="button"
+              title="Click to copy command prefix"
+              onClick={(e) => {
+                e.stopPropagation()
+                onCopyPrefix()
+              }}
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#191D22] text-[#8B95A2] border border-[#242930]/70 hover:border-[#10B981]/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
+            >
+              prefix:{' '}
+              <span className="text-[#F1F4F8] font-semibold ml-0.5">{bot.prefix}</span>
+            </button>
+          </div>
+          <div className="flex items-center space-x-1.5 mt-0.5">
+            <span
+              className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                isActive ? 'bg-[#10B981]' : 'bg-[#5D6775]',
+              )}
+            />
+            <span
+              className={cn(
+                'font-medium text-[11px]',
+                isActive ? 'text-[#10B981]' : 'text-[#5D6775]',
+              )}
+            >
+              {isActive ? 'Online' : 'Offline'}
+            </span>
           </div>
         </div>
-
-        <Status.Root colorPalette={statusColor} size="sm">
-          <Status.Indicator
-            colorPalette={statusColor}
-            size="sm"
-            pulse={isActive}
-          />
-          {statusLabel}
-        </Status.Root>
       </div>
-
-      {/* Prefix badge + chevron */}
-      <div className="mt-4 flex items-center justify-between">
-        <Badge
-          variant="tonal"
-          color="default"
-          className="font-mono text-label-sm"
-        >
-          <span className="text-on-surface-variant/50 mr-1">prefix</span>
-          {bot.prefix}
-        </Badge>
-        <ChevronRight className="h-4 w-4 text-on-surface-variant/30 group-hover:text-on-surface-variant/60 transition-colors duration-fast" />
+      {/* Chevron — consistent 16px optical alignment */}
+      <div className="flex items-center pl-3 flex-shrink-0 text-[#5D6775]">
+        <ChevronRight className="w-4 h-4" strokeWidth={2} />
       </div>
-    </Card.Root>
+    </article>
   )
 }
 
 // ============================================================================
-// BotCardSkeleton
+// Uptime card — live counter from the earliest active session start
 // ============================================================================
 
-function BotCardSkeleton() {
+const SECONDS_PER_MINUTE = 60
+const SECONDS_PER_HOUR = 3600
+const SECONDS_PER_DAY = 86400
+const SECONDS_PER_MONTH = 2592000
+const SECONDS_PER_YEAR = 31536000
+
+function useNowTick(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [active])
+  return now
+}
+
+function UptimeCard({ earliestStart, online, total }: { earliestStart: number | null; online: number; total: number }) {
+  const now = useNowTick(earliestStart !== null)
+  const operational = earliestStart !== null
+
+  let years = 0
+  let months = 0
+  let days = 0
+  let hours = 0
+  let minutes = 0
+  let seconds = 0
+  if (earliestStart !== null) {
+    let remainder = Math.max(0, Math.floor((now - earliestStart) / 1000))
+    years = Math.floor(remainder / SECONDS_PER_YEAR)
+    remainder %= SECONDS_PER_YEAR
+    months = Math.floor(remainder / SECONDS_PER_MONTH)
+    remainder %= SECONDS_PER_MONTH
+    days = Math.floor(remainder / SECONDS_PER_DAY)
+    remainder %= SECONDS_PER_DAY
+    hours = Math.floor(remainder / SECONDS_PER_HOUR)
+    remainder %= SECONDS_PER_HOUR
+    minutes = Math.floor(remainder / SECONDS_PER_MINUTE)
+    seconds = remainder % SECONDS_PER_MINUTE
+  }
+  const pad = (n: number) => String(n).padStart(2, '0')
+
+  const cells = [
+    { value: String(years), label: 'yr', live: false },
+    { value: String(months), label: 'mo', live: false },
+    { value: String(days), label: 'day', live: false },
+    { value: pad(hours), label: 'hr', live: false },
+    { value: pad(minutes), label: 'min', live: false },
+    { value: pad(seconds), label: 'sec', live: true },
+  ]
+
   return (
-    <Card.Root
-      variant="elevated"
-      padding="md"
-      shadowElevation={1}
-      className="border border-hairline"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Skeleton variant="input" width={40} height={40} />
-          <div className="flex flex-col gap-2 pt-0.5">
-            <Skeleton textSize="title-md" width="128px" />
-            <Skeleton textSize="body-sm" width="80px" />
+    <section aria-label="System Uptime Status">
+      <div className="bg-[#13161A] border border-[#242930] rounded-xl p-3.5 space-y-3">
+        {/* Status row + live badge */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="relative flex h-2 w-2">
+              {operational && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75" />
+              )}
+              <span
+                className={cn(
+                  'relative inline-flex rounded-full h-2 w-2',
+                  operational ? 'bg-[#10B981]' : 'bg-[#5D6775]',
+                )}
+              />
+            </span>
+            <span className="text-xs font-semibold text-[#F1F4F8] tracking-tight">
+              {operational ? 'System Operational' : 'System Idle'}
+            </span>
+          </div>
+          <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.3)] text-[#10B981] font-mono text-[11px] font-semibold">
+            <Check className="w-3 h-3 text-[#10B981]" strokeWidth={2} />
+            <span>
+              {online} of {total} online
+            </span>
           </div>
         </div>
-        <Skeleton variant="pill" width="64px" height="22px" />
+        {/* Elapsed breakdown */}
+        <div className="grid grid-cols-6 gap-1.5 pt-0.5">
+          {cells.map((c) => (
+            <div
+              key={c.label}
+              className={cn(
+                'bg-[#191D22]/80 border rounded-lg py-1.5 px-1 text-center',
+                c.live && operational
+                  ? 'border-[rgba(16,185,129,0.3)]'
+                  : 'border-[#1C2026]',
+              )}
+            >
+              <div
+                className={cn(
+                  'text-xs font-bold font-mono leading-tight',
+                  c.live && operational ? 'text-[#10B981]' : 'text-[#F1F4F8]',
+                )}
+              >
+                {c.value}
+              </div>
+              <div
+                className={cn(
+                  'text-[9px] uppercase tracking-wider font-medium mt-0.5',
+                  c.live && operational ? 'text-[#10B981]/70' : 'text-[#5D6775]',
+                )}
+              >
+                {c.label}
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Duration label */}
+        <div className="flex items-center justify-between text-[11px] text-[#5D6775] pt-0.5 px-0.5">
+          <span className="flex items-center space-x-1">
+            <span>Continuous uptime:</span>
+            <span className="font-mono text-[#8B95A2] font-medium">
+              {years}y {months}m {days}d {pad(hours)}:{pad(minutes)}:{pad(seconds)}
+            </span>
+          </span>
+          <span
+            className={cn(
+              'font-mono text-[10px] flex items-center space-x-1',
+              operational ? 'text-[#10B981]' : 'text-[#5D6775]',
+            )}
+          >
+            <span
+              className={cn(
+                'inline-block w-1 h-1 rounded-full',
+                operational ? 'bg-[#10B981]' : 'bg-[#5D6775]',
+              )}
+            />
+            <span>{operational ? 'LIVE' : 'IDLE'}</span>
+          </span>
+        </div>
       </div>
-      <div className="mt-4 flex items-center justify-between">
-        <Skeleton variant="pill" width="90px" height="26px" />
-        <Skeleton variant="pill" width={16} height={16} />
+    </section>
+  )
+}
+
+// ============================================================================
+// Loading skeletons mirroring the grouped rows
+// ============================================================================
+
+function BotRowSkeleton() {
+  return (
+    <div className="p-3.5 flex items-center justify-between" aria-hidden="true">
+      <div className="flex items-center space-x-3 min-w-0">
+        <Skeleton variant="input" width={36} height={36} />
+        <div className="flex flex-col gap-2">
+          <Skeleton textSize="body-sm" width="128px" />
+          <Skeleton textSize="body-sm" width="64px" />
+        </div>
       </div>
-    </Card.Root>
+      <Skeleton variant="pill" width={16} height={16} />
+    </div>
   )
 }
 
@@ -122,100 +266,121 @@ function BotCardSkeleton() {
 
 export default function BotManagerPage() {
   const navigate = useNavigate()
+  const { success } = useSnackbar()
   const { bots, isLoading, error } = useBotList()
 
   const sessionIds = useMemo(() => bots.map((b) => b.sessionId), [bots])
   const botStatuses = useBotStatus(sessionIds)
 
-  const onlineBots = bots.filter(
-    (b) => botStatuses[b.sessionId]?.active ?? false,
-  ).length
+  const onlineBots = bots.filter((b) => botStatuses[b.sessionId]?.active ?? false)
+
+  // Earliest live session start drives the uptime card (real data only).
+  // startedAt may arrive in ms or seconds — normalize to ms.
+  const earliestStart = useMemo(() => {
+    const starts = onlineBots
+      .map((b) => botStatuses[b.sessionId]?.startedAt ?? null)
+      .filter((s): s is number => typeof s === 'number')
+      .map((s) => (s < 1e12 ? s * 1000 : s))
+    return starts.length > 0 ? Math.min(...starts) : null
+  }, [onlineBots, botStatuses])
+
+  const handleCopyPrefix = async (prefix: string) => {
+    try {
+      await navigator.clipboard.writeText(prefix)
+      success(`Copied command prefix: "${prefix}"`)
+    } catch {
+      success(`Command prefix: "${prefix}"`)
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-0 max-w-[400px] w-full mx-auto md:max-w-2xl">
       <Helmet>
         <title>Bot Manager · Cat-Bot</title>
       </Helmet>
 
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-headline-sm font-bold text-on-surface tracking-tight md:hidden">
-            Bot Manager
-          </h1>
-          <p className="mt-1 flex items-center gap-1.5 text-body-sm text-on-surface-variant md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
-            Configure and monitor your deployed bots.
-            {isLoading ? (
-              /* Mirrors the "X of Y online" span's footprint so the header
-                 never reflows when the counts arrive. */
-              <Skeleton variant="text" width={96} className="ml-1.5" />
-            ) : (
-              bots.length > 0 && (
-                <span className="ml-1.5 text-success font-medium">
-                  {onlineBots} of {bots.length} online
-                </span>
-              )
-            )}
-          </p>
-        </div>
-
-        <Button
-          variant="filled"
-          color="primary"
-          size="md"
-          leftIcon={<Plus className="h-4 w-4" />}
+      {/* ── Primary CTA (h-11 emerald) ─────────────────────────────────── */}
+      <div className="pt-5 pb-5">
+        <button
+          type="button"
           onClick={() => navigate(ROUTES.DASHBOARD.CREATE_NEW_BOT)}
+          className="w-full h-11 px-4 rounded-lg bg-[#10B981] hover:bg-emerald-400 active:bg-emerald-600 active:opacity-[0.82] text-[#070B0E] font-semibold text-sm flex items-center justify-center space-x-2 transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-[#0A0C0E]"
         >
-          Create New Bot
-        </Button>
+          <Plus className="w-4 h-4" strokeWidth={2.2} />
+          <span className="tracking-tight">Create New Bot</span>
+        </button>
       </div>
 
-      {/* ── Loading ────────────────────────────────────────────────────── */}
-      {isLoading && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <BotCardSkeleton />
-          <BotCardSkeleton />
-          <BotCardSkeleton />
+      {/* ── Grouped list ───────────────────────────────────────────────── */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-semibold text-[#8B95A2] uppercase tracking-wider">
+            Active Instances
+          </h2>
         </div>
-      )}
 
-      {/* ── Error ──────────────────────────────────────────────────────── */}
-      {!isLoading && error !== null && (
-        <Alert
-          variant="tonal"
-          color="error"
-          title="Error loading bots"
-          message={error}
-        />
-      )}
+        {isLoading && (
+          <div className="bg-[#13161A] border border-[#242930] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            <BotRowSkeleton />
+            <BotRowSkeleton />
+          </div>
+        )}
 
-      {/* ── Empty ──────────────────────────────────────────────────────── */}
-      {!isLoading && error === null && bots.length === 0 && (
-        <EmptyState
-          icon={Bot}
-          title="No bots configured yet"
-          description="Create your first bot to start managing your messaging platforms."
-          action={{
-            label: 'Create New Bot',
-            onClick: () => navigate(ROUTES.DASHBOARD.CREATE_NEW_BOT),
-            icon: <Plus className="h-4 w-4" />,
-          }}
-        />
-      )}
+        {!isLoading && error !== null && (
+          <Alert
+            variant="tonal"
+            color="error"
+            title="Error loading bots"
+            message={error}
+          />
+        )}
 
-      {/* ── Bot grid ───────────────────────────────────────────────────── */}
-      {!isLoading && bots.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {bots.map((bot) => (
-            <BotCard
-              key={bot.sessionId}
-              bot={bot}
-              onClick={() =>
-                navigate(`${ROUTES.DASHBOARD.BOT}?id=${bot.sessionId}`)
-              }
-              isActive={botStatuses[bot.sessionId]?.active ?? false}
-            />
-          ))}
+        {!isLoading && error === null && bots.length === 0 && (
+          <EmptyState
+            icon={Bot}
+            title="No bots configured yet"
+            description="Create your first bot to start managing your messaging platforms."
+            action={{
+              label: 'Create New Bot',
+              onClick: () => navigate(ROUTES.DASHBOARD.CREATE_NEW_BOT),
+              icon: <Plus className="h-4 w-4" />,
+            }}
+          />
+        )}
+
+        {!isLoading && bots.length > 0 && (
+          <div className="bg-[#13161A] border border-[#242930] rounded-xl divide-y divide-[#1C2026] overflow-hidden">
+            {bots.map((bot) => (
+              <BotRow
+                key={bot.sessionId}
+                bot={bot}
+                onClick={() => navigate(`${ROUTES.DASHBOARD.BOT}?id=${bot.sessionId}`)}
+                isActive={botStatuses[bot.sessionId]?.active ?? false}
+                onCopyPrefix={() => void handleCopyPrefix(bot.prefix)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Platform hint under the list */}
+        {!isLoading && error === null && bots.length > 0 && (
+          <p className="px-1 pt-1 text-[11px] text-[#5D6775]">
+            {bots
+              .map((b) => getPlatformLabel(b.platform))
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .join(' · ')}
+          </p>
+        )}
+      </section>
+
+      {/* ── Uptime card ────────────────────────────────────────────────── */}
+      {!isLoading && error === null && bots.length > 0 && (
+        <div className="mt-4">
+          <UptimeCard
+            earliestStart={earliestStart}
+            online={onlineBots.length}
+            total={bots.length}
+          />
         </div>
       )}
     </div>

@@ -23,19 +23,16 @@
 // ─── Structural ────────────────────────────────────────────────────────────
 
 /**
- * Vertical footprint — 64 px baseline (56 px on mobile, < md, for a
- * trimmer header strip on small screens without touching desktop).
- * Scales up at ultra-wide viewports (3xl = 1920 px, 4xl = 2560 px).
+ * Bot Manager app-bar: 48px content height on every viewport.
+ * Desktop keeps the same bar and adds contextual actions inline —
+ * never a taller/different header.
  */
-export const H_HEIGHT =
-  'h-14 md:h-16 3xl:h-[4.5rem] 4xl:h-20' as const
+export const H_HEIGHT = 'h-12' as const
 
 /**
- * Horizontal padding on all nav / header containers. Tighter on mobile
- * (< md) so edge controls like the hamburger and profile icon sit closer
- * to the screen edges; unchanged on desktop.
+ * Bot Manager horizontal inset: 20px on every viewport.
  */
-export const H_PX = 'px-3 md:px-6' as const
+export const H_PX = 'px-5' as const
 
 /**
  * Desktop sidebar width (admin).
@@ -47,17 +44,14 @@ export const H_SIDEBAR_WIDTH = 'w-[var(--layout-sidebar-w)]' as const
 // ─── Logo & Brand ──────────────────────────────────────────────────────────
 
 /**
- * Cat logo icon dimensions — em-relative so the icon scales with the brand
- * text. Smaller on mobile (< md) to match the trimmer header; unchanged on
- * desktop.
+ * Cat logo icon dimensions — 20px Bot Manager optical size.
  */
-export const H_LOGO_ICON = 'h-8 w-8 md:h-10 md:w-10' as const
+export const H_LOGO_ICON = 'h-5 w-5' as const
 
 /**
- * Brand / page-title typography. One step down on mobile (< md) to match
- * the trimmer header; unchanged on desktop.
+ * Brand / page-title typography — 16px semibold Bot Manager title.
  */
-export const H_BRAND_TEXT = 'text-title-md md:text-title-lg font-semibold' as const
+export const H_BRAND_TEXT = 'text-base font-semibold' as const
 
 // ─── User / Admin Avatar ───────────────────────────────────────────────────
 
@@ -65,8 +59,7 @@ export const H_BRAND_TEXT = 'text-title-md md:text-title-lg font-semibold' as co
  * Circular avatar dimensions. One notch smaller on mobile (< md) to match
  * the trimmer header; unchanged on desktop. Scales at ultra-wide viewports.
  */
-export const H_AVATAR =
-  'h-8 w-8 md:h-9 md:w-9 3xl:h-10 3xl:w-10 4xl:h-11 4xl:w-11' as const
+export const H_AVATAR = 'h-7 w-7' as const
 
 /**
  * Typography inside avatar circle and dropdown header. One step down on
@@ -87,23 +80,22 @@ export const H_AVATAR_TEXT =
  * `!important` this override would be at the mercy of Tailwind's internal
  * stylesheet ordering rather than reliably winning.
  */
-// 36px/40px visual size (intentionally compact for a dense mobile header),
-// but both are under the 44px HIG minimum — hit-slop extends the actual
-// tap area without growing the header's visual footprint.
+// 36px Bot Manager control target with 20px glyph; 44px hit-slop
+// preserves touch ergonomics without growing the visual footprint.
 export const H_ICON_BTN_MOBILE =
-  'relative !w-9 !h-9 md:!w-10 md:!h-10 [&>svg]:!w-[18px] [&>svg]:!h-[18px] md:[&>svg]:!w-5 md:[&>svg]:!h-5 before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]' as const
+  'relative !w-9 !h-9 [&>svg]:!w-5 [&>svg]:!h-5 before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]' as const
 
 /** Chevron icon in menu triggers. */
 export const H_CHEVRON = 'h-4 w-4 3xl:h-5 3xl:w-5' as const
 
 // ─── Sidebar Navigation (Admin) ────────────────────────────────────────────
 
-/** Admin sidebar nav item classes. */
+/** Sidebar nav item — bot_manager drawer spec: h-14, px-4, rounded-2xl, 17px. */
 export const H_SIDEBAR_NAV =
-  'flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-input)] text-label-lg font-medium transition-colors duration-fast' as const
+  'flex items-center gap-4 px-4 h-14 rounded-2xl text-[17px] tracking-tight transition-colors duration-100' as const
 
-/** Icon size inside sidebar nav items. */
-export const H_SIDEBAR_ICON = 'h-4 w-4 shrink-0 3xl:h-5 3xl:w-5' as const
+/** Icon size inside sidebar nav items — 24px drawer spec. */
+export const H_SIDEBAR_ICON = 'h-6 w-6 shrink-0' as const
 
 // ─── Dropdown Panel ────────────────────────────────────────────────────────
 

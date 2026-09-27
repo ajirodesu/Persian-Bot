@@ -20,16 +20,14 @@ import {
 /**
  * Public shell — marketing and auth routes (/, /login, /signup, etc.)
  *
- * Header: 48px unified height, glass-morphism backdrop blur,
- * hairline border on scroll. Centred brand text on mobile, left-aligned
- * logo + brand on desktop. Auth CTAs on the right.
+ * Bot Manager AppHeader: 48px height, 20px inset, 36px controls,
+ * 1px #242930 separator. Centred brand on mobile, left logo on desktop.
  */
 export default function Layout() {
   const location = useLocation()
   const { isAuthenticated } = useUserAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [prevPath, setPrevPath] = useState(location.pathname)
-  const [scrolled, setScrolled] = useState(false)
 
   const isLogin = location.pathname === '/login'
   const isSignup = location.pathname === '/signup'
@@ -38,12 +36,6 @@ export default function Layout() {
     setPrevPath(location.pathname)
     setMobileOpen(false)
   }
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   useEffect(() => {
     if (!mobileOpen) return
@@ -55,19 +47,9 @@ export default function Layout() {
   }, [mobileOpen])
 
   return (
-    <div className="min-h-screen flex flex-col bg-surface text-on-surface">
-      {/* ── Header ── */}
-      <header
-        className={cn(
-          'sticky top-0 z-fixed transition-all duration-normal',
-          // Sticky header is one of the spec's named allowed vibrancy
-          // surfaces — migrated off hardcoded backdrop-blur-xl/md onto the
-          // shared --surface-blur-lg/md tokens (same material as Dialog/Select).
-          scrolled
-            ? 'bg-surface/85 [backdrop-filter:var(--surface-blur-lg)] border-b border-hairline shadow-elevation-1'
-            : 'bg-surface/60 [backdrop-filter:var(--surface-blur-md)] border-b border-hairline',
-        )}
-      >
+    <div className="min-h-screen flex flex-col bg-[#0A0C0E] text-[#F1F4F8]">
+      {/* ── Bot Manager AppHeader: h-12, px-5, 1px #242930 separator ── */}
+      <header className="sticky top-0 z-[100] bg-[#0A0C0E] border-b border-[#242930]">
         <nav
           className={cn(
             'relative max-w-6xl mx-auto flex items-center',
@@ -82,16 +64,18 @@ export default function Layout() {
             to="/"
             variant="unstyled"
             aria-label="Cat-Bot home"
-            className="flex items-center gap-2 text-title-lg font-semibold text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)]"
+            className="flex items-center gap-2 text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg"
           >
-            <Logo className={H_LOGO_ICON} />
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.3)]">
+              <Logo className={H_LOGO_ICON} />
+            </span>
           </UILink>
 
           {/* Desktop: brand text */}
           <Link
             to="/"
             className={cn(
-              'hidden md:inline-flex ml-2 text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
+              'hidden md:inline-flex ml-2 text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg tracking-tight',
               H_BRAND_TEXT,
             )}
           >
@@ -103,7 +87,7 @@ export default function Layout() {
             <Link
               to="/"
               className={cn(
-                'pointer-events-auto text-primary hover:opacity-75 transition-opacity duration-fast outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-[var(--radius-input)] font-semibold tracking-tight',
+                'pointer-events-auto text-[#F1F4F8] hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40 rounded-lg tracking-tight',
                 H_BRAND_TEXT,
               )}
             >
@@ -171,7 +155,7 @@ export default function Layout() {
             role="navigation"
             aria-label="Mobile navigation"
             className={cn(
-              'md:hidden border-t border-hairline bg-surface-container-low/95 [backdrop-filter:var(--surface-blur-lg)]',
+              'md:hidden border-t border-[#1C2026] bg-[#13161A]',
               '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
             )}
           >
@@ -222,15 +206,15 @@ export default function Layout() {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-hairline bg-surface-container-low/40">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <footer className="border-t border-[#242930] bg-[#0A0C0E]">
+        <div className="max-w-6xl mx-auto px-5 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Logo className="h-4 w-4 text-primary/70" />
-            <span className="text-label-sm text-on-surface-variant/60 font-medium tracking-tight">
+            <Logo className="h-4 w-4 text-[#8B95A2]" />
+            <span className="text-label-sm text-[#8B95A2] font-medium tracking-tight">
               Cat-Bot
             </span>
           </div>
-          <p className="text-label-sm text-on-surface-variant/50">
+          <p className="text-label-sm text-[#5D6775]">
             Multi-platform bot management — open source
           </p>
         </div>

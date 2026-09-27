@@ -1,6 +1,7 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { ArrowRight, Lock } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
@@ -68,120 +69,113 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-container-highest px-4 py-12 relative overflow-hidden">
+    <div className="bg-[#0A0C0E] text-[#F1F4F8] min-h-screen flex flex-col">
       <Helmet>
         <title>Admin · Cat-Bot</title>
       </Helmet>
 
-      {/* Subtle background */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle, rgb(var(--color-outline-variant) / 0.25) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
-
-      <div
-        className="relative w-full max-w-[380px] flex flex-col gap-7"
-        style={{ animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both' }}
-      >
-        {/* Lock icon + heading */}
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-error-container/40 border border-error/20">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-6 h-6 text-error"
-              aria-hidden="true"
-            >
-              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Admin Access
-            </h1>
-            <p className="text-body-sm text-on-surface-variant">
-              Restricted to authorised administrators only.
-            </p>
-          </div>
-        </div>
-
-        {/* Form card */}
-        <div className="rounded-2xl border border-outline-variant/70 bg-surface-container-low shadow-elevation-2 p-6 flex flex-col gap-5">
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-col gap-4"
-          >
-            <Field.Root invalid={!!errors.email} required>
-              <Field.Label>Email</Field.Label>
-              <Input
-                type="email"
-                placeholder="admin@example.com"
-                value={form.email}
-                onChange={handleChange('email')}
-                autoComplete="email"
-              />
-              <Field.ErrorText>{errors.email}</Field.ErrorText>
-            </Field.Root>
-
-            <Field.Root invalid={!!errors.password} required>
-              <div className="flex items-center justify-between mb-1.5">
-                <Field.Label className="mb-0">Password</Field.Label>
-                {isEmailEnabled && (
-                  <Link
-                    to={ROUTES.ADMIN.FORGOT_PASSWORD}
-                    className="text-label-sm text-primary hover:opacity-80 transition-opacity duration-fast"
-                  >
-                    Forgot password?
-                  </Link>
-                )}
+      <main className="flex-1 flex flex-col w-full px-5">
+        <div className="flex flex-col w-full items-center justify-between min-h-[calc(100vh-4rem)] py-6">
+          <div className="w-full max-w-sm flex flex-col items-center my-auto">
+            {/* Lock hero with live indicator */}
+            <div className="flex flex-col items-center text-center mb-8">
+              <div className="w-16 h-16 rounded-xl bg-[#13161A] border border-[#242930] flex items-center justify-center mb-4 relative">
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#10B981] ring-4 ring-[#0A0C0E]" />
+                <Lock className="text-[#10B981] w-8 h-8" strokeWidth={2} />
               </div>
-              <PasswordInput
-                placeholder="Password"
-                value={form.password}
-                onChange={handleChange('password')}
-                autoComplete="current-password"
-              />
-              <Field.ErrorText>{errors.password}</Field.ErrorText>
-            </Field.Root>
+              <h1 className="text-[28px] font-bold text-[#F1F4F8] tracking-tight mb-1">
+                Admin Access
+              </h1>
+              <p className="text-sm text-[#8B95A2] max-w-[260px] leading-relaxed">
+                Restricted to authorised administrators only.
+              </p>
+            </div>
 
-            {apiError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Access Denied"
-                message={apiError}
-              />
-            )}
+            {/* Form card */}
+            <div className="w-full bg-[#13161A] border border-[#242930] p-6 rounded-xl flex flex-col gap-4">
+              <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+                <Field.Root invalid={!!errors.email} required>
+                  <Field.Label>
+                    Email <span className="text-[#EF4444]">*</span>
+                  </Field.Label>
+                  <Input
+                    type="email"
+                    placeholder="admin@example.com"
+                    value={form.email}
+                    onChange={handleChange('email')}
+                    autoComplete="email"
+                    className="h-14 font-mono text-sm"
+                  />
+                  <Field.ErrorText>{errors.email}</Field.ErrorText>
+                </Field.Root>
 
-            <Button
-              type="submit"
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isLoading}
-              className="mt-1"
-            >
-              Sign in
-            </Button>
-          </form>
+                <Field.Root invalid={!!errors.password} required>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Field.Label className="mb-0">
+                      Password <span className="text-[#EF4444]">*</span>
+                    </Field.Label>
+                    {isEmailEnabled && (
+                      <Link
+                        to={ROUTES.ADMIN.FORGOT_PASSWORD}
+                        className="text-xs text-[#10B981] hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    )}
+                  </div>
+                  <PasswordInput
+                    placeholder="••••••••••••"
+                    value={form.password}
+                    onChange={handleChange('password')}
+                    autoComplete="current-password"
+                    className="h-14 font-mono text-sm"
+                  />
+                  <Field.ErrorText>{errors.password}</Field.ErrorText>
+                </Field.Root>
+
+                {/* Live verification indicator */}
+                {isLoading && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0A0C0E]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                    <span className="font-mono text-[#8B95A2] text-[11px]">
+                      Verifying credentials...
+                    </span>
+                  </div>
+                )}
+
+                {apiError && (
+                  <Alert
+                    variant="tonal"
+                    color="error"
+                    title="Access Denied"
+                    message={apiError}
+                  />
+                )}
+
+                <Button
+                  type="submit"
+                  variant="filled"
+                  color="primary"
+                  size="lg"
+                  fullWidth
+                  isLoading={isLoading}
+                  rightIcon={<ArrowRight className="h-[18px] w-[18px]" />}
+                  className="h-12 rounded-lg text-[15px] font-semibold mt-1"
+                >
+                  Sign in
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          {/* Dedicated admin footer */}
+          <footer className="w-full flex flex-col items-center justify-center pt-6 pb-2 text-center">
+            <p className="font-mono text-[#5D6775] text-[11px] tracking-widest uppercase">
+              Cat-Bot Admin Portal
+            </p>
+          </footer>
         </div>
-
-        <p className="text-center text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
-          Cat-Bot Admin Portal
-        </p>
-      </div>
+      </main>
     </div>
   )
 }

@@ -145,120 +145,141 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16">
+    <div className="bg-[#0A0C0E] text-[#F1F4F8] min-h-[calc(100vh-48px)] flex flex-col">
       <Helmet>
         <title>Sign Up · Cat-Bot</title>
       </Helmet>
 
-      <div
-        className="w-full max-w-[400px] flex flex-col gap-7"
-        style={{ animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both' }}
-      >
-        {/* Brand mark */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <Logo className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-1.5">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
+      <main className="flex-1 flex flex-col w-full max-w-sm mx-auto px-5 pb-8">
+        <div className="flex flex-col w-full my-auto py-10">
+          {/* Hero — 72px double-well mark per create_account.html */}
+          <section className="flex flex-col items-center text-center mb-8">
+            <div className="w-[72px] h-[72px] rounded-xl bg-[#13161A] border border-[#242930] flex items-center justify-center mb-5">
+              <div className="w-12 h-12 rounded-lg bg-[#191D22] border border-[#242930] flex items-center justify-center text-[#10B981]">
+                <Logo className="w-[30px] h-[30px]" />
+              </div>
+            </div>
+            <h1 className="text-[32px] font-bold text-[#F1F4F8] tracking-tight mb-1">
               Create your account
             </h1>
-            <p className="text-body-sm text-on-surface-variant">
+            <p className="text-sm text-[#8B95A2] max-w-[280px] leading-relaxed">
               Deploy bots across Discord, Telegram, and Fluxer in minutes.
             </p>
+          </section>
+
+          {/* Form card */}
+          <div className="w-full bg-[#13161A] border border-[#242930] rounded-xl p-6 mb-8">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+              <Field.Root invalid={!!errors.name} required>
+                <Field.Label>
+                  Full name <span className="text-[#EF4444]">*</span>
+                </Field.Label>
+                <Input
+                  type="text"
+                  placeholder="Jane Smith"
+                  value={form.name}
+                  onChange={handleChange('name')}
+                  autoComplete="name"
+                  className="h-[52px]"
+                />
+                <Field.ErrorText>{errors.name}</Field.ErrorText>
+              </Field.Root>
+
+              <Field.Root invalid={!!errors.email} required>
+                <Field.Label>
+                  Email <span className="text-[#EF4444]">*</span>
+                </Field.Label>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={handleChange('email')}
+                  autoComplete="email"
+                  className="h-[52px]"
+                />
+                <Field.ErrorText>{errors.email}</Field.ErrorText>
+              </Field.Root>
+
+              <Field.Root invalid={!!errors.password} required>
+                <Field.Label>
+                  Password <span className="text-[#EF4444]">*</span>
+                </Field.Label>
+                <PasswordInput
+                  placeholder="At least 8 characters"
+                  value={form.password}
+                  onChange={handleChange('password')}
+                  autoComplete="new-password"
+                  className="h-[52px]"
+                />
+                <Field.ErrorText>{errors.password}</Field.ErrorText>
+              </Field.Root>
+
+              <Field.Root invalid={!!errors.confirmPassword} required>
+                <Field.Label>
+                  Confirm password <span className="text-[#EF4444]">*</span>
+                </Field.Label>
+                <PasswordInput
+                  placeholder="Repeat your password"
+                  value={form.confirmPassword}
+                  onChange={handleChange('confirmPassword')}
+                  autoComplete="new-password"
+                  className="h-[52px]"
+                />
+                <Field.ErrorText>{errors.confirmPassword}</Field.ErrorText>
+              </Field.Root>
+
+              {apiError && (
+                <Alert
+                  variant="tonal"
+                  color="error"
+                  title="Sign-up Failed"
+                  message={apiError}
+                />
+              )}
+
+              <div className="pt-1">
+                <Button
+                  type="submit"
+                  variant="filled"
+                  color="primary"
+                  size="lg"
+                  fullWidth
+                  isLoading={isLoading}
+                  className="h-12 rounded-lg text-[15px] font-semibold"
+                >
+                  Create account
+                </Button>
+              </div>
+            </form>
           </div>
-        </div>
 
-        {/* Form card */}
-        <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-5">
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-col gap-4"
-          >
-            <Field.Root invalid={!!errors.name} required>
-              <Field.Label>Full name</Field.Label>
-              <Input
-                type="text"
-                placeholder="Jane Smith"
-                value={form.name}
-                onChange={handleChange('name')}
-                autoComplete="name"
-              />
-              <Field.ErrorText>{errors.name}</Field.ErrorText>
-            </Field.Root>
-
-            <Field.Root invalid={!!errors.email} required>
-              <Field.Label>Email</Field.Label>
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={handleChange('email')}
-                autoComplete="email"
-              />
-              <Field.ErrorText>{errors.email}</Field.ErrorText>
-            </Field.Root>
-
-            <Field.Root invalid={!!errors.password} required>
-              <Field.Label>Password</Field.Label>
-              <PasswordInput
-                placeholder="At least 8 characters"
-                value={form.password}
-                onChange={handleChange('password')}
-                autoComplete="new-password"
-              />
-              <Field.ErrorText>{errors.password}</Field.ErrorText>
-            </Field.Root>
-
-            <Field.Root invalid={!!errors.confirmPassword} required>
-              <Field.Label>Confirm password</Field.Label>
-              <PasswordInput
-                placeholder="Repeat your password"
-                value={form.confirmPassword}
-                onChange={handleChange('confirmPassword')}
-                autoComplete="new-password"
-              />
-              <Field.ErrorText>{errors.confirmPassword}</Field.ErrorText>
-            </Field.Root>
-
-            {apiError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Sign-up Failed"
-                message={apiError}
-              />
-            )}
-
+          {/* Redirect */}
+          <div className="flex items-center justify-center gap-1.5 mb-8">
+            <span className="text-sm text-[#8B95A2]">Already have an account?</span>
             <Button
-              type="submit"
-              variant="filled"
+              as={Link}
+              to={ROUTES.LOGIN}
+              variant="link"
               color="primary"
-              size="md"
-              fullWidth
-              isLoading={isLoading}
-              className="mt-1"
+              size="sm"
+              className="font-semibold min-h-[44px] inline-flex items-center"
             >
-              Create account
+              Log in
             </Button>
-          </form>
-        </div>
+          </div>
 
-        {/* Footer */}
-        <p className="text-center text-body-sm text-on-surface-variant">
-          Already have an account?{' '}
-          <Button
-            as={Link}
-            to={ROUTES.LOGIN}
-            variant="link"
-            color="primary"
-            size="sm"
-          >
-            Log in
-          </Button>
-        </p>
-      </div>
+          {/* Mini footer */}
+          <footer className="mt-auto flex flex-col items-center justify-center text-center gap-1 py-4">
+            <div className="flex items-center gap-1.5 text-[#8B95A2]">
+              <Logo className="w-4 h-4" />
+              <span className="text-xs font-medium">Cat-Bot</span>
+            </div>
+            <p className="font-mono text-xs text-[#8B95A2]">
+              Multi-platform bot management — open source
+            </p>
+          </footer>
+        </div>
+      </main>
     </div>
   )
 }
