@@ -26,11 +26,12 @@ export interface AiAgentCapabilitiesDto {
 export interface AiAgentSettingsDto {
   enabled: boolean
   needleUrl: string
-  /** Always masked — true when a token is stored, never the value. */
+  /** Always masked — true when a key is stored, never the value. */
   tokenConfigured: boolean
-  /** 'none' = unauthenticated service (normal) · 'token' = Service Token set. */
+  /** 'none' = no key stored · 'token' = NEEDLE_API_KEY set. */
   authMode: AiAgentAuthMode
   timeoutMs: number
+  maxNewTokens: number
   confidenceThreshold: number
   updatedAt: string
   lastSuccessAt: string
@@ -41,9 +42,9 @@ export interface AiAgentTestDto {
   /** Precise reason — never collapsed, never a secret. */
   detail: string | null
   capabilities: AiAgentCapabilitiesDto | null
-  /** Loaded model name from GET /model (only what the service returns). */
+  /** Loaded model name from GET /health (only what the service returns). */
   model: string | null
-  /** Inference endpoint used, e.g. /complete. */
+  /** Inference endpoint used, e.g. /v1/complete. */
   endpoint: string | null
   latencyMs: number | null
   lastCheckedAt: string
@@ -66,6 +67,7 @@ class AiAgentService {
     needleUrl: string
     token?: string
     timeoutMs: number
+    maxNewTokens: number
     confidenceThreshold: number
   }): Promise<AiAgentSettingsDto> {
     const response = await apiClient.put<AiAgentSettingsDto>(

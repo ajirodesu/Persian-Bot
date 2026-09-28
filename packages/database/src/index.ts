@@ -277,6 +277,7 @@ export type AiAgentConfigStoreValue = {
   needleUrl: string;
   encryptedToken: string;
   timeoutMs: number;
+  maxNewTokens: number;
   confidenceThreshold: number;
   updatedAt: string;
 };

@@ -3,31 +3,30 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 import type { NeedleToolDefinition } from './tool-schema.lib.js';
 
 /**
- * Needle 3 client — Persian-Bot → hosted Cactus Needle 3 (playground-style).
+ * Needle 3 client — Persian-Bot → standalone Wataru Needle 3 Render API.
  *
- * Live contract (verified against https://lanceajiro-needle.onrender.com):
- *   GET  /model                 → {"name": "needle3.cact"}
- *   POST /complete {query, tools} → Needle turn dict
+ * Live contract (verified against https://wataru-needle-3-api.onrender.com):
+ *   GET  /health       → {ok, model: "needle3", generation: 3, package_version}
+ *                          (503 while uninitialized — degraded, not ready)
+ *   POST /v1/complete  → native Needle turn dict, verbatim:
  *     {type, success, error, error_code, reason, function_calls: [{name,
  *      arguments: {...}}], suppressed_calls, reasoning, confidence,
  *      validation, prefill_tps, decode_tps, peak_ram_mb}
- *   POST /reset                 → {"ok": true}
  *
- * No /health, no /capabilities, no auth on inference. The stored base URL is
- * NEVER suffixed at rest — this client appends /model, /complete, /reset so
- * one URL serves every endpoint. An optional deployment-level Service Token
- * is sent as `Authorization: Bearer` when configured (harmless when the
- * service is unauthenticated). A Cactus Platform API key is NEVER required
- * for inference and is NEVER sent.
+ * Auth: `Authorization: Bearer ${NEEDLE_API_KEY}` (the server also accepts
+ * `X-API-Key`, but Bearer is canonical here). The key comes ONLY from the
+ * environment / encrypted dashboard store — it is never hardcoded, never
+ * logged, and never echoed back to any caller.
  *
- * Multi-turn: the hosted playground keeps ONE global agent (shared
- * conversation slot, reset when the toolset changes or /reset is called).
- * Remote session persistence therefore cannot be assumed — agent.ts drives
- * the loop with a locally-held transcript (full context in every query) and
- * calls /reset at the start/end of each AI sequence. Concurrent AI users
- * share the remote slot; this is safe because tool execution, guard checks
- * and delivery all happen locally per-turn and every tool name is
- * re-validated against the caller's own catalogue.
+ * The service is stateless per request (it resets its agent on every call),
+ * so multi-turn is driven here: agent.ts carries the full local transcript
+ * in `query` (with `system` for the stable prompt head) on every turn.
+ * There is no remote session to create, reset, or leak across users.
+ *
+ * Render Free notes: the instance sleeps when idle (cold-start latency) —
+ * the default 30 s timeout tolerates a slow wake-up, 5xx gets ONE retry,
+ * and timeouts are never retried (a timed-out inference may still be
+ * running server-side; re-firing just queues duplicate work).
  */
 
 export type NeedleClientErrorCode =
@@ -56,18 +55,25 @@ export type NeedleAuthMode = 'none' | 'token';
 
 export interface NeedleConfig {
   enabled: boolean;
-  /** Normalized base URL (no trailing slash, no /complete suffix). */
+  /** Normalized base URL (no trailing slash, no endpoint suffix). */
   url: string;
+  /** API key (NEEDLE_API_KEY). Empty when unconfigured. Never log this. */
   token: string;
   timeoutMs: number;
+  /** Per-request inference budget forwarded as max_new_tokens (1–512). */
+  maxNewTokens: number;
   confidenceThreshold: number;
   tokenConfigured: boolean;
   authMode: NeedleAuthMode;
 }
 
-export const DEFAULT_TIMEOUT_MS = 300000;
-export const MAX_TIMEOUT_MS = 600000;
-const MODEL_PROBE_TIMEOUT_MS = 30000;
+/** Render Free cold starts need room, but requests must stay bounded. */
+export const DEFAULT_TIMEOUT_MS = 30000;
+export const MAX_TIMEOUT_MS = 120000;
+export const MIN_TIMEOUT_MS = 1000;
+export const DEFAULT_MAX_NEW_TOKENS = 256;
+export const MAX_ALLOWED_TOKENS = 512;
+const HEALTH_PROBE_TIMEOUT_MS = 15000;
 const CAPABILITY_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /** Normalizes the stored base URL. Never appends an endpoint path. */
@@ -75,12 +81,32 @@ export function normalizeBaseUrl(raw: string): string {
   return (raw ?? '').trim().replace(/\/+$/, '');
 }
 
+function clampTimeout(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_TIMEOUT_MS;
+  return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, Math.round(raw)));
+}
+
+function clampMaxTokens(raw: number): number {
+  if (!Number.isFinite(raw)) return DEFAULT_MAX_NEW_TOKENS;
+  return Math.min(
+    MAX_ALLOWED_TOKENS,
+    Math.max(1, Math.round(raw)),
+  );
+}
+
 /** Resolves effective config: DB store (dashboard) wins, env is the fallback. */
 export async function resolveNeedleConfig(): Promise<NeedleConfig> {
   const envEnabled = process.env['NEEDLE_ENABLED'] === 'true';
   const envUrl = normalizeBaseUrl(process.env['NEEDLE_URL'] ?? '');
-  const envToken = (process.env['NEEDLE_AUTH_TOKEN'] ?? '').trim();
+  // Canonical key first; legacy NEEDLE_AUTH_TOKEN kept as a silent fallback
+  // so existing deployments do not break on upgrade.
+  const envToken = (
+    process.env['NEEDLE_API_KEY'] ??
+    process.env['NEEDLE_AUTH_TOKEN'] ??
+    ''
+  ).trim();
   const envTimeout = parseInt(process.env['NEEDLE_TIMEOUT_MS'] ?? '', 10);
+  const envTokens = parseInt(process.env['NEEDLE_MAX_NEW_TOKENS'] ?? '', 10);
   const envConfidence = parseFloat(
     process.env['NEEDLE_CONFIDENCE_THRESHOLD'] ?? '',
   );
@@ -98,9 +124,8 @@ export async function resolveNeedleConfig(): Promise<NeedleConfig> {
     enabled: store ? store.enabled : envEnabled,
     url,
     token,
-    timeoutMs:
-      store?.timeoutMs ??
-      (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : DEFAULT_TIMEOUT_MS),
+    timeoutMs: clampTimeout(store?.timeoutMs ?? envTimeout),
+    maxNewTokens: clampMaxTokens(store?.maxNewTokens ?? envTokens),
     confidenceThreshold:
       store?.confidenceThreshold ??
       (Number.isFinite(envConfidence) && envConfidence >= 0 && envConfidence <= 1
@@ -134,12 +159,13 @@ export interface NeedleFunctionCall {
   arguments: Record<string, unknown>;
 }
 
-/** Verbatim subset of the documented Needle 3 turn dict. */
+/** Verbatim subset of the native Needle 3 turn dict. */
 export interface NeedleTurnResult {
   type: string;
   success: boolean;
   error: string | null;
   errorCode: string | null;
+  reason: string | null;
   functionCalls: NeedleFunctionCall[];
   reasoning: string | null;
   confidence: number | null;
@@ -147,7 +173,7 @@ export interface NeedleTurnResult {
   validation: Record<string, unknown> | null;
 }
 
-function parseTurnResult(raw: unknown): NeedleTurnResult {
+export function parseTurnResult(raw: unknown): NeedleTurnResult {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new NeedleClientError('MALFORMED', 'Needle 3 returned a malformed response.');
   }
@@ -188,11 +214,13 @@ function parseTurnResult(raw: unknown): NeedleTurnResult {
     );
   }
   const confidenceRaw = r['confidence'];
+  const reasonRaw = r['reason'];
   return {
     type: typeof r['type'] === 'string' ? r['type'] : 'respond',
     success: r['success'] !== false,
     error: typeof r['error'] === 'string' ? r['error'] : null,
     errorCode: typeof r['error_code'] === 'string' ? r['error_code'] : null,
+    reason: typeof reasonRaw === 'string' ? reasonRaw : null,
     functionCalls,
     reasoning: typeof r['reasoning'] === 'string' ? r['reasoning'] : null,
     confidence:
@@ -210,8 +238,8 @@ function parseTurnResult(raw: unknown): NeedleTurnResult {
 }
 
 function authHeaders(cfg: NeedleConfig): Record<string, string> {
-  // Service Token only — never a Cactus Platform API key, never on principle
-  // when unconfigured. Unauthenticated services simply ignore the header.
+  // NEEDLE_API_KEY only, and only when configured. Never logged (see
+  // logProbe — it records baseUrl/path/status/duration, never headers).
   return cfg.tokenConfigured ? { Authorization: `Bearer ${cfg.token}` } : {};
 }
 
@@ -252,7 +280,7 @@ function throwForStatus(
   if (status === 401 || status === 403) {
     throw new NeedleClientError(
       'UNAUTHORIZED',
-      'Needle 3 rejected authentication (check the Service Token).',
+      'Needle 3 rejected authentication (check NEEDLE_API_KEY).',
     );
   }
   if (status === 404) {
@@ -267,6 +295,12 @@ function throwForStatus(
         ? ((data as Record<string, unknown>)['error'] as string)
         : 'invalid request';
     throw new NeedleClientError('INVALID', `Needle 3 rejected the request: ${msg}`);
+  }
+  if (status === 503) {
+    throw new NeedleClientError(
+      'SERVICE_UNAVAILABLE',
+      'Needle 3 is starting up or not configured (cold start / degraded).',
+    );
   }
   if (status >= 500) {
     throw new NeedleClientError(
@@ -307,11 +341,11 @@ function logProbe(opts: {
 
 async function requestJson(opts: {
   cfg: NeedleConfig;
-  path: '/complete' | '/model' | '/reset';
+  path: '/v1/complete' | '/health';
   method: 'GET' | 'POST';
   body?: Record<string, unknown>;
   timeoutMs: number;
-  /** Single retry on transient failures only (never 401/4xx). */
+  /** Single retry on 5xx only (never 401/4xx, never timeouts). */
   retryTransient?: boolean;
 }): Promise<RawResponse> {
   const started = Date.now();
@@ -367,8 +401,8 @@ async function requestJson(opts: {
     return await attempt();
   } catch (err) {
     // Single retry on 5xx only. Timeouts are NOT retried: a timed-out
-    // inference is usually still processing server-side (single global
-    // slot), so retrying just queues another slow run behind it.
+    // inference may still be processing server-side, so retrying just
+    // queues duplicate work (and hammers a Free-tier instance).
     const retryable =
       err instanceof NeedleClientError && err.code === 'SERVICE_UNAVAILABLE';
     if (opts.retryTransient !== false && retryable) {
@@ -378,19 +412,41 @@ async function requestJson(opts: {
   }
 }
 
-/** One Needle inference turn: POST {base}/complete {query, tools}. */
-export async function completeTurn(opts: {
+export interface CompleteTurnOptions {
   query: string;
+  /** Stable prompt head (system prompt + catalogue). Sent as `system`. */
+  system?: string;
   tools: NeedleToolDefinition[];
+  /** Overrides the configured max_new_tokens for this turn. */
+  maxNewTokens?: number;
   config?: NeedleConfig;
-}): Promise<{ turn: NeedleTurnResult; latencyMs: number }> {
+}
+
+/** One Needle inference turn: POST {base}/v1/complete. */
+export async function completeTurn(opts: CompleteTurnOptions): Promise<{
+  turn: NeedleTurnResult;
+  latencyMs: number;
+}> {
   const cfg = opts.config ?? (await resolveNeedleConfig());
   requireUsable(cfg);
+  if (typeof opts.query !== 'string' || opts.query.trim() === '') {
+    throw new NeedleClientError('INVALID', 'query must be a non-empty string.');
+  }
   const res = await requestJson({
     cfg,
-    path: '/complete',
+    path: '/v1/complete',
     method: 'POST',
-    body: { query: opts.query, tools: opts.tools },
+    body: {
+      query: opts.query,
+      ...(opts.system !== undefined && opts.system !== ''
+        ? { system: opts.system }
+        : {}),
+      tools: opts.tools,
+      max_new_tokens:
+        opts.maxNewTokens !== undefined
+          ? clampMaxTokens(opts.maxNewTokens)
+          : cfg.maxNewTokens,
+    },
     timeoutMs: cfg.timeoutMs,
   });
   const result =
@@ -400,50 +456,58 @@ export async function completeTurn(opts: {
   return { turn: parseTurnResult(result), latencyMs: res.latencyMs };
 }
 
-/** Fast model probe: GET {base}/model → loaded model name. */
-export async function fetchModelName(config?: NeedleConfig): Promise<string | null> {
+export interface NeedleHealth {
+  ok: boolean;
+  model: string | null;
+  generation: number | null;
+  packageVersion: string | null;
+}
+
+/**
+ * Liveness probe: GET {base}/health. Asserts model = needle3,
+ * generation = 3. 503 = degraded/starting (mapped to SERVICE_UNAVAILABLE).
+ */
+export async function checkHealth(config?: NeedleConfig): Promise<{
+  health: NeedleHealth;
+  latencyMs: number;
+}> {
   const cfg = config ?? (await resolveNeedleConfig());
   requireUsable(cfg);
   const res = await requestJson({
     cfg,
-    path: '/model',
+    path: '/health',
     method: 'GET',
-    timeoutMs: Math.min(cfg.timeoutMs, MODEL_PROBE_TIMEOUT_MS),
+    timeoutMs: Math.min(cfg.timeoutMs, HEALTH_PROBE_TIMEOUT_MS),
     retryTransient: false,
   });
   const data = (res.data ?? {}) as Record<string, unknown>;
-  const name = data['name'];
-  const model = typeof name === 'string' && name !== '' ? name : null;
+  const health: NeedleHealth = {
+    ok: data['ok'] === true,
+    model: typeof data['model'] === 'string' ? data['model'] : null,
+    generation: typeof data['generation'] === 'number' ? data['generation'] : null,
+    packageVersion:
+      typeof data['package_version'] === 'string' ? data['package_version'] : null,
+  };
+  if (health.model !== null && health.model !== 'needle3') {
+    throw new NeedleClientError(
+      'INVALID',
+      `Unexpected Needle model: ${health.model} (expected needle3).`,
+    );
+  }
+  if (health.generation !== null && health.generation !== 3) {
+    throw new NeedleClientError(
+      'INVALID',
+      `Unexpected Needle generation: ${health.generation} (expected 3).`,
+    );
+  }
   logProbe({
     baseUrl: cfg.url,
-    path: '/model',
+    path: '/health',
     status: res.status,
     durationMs: res.latencyMs,
-    ...(model ? { model } : {}),
+    ...(health.model ? { model: health.model } : {}),
   });
-  return model;
-}
-
-/** Clears the hosted service's shared conversation slot (best-effort). */
-export async function resetRemote(config?: NeedleConfig): Promise<void> {
-  const cfg = config ?? (await resolveNeedleConfig());
-  try {
-    requireUsable(cfg);
-  } catch {
-    return;
-  }
-  try {
-    await requestJson({
-      cfg,
-      path: '/reset',
-      method: 'POST',
-      body: {},
-      timeoutMs: Math.min(cfg.timeoutMs, 15000),
-      retryTransient: false,
-    });
-  } catch {
-    /* best-effort — a stale remote slot only confuses, never breaches */
-  }
+  return { health, latencyMs: res.latencyMs };
 }
 
 export interface NeedleCapabilities {
@@ -452,7 +516,7 @@ export interface NeedleCapabilities {
   skills: boolean;
   mcpReason?: string;
   skillsReason?: string;
-  /** Loaded model name from GET /model (only what the service returns). */
+  /** Loaded model name from GET /health (only what the service returns). */
   model?: string;
 }
 
@@ -512,11 +576,16 @@ function statusForError(err: unknown): {
 
 let cachedProbe: { at: number; probe: ConnectionProbe } | null = null;
 
+/** Clears the cached probe (tests / settings changes). */
+export function clearProbeCacheForTests(): void {
+  cachedProbe = null;
+}
+
 /**
- * Real connection probe: GET /model (fast reachability + model name) then
- * POST /complete with an empty toolset (real inference proof). Only a
- * successful /complete yields Connected. Results are cached 5 minutes for
- * page loads; Test Connection bypasses the cache.
+ * Real connection probe: GET /health (liveness + model/generation proof)
+ * then POST /v1/complete with an empty toolset (real inference proof).
+ * Only a successful /v1/complete yields Connected. Results are cached
+ * 5 minutes for page loads; Test Connection bypasses the cache.
  */
 export async function probeConnection(opts?: {
   config?: NeedleConfig;
@@ -547,9 +616,9 @@ export async function probeConnection(opts?: {
     };
   }
 
-  let model: string | null;
+  let health: NeedleHealth;
   try {
-    model = await fetchModelName(cfg);
+    ({ health } = await checkHealth(cfg));
   } catch (err) {
     const mapped = statusForError(err);
     return {
@@ -561,13 +630,18 @@ export async function probeConnection(opts?: {
       lastCheckedAt: stamp(),
     };
   }
+  const model = health.model;
 
   try {
     const res = await requestJson({
       cfg,
-      path: '/complete',
+      path: '/v1/complete',
       method: 'POST',
-      body: { query: 'connection check', tools: [] },
+      body: {
+        query: 'connection check',
+        tools: [],
+        max_new_tokens: Math.min(cfg.maxNewTokens, 32),
+      },
       timeoutMs: cfg.timeoutMs,
     });
     const turn = parseTurnResult(res.data);
@@ -584,7 +658,7 @@ export async function probeConnection(opts?: {
         ...(model ? { model } : {}),
       },
       model,
-      endpoint: '/complete',
+      endpoint: '/v1/complete',
       latencyMs: res.latencyMs,
       lastCheckedAt: stamp(),
     };

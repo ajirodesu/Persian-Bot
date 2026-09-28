@@ -27,10 +27,12 @@ const CACHE_KEY = 'ai-agent:config:stored';
 export interface AiAgentSettings {
   enabled: boolean;
   needleUrl: string;
-  /** Decrypted Bearer token. Empty when none configured. Never log this. */
+  /** Decrypted API key. Empty when none configured. Never log this. */
   token: string;
   tokenConfigured: boolean;
   timeoutMs: number;
+  /** Per-request inference budget forwarded as max_new_tokens (1–512). */
+  maxNewTokens: number;
   confidenceThreshold: number;
   updatedAt: string;
   fromStore: boolean;
@@ -38,16 +40,28 @@ export interface AiAgentSettings {
 
 function envSettings(): AiAgentSettings {
   const timeoutRaw = parseInt(process.env['NEEDLE_TIMEOUT_MS'] ?? '', 10);
+  const tokensRaw = parseInt(process.env['NEEDLE_MAX_NEW_TOKENS'] ?? '', 10);
   const confRaw = parseFloat(process.env['NEEDLE_CONFIDENCE_THRESHOLD'] ?? '');
-  const token = (process.env['NEEDLE_AUTH_TOKEN'] ?? '').trim();
+  // Canonical NEEDLE_API_KEY first; legacy NEEDLE_AUTH_TOKEN is a fallback.
+  const token = (
+    process.env['NEEDLE_API_KEY'] ??
+    process.env['NEEDLE_AUTH_TOKEN'] ??
+    ''
+  ).trim();
   return {
     enabled: process.env['NEEDLE_ENABLED'] === 'true',
     needleUrl: (process.env['NEEDLE_URL'] ?? '').trim(),
     token,
     tokenConfigured: token !== '',
-    // Hosted CPU inference can take 60s+ (cold starts) — default generously.
+    // Render Free cold starts need room, but requests stay bounded (1–120 s).
     timeoutMs:
-      Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : 300000,
+      Number.isFinite(timeoutRaw) && timeoutRaw > 0
+        ? Math.min(120000, Math.max(1000, Math.round(timeoutRaw)))
+        : 30000,
+    maxNewTokens:
+      Number.isFinite(tokensRaw)
+        ? Math.min(512, Math.max(1, Math.round(tokensRaw)))
+        : 256,
     confidenceThreshold:
       Number.isFinite(confRaw) && confRaw >= 0 && confRaw <= 1 ? confRaw : 0.7,
     updatedAt: '',
@@ -79,6 +93,11 @@ export async function getAiAgentSettings(): Promise<AiAgentSettings> {
         token,
         tokenConfigured: store.encryptedToken !== '',
         timeoutMs: store.timeoutMs,
+        maxNewTokens:
+          typeof store.maxNewTokens === 'number' &&
+          Number.isFinite(store.maxNewTokens)
+            ? Math.min(512, Math.max(1, Math.round(store.maxNewTokens)))
+            : 256,
         confidenceThreshold: store.confidenceThreshold,
         updatedAt: store.updatedAt,
         fromStore: true,
@@ -94,13 +113,14 @@ export async function getAiAgentSettings(): Promise<AiAgentSettings> {
 export interface SaveAiAgentSettingsInput {
   enabled: boolean;
   needleUrl: string;
-  /** Plaintext token from the dashboard (undefined = keep existing). */
+  /** Plaintext API key from the dashboard (undefined = keep existing). */
   token?: string | undefined;
   timeoutMs: number;
+  maxNewTokens: number;
   confidenceThreshold: number;
 }
 
-/** Persists dashboard settings (token encrypted). Writes through the cache. */
+/** Persists dashboard settings (API key encrypted). Writes through the cache. */
 export async function saveAiAgentSettings(
   input: SaveAiAgentSettingsInput,
 ): Promise<AiAgentSettings> {
@@ -111,6 +131,7 @@ export async function saveAiAgentSettings(
     needleUrl: input.needleUrl,
     encryptedToken: token ? encrypt(token) : '',
     timeoutMs: input.timeoutMs,
+    maxNewTokens: Math.min(512, Math.max(1, Math.round(input.maxNewTokens))),
     confidenceThreshold: input.confidenceThreshold,
     updatedAt: new Date().toISOString(),
   };
@@ -121,6 +142,7 @@ export async function saveAiAgentSettings(
     token,
     tokenConfigured: value.encryptedToken !== '',
     timeoutMs: value.timeoutMs,
+    maxNewTokens: value.maxNewTokens,
     confidenceThreshold: value.confidenceThreshold,
     updatedAt: value.updatedAt,
     fromStore: true,

@@ -3,12 +3,13 @@ import './mock-database.js';
 import { resetDbStubs } from './mock-database.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import {
+  checkHealth,
+  clearProbeCacheForTests,
   completeTurn,
-  fetchModelName,
   NeedleClientError,
   normalizeBaseUrl,
+  parseTurnResult,
   probeConnection,
-  resetRemote,
   resolveNeedleConfig,
 } from '../lib/needle-client.lib.js';
 
@@ -23,16 +24,10 @@ const TOOLS = [
 const BASE_CONFIG = {
   enabled: true,
   url: 'https://needle.example',
-  token: '',
-  timeoutMs: 5000,
+  token: 'secret-key',
+  timeoutMs: 30000,
+  maxNewTokens: 256,
   confidenceThreshold: 0.7,
-  tokenConfigured: false,
-  authMode: 'none' as const,
-};
-
-const TOKEN_CONFIG = {
-  ...BASE_CONFIG,
-  token: 'tok',
   tokenConfigured: true,
   authMode: 'token' as const,
 };
@@ -51,9 +46,26 @@ function networkError(code: string) {
   return err;
 }
 
-describe('needle-client (playground contract)', () => {
+/** Exact structured response verified against the live Render service. */
+const VERIFIED_RENDER_RESPONSE = {
+  type: 'call',
+  success: true,
+  error: null,
+  error_code: null,
+  function_calls: [{ name: 'set_brightness', arguments: { brightness: 30 } }],
+  suppressed_calls: [],
+  reasoning: "brightness 30 from '30'",
+  confidence: 1.0,
+  prefill_tps: 0.8,
+  decode_tps: 0.3,
+  peak_ram_mb: 142.8,
+  validation: { ungrounded: [], negation: false },
+};
+
+describe('needle-client (Wataru /v1/complete contract)', () => {
   beforeEach(() => {
     lruCache.clear();
+    clearProbeCacheForTests();
     vi.clearAllMocks();
     resetDbStubs();
     vi.stubGlobal('fetch', vi.fn());
@@ -61,6 +73,12 @@ describe('needle-client (playground contract)', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete process.env['NEEDLE_ENABLED'];
+    delete process.env['NEEDLE_URL'];
+    delete process.env['NEEDLE_API_KEY'];
+    delete process.env['NEEDLE_AUTH_TOKEN'];
+    delete process.env['NEEDLE_TIMEOUT_MS'];
+    delete process.env['NEEDLE_MAX_NEW_TOKENS'];
   });
 
   function mockFetch() {
@@ -73,61 +91,89 @@ describe('needle-client (playground contract)', () => {
     expect(normalizeBaseUrl('  https://x.onrender.com  ')).toBe('https://x.onrender.com');
   });
 
-  it('resolves authMode none when no token is configured', async () => {
+  it('resolves NEEDLE_API_KEY with legacy NEEDLE_AUTH_TOKEN fallback', async () => {
     process.env['NEEDLE_ENABLED'] = 'true';
     process.env['NEEDLE_URL'] = 'https://env-needle.example/';
-    delete process.env['NEEDLE_AUTH_TOKEN'];
-    try {
-      const cfg = await resolveNeedleConfig();
-      expect(cfg.enabled).toBe(true);
-      expect(cfg.url).toBe('https://env-needle.example');
-      expect(cfg.authMode).toBe('none');
-      expect(cfg.timeoutMs).toBe(300000);
-    } finally {
-      delete process.env['NEEDLE_ENABLED'];
-      delete process.env['NEEDLE_URL'];
-    }
+    process.env['NEEDLE_API_KEY'] = 'new-key';
+    process.env['NEEDLE_AUTH_TOKEN'] = 'old-key';
+    const cfg = await resolveNeedleConfig();
+    expect(cfg.enabled).toBe(true);
+    expect(cfg.url).toBe('https://env-needle.example');
+    expect(cfg.token).toBe('new-key');
+    expect(cfg.authMode).toBe('token');
+    expect(cfg.timeoutMs).toBe(30000);
+    expect(cfg.maxNewTokens).toBe(256);
+
+    delete process.env['NEEDLE_API_KEY'];
+    lruCache.clear();
+    const legacy = await resolveNeedleConfig();
+    expect(legacy.token).toBe('old-key');
+    expect(legacy.authMode).toBe('token');
   });
 
-  it('POSTs /complete with {query, tools} and no api_key', async () => {
+  it('clamps timeout and max tokens into the supported ranges', async () => {
+    process.env['NEEDLE_ENABLED'] = 'true';
+    process.env['NEEDLE_URL'] = 'https://env-needle.example';
+    process.env['NEEDLE_TIMEOUT_MS'] = '999999';
+    process.env['NEEDLE_MAX_NEW_TOKENS'] = '9999';
+    const cfg = await resolveNeedleConfig();
+    expect(cfg.timeoutMs).toBe(120000);
+    expect(cfg.maxNewTokens).toBe(512);
+  });
+
+  it('parses the verified live response: set_brightness({brightness: 30})', async () => {
     mockFetch().mockResolvedValue(
-      jsonResponse(200, {
-        type: 'call',
-        success: true,
-        error: null,
-        error_code: null,
-        function_calls: [{ name: 'send_result', arguments: { message: 'hi' } }],
-        reasoning: 'r',
-        confidence: 0.9,
-        suppressed_calls: [],
-        validation: null,
-      }) as unknown as Response,
+      jsonResponse(200, VERIFIED_RENDER_RESPONSE) as unknown as Response,
     );
     const { turn, latencyMs } = await completeTurn({
-      query: 'hello',
-      tools: TOOLS,
+      query: 'set brightness to 30',
+      system: 'You are the tool-selection agent.',
+      tools: [
+        {
+          name: 'set_brightness',
+          description: 'Set the brightness.',
+          parameters: {
+            type: 'object',
+            properties: { brightness: { type: 'integer' } },
+            required: ['brightness'],
+          },
+        },
+      ],
       config: BASE_CONFIG,
     });
     expect(turn.type).toBe('call');
+    expect(turn.success).toBe(true);
     expect(turn.functionCalls).toHaveLength(1);
-    expect(turn.functionCalls[0]?.arguments).toEqual({ message: 'hi' });
-    expect(turn.confidence).toBe(0.9);
+    expect(turn.functionCalls[0]?.name).toBe('set_brightness');
+    expect(turn.functionCalls[0]?.arguments).toEqual({ brightness: 30 });
+    expect(turn.confidence).toBe(1.0);
+    expect(turn.reasoning).toBe("brightness 30 from '30'");
     expect(latencyMs).toBeGreaterThanOrEqual(0);
+
     const [calledUrl, opts] = mockFetch().mock.calls[0] as [string, RequestInit];
-    expect(calledUrl).toBe('https://needle.example/complete');
+    expect(calledUrl).toBe('https://needle.example/v1/complete');
+    const headers = opts.headers as Record<string, string>;
+    expect(headers['Authorization']).toBe('Bearer secret-key');
+    expect(headers['Content-Type']).toBe('application/json');
     const body = JSON.parse(opts.body as string) as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(['query', 'tools']);
+    expect(body['query']).toBe('set brightness to 30');
+    expect(body['system']).toBe('You are the tool-selection agent.');
+    expect(body['max_new_tokens']).toBe(256);
     expect(body).not.toHaveProperty('api_key');
-    expect(opts.headers).not.toHaveProperty('Authorization');
+    expect(body).not.toHaveProperty('session_id');
   });
 
-  it('sends the Service Token only when configured', async () => {
-    mockFetch().mockResolvedValue(
-      jsonResponse(200, { type: 'respond', success: true, function_calls: [] }) as unknown as Response,
-    );
-    await completeTurn({ query: 'x', tools: TOOLS, config: TOKEN_CONFIG });
-    const [, opts] = mockFetch().mock.calls[0] as [string, RequestInit];
-    expect((opts.headers as Record<string, string>)['Authorization']).toBe('Bearer tok');
+  it('supports multiple function calls in one turn', () => {
+    const turn = parseTurnResult({
+      type: 'call',
+      success: true,
+      function_calls: [
+        { name: 'first_tool', arguments: {} },
+        { name: 'second_tool', arguments: { n: 2 } },
+      ],
+    });
+    expect(turn.functionCalls).toHaveLength(2);
+    expect(turn.functionCalls[1]).toEqual({ name: 'second_tool', arguments: { n: 2 } });
   });
 
   it('treats empty function_calls as refusal (no invented action)', async () => {
@@ -136,6 +182,13 @@ describe('needle-client (playground contract)', () => {
     );
     const { turn } = await completeTurn({ query: 'nonsense', tools: TOOLS, config: BASE_CONFIG });
     expect(turn.functionCalls).toEqual([]);
+  });
+
+  it('rejects an empty query before any network call', async () => {
+    await expect(
+      completeTurn({ query: '   ', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'INVALID' });
+    expect(mockFetch()).not.toHaveBeenCalled();
   });
 
   it('maps a 200 {"error"} body to NEEDLE_ERROR', async () => {
@@ -147,7 +200,22 @@ describe('needle-client (playground contract)', () => {
     ).rejects.toMatchObject({ code: 'NEEDLE_ERROR' });
   });
 
-  it('distinguishes DNS, refused, 404, 401 and 500 failures', async () => {
+  it('maps 401 to UNAUTHORIZED without retrying', async () => {
+    mockFetch().mockResolvedValue(jsonResponse(401, { error: 'unauthorized' }) as unknown as Response);
+    await expect(
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(mockFetch()).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps 503 (cold start / degraded) to SERVICE_UNAVAILABLE', async () => {
+    mockFetch().mockResolvedValue(jsonResponse(503, { ok: false }) as unknown as Response);
+    await expect(
+      checkHealth(BASE_CONFIG),
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+  });
+
+  it('distinguishes DNS, refused, 404, timeout and 500 failures', async () => {
     mockFetch().mockRejectedValueOnce(networkError('ENOTFOUND'));
     await expect(
       completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
@@ -163,22 +231,16 @@ describe('needle-client (playground contract)', () => {
       completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
     ).rejects.toMatchObject({ code: 'ENDPOINT_NOT_FOUND' });
 
-    mockFetch().mockResolvedValueOnce(jsonResponse(401, {}) as unknown as Response);
+    const abort = new Error('aborted');
+    abort.name = 'AbortError';
+    mockFetch().mockRejectedValueOnce(abort);
     await expect(
       completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
-    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-    expect(mockFetch().mock.calls.length).toBeGreaterThan(0);
+    ).rejects.toMatchObject({ code: 'TIMEOUT' });
+    // Timeouts are never retried.
+    expect(mockFetch()).toHaveBeenCalledTimes(4);
 
-    // 401 is never retried.
-    const callsBefore = mockFetch().mock.calls.length;
-    mockFetch().mockResolvedValueOnce(jsonResponse(401, {}) as unknown as Response);
-    await expect(
-      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
-    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-    expect(mockFetch().mock.calls.length).toBe(callsBefore + 1);
-  });
-
-  it('retries once on 500 then succeeds', async () => {
+    // 500 gets exactly one retry, then succeeds.
     mockFetch()
       .mockResolvedValueOnce(jsonResponse(500, {}) as unknown as Response)
       .mockResolvedValueOnce(
@@ -186,7 +248,7 @@ describe('needle-client (playground contract)', () => {
       );
     const { turn } = await completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG });
     expect(turn.type).toBe('respond');
-    expect(mockFetch()).toHaveBeenCalledTimes(2);
+    expect(mockFetch()).toHaveBeenCalledTimes(6);
   });
 
   it('throws DISABLED / INCOMPLETE_CONFIG before any network call', async () => {
@@ -199,34 +261,33 @@ describe('needle-client (playground contract)', () => {
     expect(mockFetch()).not.toHaveBeenCalled();
   });
 
-  it('fetches the model name from GET /model', async () => {
+  it('checks health via GET /health asserting needle3 / generation 3', async () => {
     mockFetch().mockResolvedValue(
-      jsonResponse(200, { name: 'needle3.cact' }) as unknown as Response,
+      jsonResponse(200, { ok: true, model: 'needle3', generation: 3, package_version: '3.0.1' }) as unknown as Response,
     );
-    await expect(fetchModelName(BASE_CONFIG)).resolves.toBe('needle3.cact');
+    const { health } = await checkHealth(BASE_CONFIG);
+    expect(health).toMatchObject({ ok: true, model: 'needle3', generation: 3 });
     const [calledUrl] = mockFetch().mock.calls[0] as [string, RequestInit];
-    expect(calledUrl).toBe('https://needle.example/model');
+    expect(calledUrl).toBe('https://needle.example/health');
+
+    mockFetch().mockResolvedValue(
+      jsonResponse(200, { ok: true, model: 'other', generation: 2 }) as unknown as Response,
+    );
+    await expect(checkHealth(BASE_CONFIG)).rejects.toMatchObject({ code: 'INVALID' });
   });
 
-  it('resetRemote POSTs /reset and never throws', async () => {
-    mockFetch().mockResolvedValue(jsonResponse(200, { ok: true }) as unknown as Response);
-    await expect(resetRemote(BASE_CONFIG)).resolves.toBeUndefined();
-    const [calledUrl] = mockFetch().mock.calls[0] as [string, RequestInit];
-    expect(calledUrl).toBe('https://needle.example/reset');
-    mockFetch().mockRejectedValue(networkError('ECONNREFUSED'));
-    await expect(resetRemote(BASE_CONFIG)).resolves.toBeUndefined();
-  });
-
-  it('probeConnection connects only after a real /complete', async () => {
+  it('probeConnection connects only after a real /v1/complete', async () => {
     mockFetch()
-      .mockResolvedValueOnce(jsonResponse(200, { name: 'needle3.cact' }) as unknown as Response)
+      .mockResolvedValueOnce(
+        jsonResponse(200, { ok: true, model: 'needle3', generation: 3, package_version: '3.0.1' }) as unknown as Response,
+      )
       .mockResolvedValueOnce(
         jsonResponse(200, { type: 'call', success: true, function_calls: [] }) as unknown as Response,
       );
     const probe = await probeConnection({ config: BASE_CONFIG, bypassCache: true });
     expect(probe.status).toBe('Connected');
-    expect(probe.model).toBe('needle3.cact');
-    expect(probe.endpoint).toBe('/complete');
+    expect(probe.model).toBe('needle3');
+    expect(probe.endpoint).toBe('/v1/complete');
     expect(probe.capabilities?.toolCalling).toBe(true);
     expect(probe.capabilities?.mcp).toBe(false);
     expect(probe.capabilities?.skills).toBe(false);
@@ -241,13 +302,14 @@ describe('needle-client (playground contract)', () => {
     expect(probe.capabilities).toBeNull();
   });
 
-  it('probeConnection reports refused /complete distinctly', async () => {
+  it('probeConnection reports wrong credentials as Unauthorized', async () => {
     mockFetch()
-      .mockResolvedValueOnce(jsonResponse(200, { name: 'needle3.cact' }) as unknown as Response)
-      .mockRejectedValueOnce(networkError('ECONNREFUSED'));
+      .mockResolvedValueOnce(
+        jsonResponse(200, { ok: true, model: 'needle3', generation: 3 }) as unknown as Response,
+      )
+      .mockResolvedValueOnce(jsonResponse(401, { error: 'unauthorized' }) as unknown as Response);
     const probe = await probeConnection({ config: BASE_CONFIG, bypassCache: true });
-    expect(probe.status).toBe('Disconnected');
-    expect(probe.detail).toContain('Connection refused');
+    expect(probe.status).toBe('Unauthorized');
   });
 
   it('NeedleClientError carries codes', () => {

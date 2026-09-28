@@ -12,7 +12,6 @@ import { buildCommandCatalog } from '@/engine/agent/lib/command-catalog.lib.js';
 import { buildNeedleTools } from '@/engine/agent/lib/tool-schema.lib.js';
 import {
   completeTurn,
-  resetRemote,
   resolveNeedleConfig,
   NeedleClientError,
 } from '@/engine/agent/lib/needle-client.lib.js';
@@ -108,7 +107,7 @@ export function __clearToolCacheForTests(): void {
 const MAX_TURNS = 20;
 // Transcript growth guard: keep the system head, truncate the middle.
 const MAX_TRANSCRIPT_CHARS = 12000;
-const SYSTEM_HEAD_CHARS = 6000;
+const MAX_TRANSCRIPT_HEAD_CHARS = 6000;
 const MAX_TRANSCRIPT_TAIL_CHARS = 5000;
 
 interface ToolMessage {
@@ -117,13 +116,15 @@ interface ToolMessage {
 }
 
 /**
- * Runs the agent loop against the separately hosted Cactus Needle 3 service.
+ * Runs the agent loop against the standalone Wataru Needle 3 Render API.
  *
- * Each iteration = exactly ONE Needle turn (`complete`). Returned
+ * Each iteration = exactly ONE Needle turn (`POST /v1/complete`). Returned
  * `function_calls` (help / test_command / send_result) execute LOCALLY with
  * the authenticated AppCtx; their outputs are JSON-encoded and fed back as
  * the next turn's input — the documented Needle multi-turn pattern. The
- * Needle service keeps one stateful `Needle` instance per AI session id.
+ * service keeps no per-user session (stateless per request), so the full
+ * local transcript travels in every query and the stable prompt head in
+ * `system`.
  *
  * Safety:
  *   - bounded loop (20 turns max) — no runaway execution
@@ -212,14 +213,14 @@ export async function runAgent(
       .replace('{{AVAILABLE_COMMANDS}}', groupedList);
 
     // ── Bounded agent loop ─────────────────────────────────────────────
-    // The hosted playground exposes single-turn /complete with one shared
-    // conversation slot and no per-session state, so multi-turn is driven
-    // here: every query carries the full local transcript (system prompt +
-    // catalogue on turn 1, tool results appended after). A /reset opens and
-    // closes our sequence so we never inherit another session's context.
-    await resetRemote(cfg);
-    let transcript =
-      `${systemContent}\n\nUser request:\n${userInput}`;
+    // The standalone Needle 3 API is stateless per request (it resets its
+    // own agent on every /v1/complete call and keeps no per-user session),
+    // so multi-turn is driven here: the stable prompt head travels as
+    // `system`, and every query carries the full local transcript (system
+    // head on turn 1, tool results appended after). Tool execution, guard
+    // checks and delivery all happen locally per-turn, and every tool name
+    // is re-validated against the caller's own catalogue.
+    let transcript = `User request:\n${userInput}`;
     let turns = MAX_TURNS;
     let testCommandCalls = 0;
     const history: ToolMessage[] = [];
@@ -229,6 +230,7 @@ export async function runAgent(
       try {
         const res = await completeTurn({
           query: transcript,
+          system: systemContent,
           tools: needleTools,
           config: cfg,
         });
@@ -237,15 +239,17 @@ export async function runAgent(
         if (err instanceof NeedleClientError) {
           logger.error('[Agent] Needle 3 turn failed', { error: err });
           if (err.code === 'UNAUTHORIZED') {
-            return 'The AI service rejected authentication. An admin should check the Service Token.';
+            return 'The AI agent is not configured correctly.';
+          }
+          if (err.code === 'TIMEOUT') {
+            return 'The AI agent timed out. Please try again.';
           }
           if (
-            err.code === 'TIMEOUT' ||
             err.code === 'SERVICE_UNAVAILABLE' ||
             err.code === 'UNRESOLVABLE' ||
             err.code === 'REFUSED'
           ) {
-            return 'The AI service is temporarily unavailable. Please try again later.';
+            return 'The AI agent is currently unavailable. Please try again later.';
           }
           if (
             err.code === 'MALFORMED' ||
@@ -330,11 +334,12 @@ export async function runAgent(
       transcript =
         `${transcript}\n\n[tool results]\n${JSON.stringify(feedback)}\n` +
         'Continue: call test_command for remaining commands, then send_result exactly once.';
-      // Bound the transcript so long sequences cannot grow without limit;
-      // the system head (prompt + catalogue) is always preserved.
+      // Bound the transcript so long sequences cannot grow without limit.
+      // The system head travels separately as `system` and is never
+      // truncated; only the turn history here is shortened.
       if (transcript.length > MAX_TRANSCRIPT_CHARS) {
         transcript =
-          transcript.slice(0, SYSTEM_HEAD_CHARS) +
+          transcript.slice(0, MAX_TRANSCRIPT_HEAD_CHARS) +
           '\n\n[…earlier turns omitted…]\n' +
           transcript.slice(-MAX_TRANSCRIPT_TAIL_CHARS);
       }
@@ -344,6 +349,5 @@ export async function runAgent(
   } finally {
     destroyAiContext(aiCtx.id);
     aiRateLimiter.release(sessionKey);
-    void resetRemote().catch(() => undefined);
   }
 }

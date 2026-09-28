@@ -192,7 +192,8 @@ export default function AdminAiAgentPage() {
   const [needleUrl, setNeedleUrl] = useState('')
   const [token, setToken] = useState('')
   const [enabled, setEnabled] = useState(false)
-  const [timeoutMs, setTimeoutMs] = useState('300000')
+  const [timeoutMs, setTimeoutMs] = useState('30000')
+  const [maxNewTokens, setMaxNewTokens] = useState('256')
   const [confidence, setConfidence] = useState('0.7')
   const [dirty, setDirty] = useState(false)
 
@@ -205,6 +206,7 @@ export default function AdminAiAgentPage() {
     setNeedleUrl(settings.needleUrl)
     setEnabled(settings.enabled)
     setTimeoutMs(String(settings.timeoutMs))
+    setMaxNewTokens(String(settings.maxNewTokens ?? 256))
     setConfidence(String(settings.confidenceThreshold))
     setToken('')
     setDirty(false)
@@ -215,13 +217,15 @@ export default function AdminAiAgentPage() {
 
   const handleSave = async () => {
     const timeout = parseInt(timeoutMs, 10)
+    const tokens = parseInt(maxNewTokens, 10)
     const conf = parseFloat(confidence)
     const ok = await save({
       enabled,
       needleUrl: needleUrl.trim(),
       // Omit the token to keep the stored secret; it is never shown.
       ...(token !== '' ? { token } : {}),
-      timeoutMs: Number.isFinite(timeout) ? timeout : 300000,
+      timeoutMs: Number.isFinite(timeout) ? timeout : 30000,
+      maxNewTokens: Number.isFinite(tokens) ? tokens : 256,
       confidenceThreshold: Number.isFinite(conf) ? conf : 0.7,
     })
     if (ok) {
@@ -277,7 +281,7 @@ export default function AdminAiAgentPage() {
                     </span>
                     <StatusChip text={status ?? '…'} tone={statusTone(status)} />
                     <StatusChip
-                      text={settings.authMode === 'token' ? 'Service Token' : 'No auth'}
+                      text={settings.authMode === 'token' ? 'API key' : 'No key'}
                       tone={settings.authMode === 'token' ? 'accent' : 'default'}
                     />
                   </div>
@@ -312,8 +316,8 @@ export default function AdminAiAgentPage() {
                 {testing ? 'Testing…' : 'Test Connection'}
               </Button>
               <p className="text-[11px] text-surface-variant leading-normal px-0.5 pt-2">
-                Performs a real request (model info plus a minimal
-                inference call) against the hosted Needle 3 service — the
+                Performs a real request (health check plus a minimal
+                inference call) against the standalone Needle 3 API — the
                 state above is never assumed.
               </p>
               {detail && (
@@ -366,7 +370,7 @@ export default function AdminAiAgentPage() {
 
             <div className="p-3.5 space-y-2.5">
               <Input
-                placeholder="https://persian-bot-needle3.onrender.com"
+                placeholder="https://wataru-needle-3-api.onrender.com"
                 value={needleUrl}
                 onChange={(e) => {
                   setNeedleUrl(e.target.value)
@@ -381,7 +385,7 @@ export default function AdminAiAgentPage() {
                 placeholder={
                   settings.tokenConfigured
                     ? '•••••••• (stored — leave blank to keep)'
-                    : 'Only if the service requires one — else leave blank'
+                    : 'NEEDLE_API_KEY for the Needle service'
                 }
                 value={token}
                 onChange={(e) => {
@@ -390,15 +394,15 @@ export default function AdminAiAgentPage() {
                 }}
                 disabled={saving}
                 autoComplete="off"
-                aria-label="Needle 3 service token"
+                aria-label="Needle 3 API key"
                 className="py-2.5 text-sm leading-6"
               />
               <p className="text-[11px] text-surface-variant leading-normal px-0.5">
                 {settings.tokenConfigured
-                  ? 'A service token is stored encrypted server-side. The value is never shown — leave blank to keep it.'
-                  : 'Most self-hosted Needle deployments need no token (Authentication: None). Set one only if the service requires it — never a Cactus Platform API key.'}
+                  ? 'An API key is stored encrypted server-side. The value is never shown — leave blank to keep it.'
+                  : 'The standalone Needle 3 API requires NEEDLE_API_KEY (sent as Authorization: Bearer). Never a Cactus Platform key.'}
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Input
                   placeholder="Timeout (ms)"
                   value={timeoutMs}
@@ -409,6 +413,18 @@ export default function AdminAiAgentPage() {
                   disabled={saving}
                   inputMode="numeric"
                   aria-label="Request timeout in milliseconds"
+                  className="py-2.5 text-sm leading-6 font-mono"
+                />
+                <Input
+                  placeholder="Max tokens"
+                  value={maxNewTokens}
+                  onChange={(e) => {
+                    setMaxNewTokens(e.target.value)
+                    markDirty()
+                  }}
+                  disabled={saving}
+                  inputMode="numeric"
+                  aria-label="Maximum inference tokens per request"
                   className="py-2.5 text-sm leading-6 font-mono"
                 />
                 <Input
@@ -425,8 +441,9 @@ export default function AdminAiAgentPage() {
                 />
               </div>
               <p className="text-[11px] text-surface-variant leading-normal px-0.5">
-                Hosted CPU inference can take 60 s or more (cold starts) —
-                keep the timeout generous (default 300000 ms, max 600000 ms).
+                Render Free instances sleep when idle — 30000 ms tolerates a
+                cold start (range 1000–120000 ms). Inference budget 1–512
+                tokens (default 256).
               </p>
               <Button
                 variant="filled"

@@ -97,9 +97,12 @@ interface EnvConfig {
   // dashboard store is the source of truth; env vars are the fallback.
   // The bot MUST start with Needle offline (AI gracefully unavailable).
   readonly NEEDLE_URL?: string | undefined;
+  readonly NEEDLE_API_KEY?: string | undefined;
+  /** @deprecated Use NEEDLE_API_KEY. Kept as a silent fallback. */
   readonly NEEDLE_AUTH_TOKEN?: string | undefined;
   readonly NEEDLE_ENABLED?: string | undefined;
   readonly NEEDLE_TIMEOUT_MS?: string | undefined;
+  readonly NEEDLE_MAX_NEW_TOKENS?: string | undefined;
   readonly NEEDLE_CONFIDENCE_THRESHOLD?: string | undefined;
 
   // Derived boolean helpers
@@ -352,9 +355,11 @@ export const env: EnvConfig = {
       return undefined;
     }
   })(),
+  NEEDLE_API_KEY: getOptionalEnv('NEEDLE_API_KEY'),
   NEEDLE_AUTH_TOKEN: getOptionalEnv('NEEDLE_AUTH_TOKEN'),
   NEEDLE_ENABLED: getOptionalEnv('NEEDLE_ENABLED'),
   NEEDLE_TIMEOUT_MS: getOptionalEnv('NEEDLE_TIMEOUT_MS'),
+  NEEDLE_MAX_NEW_TOKENS: getOptionalEnv('NEEDLE_MAX_NEW_TOKENS'),
   NEEDLE_CONFIDENCE_THRESHOLD: getOptionalEnv('NEEDLE_CONFIDENCE_THRESHOLD'),
 
   // Derived boolean helpers for convenience

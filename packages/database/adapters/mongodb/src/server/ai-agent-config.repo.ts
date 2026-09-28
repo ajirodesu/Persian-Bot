@@ -16,6 +16,8 @@ export interface AiAgentConfigStoreValue {
   /** AES-256-GCM encrypted Needle Bearer token (enc:v1:…). Empty = none set. */
   encryptedToken: string;
   timeoutMs: number;
+  /** Per-request inference budget forwarded as max_new_tokens (1-512). */
+  maxNewTokens: number;
   /** Minimum Needle confidence required before executing a tool call (0-1). */
   confidenceThreshold: number;
   updatedAt: string;
@@ -42,7 +44,11 @@ function parseValue(raw: unknown): AiAgentConfigStoreValue | null {
     timeoutMs:
       typeof v.timeoutMs === 'number' && Number.isFinite(v.timeoutMs)
         ? v.timeoutMs
-        : 300000,
+        : 30000,
+    maxNewTokens:
+      typeof v.maxNewTokens === 'number' && Number.isFinite(v.maxNewTokens)
+        ? Math.min(512, Math.max(1, Math.round(v.maxNewTokens)))
+        : 256,
     confidenceThreshold:
       typeof v.confidenceThreshold === 'number' &&
       Number.isFinite(v.confidenceThreshold)

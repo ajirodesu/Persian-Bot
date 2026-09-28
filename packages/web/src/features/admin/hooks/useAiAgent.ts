@@ -26,6 +26,7 @@ export interface UseAiAgentState {
     needleUrl: string
     token?: string
     timeoutMs: number
+    maxNewTokens: number
     confidenceThreshold: number
   }) => Promise<boolean>
   test: () => Promise<AiAgentTestDto | null>

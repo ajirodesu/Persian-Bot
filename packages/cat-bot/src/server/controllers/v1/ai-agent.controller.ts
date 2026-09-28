@@ -10,24 +10,25 @@ import {
   probeConnection,
   resolveNeedleConfig,
   DEFAULT_TIMEOUT_MS,
+  DEFAULT_MAX_NEW_TOKENS,
   MAX_TIMEOUT_MS,
 } from '@/engine/agent/lib/needle-client.lib.js';
 import type { ConnectionProbe } from '@/engine/agent/lib/needle-client.lib.js';
 
 /**
- * AI Agent Controller — Admin API for the hosted Cactus Needle 3 service.
+ * AI Agent Controller — Admin API for the standalone Needle 3 Render API.
  *
  *   GET  /api/v1/admin/ai-agent               — effective settings (secret masked)
- *   PUT  /api/v1/admin/ai-agent               — update URL / token / enabled / limits
- *   POST /api/v1/admin/ai-agent/test          — REAL probe: model + /complete
+ *   PUT  /api/v1/admin/ai-agent               — update URL / key / enabled / limits
+ *   POST /api/v1/admin/ai-agent/test          — REAL probe: /health + /v1/complete
  *   GET  /api/v1/admin/ai-agent/capabilities  — live detection (5-min cache)
  *
- * Authentication model: the hosted service may be unauthenticated (no token
- * needed — normal) or guarded by a deployment-level Service Token. There is
- * NO "Cactus API Key" concept here: a Cactus Platform key is only for
- * Platform fine-tuning/jobs and is never sent to /complete.
+ * Authentication model: the standalone service requires NEEDLE_API_KEY
+ * (sent as `Authorization: Bearer`). There is NO "Cactus Platform API key"
+ * concept here: a Platform key is only for Platform fine-tuning/jobs and
+ * is never sent to /v1/complete.
  *
- * Secret handling: the Service Token is NEVER returned to the browser
+ * Secret handling: the API key is NEVER returned to the browser
  * (`tokenConfigured` / `authMode` only) and NEVER logged. Writes go through
  * the server-side encrypted store (AES-256-GCM at rest).
  */
@@ -48,6 +49,7 @@ function toPublicSettings(settings: Awaited<ReturnType<typeof getAiAgentSettings
     tokenConfigured: settings.tokenConfigured,
     authMode: settings.tokenConfigured ? 'token' : 'none',
     timeoutMs: settings.timeoutMs,
+    maxNewTokens: settings.maxNewTokens,
     confidenceThreshold: settings.confidenceThreshold,
     updatedAt: settings.updatedAt,
     lastSuccessAt: getAiAgentLastSuccess(),
@@ -75,7 +77,7 @@ class AiAgentController {
   async updateSettings(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const { enabled, needleUrl, token, timeoutMs, confidenceThreshold } = body;
+    const { enabled, needleUrl, token, timeoutMs, maxNewTokens, confidenceThreshold } = body;
 
     if (typeof enabled !== 'boolean') {
       res.status(400).json({ error: 'enabled must be a boolean' });
@@ -101,6 +103,12 @@ class AiAgentController {
       res.status(400).json({ error: `timeoutMs must be between 1000 and ${MAX_TIMEOUT_MS}` });
       return;
     }
+    const tokens =
+      maxNewTokens === undefined ? DEFAULT_MAX_NEW_TOKENS : Number(maxNewTokens);
+    if (!Number.isFinite(tokens) || tokens < 1 || tokens > 512) {
+      res.status(400).json({ error: 'maxNewTokens must be between 1 and 512' });
+      return;
+    }
     const confidence =
       confidenceThreshold === undefined ? 0.7 : Number(confidenceThreshold);
     if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
@@ -114,6 +122,7 @@ class AiAgentController {
         needleUrl: url,
         ...(token !== undefined ? { token: token.trim() } : {}),
         timeoutMs: Math.round(timeout),
+        maxNewTokens: Math.round(tokens),
         confidenceThreshold: confidence,
       });
       res.status(200).json(toPublicSettings(settings));

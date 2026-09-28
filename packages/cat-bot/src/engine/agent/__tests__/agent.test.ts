@@ -11,7 +11,6 @@ vi.mock('../lib/needle-client.lib.js', async (importOriginal) => {
   return {
     ...actual,
     completeTurn: vi.fn(),
-    resetRemote: vi.fn(async () => undefined),
   };
 });
 
@@ -28,6 +27,11 @@ interface CapturedReply {
 }
 
 function makeCtx(replies: CapturedReply[]): AppCtx {
+  // Unique sender/message per context so the shared in-memory AI rate
+  // limiter never bleeds cadence state across test cases.
+  const n = (makeCtx as { seq?: number }).seq = ((makeCtx as { seq?: number }).seq ?? 0) + 1;
+  const sender = `user${n}`;
+  const msgId = `msg${n}`;
   const ping = {
     meta: {
       name: 'ping',
@@ -66,7 +70,7 @@ function makeCtx(replies: CapturedReply[]): AppCtx {
   };
 
   return {
-    event: { senderID: 'user1', threadID: 'thread1', messageID: 'msg1' },
+    event: { senderID: sender, threadID: 'thread1', messageID: msgId },
     commands,
     prefix: '/',
     native: { platform: 'fluxer', userId: 'owner1', sessionId: 'sess1' },
@@ -121,7 +125,8 @@ describe('agent loop (Needle-driven, locally executed tools)', () => {
     __clearToolCacheForTests();
     process.env['NEEDLE_ENABLED'] = 'true';
     process.env['NEEDLE_URL'] = 'https://needle.example';
-    process.env['NEEDLE_AUTH_TOKEN'] = 'tok';
+    process.env['NEEDLE_API_KEY'] = 'tok';
+    delete process.env['NEEDLE_AUTH_TOKEN'];
   });
 
   it('runs help → test_command → send_result and delivers once', async () => {
@@ -234,7 +239,117 @@ describe('agent loop (Needle-driven, locally executed tools)', () => {
       new NeedleClientError('SERVICE_UNAVAILABLE', 'down'),
     );
     const result = await runAgent('hi', ctx);
-    expect(result).toContain('temporarily unavailable');
+    expect(result).toContain('currently unavailable');
     expect(replies).toHaveLength(0);
+  });
+
+  it('maps auth failure to a configuration message and timeout distinctly', async () => {
+    const replies: CapturedReply[] = [];
+    const ctx = makeCtx(replies);
+    const { NeedleClientError } = await import('../lib/needle-client.lib.js');
+    mockedCompleteTurn().mockRejectedValueOnce(
+      new NeedleClientError('UNAUTHORIZED', 'bad key'),
+    );
+    expect(await runAgent('hi', ctx)).toContain('not configured correctly');
+
+    mockedCompleteTurn().mockRejectedValueOnce(
+      new NeedleClientError('TIMEOUT', 'slow'),
+    );
+    expect(await runAgent('hi', ctx)).toContain('timed out');
+    expect(replies).toHaveLength(0);
+  });
+
+  it('denies restricted tools for unauthorized users (executor never runs)', async () => {
+    const replies: CapturedReply[] = [];
+    const ctx = makeCtx(replies);
+    let executed = false;
+    ctx.commands.set('restart', {
+      meta: {
+        name: 'restart',
+        description: 'Restart the bot',
+        category: 'admin',
+        usage: '',
+        role: Role.SYSTEM_ADMIN,
+        cooldown: 0,
+        hasPrefix: true,
+      },
+      onCommand: async () => {
+        executed = true;
+      },
+    } as unknown as Record<string, unknown>);
+
+    mockedCompleteTurn()
+      .mockResolvedValueOnce(
+        turn([
+          {
+            name: 'test_command',
+            arguments: { commands: [{ command: 'restart', args: [] }] },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        turn([{ name: 'send_result', arguments: { message: 'Blocked: admins only.' } }]),
+      );
+    const result = await runAgent('restart the bot', ctx);
+    expect(result).toBe('');
+    expect(executed).toBe(false);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.options['message']).toBe('Blocked: admins only.');
+  });
+
+  it('rejects malformed tool arguments without executing anything', async () => {
+    const replies: CapturedReply[] = [];
+    const ctx = makeCtx(replies);
+    let executed = false;
+    const ping = ctx.commands.get('ping') as Record<string, unknown>;
+    const orig = ping['onCommand'];
+    ping['onCommand'] = async (...args: unknown[]) => {
+      executed = true;
+      return (orig as (...a: unknown[]) => unknown)(...args);
+    };
+
+    mockedCompleteTurn()
+      .mockResolvedValueOnce(
+        turn([{ name: 'test_command', arguments: { bogus: 'hello' } }]),
+      )
+      .mockResolvedValueOnce(
+        turn([{ name: 'send_result', arguments: { message: 'Understood.' } }]),
+      );
+    const result = await runAgent('ping?', ctx);
+    expect(result).toBe('');
+    expect(executed).toBe(false);
+    expect(replies).toHaveLength(1);
+  });
+
+  it('executes multiple function calls through validation in order', async () => {
+    const replies: CapturedReply[] = [];
+    const ctx = makeCtx(replies);
+    const order: string[] = [];
+    const origPing = (ctx.commands.get('ping') as Record<string, unknown>)['onCommand'];
+    (ctx.commands.get('ping') as Record<string, unknown>)['onCommand'] = async (
+      c: AppCtx,
+    ) => {
+      order.push((c.event['message'] as string) ?? 'ping');
+      return (origPing as (c: AppCtx) => unknown)(c);
+    };
+
+    mockedCompleteTurn()
+      .mockResolvedValueOnce(
+        turn([
+          { name: 'help', arguments: { query: 'ping' } },
+          {
+            name: 'test_command',
+            arguments: { commands: [{ command: 'ping', args: [] }] },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        turn([{ name: 'send_result', arguments: { message: 'Pong!' } }]),
+      );
+    const result = await runAgent('ping twice', ctx);
+    expect(result).toBe('');
+    expect(order).toHaveLength(1);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.options['message']).toBe('Pong!');
   });
 });
