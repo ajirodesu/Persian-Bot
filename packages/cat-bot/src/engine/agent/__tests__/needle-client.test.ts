@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './mock-database.js';
-import { dbStubs, resetDbStubs } from './mock-database.js';
+import { resetDbStubs } from './mock-database.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import {
   completeTurn,
-  fetchCapabilities,
+  fetchModelName,
   NeedleClientError,
-  resetSession,
+  normalizeBaseUrl,
+  probeConnection,
+  resetRemote,
   resolveNeedleConfig,
 } from '../lib/needle-client.lib.js';
 
@@ -21,10 +23,18 @@ const TOOLS = [
 const BASE_CONFIG = {
   enabled: true,
   url: 'https://needle.example',
-  token: 'tok',
+  token: '',
   timeoutMs: 5000,
   confidenceThreshold: 0.7,
+  tokenConfigured: false,
+  authMode: 'none' as const,
+};
+
+const TOKEN_CONFIG = {
+  ...BASE_CONFIG,
+  token: 'tok',
   tokenConfigured: true,
+  authMode: 'token' as const,
 };
 
 function jsonResponse(status: number, data: unknown) {
@@ -35,7 +45,13 @@ function jsonResponse(status: number, data: unknown) {
   };
 }
 
-describe('needle-client', () => {
+function networkError(code: string) {
+  const err = new Error(`fetch failed (${code})`);
+  (err as { cause?: unknown }).cause = { code };
+  return err;
+}
+
+describe('needle-client (playground contract)', () => {
   beforeEach(() => {
     lruCache.clear();
     vi.clearAllMocks();
@@ -51,219 +67,187 @@ describe('needle-client', () => {
     return vi.mocked(fetch);
   }
 
-  it('resolves config from env when no store exists', async () => {
+  it('normalizes the base URL without appending an endpoint', () => {
+    expect(normalizeBaseUrl('https://x.onrender.com/')).toBe('https://x.onrender.com');
+    expect(normalizeBaseUrl('https://x.onrender.com///')).toBe('https://x.onrender.com');
+    expect(normalizeBaseUrl('  https://x.onrender.com  ')).toBe('https://x.onrender.com');
+  });
+
+  it('resolves authMode none when no token is configured', async () => {
     process.env['NEEDLE_ENABLED'] = 'true';
     process.env['NEEDLE_URL'] = 'https://env-needle.example/';
-    process.env['NEEDLE_AUTH_TOKEN'] = 'envtok';
+    delete process.env['NEEDLE_AUTH_TOKEN'];
     try {
       const cfg = await resolveNeedleConfig();
       expect(cfg.enabled).toBe(true);
       expect(cfg.url).toBe('https://env-needle.example');
-      expect(cfg.tokenConfigured).toBe(true);
+      expect(cfg.authMode).toBe('none');
+      expect(cfg.timeoutMs).toBe(300000);
     } finally {
       delete process.env['NEEDLE_ENABLED'];
       delete process.env['NEEDLE_URL'];
-      delete process.env['NEEDLE_AUTH_TOKEN'];
     }
   });
 
-  it('prefers the dashboard store over env', async () => {
-    dbStubs.getAiAgentConfigStore.mockResolvedValue({
-      enabled: true,
-      needleUrl: 'https://store.example',
-      encryptedToken: '',
-      timeoutMs: 9000,
-      confidenceThreshold: 0.5,
-      updatedAt: 'x',
-    });
-    const cfg = await resolveNeedleConfig();
-    expect(cfg.url).toBe('https://store.example');
-    expect(cfg.timeoutMs).toBe(9000);
-  });
-
-  it('completes a turn and parses the documented response shape', async () => {
+  it('POSTs /complete with {query, tools} and no api_key', async () => {
     mockFetch().mockResolvedValue(
       jsonResponse(200, {
-        result: {
-          type: 'call',
-          success: true,
-          error: null,
-          error_code: null,
-          function_calls: [
-            { name: 'send_result', arguments: { message: 'hi' } },
-          ],
-          reasoning: 'r',
-          confidence: 0.9,
-          suppressed_calls: [],
-          validation: null,
-        },
+        type: 'call',
+        success: true,
+        error: null,
+        error_code: null,
+        function_calls: [{ name: 'send_result', arguments: { message: 'hi' } }],
+        reasoning: 'r',
+        confidence: 0.9,
+        suppressed_calls: [],
+        validation: null,
       }) as unknown as Response,
     );
-    const turn = await completeTurn({
-      sessionId: 's1',
-      system: 'sys',
+    const { turn, latencyMs } = await completeTurn({
+      query: 'hello',
       tools: TOOLS,
-      input: 'hello',
       config: BASE_CONFIG,
     });
     expect(turn.type).toBe('call');
     expect(turn.functionCalls).toHaveLength(1);
     expect(turn.functionCalls[0]?.arguments).toEqual({ message: 'hi' });
     expect(turn.confidence).toBe(0.9);
-    const [, opts] = mockFetch().mock.calls[0] as [string, RequestInit];
-    expect((opts.headers as Record<string, string>)['Authorization']).toBe(
-      'Bearer tok',
+    expect(latencyMs).toBeGreaterThanOrEqual(0);
+    const [calledUrl, opts] = mockFetch().mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('https://needle.example/complete');
+    const body = JSON.parse(opts.body as string) as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual(['query', 'tools']);
+    expect(body).not.toHaveProperty('api_key');
+    expect(opts.headers).not.toHaveProperty('Authorization');
+  });
+
+  it('sends the Service Token only when configured', async () => {
+    mockFetch().mockResolvedValue(
+      jsonResponse(200, { type: 'respond', success: true, function_calls: [] }) as unknown as Response,
     );
+    await completeTurn({ query: 'x', tools: TOOLS, config: TOKEN_CONFIG });
+    const [, opts] = mockFetch().mock.calls[0] as [string, RequestInit];
+    expect((opts.headers as Record<string, string>)['Authorization']).toBe('Bearer tok');
   });
 
   it('treats empty function_calls as refusal (no invented action)', async () => {
     mockFetch().mockResolvedValue(
-      jsonResponse(200, {
-        result: { type: 'respond', success: true, function_calls: [] },
-      }) as unknown as Response,
+      jsonResponse(200, { type: 'respond', success: true, function_calls: [] }) as unknown as Response,
     );
-    const turn = await completeTurn({
-      sessionId: 's1',
-      system: 'sys',
-      tools: TOOLS,
-      input: 'nonsense',
-      config: BASE_CONFIG,
-    });
+    const { turn } = await completeTurn({ query: 'nonsense', tools: TOOLS, config: BASE_CONFIG });
     expect(turn.functionCalls).toEqual([]);
   });
 
-  it('parses string-encoded arguments and drops unparseable calls', async () => {
+  it('maps a 200 {"error"} body to NEEDLE_ERROR', async () => {
     mockFetch().mockResolvedValue(
-      jsonResponse(200, {
-        result: {
-          type: 'call',
-          success: true,
-          function_calls: [
-            { name: 'a', arguments: '{"x":1}' },
-            { name: 'b', arguments: '{broken' },
-          ],
-        },
-      }) as unknown as Response,
+      jsonResponse(200, { error: 'engine exploded' }) as unknown as Response,
     );
-    const turn = await completeTurn({
-      sessionId: 's1',
-      system: 'sys',
-      tools: TOOLS,
-      input: 'x',
-      config: BASE_CONFIG,
-    });
-    expect(turn.functionCalls.map((c) => c.name)).toEqual(['a']);
+    await expect(
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'NEEDLE_ERROR' });
   });
 
-  it('throws UNAUTHORIZED on 401 without retry', async () => {
-    mockFetch().mockResolvedValue(jsonResponse(401, {}) as unknown as Response);
+  it('distinguishes DNS, refused, 404, 401 and 500 failures', async () => {
+    mockFetch().mockRejectedValueOnce(networkError('ENOTFOUND'));
     await expect(
-      completeTurn({
-        sessionId: 's1',
-        system: 'sys',
-        tools: TOOLS,
-        input: 'x',
-        config: BASE_CONFIG,
-      }),
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'UNRESOLVABLE' });
+
+    mockFetch().mockRejectedValueOnce(networkError('ECONNREFUSED'));
+    await expect(
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'REFUSED' });
+
+    mockFetch().mockResolvedValueOnce(jsonResponse(404, 'not found') as unknown as Response);
+    await expect(
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'ENDPOINT_NOT_FOUND' });
+
+    mockFetch().mockResolvedValueOnce(jsonResponse(401, {}) as unknown as Response);
+    await expect(
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-    expect(mockFetch()).toHaveBeenCalledTimes(1);
+    expect(mockFetch().mock.calls.length).toBeGreaterThan(0);
+
+    // 401 is never retried.
+    const callsBefore = mockFetch().mock.calls.length;
+    mockFetch().mockResolvedValueOnce(jsonResponse(401, {}) as unknown as Response);
+    await expect(
+      completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(mockFetch().mock.calls.length).toBe(callsBefore + 1);
   });
 
   it('retries once on 500 then succeeds', async () => {
     mockFetch()
       .mockResolvedValueOnce(jsonResponse(500, {}) as unknown as Response)
       .mockResolvedValueOnce(
-        jsonResponse(200, {
-          result: { type: 'respond', success: true, function_calls: [] },
-        }) as unknown as Response,
+        jsonResponse(200, { type: 'respond', success: true, function_calls: [] }) as unknown as Response,
       );
-    const turn = await completeTurn({
-      sessionId: 's1',
-      system: 'sys',
-      tools: TOOLS,
-      input: 'x',
-      config: BASE_CONFIG,
-    });
+    const { turn } = await completeTurn({ query: 'x', tools: TOOLS, config: BASE_CONFIG });
     expect(turn.type).toBe('respond');
     expect(mockFetch()).toHaveBeenCalledTimes(2);
   });
 
-  it('throws MALFORMED on garbage responses', async () => {
-    mockFetch().mockResolvedValue(
-      jsonResponse(200, { nope: true }) as unknown as Response,
-    );
-    await expect(
-      completeTurn({
-        sessionId: 's1',
-        system: 'sys',
-        tools: TOOLS,
-        input: 'x',
-        config: BASE_CONFIG,
-      }),
-    ).rejects.toMatchObject({ code: 'MALFORMED' });
-  });
-
   it('throws DISABLED / INCOMPLETE_CONFIG before any network call', async () => {
     await expect(
-      completeTurn({
-        sessionId: 's1',
-        system: 'sys',
-        tools: TOOLS,
-        input: 'x',
-        config: { ...BASE_CONFIG, enabled: false },
-      }),
+      completeTurn({ query: 'x', tools: TOOLS, config: { ...BASE_CONFIG, enabled: false } }),
     ).rejects.toMatchObject({ code: 'DISABLED' });
     await expect(
-      completeTurn({
-        sessionId: 's1',
-        system: 'sys',
-        tools: TOOLS,
-        input: 'x',
-        config: { ...BASE_CONFIG, url: '', tokenConfigured: false },
-      }),
+      completeTurn({ query: 'x', tools: TOOLS, config: { ...BASE_CONFIG, url: '' } }),
     ).rejects.toMatchObject({ code: 'INCOMPLETE_CONFIG' });
     expect(mockFetch()).not.toHaveBeenCalled();
   });
 
-  it('detects capabilities truthfully (mcp/skills false)', async () => {
+  it('fetches the model name from GET /model', async () => {
     mockFetch().mockResolvedValue(
-      jsonResponse(200, {
-        toolCalling: true,
-        mcp: false,
-        skills: false,
-        generation: 3,
-        needleVersion: '3.0.1',
-        runtimeAvailable: true,
-      }) as unknown as Response,
+      jsonResponse(200, { name: 'needle3.cact' }) as unknown as Response,
     );
-    const { status, capabilities } = await fetchCapabilities(BASE_CONFIG);
-    expect(status).toBe('Connected');
-    expect(capabilities?.toolCalling).toBe(true);
-    expect(capabilities?.mcp).toBe(false);
-    expect(capabilities?.skills).toBe(false);
+    await expect(fetchModelName(BASE_CONFIG)).resolves.toBe('needle3.cact');
+    const [calledUrl] = mockFetch().mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('https://needle.example/model');
   });
 
-  it('reports Unauthorized / Disabled / Configuration incomplete without faking', async () => {
-    mockFetch().mockResolvedValue(jsonResponse(401, {}) as unknown as Response);
-    expect((await fetchCapabilities(BASE_CONFIG)).status).toBe('Unauthorized');
-    expect(
-      (await fetchCapabilities({ ...BASE_CONFIG, enabled: false })).status,
-    ).toBe('Disabled');
-    expect(
-      (
-        await fetchCapabilities({
-          ...BASE_CONFIG,
-          url: '',
-          tokenConfigured: false,
-        })
-      ).status,
-    ).toBe('Configuration incomplete');
+  it('resetRemote POSTs /reset and never throws', async () => {
+    mockFetch().mockResolvedValue(jsonResponse(200, { ok: true }) as unknown as Response);
+    await expect(resetRemote(BASE_CONFIG)).resolves.toBeUndefined();
+    const [calledUrl] = mockFetch().mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('https://needle.example/reset');
+    mockFetch().mockRejectedValue(networkError('ECONNREFUSED'));
+    await expect(resetRemote(BASE_CONFIG)).resolves.toBeUndefined();
   });
 
-  it('resetSession is best-effort (never throws)', async () => {
-    mockFetch().mockRejectedValue(new Error('down'));
-    await expect(resetSession('s1', BASE_CONFIG)).resolves.toBeUndefined();
-    expect(true).toBe(true);
+  it('probeConnection connects only after a real /complete', async () => {
+    mockFetch()
+      .mockResolvedValueOnce(jsonResponse(200, { name: 'needle3.cact' }) as unknown as Response)
+      .mockResolvedValueOnce(
+        jsonResponse(200, { type: 'call', success: true, function_calls: [] }) as unknown as Response,
+      );
+    const probe = await probeConnection({ config: BASE_CONFIG, bypassCache: true });
+    expect(probe.status).toBe('Connected');
+    expect(probe.model).toBe('needle3.cact');
+    expect(probe.endpoint).toBe('/complete');
+    expect(probe.capabilities?.toolCalling).toBe(true);
+    expect(probe.capabilities?.mcp).toBe(false);
+    expect(probe.capabilities?.skills).toBe(false);
+    expect(probe.detail).toBeNull();
+  });
+
+  it('probeConnection reports unreachable model host distinctly', async () => {
+    mockFetch().mockRejectedValue(networkError('ENOTFOUND'));
+    const probe = await probeConnection({ config: BASE_CONFIG, bypassCache: true });
+    expect(probe.status).toBe('Disconnected');
+    expect(probe.detail).toContain('Cannot resolve host');
+    expect(probe.capabilities).toBeNull();
+  });
+
+  it('probeConnection reports refused /complete distinctly', async () => {
+    mockFetch()
+      .mockResolvedValueOnce(jsonResponse(200, { name: 'needle3.cact' }) as unknown as Response)
+      .mockRejectedValueOnce(networkError('ECONNREFUSED'));
+    const probe = await probeConnection({ config: BASE_CONFIG, bypassCache: true });
+    expect(probe.status).toBe('Disconnected');
+    expect(probe.detail).toContain('Connection refused');
   });
 
   it('NeedleClientError carries codes', () => {

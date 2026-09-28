@@ -6,7 +6,12 @@
  * Separated from listen() to allow supertest mounts.
  */
 
-import express, { type Application } from 'express';
+import express, {
+  type Application,
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'express';
 import { env } from '@/engine/config/env.config.js';
 import { toNodeHandler } from 'better-auth/node';
 import { auth, adminAuth } from '@/server/lib/better-auth.lib.js';
@@ -100,6 +105,15 @@ export function createApp(): Application {
 
   // Mount API endpoints for bot administration
   app.use('/api/v1', apiV1Router);
+
+  // JSON error boundary for /api routes — async controller rejections
+  // forwarded via next(err) land here as 500 JSON instead of Express's
+  // default HTML page (and, critically, never as uncaught rejections).
+  // NOTE: the 4-arg signature is what marks this as error middleware.
+  app.use('/api', (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    res.status(500).json({ error: message });
+  });
 
   // Health check — startedAt is the backend process boot time (ms epoch);
   // the dashboard uptime card derives live uptime from it.

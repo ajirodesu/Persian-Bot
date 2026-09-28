@@ -433,7 +433,6 @@ export default function SettingsPage() {
                       aria-checked={active}
                       onClick={() => {
                         setTheme(opt.id)
-                        success(`Interface theme set to: ${opt.label}`)
                       }}
                       className={cn(
                         'flex items-center justify-center space-x-2 py-2 px-2.5 rounded-lg text-xs font-medium transition-colors duration-100 active:opacity-[0.82] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
@@ -533,7 +532,7 @@ export default function SettingsPage() {
                 </IconWell>
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-semibold text-on-surface leading-snug">
-                    Two-Factor & Sessions
+                    Sessions
                   </span>
                   <span className="text-xs text-primary mt-0.5 flex items-center space-x-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />

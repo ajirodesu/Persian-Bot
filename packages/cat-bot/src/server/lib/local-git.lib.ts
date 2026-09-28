@@ -260,13 +260,44 @@ function statusKind(x: string, y: string): GitChangeStatus {
   }
 }
 
+/** Parses the `## ` header of `git status --porcelain=v1 -b -z`. */
+function parsePorcelainHeader(token: string): {
+  branch: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+} {
+  const none = { branch: null, upstream: null, ahead: 0, behind: 0 };
+  const body = token.slice(3);
+  if (body.startsWith('HEAD (no branch)')) return none;
+  let branch = body;
+  let upstream: string | null = null;
+  let ahead = 0;
+  let behind = 0;
+  const dots = body.indexOf('...');
+  if (dots !== -1) {
+    branch = body.slice(0, dots).replace(/^No commits yet on /, '');
+    const rest = body.slice(dots + 3);
+    const bracket = rest.indexOf(' [');
+    upstream = bracket === -1 ? rest : rest.slice(0, bracket);
+    const aheadMatch = /ahead (\d+)/.exec(rest);
+    if (aheadMatch) ahead = Number.parseInt(aheadMatch[1] ?? '0', 10) || 0;
+    const behindMatch = /behind (\d+)/.exec(rest);
+    if (behindMatch) behind = Number.parseInt(behindMatch[1] ?? '0', 10) || 0;
+  } else {
+    branch = branch.replace(/^No commits yet on /, '');
+  }
+  if (upstream === '') upstream = null;
+  return { branch: branch || null, upstream, ahead, behind };
+}
+
 /** Parses `git status --porcelain=v1 -z` into structured changes. */
 function parsePorcelainChanges(stdout: string): GitChange[] {
   const tokens = stdout.split('\0');
   const changes: GitChange[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const raw = tokens[i];
-    if (!raw || raw.length < 3) continue;
+    if (!raw || raw.length < 3 || raw.startsWith('## ')) continue;
     const x = raw[0] ?? ' ';
     const y = raw[1] ?? ' ';
     let path = raw.slice(3);
@@ -325,30 +356,63 @@ export async function getGitMeta(): Promise<GitMeta> {
 }
 
 /** Full working-tree status: branch, upstream, ahead/behind, changed files. */
-export async function getGitStatus(): Promise<GitStatus> {
+export async function getGitStatus(force = false): Promise<GitStatus> {
+  if (!force && statusCache && Date.now() - statusCache.at < STATUS_TTL_MS) {
+    return statusCache.status;
+  }
   const root = getRepoRootOrThrow();
-  const [porcelain, branch, upstream] = await Promise.all([
-    runGit([...NO_QUOTE_CONFIG, 'status', '--porcelain=v1', '-z']),
-    getCurrentBranch(),
-    getUpstream(),
+  // ONE subprocess: `-b` folds branch/upstream/ahead/behind into the same
+  // porcelain output (previously 4 separate git invocations).
+  const porcelain = await runGit([
+    ...NO_QUOTE_CONFIG,
+    'status',
+    '--porcelain=v1',
+    '-b',
+    '-z',
   ]);
-  const aheadBehind = upstream !== null
-    ? await getAheadBehind()
-    : { ahead: 0, behind: 0 };
-
+  const headerToken = porcelain.split('\0').find((t) => t.startsWith('## ')) ?? '';
+  const header =
+    headerToken !== '' ? parsePorcelainHeader(headerToken) : await fallbackBranchInfo();
   const changes = parsePorcelainChanges(porcelain);
-  return {
+  const status: GitStatus = {
     configured: true,
     root,
-    branch,
-    upstream,
-    ahead: aheadBehind.ahead,
-    behind: aheadBehind.behind,
+    branch: header.branch,
+    upstream: header.upstream,
+    ahead: header.ahead,
+    behind: header.behind,
     changes,
     stagedCount: changes.filter((c) => c.staged).length,
     unstagedCount: changes.filter((c) => !c.staged).length,
     clean: changes.length === 0,
   };
+  statusCache = { at: Date.now(), status };
+  return status;
+}
+
+/** Branch info when the status header is missing (bare/odd repos). */
+async function fallbackBranchInfo(): Promise<{
+  branch: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+}> {
+  const [branch, upstream] = await Promise.all([getCurrentBranch(), getUpstream()]);
+  const aheadBehind =
+    upstream !== null ? await getAheadBehind() : { ahead: 0, behind: 0 };
+  return { branch, upstream, ...aheadBehind };
+}
+
+// Short-TTL memo for working-tree status: Files markers, the Git page and
+// manual refreshes within the same burst share one computation instead of
+// re-spawning git. Every mutation below invalidates, so writes never read
+// stale (worst case a parallel external change lags TTL_MS).
+const STATUS_TTL_MS = 2000;
+let statusCache: { at: number; status: GitStatus } | null = null;
+
+/** Drops the cached status — called by every local mutation. */
+export function invalidateGitStatus(): void {
+  statusCache = null;
 }
 
 /** Current branch name, or a short SHA when HEAD is detached. */
@@ -542,6 +606,7 @@ export async function stagePaths(paths: string[]): Promise<void> {
   } else {
     await runGit(['add', '--', ...normalized]);
   }
+  invalidateGitStatus();
 }
 
 /** Unstages paths (or everything when no paths are given). */
@@ -562,6 +627,7 @@ export async function unstagePaths(paths: string[]): Promise<void> {
     }
     void err;
   }
+  invalidateGitStatus();
 }
 
 /**
@@ -627,7 +693,9 @@ export async function commitStaged(
     throw new RepoFileManagerError(400, 'Commit message is required');
   }
   try {
-    return await runCommit(cleanMessage, identity);
+    const result = await runCommit(cleanMessage, identity);
+    invalidateGitStatus();
+    return result;
   } catch (err) {
     if (
       err instanceof RepoFileManagerError &&
@@ -635,7 +703,9 @@ export async function commitStaged(
     ) {
       // The server has no git identity — commit as the bot instead of failing.
       // User-configured identity (repo/global git config) still wins when present.
-      return runCommit(cleanMessage, FALLBACK_COMMITTER);
+      const result = await runCommit(cleanMessage, FALLBACK_COMMITTER);
+      invalidateGitStatus();
+      return result;
     }
     throw err;
   }
@@ -886,6 +956,7 @@ export async function pushCurrent(): Promise<string> {
       ? upstream.slice(0, upstream.indexOf('/'))
       : 'origin';
   await tryUpdateTrackingRef(remote, branch, result.commitSha);
+  invalidateGitStatus();
 
   return `Pushed ${result.pushedCount} commit${result.pushedCount === 1 ? '' : 's'} to ${remote}/${branch} (${result.commitSha.slice(0, 7)})`;
 }
@@ -893,6 +964,7 @@ export async function pushCurrent(): Promise<string> {
 /** Pulls the latest changes for the current branch from its upstream. */
 export async function pullCurrent(): Promise<string> {
   const out = await runGit(['pull']);
+  invalidateGitStatus();
   return out.trim();
 }
 
@@ -927,6 +999,7 @@ export async function listBranches(): Promise<string[]> {
 /** Switches the working tree to an existing local branch. */
 export async function checkoutBranch(branch: string): Promise<string> {
   const out = await runGit(['checkout', branch]);
+  invalidateGitStatus();
   return out.trim();
 }
 
@@ -963,6 +1036,7 @@ export async function discardChanges(paths: string[]): Promise<void> {
   if (cleanTargets.length > 0) {
     await runGit(['clean', '-fd', '--', ...cleanTargets]);
   }
+  invalidateGitStatus();
 }
 
 /** Creates a new local branch from the current HEAD and switches to it. */
@@ -977,5 +1051,6 @@ export async function createBranch(name: string): Promise<string> {
     throw new RepoFileManagerError(400, `Invalid branch name: ${cleanName}`);
   }
   const out = await runGit(['checkout', '-b', cleanName]);
+  invalidateGitStatus();
   return out.trim();
 }

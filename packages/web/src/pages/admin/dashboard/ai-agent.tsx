@@ -1,98 +1,205 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { useState } from 'react'
-import { Bot, KeyRound, Link2, PlugZap, Sparkles, Wrench } from 'lucide-react'
+import {
+  Bot,
+  KeyRound,
+  Link2,
+  PlugZap,
+  RefreshCw,
+  Sparkles,
+  Wrench,
+} from 'lucide-react'
 import Alert from '@/components/ui/feedback/Alert'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import Button from '@/components/ui/buttons/Button'
-import Card from '@/components/ui/data-display/Card'
-import Status from '@/components/ui/data-display/Status'
-import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Switch from '@/components/ui/forms/Switch'
+import { useSnackbar } from '@/contexts/SnackbarContext'
 import { useAiAgent } from '@/features/admin/hooks/useAiAgent'
-import type { AiAgentConnectionStatus } from '@/features/admin/services/ai-agent.service'
-import type { AiAgentSettingsDto } from '@/features/admin/services/ai-agent.service'
+import type {
+  AiAgentConnectionStatus,
+  AiAgentSettingsDto,
+} from '@/features/admin/services/ai-agent.service'
 import { cn } from '@/utils/cn.util'
 
-/**
- * Admin → AI Agent page.
- *
- * Controls the external Cactus Needle 3 integration: connection settings
- * (URL / token / enabled), a real authenticated Test Connection, and live
- * capability detection. MCP and Skills render their truthful state —
- * "Not supported by this Needle 3 build" — with no management controls when
- * the connected build does not provide them.
- */
+// ============================================================================
+// Small presentational pieces matching admin settings
+// ============================================================================
 
-function statusColor(status: AiAgentConnectionStatus | null) {
-  switch (status) {
-    case 'Connected':
-      return 'success' as const
-    case 'Unauthorized':
-    case 'Configuration incomplete':
-    case 'Disabled':
-      return 'warning' as const
-    default:
-      return 'error' as const
-  }
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-1">
+      <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+        {children}
+      </h2>
+    </div>
+  )
 }
 
-function SectionHeader({
-  icon,
-  title,
-  hint,
+function StatusChip({
+  text,
+  tone = 'default',
 }: {
-  icon: React.ReactNode
-  title: string
-  hint?: string
+  text: string
+  tone?: 'default' | 'accent' | 'success' | 'error' | 'info' | 'warning'
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex items-center justify-center w-9 h-9 rounded-lg border bg-surface-container-high border-hairline text-primary flex-shrink-0">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <h2 className="text-body-lg font-semibold text-on-surface leading-tight">
-          {title}
-        </h2>
-        {hint && (
-          <p className="text-label-md text-on-surface-variant truncate">
-            {hint}
-          </p>
-        )}
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border flex-shrink-0',
+        tone === 'accent' && 'bg-surface-container-high text-primary border-primary/30',
+        tone === 'success' && 'bg-surface-container-high text-success border-success/30',
+        tone === 'error' && 'bg-surface-container-high text-error border-error/30',
+        tone === 'info' && 'bg-surface-container-high text-info border-info/30',
+        tone === 'warning' && 'bg-surface-container-high text-warning border-warning/30',
+        tone === 'default' && 'bg-surface-container-high text-on-surface-variant border-hairline',
+      )}
+    >
+      {text}
+    </span>
+  )
+}
+
+function IconWell({
+  children,
+  tone = 'default',
+  size = 'md',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'danger'
+  size?: 'md' | 'lg'
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg border flex items-center justify-center flex-shrink-0',
+        size === 'lg' ? 'w-11 h-11' : 'w-9 h-9',
+        tone === 'accent' && 'bg-primary/10 border-primary/30 text-primary',
+        tone === 'danger' && 'bg-error/10 border-error/30 text-error',
+        tone === 'default' && 'bg-surface-container-high border-hairline text-on-surface-variant',
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function StatusBadge({ active }: { active: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border',
+        active
+          ? 'bg-surface-container-high text-primary border-primary/30'
+          : 'bg-surface-container-high text-on-surface-variant border-hairline',
+      )}
+    >
+      {active ? 'Active' : 'Inactive'}
+    </span>
+  )
+}
+
+function AiAgentPageSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-0 max-w-[420px] md:max-w-2xl w-full mx-auto pb-8"
+      aria-busy="true"
+    >
+      <div className="px-5 pt-4 space-y-6">
+        {[0, 1, 2].map((s) => (
+          <section key={s} className="space-y-2">
+            <Skeleton textSize="body-sm" width="96px" />
+            <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+              <div className="p-3.5 flex items-center gap-3.5">
+                <Skeleton variant="input" width={36} height={36} />
+                <div className="flex flex-col gap-2">
+                  <Skeleton textSize="body-sm" width="140px" />
+                  <Skeleton textSize="body-sm" width="100px" />
+                </div>
+              </div>
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   )
 }
 
-export default function AiAgentPage() {
+function statusTone(
+  status: AiAgentConnectionStatus | null,
+): 'success' | 'warning' | 'error' | 'default' {
+  switch (status) {
+    case 'Connected':
+      return 'success'
+    case 'Unauthorized':
+    case 'Configuration incomplete':
+    case 'Disabled':
+      return 'warning'
+    case 'Service unavailable':
+    case 'Endpoint not found':
+    case 'Disconnected':
+    case 'Unsupported':
+      return 'error'
+    default:
+      return 'default'
+  }
+}
+
+function formatLatency(ms: number | null): string {
+  if (ms === null || ms === undefined) return '—'
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  return `${(ms / 1000).toFixed(1)} s`
+}
+
+function capabilityChip(supported: boolean | undefined, unsupportedLabel: string) {
+  if (supported === undefined) return <StatusChip text="…" />
+  return supported ? (
+    <StatusChip text="Supported" tone="success" />
+  ) : (
+    <StatusChip text={unsupportedLabel} />
+  )
+}
+
+/**
+ * AdminAiAgentPage — /admin/dashboard/ai-agent
+ *
+ * Controls the external Cactus Needle 3 integration: connection settings
+ * (URL / token / enabled / limits), a real authenticated Test Connection,
+ * and live capability detection. MCP and Skills render their truthful
+ * state — unsupported by this Needle 3 build — with no management controls.
+ */
+export default function AdminAiAgentPage() {
+  const { success, error: notifyError } = useSnackbar()
   const {
     settings,
     status,
+    detail,
     capabilities,
+    model,
+    endpoint,
+    latencyMs,
+    lastCheckedAt,
     loading,
     saving,
     testing,
     error,
-    notice,
     save,
     test,
-    dismissNotice,
+    refresh,
   } = useAiAgent()
 
   const [needleUrl, setNeedleUrl] = useState('')
   const [token, setToken] = useState('')
   const [enabled, setEnabled] = useState(false)
-  const [timeoutMs, setTimeoutMs] = useState('30000')
+  const [timeoutMs, setTimeoutMs] = useState('300000')
   const [confidence, setConfidence] = useState('0.7')
   const [dirty, setDirty] = useState(false)
 
   // Render-time form sync: when freshly loaded settings arrive, mirror them
   // into the local form state once (React "adjust state during render"
   // pattern — no effect involved).
-  const [lastSynced, setLastSynced] =
-    useState<AiAgentSettingsDto | null>(null)
+  const [lastSynced, setLastSynced] = useState<AiAgentSettingsDto | null>(null)
   if (settings && settings !== lastSynced) {
     setLastSynced(settings)
     setNeedleUrl(settings.needleUrl)
@@ -104,6 +211,7 @@ export default function AiAgentPage() {
   }
 
   const markDirty = () => setDirty(true)
+  const connected = status === 'Connected'
 
   const handleSave = async () => {
     const timeout = parseInt(timeoutMs, 10)
@@ -111,309 +219,314 @@ export default function AiAgentPage() {
     const ok = await save({
       enabled,
       needleUrl: needleUrl.trim(),
-      // Omit the token to keep the stored secret; empty string clears it.
+      // Omit the token to keep the stored secret; it is never shown.
       ...(token !== '' ? { token } : {}),
-      timeoutMs: Number.isFinite(timeout) ? timeout : 30000,
+      timeoutMs: Number.isFinite(timeout) ? timeout : 300000,
       confidenceThreshold: Number.isFinite(conf) ? conf : 0.7,
     })
-    if (ok) setDirty(false)
+    if (ok) {
+      setDirty(false)
+      success('AI Agent settings saved.')
+    } else {
+      notifyError('Failed to save AI Agent settings.')
+    }
+  }
+
+  const handleTest = async () => {
+    const result = await test()
+    if (!result) return // error state is already shown inline
+    if (result.status === 'Connected') success('Needle 3 connection verified.')
+    else notifyError(`Connection state: ${result.status}.`)
+  }
+
+  if (loading || !settings) {
+    return (
+      <>
+        <Helmet>
+          <title>AI Agent · Admin</title>
+        </Helmet>
+        <AiAgentPageSkeleton />
+      </>
+    )
   }
 
   return (
-    <>
+    <div className="flex flex-col max-w-[420px] md:max-w-2xl w-full mx-auto pb-8">
       <Helmet>
-        <title>AI Agent — Admin</title>
+        <title>AI Agent · Admin</title>
       </Helmet>
 
-      <div className="flex flex-col gap-5">
-        <div className="flex items-center gap-3 px-1">
-          <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 text-primary flex-shrink-0">
-            <Sparkles className="w-5 h-5" />
-          </span>
-          <div>
-            <h1 className="text-headline-md font-semibold text-on-surface leading-tight">
-              AI Agent
-            </h1>
-            <p className="text-label-md text-on-surface-variant">
-              Cactus Needle 3 connection, status, and capabilities
-            </p>
-          </div>
-        </div>
-
+      <div className="pt-4 space-y-6">
         {error && (
-          <Alert color="error" variant="tonal" title="Something went wrong">
-            {error}
-          </Alert>
-        )}
-        {notice && (
-          <Alert
-            color="success"
-            variant="tonal"
-            title="Done"
-            actions={[{ label: 'Dismiss', onClick: dismissNotice }]}
-          >
-            {notice}
-          </Alert>
+          <Alert variant="tonal" color="error" title="Error" message={error} size="sm" />
         )}
 
-        {loading || !settings ? (
-          <div className="flex flex-col gap-4">
-            <Skeleton height={160} />
-            <Skeleton height={112} />
-          </div>
-        ) : (
-          <>
-            {/* ── Needle 3 connection ─────────────────────────────── */}
-            <Card.Root variant="elevated" surfaceLevel="low">
-              <Card.Body className="flex flex-col gap-4 p-5">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <SectionHeader
-                    icon={<Bot className="w-4 h-4" />}
-                    title="Needle 3"
-                    hint="Separately hosted Cactus Needle 3 service"
-                  />
-                  <Status.Root colorPalette={statusColor(status)} size="md">
-                    <Status.Indicator
-                      colorPalette={statusColor(status)}
-                      size="sm"
-                    />
-                    <span className="font-medium">
-                      {status === 'Connected' ? 'Connected' : (status ?? '…')}
+        {/* ── CONNECTION ── */}
+        <section aria-label="Needle 3 connection" className="space-y-2">
+          <SectionTitle>Connection</SectionTitle>
+          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+            <div className="p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell tone={connected ? 'accent' : 'default'}>
+                  <Bot className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-on-surface truncate leading-snug">
+                      Needle 3
                     </span>
-                  </Status.Root>
+                    <StatusChip text={status ?? '…'} tone={statusTone(status)} />
+                    <StatusChip
+                      text={settings.authMode === 'token' ? 'Service Token' : 'No auth'}
+                      tone={settings.authMode === 'token' ? 'accent' : 'default'}
+                    />
+                  </div>
+                  <span className="text-xs text-on-surface-variant truncate mt-0.5 font-mono">
+                    {settings.needleUrl || 'No service URL configured'}
+                  </span>
                 </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void refresh()
+                }}
+                disabled={testing}
+                aria-label="Reload AI Agent status"
+                className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+              >
+                <RefreshCw className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+            <div className="p-3.5 pt-0">
+              <Button
+                variant="tonal"
+                color="primary"
+                size="md"
+                leftIcon={<PlugZap className="h-4 w-4" />}
+                disabled={testing}
+                onClick={() => void handleTest()}
+                fullWidth
+                className="max-sm:py-1.5"
+              >
+                {testing ? 'Testing…' : 'Test Connection'}
+              </Button>
+              <p className="text-[11px] text-surface-variant leading-normal px-0.5 pt-2">
+                Performs a real request (model info plus a minimal
+                inference call) against the hosted Needle 3 service — the
+                state above is never assumed.
+              </p>
+              {detail && (
+                <p className="text-[11px] text-surface-variant leading-normal px-0.5 pt-1 font-mono">
+                  {detail}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field.Root>
-                    <Field.Label>Needle URL</Field.Label>
-                    <Input
-                      value={needleUrl}
-                      onChange={(e) => {
-                        setNeedleUrl(e.target.value)
-                        markDirty()
-                      }}
-                      placeholder="https://persian-bot-needle3.onrender.com"
-                      inputMode="url"
-                      aria-label="Needle 3 service URL"
-                    />
-                  </Field.Root>
-
-                  <Field.Root>
-                    <Field.Label>Authentication Token</Field.Label>
-                    <PasswordInput
-                      value={token}
-                      onChange={(e) => {
-                        setToken(e.target.value)
-                        markDirty()
-                      }}
-                      placeholder={
-                        settings.tokenConfigured
-                          ? '•••••••• (stored — leave blank to keep)'
-                          : 'Paste the Needle service Bearer token'
-                      }
-                      aria-label="Needle 3 authentication token"
-                    />
-                    <Field.HelperText>
-                      {settings.tokenConfigured
-                        ? 'A token is stored server-side. The value is never shown.'
-                        : 'No token stored yet.'}
-                    </Field.HelperText>
-                  </Field.Root>
-
-                  <Field.Root>
-                    <Field.Label>Request timeout (ms)</Field.Label>
-                    <Input
-                      value={timeoutMs}
-                      onChange={(e) => {
-                        setTimeoutMs(e.target.value)
-                        markDirty()
-                      }}
-                      inputMode="numeric"
-                      aria-label="Request timeout in milliseconds"
-                    />
-                  </Field.Root>
-
-                  <Field.Root>
-                    <Field.Label>Confidence threshold (0–1)</Field.Label>
-                    <Input
-                      value={confidence}
-                      onChange={(e) => {
-                        setConfidence(e.target.value)
-                        markDirty()
-                      }}
-                      inputMode="decimal"
-                      aria-label="Minimum Needle confidence for tool execution"
-                    />
-                  </Field.Root>
+        {/* ── SETTINGS ── */}
+        <section aria-label="AI Agent settings" className="space-y-2">
+          <SectionTitle>Settings</SectionTitle>
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            <div className="p-3.5 flex items-center justify-between space-x-3">
+              <div className="flex items-center space-x-3 min-w-0">
+                <IconWell tone={enabled ? 'accent' : 'default'}>
+                  <Sparkles className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-semibold text-on-surface leading-snug">
+                      Enabled
+                    </span>
+                    <StatusBadge active={enabled} />
+                  </div>
+                  <span className="text-xs text-on-surface-variant mt-0.5">
+                    {enabled
+                      ? 'The /ai command and passive mentions answer via Needle 3.'
+                      : 'AI answers are turned off; all other bot features keep working.'}
+                  </span>
                 </div>
-
-                <div className="flex items-center justify-between gap-3 flex-wrap">
+              </div>
+              <div className="flex-shrink-0">
+                {saving ? (
+                  <Skeleton variant="pill" width="44px" height="24px" />
+                ) : (
                   <Switch
                     checked={enabled}
                     onChange={(v) => {
                       setEnabled(v)
                       markDirty()
                     }}
-                    label="Enabled"
                     aria-label="Enable AI Agent"
                   />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      color="primary"
-                      size="sm"
-                      leftIcon={<PlugZap className="w-4 h-4" />}
-                      isLoading={testing}
-                      onClick={() => void test()}
-                    >
-                      Test Connection
-                    </Button>
-                    <Button
-                      variant="filled"
-                      color="primary"
-                      size="sm"
-                      isLoading={saving}
-                      disabled={!dirty}
-                      onClick={() => void handleSave()}
-                    >
-                      Save Changes
-                    </Button>
-                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3.5 space-y-2.5">
+              <Input
+                placeholder="https://persian-bot-needle3.onrender.com"
+                value={needleUrl}
+                onChange={(e) => {
+                  setNeedleUrl(e.target.value)
+                  markDirty()
+                }}
+                disabled={saving}
+                inputMode="url"
+                aria-label="Needle 3 service URL"
+                className="py-2.5 text-sm leading-6 font-mono"
+              />
+              <PasswordInput
+                placeholder={
+                  settings.tokenConfigured
+                    ? '•••••••• (stored — leave blank to keep)'
+                    : 'Only if the service requires one — else leave blank'
+                }
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value)
+                  markDirty()
+                }}
+                disabled={saving}
+                autoComplete="off"
+                aria-label="Needle 3 service token"
+                className="py-2.5 text-sm leading-6"
+              />
+              <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+                {settings.tokenConfigured
+                  ? 'A service token is stored encrypted server-side. The value is never shown — leave blank to keep it.'
+                  : 'Most self-hosted Needle deployments need no token (Authentication: None). Set one only if the service requires it — never a Cactus Platform API key.'}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Timeout (ms)"
+                  value={timeoutMs}
+                  onChange={(e) => {
+                    setTimeoutMs(e.target.value)
+                    markDirty()
+                  }}
+                  disabled={saving}
+                  inputMode="numeric"
+                  aria-label="Request timeout in milliseconds"
+                  className="py-2.5 text-sm leading-6 font-mono"
+                />
+                <Input
+                  placeholder="Confidence (0–1)"
+                  value={confidence}
+                  onChange={(e) => {
+                    setConfidence(e.target.value)
+                    markDirty()
+                  }}
+                  disabled={saving}
+                  inputMode="decimal"
+                  aria-label="Minimum Needle confidence for tool execution"
+                  className="py-2.5 text-sm leading-6 font-mono"
+                />
+              </div>
+              <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+                Hosted CPU inference can take 60 s or more (cold starts) —
+                keep the timeout generous (default 300000 ms, max 600000 ms).
+              </p>
+              <Button
+                variant="filled"
+                color="primary"
+                size="md"
+                disabled={saving || !dirty}
+                onClick={() => void handleSave()}
+                fullWidth
+                className="max-sm:py-1.5"
+              >
+                {saving ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── CAPABILITIES ── */}
+        <section aria-label="Needle 3 capabilities" className="space-y-2">
+          <SectionTitle>Capabilities</SectionTitle>
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            <div className="p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell tone={capabilities?.toolCalling ? 'accent' : 'default'}>
+                  <Wrench className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-on-surface leading-snug">
+                    Tool Calling
+                  </span>
+                  <span className="text-xs text-on-surface-variant truncate mt-0.5">
+                    JSON Schema tools, multi-turn execution, confidence
+                  </span>
                 </div>
-              </Card.Body>
-            </Card.Root>
+              </div>
+              {capabilityChip(capabilities?.toolCalling, 'Unsupported')}
+            </div>
+            <div className="p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell>
+                  <Link2 className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-on-surface leading-snug">
+                    MCP
+                  </span>
+                  <span className="text-xs text-on-surface-variant truncate mt-0.5">
+                    {capabilities?.mcp
+                      ? 'Supported by the connected build'
+                      : 'Not supported by this Needle 3 build'}
+                  </span>
+                </div>
+              </div>
+              {capabilityChip(capabilities?.mcp, 'Not supported')}
+            </div>
+            <div className="p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3.5 min-w-0">
+                <IconWell>
+                  <KeyRound className="w-4 h-4" strokeWidth={2} />
+                </IconWell>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-on-surface leading-snug">
+                    Skills
+                  </span>
+                  <span className="text-xs text-on-surface-variant truncate mt-0.5">
+                    {capabilities?.skills
+                      ? 'Supported by the connected build'
+                      : 'Not supported by this Needle 3 build'}
+                  </span>
+                </div>
+              </div>
+              {capabilityChip(capabilities?.skills, 'Not supported')}
+            </div>
+          </div>
+        </section>
 
-            {/* ── Capabilities ────────────────────────────────────── */}
-            <Card.Root variant="elevated" surfaceLevel="low">
-              <Card.Body className="flex flex-col gap-4 p-5">
-                <SectionHeader
-                  icon={<Wrench className="w-4 h-4" />}
-                  title="Capabilities"
-                  hint="Detected live from the connected Needle 3 service"
-                />
-                <dl className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-hairline bg-surface-container-high p-3">
-                    <dt className="text-label-md text-on-surface-variant">
-                      Tool Calling
-                    </dt>
-                    <dd className="text-body-md font-medium text-on-surface">
-                      {capabilities
-                        ? capabilities.toolCalling
-                          ? 'Supported'
-                          : 'Unsupported'
-                        : '…'}
-                    </dd>
-                  </div>
-                  <div className="rounded-lg border border-hairline bg-surface-container-high p-3">
-                    <dt className="text-label-md text-on-surface-variant">
-                      MCP
-                    </dt>
-                    <dd className="text-body-md font-medium text-on-surface">
-                      {capabilities
-                        ? capabilities.mcp
-                          ? 'Supported'
-                          : 'Not supported by this Needle 3 build'
-                        : '…'}
-                    </dd>
-                  </div>
-                  <div className="rounded-lg border border-hairline bg-surface-container-high p-3">
-                    <dt className="text-label-md text-on-surface-variant">
-                      Skills
-                    </dt>
-                    <dd className="text-body-md font-medium text-on-surface">
-                      {capabilities
-                        ? capabilities.skills
-                          ? 'Supported'
-                          : 'Not supported by this Needle 3 build'
-                        : '…'}
-                    </dd>
-                  </div>
-                </dl>
-              </Card.Body>
-            </Card.Root>
-
-            {/* ── MCP / Skills (unsupported truth) ────────────────── */}
-            <Card.Root variant="outlined">
-              <Card.Body className="flex flex-col gap-2 p-5">
-                <SectionHeader
-                  icon={<Link2 className="w-4 h-4" />}
-                  title="MCP"
-                  hint="Model Context Protocol servers"
-                />
-                <p
-                  className={cn(
-                    'text-body-md text-on-surface-variant',
-                    capabilities?.mcp && 'text-on-surface',
-                  )}
-                >
-                  {capabilities?.mcp
-                    ? 'MCP is reported as supported by the connected build.'
-                    : 'Not supported by this Needle 3 build. No MCP servers can be added — ordinary Needle tools are not MCP.'}
-                </p>
-              </Card.Body>
-            </Card.Root>
-
-            <Card.Root variant="outlined">
-              <Card.Body className="flex flex-col gap-2 p-5">
-                <SectionHeader
-                  icon={<KeyRound className="w-4 h-4" />}
-                  title="Skills"
-                  hint="Reusable skill packages"
-                />
-                <p className="text-body-md text-on-surface-variant">
-                  {capabilities?.skills
-                    ? 'Skills are reported as supported by the connected build.'
-                    : 'Not supported by this Needle 3 build. Tools, prompts, and environments are not Skills.'}
-                </p>
-              </Card.Body>
-            </Card.Root>
-
-            {/* ── Runtime ─────────────────────────────────────────── */}
-            <Card.Root variant="outlined">
-              <Card.Body className="flex flex-col gap-3 p-5">
-                <SectionHeader
-                  icon={<Bot className="w-4 h-4" />}
-                  title="Runtime"
-                />
-                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <dt className="text-label-md text-on-surface-variant">
-                      Needle version
-                    </dt>
-                    <dd className="text-body-md font-mono text-on-surface">
-                      {capabilities?.needleVersion ?? '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-label-md text-on-surface-variant">
-                      Generation
-                    </dt>
-                    <dd className="text-body-md font-mono text-on-surface">
-                      {capabilities?.generation ?? '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-label-md text-on-surface-variant">
-                      Last health state
-                    </dt>
-                    <dd className="text-body-md text-on-surface">
-                      {status ?? '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-label-md text-on-surface-variant">
-                      Last successful request
-                    </dt>
-                    <dd className="text-body-md font-mono text-on-surface">
-                      {settings.lastSuccessAt || '—'}
-                    </dd>
-                  </div>
-                </dl>
-              </Card.Body>
-            </Card.Root>
-          </>
-        )}
+        {/* ── RUNTIME ── */}
+        <section aria-label="Needle 3 runtime" className="space-y-2">
+          <SectionTitle>Runtime</SectionTitle>
+          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            {(
+              [
+                ['Endpoint', endpoint ?? '—'],
+                ['Model', model ?? capabilities?.model ?? '—'],
+                ['Last latency', formatLatency(latencyMs)],
+                ['Connection state', status ?? '—'],
+                ['Status detail', detail ?? '—'],
+                ['Last checked', lastCheckedAt ?? '—'],
+                ['Last successful request', settings.lastSuccessAt || '—'],
+              ] as Array<[string, string]>
+            ).map(([label, value]) => (
+              <div key={label} className="p-3.5 flex items-center justify-between gap-3">
+                <span className="text-sm text-on-surface-variant">{label}</span>
+                <span className="text-sm font-mono text-on-surface truncate text-right">
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
-    </>
+    </div>
   )
 }

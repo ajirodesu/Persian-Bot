@@ -11,7 +11,7 @@ vi.mock('../lib/needle-client.lib.js', async (importOriginal) => {
   return {
     ...actual,
     completeTurn: vi.fn(),
-    resetSession: vi.fn(async () => undefined),
+    resetRemote: vi.fn(async () => undefined),
   };
 });
 
@@ -95,18 +95,21 @@ function turn(
   confidence = 0.95,
 ) {
   return {
-    type: 'call',
-    success: true,
-    error: null,
-    errorCode: null,
-    functionCalls: calls.map((c) => ({
-      name: c.name,
-      arguments: c.arguments,
-    })),
-    reasoning: 'test',
-    confidence,
-    suppressedCalls: null,
-    validation: null,
+    turn: {
+      type: 'call',
+      success: true,
+      error: null,
+      errorCode: null,
+      functionCalls: calls.map((c) => ({
+        name: c.name,
+        arguments: c.arguments,
+      })),
+      reasoning: 'test',
+      confidence,
+      suppressedCalls: null,
+      validation: null,
+    },
+    latencyMs: 5,
   };
 }
 
@@ -165,15 +168,18 @@ describe('agent loop (Needle-driven, locally executed tools)', () => {
     const replies: CapturedReply[] = [];
     const ctx = makeCtx(replies);
     mockedCompleteTurn().mockResolvedValueOnce({
-      type: 'respond',
-      success: true,
-      error: null,
-      errorCode: null,
-      functionCalls: [],
-      reasoning: null,
-      confidence: null,
-      suppressedCalls: null,
-      validation: null,
+      turn: {
+        type: 'respond',
+        success: true,
+        error: null,
+        errorCode: null,
+        functionCalls: [],
+        reasoning: null,
+        confidence: null,
+        suppressedCalls: null,
+        validation: null,
+      },
+      latencyMs: 5,
     });
     const result = await runAgent('do something impossible', ctx);
     expect(result).toContain("can't help");
@@ -225,7 +231,7 @@ describe('agent loop (Needle-driven, locally executed tools)', () => {
     const ctx = makeCtx(replies);
     const { NeedleClientError } = await import('../lib/needle-client.lib.js');
     mockedCompleteTurn().mockRejectedValueOnce(
-      new NeedleClientError('UNAVAILABLE', 'down'),
+      new NeedleClientError('SERVICE_UNAVAILABLE', 'down'),
     );
     const result = await runAgent('hi', ctx);
     expect(result).toContain('temporarily unavailable');

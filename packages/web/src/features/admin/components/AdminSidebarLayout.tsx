@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
+import { AdminHeaderProvider, useAdminHeader } from '@/contexts/AdminHeaderContext'
 import Logo from '@/components/ui/Logo'
 import IconButton from '@/components/ui/buttons/IconButton'
 import { ROUTES } from '@/constants/routes.constants'
@@ -249,7 +251,11 @@ function AdminAvatarMenu({
         aria-expanded={open}
         aria-label={`${displayName} — account menu`}
         className={cn(
-          'flex items-center gap-1.5 rounded-[var(--radius-input)] px-2 py-1.5 transition-colors duration-fast',
+          'flex items-center gap-1.5 rounded-[var(--radius-input)] transition-colors duration-fast',
+          // Mobile: 36px centered box — same footprint as the hamburger
+          // (H_ICON_BTN_MOBILE), so both header edges align. Desktop keeps
+          // the avatar-plus-chevron pill.
+          'h-9 w-9 justify-center md:h-auto md:w-auto md:justify-start md:px-2 md:py-1.5',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
@@ -267,7 +273,7 @@ function AdminAvatarMenu({
         <ChevronDown
           className={cn(
             H_CHEVRON,
-            'text-on-surface-variant transition-transform duration-fast hidden sm:block',
+            'text-on-surface-variant transition-transform duration-fast hidden md:block',
             open && 'rotate-180',
           )}
         />
@@ -394,6 +400,7 @@ export default function AdminSidebarLayout() {
     NAV_ITEMS.find((i) => i.path === activePath)?.label ?? 'Admin'
 
   return (
+    <AdminHeaderProvider>
     <div className="min-h-screen flex bg-surface-container-high">
       {/* Desktop sidebar */}
       <aside
@@ -436,7 +443,41 @@ export default function AdminSidebarLayout() {
 
       {/* Main content column */}
       <div className={cn('flex-1 flex flex-col min-w-0')}>
-        {/* Content header — Bot Manager bar */}
+        {/* Content header — Bot Manager bar. Pages may replace the three
+            slots (left button, title, right button) through
+            AdminHeaderContext instead of rendering a second header. */}
+        <AdminContentHeader
+          mobileOpen={mobileOpen}
+          setMobileOpen={setMobileOpen}
+          currentLabel={currentLabel}
+          user={user}
+          handleLogout={handleLogout}
+        />
+
+        <main className={cn('flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto')}>
+          <Outlet />
+        </main>
+      </div>
+    </div>
+    </AdminHeaderProvider>
+  )
+}
+
+function AdminContentHeader({
+  mobileOpen,
+  setMobileOpen,
+  currentLabel,
+  user,
+  handleLogout,
+}: {
+  mobileOpen: boolean
+  setMobileOpen: Dispatch<SetStateAction<boolean>>
+  currentLabel: string
+  user: { name?: string | null; email?: string | null } | null
+  handleLogout: () => void
+}) {
+  const { override } = useAdminHeader()
+  return (
         <div
           className={cn(
             'sticky top-0 z-[100] flex items-center bg-surface border-b',
@@ -445,7 +486,8 @@ export default function AdminSidebarLayout() {
             H_PX,
           )}
         >
-          {/* Mobile hamburger */}
+          {/* Left slot — hamburger by default */}
+          {override?.left ?? (
           <IconButton
             icon={mobileOpen ? <X /> : <Menu />}
             aria-label={mobileOpen ? 'Close navigation' : 'Open navigation menu'}
@@ -454,43 +496,38 @@ export default function AdminSidebarLayout() {
             className={cn('md:hidden', H_ICON_BTN_MOBILE)}
             onClick={() => setMobileOpen((p) => !p)}
           />
+          )}
 
           {/* Desktop: page title */}
           <span
             className={cn(
               H_BRAND_TEXT,
-              'hidden md:inline-flex text-on-surface select-none font-semibold tracking-tight',
+              'hidden md:inline-flex text-on-surface select-none font-semibold tracking-tight min-w-0 truncate',
             )}
           >
-            {currentLabel}
+            {override?.title ?? currentLabel}
           </span>
 
           {/* Mobile: page title — centred Bot Manager title */}
           <div
             className={cn(
-              'absolute inset-0 flex items-center justify-center pointer-events-none md:hidden',
+              'absolute inset-0 flex items-center justify-center pointer-events-none px-14 md:hidden',
             )}
           >
             <span
               className={cn(
                 H_BRAND_TEXT,
-                'text-on-surface select-none font-semibold tracking-tight',
+                'text-on-surface select-none font-semibold tracking-tight truncate',
               )}
             >
-              {currentLabel}
+              {override?.title ?? currentLabel}
             </span>
           </div>
 
-          {/* Avatar menu */}
+          {/* Right slot — avatar menu by default */}
           <div className="ml-auto">
-            <AdminAvatarMenu user={user} onLogout={handleLogout} />
+            {override?.right ?? <AdminAvatarMenu user={user} onLogout={handleLogout} />}
           </div>
         </div>
-
-        <main className={cn('flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto')}>
-          <Outlet />
-        </main>
-      </div>
-    </div>
   )
 }

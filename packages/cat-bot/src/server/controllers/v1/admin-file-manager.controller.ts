@@ -61,6 +61,56 @@ class AdminFileManagerController {
     }
   }
 
+  // GET /api/v1/admin/files/overview?branches=1&log=10&git=1 — one round
+  // trip for a page mount: repo meta + working-tree status always; branches,
+  // recent commits and the GitHub token state only when requested. Lets the
+  // Git page mount on a single request instead of five, and the Files page
+  // on one instead of three.
+  async overview(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    try {
+      const wantBranches = req.query['branches'] === '1';
+      const wantGit = req.query['git'] === '1';
+      const logLimit = Math.max(
+        0,
+        Math.min(
+          15,
+          Number.parseInt(String(req.query['log'] ?? '0'), 10) || 0,
+        ),
+      );
+      const [meta, status] = await Promise.all([getRepoMeta(), getGitStatus()]);
+      const [branches, commits, stored] = await Promise.all([
+        wantBranches ? listBranches() : Promise.resolve([] as string[]),
+        logLimit > 0 ? getCommitLog(logLimit) : Promise.resolve([]),
+        wantGit
+          ? getStoredGitHubConfig()
+          : Promise.resolve(null),
+      ]);
+      res.json({
+        meta,
+        status,
+        branches,
+        commits,
+        git:
+          stored !== undefined
+            ? {
+                configured: stored !== null,
+                identity: stored
+                  ? {
+                      login: stored.login,
+                      name: stored.name,
+                      email: stored.email,
+                      avatarUrl: stored.avatarUrl,
+                    }
+                  : null,
+              }
+            : undefined,
+      });
+    } catch (err) {
+      this.#handleError(res, err, 'Failed to load overview');
+    }
+  }
+
   // GET /api/v1/admin/files?path=packages — list a folder ('' = repo root).
   async list(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;

@@ -59,6 +59,10 @@ import { getSocket } from '@/lib/socket.lib'
 import { cn } from '@/utils/cn.util'
 import Logo from '@/components/ui/Logo'
 import IconButton from '@/components/ui/buttons/IconButton'
+import Button from '@/components/ui/buttons/Button'
+import Dialog from '@/components/ui/overlay/Dialog'
+import { Field } from '@/components/ui/forms/Field'
+import Input from '@/components/ui/forms/Input'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { useDashboardSidebar } from '@/contexts/DashboardSidebarContext'
@@ -1973,65 +1977,52 @@ function NicknameModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)]"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        className="w-[360px] rounded-[var(--radius-card-lg)] bg-surface-container border border-hairline shadow-elevation-3 p-6"
-        style={{ animation: 'cr-fadeIn 160ms ease both' }}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <div>
-            <h2 className="text-base font-bold text-on-surface leading-tight">Bot Nickname</h2>
-            <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
+      <Dialog.Positioner position="center">
+        <Dialog.Backdrop />
+        <Dialog.Content size="sm">
+          <Dialog.Header>
+            <Dialog.Title>Bot Nickname</Dialog.Title>
+            <Dialog.CloseTrigger />
+          </Dialog.Header>
+          <Dialog.Body>
+            <p className="text-body-md text-on-surface-variant mb-4">
               Give your bot a custom name. Say its name or use the prefix to trigger it.
             </p>
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-full text-on-surface-variant hover:bg-on-surface/10 transition-colors ml-3 shrink-0">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-xl border border-hairline px-3.5 h-11 mb-5 mt-4 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
-          <Tag className="h-4 w-4 text-primary shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            maxLength={32}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave()
-              if (e.key === 'Escape') onClose()
-            }}
-            placeholder="e.g. Cat-Bot, Aria, Nexus…"
-            className="flex-1 bg-transparent text-on-surface text-sm placeholder:text-on-surface-variant/40 focus:outline-none"
-          />
-          {value && value !== current && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-high text-primary border-primary/30 border">NEW</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest/60 border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex-1 h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-xs flex items-center justify-center gap-1.5 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
-          >
-            <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-            <span>Save</span>
-          </button>
-        </div>
-      </div>
-    </div>
+            <Field.Root>
+              <Input
+                ref={inputRef}
+                type="text"
+                value={value}
+                maxLength={32}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSave()
+                }}
+                placeholder="e.g. Cat-Bot, Aria, Nexus…"
+                leftIcon={<Tag className="h-4 w-4" />}
+              />
+            </Field.Root>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Dialog.CloseTrigger asChild>
+              <Button variant="text" color="neutral" size="sm">
+                Cancel
+              </Button>
+            </Dialog.CloseTrigger>
+            <Button
+              variant="filled"
+              color="primary"
+              size="sm"
+              onClick={handleSave}
+              leftIcon={<Check className="w-3.5 h-3.5" strokeWidth={2.5} />}
+            >
+              Save
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Positioner>
+    </Dialog.Root>
   )
 }
 
@@ -2060,63 +2051,52 @@ function PrefixModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)]"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-hairline shadow-elevation-3 p-6"
-        style={{ animation: 'cr-fadeIn 160ms ease both' }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-bold text-on-surface leading-tight">Edit Command Prefix</h2>
-            <p className="text-xs text-on-surface-variant mt-0.5">Commands starting with this symbol trigger the bot.</p>
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-full text-on-surface-variant hover:bg-on-surface/10 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 bg-surface-container-high rounded-xl border border-hairline px-3.5 h-11 mb-5 focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary/50 transition-all">
-          <Hash className="h-4 w-4 text-primary shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            maxLength={10}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave()
-              if (e.key === 'Escape') onClose()
-            }}
-            placeholder="e.g. / or ! or +"
-            className="flex-1 bg-transparent text-on-surface font-mono text-sm placeholder:text-on-surface-variant/40 focus:outline-none"
-          />
-          {value && value !== current && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-high text-primary border-primary/30 border">NEW</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest/60 border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex-1 h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-xs flex items-center justify-center gap-1.5 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
-          >
-            <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-            <span>Save</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
+      <Dialog.Positioner position="center">
+        <Dialog.Backdrop />
+        <Dialog.Content size="sm">
+          <Dialog.Header>
+            <Dialog.Title>Edit Command Prefix</Dialog.Title>
+            <Dialog.CloseTrigger />
+          </Dialog.Header>
+          <Dialog.Body>
+            <p className="text-body-md text-on-surface-variant mb-4">
+              Commands starting with this symbol trigger the bot.
+            </p>
+            <Field.Root>
+              <Input
+                ref={inputRef}
+                type="text"
+                value={value}
+                maxLength={10}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSave()
+                }}
+                placeholder="e.g. / or ! or +"
+                leftIcon={<Hash className="h-4 w-4" />}
+              />
+            </Field.Root>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Dialog.CloseTrigger asChild>
+              <Button variant="text" color="neutral" size="sm">
+                Cancel
+              </Button>
+            </Dialog.CloseTrigger>
+            <Button
+              variant="filled"
+              color="primary"
+              size="sm"
+              onClick={handleSave}
+              leftIcon={<Check className="w-3.5 h-3.5" strokeWidth={2.5} />}
+            >
+              Save
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Positioner>
+    </Dialog.Root>
   )
 }
 
@@ -2124,40 +2104,38 @@ function PrefixModal({
 
 function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
   return (
-    <div
-      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/50 [backdrop-filter:var(--surface-blur-sm)]"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        className="w-[340px] rounded-[var(--radius-card-lg)] bg-surface-container border border-hairline shadow-elevation-3 p-6"
-        style={{ animation: 'cr-fadeIn 160ms ease both' }}
-      >
-        <div className="h-11 w-11 rounded-[var(--radius-card)] bg-error/12 flex items-center justify-center mb-4">
-          <Trash2 className="h-5 w-5 text-error" />
-        </div>
-        <h2 className="text-base font-bold text-on-surface mb-1">Clear Chat?</h2>
-        <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
-          All messages in this session will be permanently removed.
-        </p>
-        <div className="flex items-center gap-3 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest/60 border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => { onConfirm(); onClose() }}
-            className="flex-1 h-11 px-4 rounded-lg bg-error hover:brightness-110 active:brightness-90 text-on-error font-semibold text-xs flex items-center justify-center gap-1.5 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-error focus-visible:ring-offset-surface"
-          >
-            <Trash2 className="w-3.5 h-3.5" strokeWidth={2.5} />
-            <span>Clear Chat</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
+      <Dialog.Positioner position="center">
+        <Dialog.Backdrop />
+        <Dialog.Content size="sm">
+          <Dialog.Header>
+            <Dialog.Title>Clear Chat?</Dialog.Title>
+            <Dialog.CloseTrigger />
+          </Dialog.Header>
+          <Dialog.Body>
+            <p className="text-body-md text-on-surface-variant">
+              All messages in this session will be permanently removed.
+            </p>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Dialog.CloseTrigger asChild>
+              <Button variant="text" color="neutral" size="sm">
+                Cancel
+              </Button>
+            </Dialog.CloseTrigger>
+            <Button
+              variant="filled"
+              color="error"
+              size="sm"
+              onClick={() => { onConfirm(); onClose() }}
+              leftIcon={<Trash2 className="w-3.5 h-3.5" strokeWidth={2.5} />}
+            >
+              Clear Chat
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Positioner>
+    </Dialog.Root>
   )
 }
 

@@ -18,6 +18,7 @@ import {
   getCurrentBranch,
   getDirLastCommits,
   getDirTrackedShas,
+  invalidateGitStatus,
   getGitMeta,
   getRepoRootOrThrow,
   getTrackedSha,
@@ -295,6 +296,7 @@ export async function createFile(
     }
     throw err;
   }
+  invalidateGitStatus();
   return { synced: false };
 }
 
@@ -311,6 +313,7 @@ export async function createFolder(raw: string): Promise<RepoMutationResult> {
     }
     throw err;
   }
+  invalidateGitStatus();
   return { synced: false };
 }
 
@@ -328,6 +331,7 @@ export async function saveFile(
     throw new RepoFileManagerError(404, `File not found: ${repoPath}`);
   }
   await fsp.writeFile(filePath, content, { encoding: 'utf8' });
+  invalidateGitStatus();
   return { synced: false };
 }
 
@@ -353,6 +357,7 @@ export async function renameEntry(
     }
     throw err;
   }
+  invalidateGitStatus();
   return { synced: false };
 }
 
@@ -368,6 +373,7 @@ export async function deleteEntry(raw: string): Promise<RepoMutationResult> {
     }
     throw err;
   }
+  invalidateGitStatus();
   return { synced: false };
 }
 

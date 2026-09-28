@@ -239,7 +239,7 @@ export default function AdminBotsPage() {
                 {bots.map((session) => (
                   <div
                     key={`${session.userId}:${session.sessionId}`}
-                    className="p-3.5 flex items-center justify-between space-x-3"
+                    className="p-3.5 flex items-center justify-between space-x-3 max-sm:flex-col max-sm:items-stretch max-sm:gap-3 max-sm:space-x-0"
                   >
                     <div className="flex items-center space-x-3 min-w-0">
                       <div

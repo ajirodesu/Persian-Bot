@@ -34,12 +34,15 @@ cooldowns; final delivery is always `send_result`.
 | Service | Content | Deploy |
 | ------- | ------- | ------ |
 | Service A (Persian-Bot) | `packages/cat-bot` (bot+API), `packages/web` (dashboard), `packages/database` | existing Render service |
-| Service B (Needle 3) | `needle-service/` (`app.py` stdlib adapter around official `cactus-needle==3.0.1`, generation 3) | `needle-service/Dockerfile` + `render.yaml`, health check `/health` |
+| Service B (Needle 3) | official Cactus playground server (`needle/playground/server.py`) loading `needle3.cact`, live at `https://lanceajiro-needle.onrender.com` | Render playground deploy |
 
-Service B exposes: `GET /health`, `GET /capabilities`,
-`POST /v1/agent/complete`, `POST /v1/agent/reset` — all (except `/health`)
-Bearer-authenticated. One stateful `Needle` instance per Persian AI session
-id (TTL-bounded); tool retrieval is engine-side (top-5/turn over 5 tools).
+Service B exposes: `GET /model` → `{"name": "needle3.cact"}`,
+`POST /complete {query, tools}` → Needle turn dict, `POST /reset` — no auth,
+no `/health`, no `/capabilities`. The playground keeps one shared
+conversation slot (no per-session state), so Persian-Bot drives multi-turn
+with a locally-held transcript (full context per query) and calls `/reset`
+around each AI sequence. Tool retrieval is engine-side. `needle-service/`
+remains an optional alternative adapter with its own contract.
 
 ## 4. Capability truth (detected live, never hardcoded)
 

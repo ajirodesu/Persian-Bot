@@ -36,7 +36,7 @@ function parseValue(raw: string | undefined | null): AiAgentConfigStoreValue | n
       timeoutMs:
         typeof v.timeoutMs === 'number' && Number.isFinite(v.timeoutMs)
           ? v.timeoutMs
-          : 30000,
+          : 300000,
       confidenceThreshold:
         typeof v.confidenceThreshold === 'number' &&
         Number.isFinite(v.confidenceThreshold)

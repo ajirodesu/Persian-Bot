@@ -126,16 +126,17 @@ export default function AdminGitPage() {
   const refresh = useCallback(async () => {
     setLoadError(null)
     try {
-      const [m, s, b, l] = await Promise.all([
-        adminFileManagerService.getMeta(),
-        adminFileManagerService.getGitStatus(),
-        adminFileManagerService.getGitBranches().catch(() => [] as string[]),
-        adminFileManagerService.getGitLog(15).catch(() => [] as GitCommitInfoDto[]),
-      ])
-      setMeta(m)
-      setStatus(s)
-      setBranches(b)
-      setLog(l)
+      // Single round trip (meta + status + branches + log + token state)
+      // instead of five parallel requests.
+      const data = await adminFileManagerService.getOverview({
+        branches: true,
+        log: 15,
+        git: true,
+      })
+      setMeta(data.meta)
+      setStatus(data.status)
+      setBranches(data.branches)
+      setLog(data.commits)
     } catch (err) {
       setLoadError(apiErrorMessage(err, 'Failed to load Git status'))
     } finally {

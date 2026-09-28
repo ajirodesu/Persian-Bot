@@ -6,12 +6,13 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { ComponentType, SVGProps } from 'react'
+import type { ComponentType, PointerEvent as ReactPointerEvent, SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { useNavigate } from 'react-router-dom'
 import {
   Folder,
+  FolderOpen,
   FolderPlus,
   FilePlus2,
   Pencil,
@@ -22,6 +23,7 @@ import {
   Copy,
   Search,
   MoreVertical,
+  ChevronRight,
 } from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
@@ -33,6 +35,7 @@ import Dialog from '@/components/ui/overlay/Dialog'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
+import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import { ROUTES } from '@/constants/routes.constants'
 import type {
@@ -273,6 +276,12 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
   const isPending = pending.has(folder)
   const isOpen = isExpanded(folder)
   const isSelected = selectedPath === folder
+  // Render children after the first expand and keep them mounted so the
+  // open/close height animation can play in both directions.
+  const [hasOpened, setHasOpened] = useState(isOpen)
+  if (isOpen && !hasOpened) {
+    setHasOpened(true)
+  }
   const folderEntry: RepoEntryDto = {
     name,
     path: folder,
@@ -309,15 +318,38 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
         {isLoading && !entryChildren ? (
           <Loader2 className="h-5 w-5 shrink-0 animate-spin text-on-surface-variant" />
         ) : (
-          <Folder
-            className={cn(
-              'h-5 w-5 shrink-0',
-              isSelected || isOpen
-                ? 'fill-[rgb(var(--color-primary)/0.15)] text-primary'
-                : 'text-on-surface-variant',
-            )}
-          />
+          <span className="relative h-5 w-5 shrink-0" aria-hidden="true">
+            <Folder
+              className={cn(
+                'absolute inset-0 h-5 w-5 transition-all duration-200',
+                isOpen
+                  ? 'opacity-0 scale-75 -rotate-12'
+                  : 'opacity-100 scale-100 rotate-0',
+                isSelected
+                  ? 'fill-[rgb(var(--color-primary)/0.15)] text-primary'
+                  : 'text-on-surface-variant',
+              )}
+            />
+            <FolderOpen
+              className={cn(
+                'absolute inset-0 h-5 w-5 transition-all duration-200',
+                isOpen
+                  ? 'opacity-100 scale-100 rotate-0'
+                  : 'opacity-0 scale-75 rotate-12',
+                isSelected || isOpen
+                  ? 'fill-[rgb(var(--color-primary)/0.15)] text-primary'
+                  : 'text-on-surface-variant',
+              )}
+            />
+          </span>
         )}
+        <ChevronRight
+          className={cn(
+            'h-4 w-4 shrink-0 transition-transform duration-200 text-on-surface-variant/70',
+            isOpen && 'rotate-90',
+          )}
+          aria-hidden="true"
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-label-md font-medium">
             {name}
@@ -365,8 +397,17 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
         </span>
       </div>
 
-      {isOpen && (
-        <div className="mt-0.5">
+      {hasOpened && (
+        <div
+          className={cn(
+            'grid transition-all duration-200 ease-out',
+            isOpen
+              ? '[grid-template-rows:1fr] opacity-100'
+              : '[grid-template-rows:0fr] opacity-0',
+          )}
+        >
+          <div className="overflow-hidden min-h-0">
+          <div className="mt-0.5">
           {isLoading && !entryChildren ? (
             <div
               className="flex flex-col gap-1 py-1"
@@ -414,6 +455,8 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
               ),
             )
           )}
+          </div>
+          </div>
         </div>
       )}
     </div>
@@ -449,6 +492,10 @@ const TreeFileRow = memo(function TreeFileRow({
       tabIndex={0}
       onClick={() => onOpenFile(entry)}
       onKeyDown={(e) => e.key === 'Enter' && onOpenFile(entry)}
+      // Hover/focus intent prefetches the content so the editor opens
+      // instantly on tap (best-effort, never throws).
+      onPointerEnter={() => adminFileManagerService.prefetchFileContent(entry.path)}
+      onFocus={() => adminFileManagerService.prefetchFileContent(entry.path)}
       className={cn(
         'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-2 pr-1 text-left ' +
           'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
@@ -588,6 +635,37 @@ export default function AdminFilesPage() {
   })
   const [treeQuery, setTreeQuery] = useState('')
 
+  // Empty-space dismissal: a tap/click on the tree background (not a row,
+  // control, menu, or dialog) clears the single-row selection. Pointer
+  // coordinates gate out scrolls/drags on both touch and mouse.
+  const tapStart = useRef<{ x: number; y: number } | null>(null)
+
+  const isBackgroundTarget = (target: EventTarget | null): boolean =>
+    target instanceof HTMLElement &&
+    target.closest(
+      'button, a, input, textarea, select, [role="button"], [role="menu"], [role="dialog"], [role="listbox"]',
+    ) === null
+
+  const handleTreePointerDown = (e: ReactPointerEvent) => {
+    tapStart.current =
+      selectedPath !== null && isBackgroundTarget(e.target)
+        ? { x: e.clientX, y: e.clientY }
+        : null
+  }
+
+  const handleTreePointerUp = (e: ReactPointerEvent) => {
+    const start = tapStart.current
+    tapStart.current = null
+    if (!start || selectedPath === null) return
+    if (!isBackgroundTarget(e.target)) return
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+    if (moved < 10) setSelectedPath(null)
+  }
+
+  const handleTreePointerCancel = () => {
+    tapStart.current = null
+  }
+
   // Persist the selected folder so a refresh resumes the same directory.
   useEffect(() => {
     try {
@@ -620,8 +698,8 @@ export default function AdminFilesPage() {
     [success],
   )
 
-  // File taps navigate to the dedicated editor route (Ajiro flow:
-  // project-files → project/code-editor) instead of an inline pane.
+  // File taps open the dedicated editor route. Selection state is still
+  // updated so a back-navigation lands on the highlighted row.
   const handleOpenFile = useCallback(
     (entry: RepoEntryDto) => {
       setSelectedFolder(parentOf(entry.path))
@@ -669,7 +747,7 @@ export default function AdminFilesPage() {
       const createdKind = createDialog
       setCreateDialog(null)
       if (createdKind === 'file') {
-        // Direct to the editor route for the freshly created file.
+        // Open the freshly created file in the editor.
         setSelectedPath(path)
         navigate(
           `${ROUTES.ADMIN.FILES_EDIT}?path=${encodeURIComponent(path)}`,
@@ -767,7 +845,7 @@ export default function AdminFilesPage() {
         className={files.directoryError ? '' : 'hidden'}
       />
 
-      {/* ── File browser (full page — tapping a file navigates to the editor route) ── */}
+      {/* ── File browser (full page — tapping a file opens the editor) ── */}
       <div className="flex flex-col max-w-2xl lg:max-w-4xl w-full mx-auto">
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between px-1">
@@ -843,12 +921,15 @@ export default function AdminFilesPage() {
                     }
                     placeholder="Search files…"
                     aria-label="Search files"
-                    pill
                     className="h-11 text-sm"
                   />
                 </div>
 
-          <div>
+          <div
+            onPointerDown={handleTreePointerDown}
+            onPointerUp={handleTreePointerUp}
+            onPointerCancel={handleTreePointerCancel}
+          >
                   {treeQueryActive ? (
                     searchResults === undefined ? (
                       files.treeError ? (

@@ -6,7 +6,26 @@
  *
  * @module config/env.config.ts
  */
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+// Resolve the .env file relative to THIS module — never relative to
+// process.cwd(). Bare `import 'dotenv/config'` only reads `<cwd>/.env`,
+// so any launch from outside packages/cat-bot (repo root, Docker
+// WORKDIR, PM2, tsx direct) silently loaded nothing and crashed later on
+// the first required var. Package dir wins; an explicit DOTENV_CONFIG_PATH
+// or real environment values keep precedence (no override).
+const configDir = dirname(fileURLToPath(import.meta.url));
+for (const envPath of [
+  process.env.DOTENV_CONFIG_PATH,
+  resolve(configDir, '../../../.env'),
+  resolve(process.cwd(), '.env'),
+]) {
+  if (typeof envPath === 'string' && envPath !== '') {
+    loadDotenv({ path: envPath, quiet: true });
+  }
+}
 
 // ============================================================================
 // TYPE DEFINITIONS

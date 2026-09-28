@@ -1,5 +1,14 @@
 # Cactus Needle 3 service (separate host)
 
+> **Live deployment note (verified):** the production Render service
+> (`https://lanceajiro-needle.onrender.com`) is the official Cactus
+> **playground server** (`needle/playground/server.py`) loading
+> `needle3.cact` — it exposes `GET /model`, `POST /complete {query, tools}`
+> and `POST /reset`, with no auth and no `/health` endpoint. Persian-Bot's
+> client (`engine/agent/lib/needle-client.lib.ts`) speaks that contract
+> directly. This directory remains an **optional alternative** adapter (own
+> `/health` + `/capabilities` + Bearer auth) for operators who prefer it.
+
 This directory is **Service B**. Persian-Bot (`packages/cat-bot`) is **Service A**.
 Needle 3 is the only AI engine; Persian-Bot decides and executes, Needle 3 only
 decides *which tool call* to make.

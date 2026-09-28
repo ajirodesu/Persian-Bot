@@ -1,5 +1,5 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Search, Users } from 'lucide-react'
 import { authAdminClient } from '@/lib/better-auth-admin-client.lib'
 import Table from '@/components/ui/data-display/Table'
@@ -122,6 +122,19 @@ export default function AdminUsersPage() {
 
   // We still load ALL bots locally without pagination to safely derive user-bot relation counts on the client
   const { bots } = useAdminBots(1, 10000, '')
+
+  // Pre-aggregate per-user session counts once per bots payload — the row
+  // render below previously re-filtered the whole list per user per render.
+  const botCounts = useMemo(() => {
+    const map = new Map<string, { total: number; active: number }>()
+    for (const b of bots) {
+      const entry = map.get(b.userId) ?? { total: 0, active: 0 }
+      entry.total += 1
+      if (b.isRunning) entry.active += 1
+      map.set(b.userId, entry)
+    }
+    return map
+  }, [bots])
 
   // ── Delete User State ──────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null)
@@ -393,14 +406,14 @@ export default function AdminUsersPage() {
         ) : (
           <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
             {users.map((u) => {
-              const userBots = bots.filter((b) => b.userId === u.id)
-              const botTotal = userBots.length
+              const counts = botCounts.get(u.id) ?? { total: 0, active: 0 }
+              const botTotal = counts.total
               // Count only the running sessions for this specific user, not the global total
-              const botActive = userBots.filter((b) => b.isRunning).length
+              const botActive = counts.active
               return (
                 <div
                   key={u.id}
-                  className="p-3.5 flex items-center justify-between space-x-3"
+                  className="p-3.5 flex items-center justify-between space-x-3 max-sm:flex-col max-sm:items-stretch max-sm:gap-3 max-sm:space-x-0"
                 >
                   <div className="flex items-center space-x-3 min-w-0">
                     <IconWell>
@@ -431,7 +444,7 @@ export default function AdminUsersPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                  <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end max-sm:justify-start">
                     {u.role !== 'admin' && !u.banned && (
                       <button
                         type="button"

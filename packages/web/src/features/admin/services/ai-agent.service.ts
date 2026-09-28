@@ -6,10 +6,13 @@ export type AiAgentConnectionStatus =
   | 'Connected'
   | 'Disconnected'
   | 'Unauthorized'
-  | 'Unavailable'
+  | 'Service unavailable'
+  | 'Endpoint not found'
   | 'Configuration incomplete'
   | 'Unsupported'
   | 'Disabled'
+
+export type AiAgentAuthMode = 'none' | 'token'
 
 export interface AiAgentCapabilitiesDto {
   toolCalling: boolean
@@ -17,9 +20,7 @@ export interface AiAgentCapabilitiesDto {
   skills: boolean
   mcpReason?: string
   skillsReason?: string
-  generation?: number
-  needleVersion?: string
-  runtimeAvailable?: boolean
+  model?: string
 }
 
 export interface AiAgentSettingsDto {
@@ -27,6 +28,8 @@ export interface AiAgentSettingsDto {
   needleUrl: string
   /** Always masked — true when a token is stored, never the value. */
   tokenConfigured: boolean
+  /** 'none' = unauthenticated service (normal) · 'token' = Service Token set. */
+  authMode: AiAgentAuthMode
   timeoutMs: number
   confidenceThreshold: number
   updatedAt: string
@@ -35,7 +38,15 @@ export interface AiAgentSettingsDto {
 
 export interface AiAgentTestDto {
   status: AiAgentConnectionStatus
+  /** Precise reason — never collapsed, never a secret. */
+  detail: string | null
   capabilities: AiAgentCapabilitiesDto | null
+  /** Loaded model name from GET /model (only what the service returns). */
+  model: string | null
+  /** Inference endpoint used, e.g. /complete. */
+  endpoint: string | null
+  latencyMs: number | null
+  lastCheckedAt: string
 }
 
 // ── Service ──────────────────────────────────────────────────────────────────

@@ -45,8 +45,9 @@ function envSettings(): AiAgentSettings {
     needleUrl: (process.env['NEEDLE_URL'] ?? '').trim(),
     token,
     tokenConfigured: token !== '',
+    // Hosted CPU inference can take 60s+ (cold starts) — default generously.
     timeoutMs:
-      Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : 30000,
+      Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : 300000,
     confidenceThreshold:
       Number.isFinite(confRaw) && confRaw >= 0 && confRaw <= 1 ? confRaw : 0.7,
     updatedAt: '',

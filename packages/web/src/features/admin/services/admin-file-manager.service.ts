@@ -118,6 +118,25 @@ export interface GitHubConfigDto {
   identity: GitHubIdentityDto | null
 }
 
+// ── Client caches (perceived instant loads) ──────────────────────────────────
+// Module-singleton caches survive route navigation (unlike hook state, which
+// resets per page visit), so Files ⇄ Git ⇄ editor round-trips resolve without
+// refetching. Short TTLs + mutation invalidation keep them fresh.
+
+/** Folder listings: 20s — invalidated on every mutation. */
+const LISTING_TTL_MS = 20_000
+/** File contents: 60s — invalidated on save/rename/delete. */
+const CONTENT_TTL_MS = 60_000
+
+const listingCache = new Map<string, { at: number; data: RepoDirectoryListingDto }>()
+const inflightListings = new Map<string, Promise<RepoDirectoryListingDto>>()
+const contentCache = new Map<string, { at: number; data: RepoReadFileDto }>()
+const inflightReads = new Map<string, Promise<RepoReadFileDto>>()
+
+function clearListingCache(): void {
+  listingCache.clear()
+}
+
 class AdminFileManagerService {
   // GET /api/v1/admin/files/meta — repo identity + branch + configured
   async getMeta(): Promise<RepoMetaDto> {
@@ -125,13 +144,56 @@ class AdminFileManagerService {
     return response.data
   }
 
-  // GET /api/v1/admin/files?path=packages — list a folder ('' = repo root)
-  async listFiles(dir: string): Promise<RepoDirectoryListingDto> {
-    const response = await apiClient.get<RepoDirectoryListingDto>(
-      '/api/v1/admin/files',
-      { params: { path: dir } },
-    )
+  // GET /api/v1/admin/files/overview — aggregated page-mount payload
+  // (meta + status always; branches / recent commits / token state on
+  // request). One round trip instead of up to five.
+  async getOverview(opts?: {
+    branches?: boolean
+    log?: number
+    git?: boolean
+  }): Promise<{
+    meta: RepoMetaDto
+    status: GitStatusDto
+    branches: string[]
+    commits: GitCommitInfoDto[]
+    git?: GitHubConfigDto
+  }> {
+    const response = await apiClient.get<{
+      meta: RepoMetaDto
+      status: GitStatusDto
+      branches: string[]
+      commits: GitCommitInfoDto[]
+      git?: GitHubConfigDto
+    }>('/api/v1/admin/files/overview', {
+      params: {
+        ...(opts?.branches ? { branches: '1' } : {}),
+        ...(opts?.log ? { log: String(opts.log) } : {}),
+        ...(opts?.git ? { git: '1' } : {}),
+      },
+    })
     return response.data
+  }
+
+  // GET /api/v1/admin/files?path=packages — list a folder ('' = repo root).
+  // Short-TTL client cache: back-navigation (Files ⇄ Git ⇄ editor) resolves
+  // instantly without refetching. Cleared on every mutation below.
+  async listFiles(dir: string): Promise<RepoDirectoryListingDto> {
+    const hit = listingCache.get(dir)
+    if (hit && Date.now() - hit.at < LISTING_TTL_MS) return hit.data
+    if (inflightListings.has(dir)) return inflightListings.get(dir) as Promise<RepoDirectoryListingDto>
+    const req = apiClient
+      .get<RepoDirectoryListingDto>('/api/v1/admin/files', {
+        params: { path: dir },
+      })
+      .then((response) => {
+        listingCache.set(dir, { at: Date.now(), data: response.data })
+        return response.data
+      })
+      .finally(() => {
+        inflightListings.delete(dir)
+      })
+    inflightListings.set(dir, req)
+    return req
   }
 
   // GET /api/v1/admin/files/tree — recursive index of every file/folder
@@ -142,13 +204,37 @@ class AdminFileManagerService {
     return response.data
   }
 
-  // GET /api/v1/admin/files/content?path=README.md — read a file
+  // GET /api/v1/admin/files/content?path=README.md — read a file.
+  // Consults the prefetch cache first (hover-prefetched rows open instantly).
   async getFileContent(path: string): Promise<RepoReadFileDto> {
-    const response = await apiClient.get<RepoReadFileDto>(
-      '/api/v1/admin/files/content',
-      { params: { path } },
-    )
-    return response.data
+    const hit = contentCache.get(path)
+    if (hit && Date.now() - hit.at < CONTENT_TTL_MS) return hit.data
+    if (inflightReads.has(path)) return inflightReads.get(path) as Promise<RepoReadFileDto>
+    const req = apiClient
+      .get<RepoReadFileDto>('/api/v1/admin/files/content', { params: { path } })
+      .then((response) => {
+        contentCache.set(path, { at: Date.now(), data: response.data })
+        return response.data
+      })
+      .finally(() => {
+        inflightReads.delete(path)
+      })
+    inflightReads.set(path, req)
+    return req
+  }
+
+  /**
+   * Best-effort prefetch for hover/focus intent — warms the content cache so
+   * a subsequent tap opens the editor with zero wait. Never throws; shares
+   * in-flight requests with getFileContent.
+   */
+  prefetchFileContent(path: string): void {
+    const hit = contentCache.get(path)
+    if (hit && Date.now() - hit.at < CONTENT_TTL_MS) return
+    if (inflightReads.has(path)) return
+    void this.getFileContent(path).catch(() => {
+      // Prefetch is advisory — real opens surface their own errors.
+    })
   }
 
   // POST /api/v1/admin/files — create a file or folder (working tree only)
@@ -161,6 +247,7 @@ class AdminFileManagerService {
       '/api/v1/admin/files',
       { path, type, content },
     )
+    clearListingCache()
     return response.data
   }
 
@@ -170,6 +257,8 @@ class AdminFileManagerService {
       '/api/v1/admin/files',
       { path, content },
     )
+    clearListingCache()
+    contentCache.delete(path)
     return response.data
   }
 
@@ -179,6 +268,9 @@ class AdminFileManagerService {
       '/api/v1/admin/files/rename',
       { from, to },
     )
+    clearListingCache()
+    contentCache.delete(from)
+    contentCache.delete(to)
     return response.data
   }
 
@@ -188,6 +280,8 @@ class AdminFileManagerService {
       '/api/v1/admin/files',
       { params: { path } },
     )
+    clearListingCache()
+    contentCache.delete(path)
     return response.data
   }
 

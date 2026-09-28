@@ -363,17 +363,38 @@ async function main(): Promise<void> {
   // dbReady is the first outbound network call of the boot sequence
   // (Turso/Neon connect over HTTPS via fetch; platform sessions start later
   // and can never throw fatally — they retry per-session in the background).
-  // A timeout here means this machine cannot reach the database host at all,
-  // so say so explicitly instead of surfacing the bare undici "fetch failed".
+  // Transient network blips (ETIMEDOUT) are common on this link, so retry
+  // with backoff instead of dying on the first failure — a dead backend is
+  // worse than a slow boot. Only after the retries are exhausted is the
+  // error fatal.
   if (dbReady !== undefined) {
-    try {
-      await dbReady;
-    } catch (err) {
+    const DB_BOOT_ATTEMPTS = 5;
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= DB_BOOT_ATTEMPTS; attempt += 1) {
+      try {
+        await dbReady;
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < DB_BOOT_ATTEMPTS) {
+          const waitMs = 2000 * attempt;
+          logger.warn(
+            `[app] Database unreachable (attempt ${attempt}/${DB_BOOT_ATTEMPTS}) — retrying in ${waitMs / 1000}s…`,
+            { error: err },
+          );
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, waitMs);
+          });
+        }
+      }
+    }
+    if (lastErr !== null) {
       logger.error(
         '[app] Could not reach the database. Check your internet connection, firewall/VPN/proxy rules, and that DATABASE_TYPE plus TURSO_DATABASE_URL (or the Neon equivalent) points at a live, reachable database.',
-        { error: err },
+        { error: lastErr },
       );
-      throw err;
+      throw lastErr;
     }
   }
 
@@ -599,10 +620,14 @@ async function handleShutdown(signal: string, exitCode: number): Promise<void> {
 
 process.once('SIGINT', () => { void handleShutdown('SIGINT', 0); });
 process.once('SIGTERM', () => { void handleShutdown('SIGTERM', 0); });
-process.once('uncaughtException', (err: Error) => {
-  logger.error('💀 [app] Uncaught exception', { error: err });
+// NOTE: `on`, not `once` — a one-shot listener silently disarms after the
+// first event, and the *second* unhandled rejection then kills the process
+// with no log line at all.
+process.on('uncaughtException', (err: Error) => {
+  logger.error('💀 [app] Uncaught exception — exiting', { error: err });
+  process.exit(1);
 });
-process.once('unhandledRejection', (reason: unknown) => {
+process.on('unhandledRejection', (reason: unknown) => {
   logger.error('💀 [app] Unhandled rejection', { error: reason });
 });
 

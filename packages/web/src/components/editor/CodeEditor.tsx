@@ -1,24 +1,33 @@
 /**
  * CodeEditor — lightweight, dependency-free source editor for the Files panels.
  *
- * Renders a transparent <textarea> layered over a syntax-highlighted <pre>
- * (the classic "overlay" technique). Both share the exact same font metrics,
- * padding and white-space so the colored tokens align pixel-perfect with the
- * caret. Scroll positions are synced from the textarea to the highlight layer.
+ * A transparent <textarea> is layered over syntax-highlighted code rows (the
+ * classic "overlay" technique). The overlay shares the code column's exact
+ * font metrics, padding, wrapping and width, so wrapped lines and the caret
+ * align pixel-perfect with the colored tokens — with zero horizontal scroll.
  *
- * A line-number gutter sits to the left, sharing the same line metrics so the
- * numbers stay aligned with the code as it scrolls.
+ * Layout is one grid row per logical line: [gutter number][code]. Rows grow
+ * with wrapped content, so numbers never drift. Long lines continue on the
+ * next line (pre-wrap + break-words), matching the prototype.
  *
  * Features:
  *   • Tab key inserts two-space indentation at the caret / over a selection
  *   • Ctrl/Cmd+S triggers the optional onSave callback (browser default stopped)
  *   • Grows to the height of the content (inline), or fills the parent
  *     (fullscreen, `fillHeight`) with internal scrolling
- *   • Token palette (.tok-*) scoped under .code-editor, matching the chat room
+ *   • Token palette (.tok-*) scoped under .code-editor, themed per dashboard theme
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { highlightToHtml } from '@/lib/syntax-highlight.lib'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { highlightToHtml, splitHighlightedHtml } from '@/lib/syntax-highlight.lib'
 import { cn } from '@/utils/cn.util'
 
 export interface CodeEditorCursor {
@@ -47,17 +56,17 @@ export interface CodeEditorProps {
   borderless?: boolean
 }
 
-/** Shared metrics — MUST be identical on both layers for alignment. */
-const surfaceClasses =
-  'font-mono text-[13px] leading-6 tracking-normal [tab-size:4] p-4 ' +
-  'whitespace-pre border-0 outline-none shadow-none'
-
-/** Line height (leading-6 = 1.5rem = 24px) and total vertical padding (p-4). */
-const LINE_HEIGHT = 24
-const V_PADDING = 32
+/** Shared code metrics — MUST be identical on rows and overlay for alignment. */
+const codeClasses =
+  'font-mono text-[13px] leading-6 tracking-normal [tab-size:4] ' +
+  'whitespace-pre-wrap break-words border-0 outline-none shadow-none'
 
 /** Horizontal gap between the rightmost digit and the code (GitHub-like). */
 const GUTTER_PAD_RIGHT = 16
+/** Inner horizontal padding of the code column, each side. */
+const CODE_PAD_X = 16
+/** Inner vertical padding of the whole surface, top and bottom. */
+const CODE_PAD_Y = 16
 
 const CodeEditor = memo(function CodeEditor({
   value,
@@ -74,31 +83,63 @@ const CodeEditor = memo(function CodeEditor({
   borderless = false,
 }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const preRef = useRef<HTMLPreElement>(null)
-  const gutterRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const rowsRef = useRef<HTMLDivElement>(null)
+  const rowRefs = useRef<Array<HTMLDivElement | null>>([])
 
-  const [scrollTop, setScrollTop] = useState(0)
   const [caretLine, setCaretLine] = useState(1)
   const [caretColumn, setCaretColumn] = useState(1)
+  const [overlayHeight, setOverlayHeight] = useState<number | undefined>(
+    undefined,
+  )
 
-  const lineCount = useMemo(() => value.split('\n').length, [value])
-  const contentHeight = useMemo(
-    () => Math.max(minHeight, lineCount * LINE_HEIGHT + V_PADDING),
-    [lineCount, minHeight],
-  )
-  const lineNumbers = useMemo(
-    () => Array.from({ length: lineCount }, (_, i) => i + 1).join('\n'),
-    [lineCount],
-  )
+  const lines = useMemo(() => value.split('\n'), [value])
+  const lineCount = lines.length
+  const htmlRows = useMemo(() => {
+    const rows = splitHighlightedHtml(highlightToHtml(value, language ?? null))
+    // Defensive: the splitter preserves line count, but never render short.
+    while (rows.length < lineCount) rows.push('')
+    return rows.slice(0, lineCount)
+  }, [value, language, lineCount])
   const gutterWidth = useMemo(
     () => Math.max(48, String(lineCount).length * 12 + GUTTER_PAD_RIGHT),
     [lineCount],
   )
 
+  // The overlay must cover the full content height (not just the viewport)
+  // so it scrolls 1:1 with the rows inside the single scroll container.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = rowsRef.current
+      if (!el) return
+      const h = el.scrollHeight
+      setOverlayHeight((prev) => (prev === h ? prev : h))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [value, lineCount])
+
   // Report the caret position whenever it moves (drives the status bar Ln/Col).
   useEffect(() => {
     onCursor?.({ line: caretLine, column: caretColumn })
   }, [caretLine, caretColumn, onCursor])
+
+  // Keep the caret's row visible inside the scroll container.
+  const ensureCaretVisible = useCallback((line: number) => {
+    const scroller = scrollRef.current
+    const row = rowRefs.current[line - 1]
+    if (!scroller || !row) return
+    const rowTop = row.offsetTop
+    const rowBottom = rowTop + row.offsetHeight
+    const viewTop = scroller.scrollTop
+    const viewBottom = viewTop + scroller.clientHeight
+    if (rowTop < viewTop + 4) {
+      scroller.scrollTop = Math.max(0, rowTop - 4)
+    } else if (rowBottom > viewBottom - 4) {
+      scroller.scrollTop = rowBottom - scroller.clientHeight + 4
+    }
+  }, [])
 
   // Parse (selectionStart → 1-based line/column) after each interaction so the
   // active-line highlight + status bar stay in sync with the caret.
@@ -113,25 +154,11 @@ const CodeEditor = memo(function CodeEditor({
       idx++
     }
     const lineStart = value.lastIndexOf('\n', pos - 1) + 1
+    const column = pos - lineStart + 1
     setCaretLine(line)
-    setCaretColumn(pos - lineStart + 1)
-  }, [value])
-
-  // Keep the highlight layer and the gutter in lockstep with the caret.
-  const handleScroll = useCallback(() => {
-    const ta = textareaRef.current
-    const pre = preRef.current
-    const gutter = gutterRef.current
-    if (ta) setScrollTop(ta.scrollTop)
-    if (ta && pre) {
-      pre.scrollTop = ta.scrollTop
-      pre.scrollLeft = ta.scrollLeft
-    }
-    if (ta && gutter) {
-      gutter.scrollTop = ta.scrollTop
-      gutter.style.transform = `translate3d(${-ta.scrollLeft}px, 0, 0)`
-    }
-  }, [])
+    setCaretColumn(column)
+    ensureCaretVisible(line)
+  }, [value, ensureCaretVisible])
 
   const applyInsertion = useCallback(
     (insert: string) => {
@@ -172,16 +199,6 @@ const CodeEditor = memo(function CodeEditor({
     [applyInsertion, onSave, readOnly],
   )
 
-  // The trailing "\n" keeps the highlight layer one line tall when the
-  // textarea's final line is empty — otherwise they drift out of sync.
-  const highlighted = useMemo(
-    () => highlightToHtml(value, language ?? null) + '\n',
-    [value, language],
-  )
-
-  const activeLineIndicatorTop =
-    V_PADDING / 2 + (caretLine - 1) * LINE_HEIGHT - scrollTop
-
   return (
     <div
       className={cn(
@@ -191,93 +208,122 @@ const CodeEditor = memo(function CodeEditor({
         fillHeight && 'h-full',
         className,
       )}
-      style={fillHeight ? undefined : { minHeight, height: contentHeight }}
+      style={fillHeight ? undefined : { minHeight }}
     >
-      {/* Active-line highlight — tracks the caret, Replit/VS Code style */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 z-[0] h-6 bg-primary/[0.06]"
-        style={{ top: activeLineIndicatorTop }}
-      />
+      {/* Single scroll container — rows and overlay travel together, so no
+          scroll syncing (and no horizontal scrolling) is needed. */}
+      <div ref={scrollRef} className="h-full w-full overflow-y-auto overflow-x-hidden">
+        <div ref={rowsRef} className="relative min-h-full" style={{ minHeight }}>
+          {/* Code rows — one grid row per logical line; the row grows with
+              wrapped content and the gutter number stays pinned to its top. */}
+          {lines.map((_, i) => {
+            const lineNo = i + 1
+            const active = lineNo === caretLine
+            return (
+              <div
+                key={lineNo}
+                ref={(el) => {
+                  rowRefs.current[i] = el
+                }}
+                className={cn(
+                  'flex min-h-6',
+                  active && 'bg-primary/[0.06]',
+                )}
+              >
+                <div
+                  aria-hidden="true"
+                  className="shrink-0 select-none text-right text-on-surface-variant/55 [font-variant-numeric:tabular-nums] font-mono text-[13px] leading-6"
+                  style={{ width: gutterWidth, paddingRight: GUTTER_PAD_RIGHT }}
+                >
+                  {lineNo}
+                </div>
+                <div
+                  className={cn(
+                    codeClasses,
+                    'flex-1 min-w-0 text-on-surface',
+                  )}
+                  style={{
+                    paddingLeft: CODE_PAD_X,
+                    paddingRight: CODE_PAD_X,
+                    paddingTop: i === 0 ? CODE_PAD_Y : 0,
+                    paddingBottom: i === lineCount - 1 ? CODE_PAD_Y : 0,
+                  }}
+                  dangerouslySetInnerHTML={{ __html: htmlRows[i] || ' ' }}
+                />
+              </div>
+            )
+          })}
 
-      {/* Line-number gutter — shares font metrics so numbers stay aligned.
-          Like GitHub, it scrolls horizontally together with the code (translated
-          by -scrollLeft in handleScroll) and stays locked to the left of each
-          line as both slide out of view. Opaque background keeps the numbers
-          readable while the code scrolls beneath. */}
-      <div
-        ref={gutterRef}
-        aria-hidden="true"
-        className={cn(
-          surfaceClasses,
-          'absolute left-0 top-0 bottom-0 z-[1] overflow-hidden select-none pointer-events-none ' +
-            'border-r border-outline-variant/50 bg-surface-container-highest text-right ' +
-            'text-on-surface-variant/55 [font-variant-numeric:tabular-nums] whitespace-pre',
-        )}
-        style={{
-          width: gutterWidth,
-          paddingRight: GUTTER_PAD_RIGHT,
-          paddingLeft: 0,
-        }}
-      >
-        <span style={{ height: contentHeight }} className="block">
-          {lineNumbers}
-        </span>
+          {/* Input layer — transparent text over the code column only. Same
+              font, padding, wrapping and width as the rows, so wrapped lines
+              and the caret align pixel-perfect with the highlight. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0"
+            style={{
+              left: gutterWidth,
+              height: overlayHeight,
+            }}
+          >
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => {
+                onChange(e.target.value)
+                // Recompute the caret for the new value (fires before the
+                // next paint so the highlight tracks typing).
+                requestAnimationFrame(syncCaret)
+              }}
+              onKeyDown={handleKeyDown}
+              onSelect={syncCaret}
+              onMouseUp={syncCaret}
+              onKeyUp={syncCaret}
+              readOnly={readOnly}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              autoFocus={autoFocus}
+              placeholder=""
+              aria-label="Code editor"
+              className={cn(
+                codeClasses,
+                'pointer-events-auto h-full w-full resize-none overflow-hidden bg-transparent ' +
+                  'text-transparent caret-[rgb(var(--color-primary))] selection:bg-primary/30 ' +
+                  'placeholder:text-on-surface-variant/60',
+              )}
+              style={{
+                paddingLeft: CODE_PAD_X,
+                paddingRight: CODE_PAD_X,
+                paddingTop: CODE_PAD_Y,
+                paddingBottom: CODE_PAD_Y,
+              }}
+            />
+          </div>
+
+          {value === '' && (
+            <div
+              aria-hidden="true"
+              className={cn(
+                codeClasses,
+                'pointer-events-none absolute text-on-surface-variant/60 whitespace-pre-wrap',
+              )}
+              style={{
+                left: gutterWidth,
+                right: 0,
+                top: 0,
+                paddingLeft: CODE_PAD_X,
+                paddingRight: CODE_PAD_X,
+                paddingTop: CODE_PAD_Y,
+              }}
+            >
+              {placeholder}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Highlight layer — absolutely positioned behind the textarea */}
-      <pre
-        ref={preRef}
-        aria-hidden="true"
-        className={cn(
-          surfaceClasses,
-          'absolute inset-0 m-0 overflow-hidden rounded-none text-on-surface pointer-events-none',
-        )}
-        style={{
-          paddingLeft: gutterWidth,
-        }}
-        dangerouslySetInnerHTML={{ __html: highlighted }}
-      />
-
-      {/* Input layer — transparent text, visible caret */}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value)
-          // Recompute the caret for the new value (fires before the next
-          // paint so the active-line highlight tracks typing).
-          requestAnimationFrame(syncCaret)
-        }}
-        onScroll={handleScroll}
-        onKeyDown={handleKeyDown}
-        onSelect={syncCaret}
-        onMouseUp={syncCaret}
-        onKeyUp={syncCaret}
-        readOnly={readOnly}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        aria-label="Code editor"
-        className={cn(
-          surfaceClasses,
-          // Scrollable with a hidden native scrollbar so both layers keep
-          // identical content boxes (no scrollbar gutter → pixel-perfect
-          // highlight alignment). Wheel/touch/keyboard scrolling all still
-          // work; iOS Safari shows its overlay scrollbar on demand.
-          'scrollbar-hidden relative h-full w-full resize-none overflow-auto bg-transparent ' +
-            'text-transparent caret-[rgb(var(--color-primary))] selection:bg-primary/30 ' +
-            'placeholder:text-on-surface-variant/60',
-        )}
-        style={{
-          paddingLeft: gutterWidth,
-        }}
-      />
-
-      {/* Scoped token palette — matches the chat room's VS Code "Dark+" colors */}
+      {/* Scoped token palette — every color derives from the active theme */}
       <style>{`
         .code-editor .tok-keyword  { color: rgb(var(--color-primary)); }
         .code-editor .tok-string   { color: rgb(var(--color-warning)); }

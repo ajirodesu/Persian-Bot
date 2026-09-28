@@ -12,7 +12,7 @@ import { buildCommandCatalog } from '@/engine/agent/lib/command-catalog.lib.js';
 import { buildNeedleTools } from '@/engine/agent/lib/tool-schema.lib.js';
 import {
   completeTurn,
-  resetSession,
+  resetRemote,
   resolveNeedleConfig,
   NeedleClientError,
 } from '@/engine/agent/lib/needle-client.lib.js';
@@ -106,6 +106,10 @@ export function __clearToolCacheForTests(): void {
 }
 
 const MAX_TURNS = 20;
+// Transcript growth guard: keep the system head, truncate the middle.
+const MAX_TRANSCRIPT_CHARS = 12000;
+const SYSTEM_HEAD_CHARS = 6000;
+const MAX_TRANSCRIPT_TAIL_CHARS = 5000;
 
 interface ToolMessage {
   tool: string;
@@ -150,7 +154,8 @@ export async function runAgent(
     return 'The AI is busy right now. Please try again in a moment.';
   }
 
-  // Opaque handle binding this turn's Needle session to server-side coords.
+  // Opaque handle binding this AI sequence to server-side coords.
+  // Identity always comes from here — never from model-provided values.
   const aiCtx = createAiContext({
     userId: sessionUserId,
     platform,
@@ -159,16 +164,17 @@ export async function runAgent(
     senderId: senderID,
     messageId: (ctx.event['messageID'] as string) || '',
   });
-  const needleSessionId = `pb:${sessionUserId}:${platform}:${sessionId}:${aiCtx.id}`;
 
   try {
     const cfg = await resolveNeedleConfig();
     if (!cfg.enabled) {
       return 'The AI is currently disabled.';
     }
-    if (!cfg.url || !cfg.tokenConfigured) {
+    if (!cfg.url) {
       return 'The AI is not configured yet. An admin can connect it from the AI Agent dashboard page.';
     }
+    // No Service Token required when the hosted service is unauthenticated —
+    // the client only sends Authorization when a token is configured.
 
     const tools = await loadAgentTools();
     if (tools.length === 0) {
@@ -206,7 +212,14 @@ export async function runAgent(
       .replace('{{AVAILABLE_COMMANDS}}', groupedList);
 
     // ── Bounded agent loop ─────────────────────────────────────────────
-    let nextInput = userInput;
+    // The hosted playground exposes single-turn /complete with one shared
+    // conversation slot and no per-session state, so multi-turn is driven
+    // here: every query carries the full local transcript (system prompt +
+    // catalogue on turn 1, tool results appended after). A /reset opens and
+    // closes our sequence so we never inherit another session's context.
+    await resetRemote(cfg);
+    let transcript =
+      `${systemContent}\n\nUser request:\n${userInput}`;
     let turns = MAX_TURNS;
     let testCommandCalls = 0;
     const history: ToolMessage[] = [];
@@ -214,23 +227,32 @@ export async function runAgent(
     while (turns-- > 0) {
       let turn;
       try {
-        turn = await completeTurn({
-          sessionId: needleSessionId,
-          system: systemContent,
+        const res = await completeTurn({
+          query: transcript,
           tools: needleTools,
-          input: nextInput,
           config: cfg,
         });
+        turn = res.turn;
       } catch (err) {
         if (err instanceof NeedleClientError) {
           logger.error('[Agent] Needle 3 turn failed', { error: err });
           if (err.code === 'UNAUTHORIZED') {
-            return 'The AI service rejected authentication. An admin should check the Needle 3 token.';
+            return 'The AI service rejected authentication. An admin should check the Service Token.';
           }
-          if (err.code === 'TIMEOUT' || err.code === 'UNAVAILABLE') {
+          if (
+            err.code === 'TIMEOUT' ||
+            err.code === 'SERVICE_UNAVAILABLE' ||
+            err.code === 'UNRESOLVABLE' ||
+            err.code === 'REFUSED'
+          ) {
             return 'The AI service is temporarily unavailable. Please try again later.';
           }
-          if (err.code === 'MALFORMED' || err.code === 'INVALID') {
+          if (
+            err.code === 'MALFORMED' ||
+            err.code === 'INVALID' ||
+            err.code === 'NEEDLE_ERROR' ||
+            err.code === 'ENDPOINT_NOT_FOUND'
+          ) {
             return 'The AI service returned an unexpected response. Please try again later.';
           }
           return 'The AI is temporarily unavailable. Please try again later.';
@@ -305,16 +327,23 @@ export async function runAgent(
         }
       }
 
-      nextInput = JSON.stringify({
-        toolResults: feedback,
-        note: 'Continue: call test_command for remaining commands, then send_result exactly once.',
-      });
+      transcript =
+        `${transcript}\n\n[tool results]\n${JSON.stringify(feedback)}\n` +
+        'Continue: call test_command for remaining commands, then send_result exactly once.';
+      // Bound the transcript so long sequences cannot grow without limit;
+      // the system head (prompt + catalogue) is always preserved.
+      if (transcript.length > MAX_TRANSCRIPT_CHARS) {
+        transcript =
+          transcript.slice(0, SYSTEM_HEAD_CHARS) +
+          '\n\n[…earlier turns omitted…]\n' +
+          transcript.slice(-MAX_TRANSCRIPT_TAIL_CHARS);
+      }
     }
 
     return 'I had to stop processing because the task required too many steps.';
   } finally {
     destroyAiContext(aiCtx.id);
     aiRateLimiter.release(sessionKey);
-    void resetSession(needleSessionId).catch(() => undefined);
+    void resetRemote().catch(() => undefined);
   }
 }

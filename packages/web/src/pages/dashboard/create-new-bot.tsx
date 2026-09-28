@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, Check } from 'lucide-react'
 import Card from '@/components/ui/data-display/Card'
 import Button from '@/components/ui/buttons/Button'
+import IconButton from '@/components/ui/buttons/IconButton'
 import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import Select from '@/components/ui/forms/Select'
@@ -231,23 +232,19 @@ export default function NewBotPage() {
   const filledAdmins = form.botAdmins.filter((a) => a.trim())
 
   return (
-    <div className="w-full max-w-[520px] md:max-w-2xl mx-auto min-w-0">
+    <div className="flex flex-col max-w-[420px] md:max-w-2xl w-full mx-auto pb-8">
       <Helmet>
         <title>Create New Bot · Cat-Bot</title>
       </Helmet>
 
-      <div className="mb-8">
-        <h1 className="text-[1.5rem] font-bold tracking-tight text-on-surface leading-tight md:hidden">
-          Create New Bot
-        </h1>
-        <p className="mt-2 text-sm text-on-surface-variant leading-relaxed max-w-sm md:mt-0 md:text-headline-sm md:font-bold md:text-on-surface md:tracking-tight">
+      <div className="pt-4 space-y-6">
+        <p className="text-sm text-on-surface-variant leading-relaxed">
           Set up your bot in three steps. Each field is verified before you proceed.
         </p>
-      </div>
 
-      <WizardStepper steps={STEPS} current={currentStep} onGoTo={goTo} />
+        <WizardStepper steps={STEPS} current={currentStep} onGoTo={goTo} />
 
-      <div className="mt-5">
+        <div>
         {currentStep === 0 && (
           <WizardCard
             title="Bot Identity"
@@ -311,13 +308,7 @@ export default function NewBotPage() {
               </Field.Root>
 
               {form.platform && (
-                <div
-                  className="flex flex-col gap-5"
-                  style={{
-                    animation:
-                      'fade-in-blur 220ms cubic-bezier(0.2,0,0,1) both',
-                  }}
-                >
+                <div className="flex flex-col gap-5 animate-in fade-in duration-normal">
                   <FieldGroup label="Credentials">
                     <PlatformFieldInputs
                       platform={form.platform}
@@ -330,14 +321,15 @@ export default function NewBotPage() {
                     label="Bot Admins"
                     hint="User IDs that have admin control over this bot."
                     action={
-                      <button
-                        type="button"
+                      <Button
+                        variant="text"
+                        color="primary"
+                        size="sm"
                         onClick={addAdmin}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded"
+                        leftIcon={<Plus className="h-3.5 w-3.5" />}
                       >
-                        <Plus className="h-3.5 w-3.5" />
                         Add
-                      </button>
+                      </Button>
                     }
                   >
                     <div className="flex flex-col gap-2.5">
@@ -353,19 +345,14 @@ export default function NewBotPage() {
                           </div>
 
                           {form.botAdmins.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeAdmin(i)}
+                            <IconButton
+                              icon={<Trash2 className="h-4 w-4" />}
+                              variant="text"
+                              size="sm"
                               aria-label={`Remove admin ${i + 1}`}
-                              className={cn(
-                                'shrink-0 h-9 w-9 flex items-center justify-center rounded-[var(--radius-input)]',
-                                'text-on-surface-variant hover:text-error hover:bg-error/10',
-                                'transition-all duration-150',
-                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30',
-                              )}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                              onClick={() => removeAdmin(i)}
+                              className="shrink-0 hover:!text-error"
+                            />
                           )}
                         </div>
                       ))}
@@ -445,6 +432,7 @@ export default function NewBotPage() {
                   color="error"
                   title="Creation Failed"
                   message={botError}
+                  size="sm"
                 />
               )}
             </FormBody>
@@ -459,6 +447,7 @@ export default function NewBotPage() {
             />
           </WizardCard>
         )}
+        </div>
       </div>
     </div>
   )
@@ -504,17 +493,9 @@ function WizardStepper({
                     'text-[11px] font-bold tracking-tight transition-all duration-300',
                     'border',
                     isDone || isActive
-                      ? 'bg-primary text-on-primary border-primary'
+                      ? 'bg-primary text-on-primary border-primary ring-2 ring-primary/30'
                       : 'bg-surface text-on-surface-variant border-on-surface-variant/30',
                   )}
-                  style={
-                    isDone || isActive
-                      ? {
-                          boxShadow:
-                            '0 0 0 3px rgba(138,180,255,0.18), 0 0 12px rgba(138,180,255,0.12)',
-                        }
-                      : undefined
-                  }
                 >
                   {isDone ? (
                     <Check className="h-3.5 w-3.5 stroke-[2.5]" />
@@ -563,14 +544,9 @@ function ProgressConnector({ filled }: { filled: boolean }) {
     <div className="flex-1 mx-3 sm:mx-4 relative h-[3px] rounded-full overflow-hidden bg-on-surface-variant/20 dark:bg-white/10">
       <div
         className={cn(
-          'absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out',
+          'absolute inset-y-0 left-0 rounded-full bg-primary transition-all duration-500 ease-out',
           filled ? 'w-full' : 'w-0',
         )}
-        style={{
-          background:
-            'linear-gradient(90deg, rgba(138,180,255,0.55) 0%, rgba(138,180,255,0.95) 100%)',
-          boxShadow: filled ? '0 0 6px rgba(138,180,255,0.35)' : 'none',
-        }}
       />
     </div>
   )
@@ -688,17 +664,13 @@ function ReviewGroup({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.09em] text-on-surface-variant/55 select-none">
-        {title}
-      </p>
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+          {title}
+        </h2>
+      </div>
 
-      <div
-        className="rounded-[var(--radius-card)] overflow-hidden flex flex-col"
-        style={{
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.07)',
-        }}
-      >
+      <div className="rounded-[var(--radius-card)] overflow-hidden flex flex-col bg-surface-container-low border border-hairline divide-y divide-outline-variant">
         {children}
       </div>
     </div>
@@ -717,10 +689,7 @@ function ReviewRow({
   children?: React.ReactNode
 }) {
   return (
-    <div
-      className="flex flex-col gap-1 px-4 py-3.5 [&+&]:border-t"
-      style={{ borderColor: 'rgba(255,255,255,0.055)' }}
-    >
+    <div className="flex flex-col gap-1 px-4 py-3.5">
       <span className="text-[11px] font-medium text-on-surface-variant leading-none tracking-wide uppercase">
         {label}
       </span>
@@ -745,13 +714,7 @@ function ReviewRow({
 
 function AdminBadge({ children }: { children: React.ReactNode }) {
   return (
-    <span
-      className="inline-flex items-center px-2.5 py-1 rounded-[var(--radius-input)] text-xs font-mono text-on-surface break-all leading-none"
-      style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.09)',
-      }}
-    >
+    <span className="inline-flex items-center px-2.5 py-1 rounded-[var(--radius-input)] text-xs font-mono text-on-surface bg-surface-container-high border border-hairline break-all leading-none">
       {children}
     </span>
   )

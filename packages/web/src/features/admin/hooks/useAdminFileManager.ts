@@ -5,11 +5,11 @@
  * The File Manager edits a REAL git checkout on the server: reads come from
  * disk, mutations write to the working tree, and nothing is committed until the
  * operator explicitly stages/commits from the Git page. This hook manages the
- * lazily-expanded folder tree, multiple editor tabs, file mutations, and the
- * git working-tree status/diff/stage/commit/push state.
+ * lazily-expanded folder tree, file mutations, and the git working-tree
+ * status/diff/stage/commit/push state.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
 import type {
   GitCommitInfoDto,
@@ -20,14 +20,6 @@ import type {
   RepoMutationResultDto,
   RepoTreeNodeDto,
 } from '@/features/admin/services/admin-file-manager.service'
-
-export interface OpenTab {
-  entry: RepoEntryDto
-  content: string
-  savedContent: string
-  loading: boolean
-  error: string | null
-}
 
 export interface UseAdminFileManagerReturn {
   // Repository + tree
@@ -48,26 +40,8 @@ export interface UseAdminFileManagerReturn {
   treeLoading: boolean
   refreshTree: () => Promise<void>
 
-  // Open files / editor — `openFileEntry`/`content`/… reflect the ACTIVE tab
-  tabs: OpenTab[]
-  activePath: string | null
-  activateTab: (path: string) => void
-  closeTab: (path: string) => void
-  openFileEntry: RepoEntryDto | null
-  content: string
-  savedContent: string
-  isDirty: boolean
-  fileLoading: boolean
-  fileError: string | null
-  openFile: (entry: RepoEntryDto) => Promise<boolean>
-  forceOpenFile: (entry: RepoEntryDto) => Promise<void>
-  setContent: (value: string) => void
-  closeFile: () => void
-
   // Mutations
   pending: Set<string>
-  lastMutation: RepoMutationResultDto | null
-  saveFile: () => Promise<RepoMutationResultDto>
   createEntry: (
     path: string,
     type: 'file' | 'folder',
@@ -117,13 +91,11 @@ function parentOf(entryPath: string): string {
   return idx === -1 ? '' : entryPath.slice(0, idx)
 }
 
-/** localStorage key for the editor's persisted session state. */
+/** localStorage key for the browser's persisted session state. */
 const STORAGE_KEY = 'admin-file-manager:state:v1'
 
 interface PersistedState {
   expanded: string[]
-  tabs: OpenTab[]
-  activePath: string | null
 }
 
 /** Reads a persisted session snapshot; returns null when absent/corrupt. */
@@ -132,17 +104,8 @@ function readPersisted(): PersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<PersistedState>
-    const tabs = Array.isArray(parsed.tabs)
-      ? parsed.tabs.filter((t) => t && typeof t === 'object' && t.entry)
-      : []
     return {
       expanded: Array.isArray(parsed.expanded) ? parsed.expanded : [],
-      tabs,
-      activePath:
-        typeof parsed.activePath === 'string' &&
-        tabs.some((t) => t.entry.path === parsed.activePath)
-          ? parsed.activePath
-          : (tabs[0]?.entry.path ?? null),
     }
   } catch {
     return null
@@ -150,9 +113,8 @@ function readPersisted(): PersistedState | null {
 }
 
 export function useAdminFileManager(): UseAdminFileManagerReturn {
-  // Restore a persisted session on mount so a refreshed tab resumes where it
-  // left off (open tabs + content + expanded folders). Lazy initializers avoid
-  // setState-in-effect entirely.
+  // Restore expanded folders on mount so a refresh resumes the same tree.
+  // Lazy initializers avoid setState-in-effect entirely.
   const [initialState] = useState<PersistedState | null>(() => readPersisted())
 
   const [meta, setMeta] = useState<RepoMetaDto | null>(null)
@@ -169,14 +131,11 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   // Mirror for mutation paths — refreshes the search index after a
   // create/rename/delete only when it was actually loaded.
   const treeIndexRef = useRef<RepoTreeNodeDto[] | undefined>(undefined)
-  treeIndexRef.current = treeIndex
+  useEffect(() => {
+    treeIndexRef.current = treeIndex
+  }, [treeIndex])
 
-  const [tabs, setTabs] = useState<OpenTab[]>(initialState?.tabs ?? [])
-  const [activePath, setActivePath] = useState<string | null>(
-    initialState?.activePath ?? null,
-  )
   const [pending, setPending] = useState<Set<string>>(new Set())
-  const [lastMutation, setLastMutation] = useState<RepoMutationResultDto | null>(null)
 
   // Git working-tree panel state
   const [gitStatus, setGitStatus] = useState<GitStatusDto | null>(null)
@@ -213,23 +172,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   const fetchRef = useRef<Record<string, number>>({})
   // Guards the full-repo tree index reads (search).
   const treeFetchRef = useRef(0)
-  // Guards the per-tab content reads so a slow response for an older file can
-  // never overwrite a newer one for the same path.
-  const readRef = useRef<Record<string, number>>({})
-
-  // The active tab derives from `activePath`; all public editor state is the
-  // projection of that single tab so the rest of the page can keep reading
-  // `openFileEntry`/`content`/`isDirty` as before.
-  const activeTab = useMemo(
-    () => tabs.find((t) => t.entry.path === activePath) ?? null,
-    [tabs, activePath],
-  )
-  const openFileEntry = activeTab?.entry ?? null
-  const content = activeTab?.content ?? ''
-  const savedContent = activeTab?.savedContent ?? ''
-  const isDirty = openFileEntry ? content !== savedContent : false
-  const fileLoading = activeTab?.loading ?? false
-  const fileError = activeTab?.error ?? null
 
   // Load repository metadata once on mount. When the checkout is not configured
   // the meta request 503s — surface a stub so the page can show the setup hint.
@@ -315,11 +257,21 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   // Ref mirrors so folder toggling never depends on (or invalidates) the
   // cached children identity — memoized tree rows stay memoized.
   const childrenRef = useRef(children)
-  childrenRef.current = children
+  useEffect(() => {
+    childrenRef.current = children
+  }, [children])
   const expandedRef = useRef(expanded)
-  expandedRef.current = expanded
+  useEffect(() => {
+    expandedRef.current = expanded
+  }, [expanded])
 
-  const isExpanded = useCallback((path: string) => expandedRef.current.has(path), [])
+  // Reads LIVE state (not the ref mirror): open/close must paint on the
+  // same render as the toggle, otherwise rows lag one tap behind and the
+  // wrong folder appears to open/close.
+  const isExpanded = useCallback(
+    (path: string) => expanded.has(path),
+    [expanded],
+  )
 
   const toggleFolder = useCallback(
     (path: string) => {
@@ -343,6 +295,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
   // resolves lazily on first search interaction so first paint never waits
   // for the walk.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to await continuations
     void refresh('')
 
     // Re-fetch any folders that were expanded in the persisted session so the
@@ -352,7 +305,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     }
   }, [refresh, refreshTree])
 
-  // Persist the session so a refresh resumes exactly where the user left off.
+  // Persist the expanded folders so a refresh resumes the same tree.
   const persistRef = useRef<number | null>(null)
   useEffect(() => {
     if (persistRef.current !== null) window.clearTimeout(persistRef.current)
@@ -360,8 +313,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
       try {
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ expanded: [...expanded], tabs, activePath } satisfies
-            PersistedState),
+          JSON.stringify({ expanded: [...expanded] } satisfies PersistedState),
         )
       } catch {
         // Storage full / private mode — the session just won't persist.
@@ -370,130 +322,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     return () => {
       if (persistRef.current !== null) window.clearTimeout(persistRef.current)
     }
-  }, [expanded, tabs, activePath])
-
-  // ── Open file / editor ──────────────────────────────────────────────────────
-
-  /** Patches the tab for `path` using a functional updater (best-effort). */
-  const updateTab = useCallback(
-    (path: string, patch: (tab: OpenTab) => OpenTab) => {
-      setTabs((prev) =>
-        prev.map((t) => (t.entry.path === path ? patch(t) : t)),
-      )
-    },
-    [],
-  )
-
-  /**
-   * Loads a file's content into its tab. Stale-response guarded per path so a
-   * slow response can't clobber a newer read of the same file.
-   */
-  const loadTab = useCallback(
-    async (entry: RepoEntryDto): Promise<void> => {
-      const path = entry.path
-      const id = (readRef.current[path] ?? 0) + 1
-      readRef.current[path] = id
-      updateTab(path, (t) => ({ ...t, loading: true, error: null }))
-      try {
-        const data = await adminFileManagerService.getFileContent(path)
-        if (id !== readRef.current[path]) return
-        updateTab(path, (t) => ({
-          ...t,
-          entry: { ...t.entry, size: data.size, language: data.language },
-          content: data.content,
-          savedContent: data.content,
-          loading: false,
-          error: null,
-        }))
-      } catch (err) {
-        if (id !== readRef.current[path]) return
-        updateTab(path, (t) => ({
-          ...t,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to read file',
-        }))
-      }
-    },
-    [updateTab],
-  )
-
-  /**
-   * Opens a file in a tab (reusing an existing tab when already open) and makes
-   * it active. Unlike a single-file editor, opening another file never discards
-   * unsaved work in the current tab — each tab keeps its own content.
-   */
-  const openFile = useCallback(
-    async (entry: RepoEntryDto): Promise<boolean> => {
-      const existing = tabs.find((t) => t.entry.path === entry.path)
-      setActivePath(entry.path)
-      if (!existing) {
-        setTabs((prev) => [
-          ...prev,
-          {
-            entry,
-            content: '',
-            savedContent: '',
-            loading: true,
-            error: null,
-          },
-        ])
-        void loadTab(entry)
-      } else if (existing.error) {
-        void loadTab(entry)
-      }
-      return true
-    },
-    [tabs, loadTab],
-  )
-
-  /** Opens a file regardless of its tab state (used after a discard confirm). */
-  const forceOpenFile = useCallback(
-    async (entry: RepoEntryDto): Promise<void> => {
-      await openFile(entry)
-    },
-    [openFile],
-  )
-
-  const activateTab = useCallback((path: string) => {
-    setActivePath(path)
-  }, [])
-
-  // Latest tab set + active path via refs, so the close logic never depends on
-  // a stale closure or nests a setState inside another updater.
-  const tabsRef = useRef(tabs)
-  useEffect(() => {
-    tabsRef.current = tabs
-  }, [tabs])
-  const activePathRef = useRef(activePath)
-  useEffect(() => {
-    activePathRef.current = activePath
-  }, [activePath])
-
-  /** Removes a tab, preferring a neighbour as the new active tab. */
-  const closeTab = useCallback((path: string) => {
-    const list = tabsRef.current
-    const idx = list.findIndex((t) => t.entry.path === path)
-    if (idx === -1) return
-    const sibling = list[idx + 1] ?? list[idx - 1]
-    setTabs((prev) => prev.filter((t) => t.entry.path !== path))
-    if (activePathRef.current === path) {
-      setActivePath(sibling?.entry.path ?? null)
-    }
-  }, [])
-
-  const setContent = useCallback(
-    (value: string) => {
-      if (!activePath) return
-      updateTab(activePath, (t) => ({ ...t, content: value, error: null }))
-    },
-    [activePath, updateTab],
-  )
-
-  /** Closes the active tab (the page prompts before dirty tabs). */
-  const closeFile = useCallback(() => {
-    if (!activePath) return
-    closeTab(activePath)
-  }, [activePath, closeTab])
+  }, [expanded])
 
   // ── Git working-tree panel ──────────────────────────────────────────────────
 
@@ -718,33 +547,13 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     setGithubIdentity(null)
   }, [])
 
-  // On mount: restore the connected identity from the server so a refreshed
-  // page resumes as the connected GitHub account (the token itself stays on
-  // the server and never reaches the browser).
+  // Load git status once on mount. History, branches and the GitHub
+  // identity have no consumer on pages using this hook (the Git page talks
+  // to the service directly), so they stay unloaded until explicitly asked.
   useEffect(() => {
-    let cancelled = false
-    adminFileManagerService
-      .getGitConfig()
-      .then((data) => {
-        if (!cancelled && data.identity) setGithubIdentity(data.identity)
-      })
-      .catch(() => {
-        // Best-effort — the Git page works without a connected account.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Load git status + history + branches once on mount.
-  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to await continuations
     void refreshGit()
-    void loadHistory()
-    adminFileManagerService
-      .getGitBranches()
-      .then(setBranches)
-      .catch(() => setBranches([]))
-  }, [refreshGit, loadHistory])
+  }, [refreshGit])
 
   // ── Mutations ───────────────────────────────────────────────────────────────
 
@@ -764,23 +573,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     [],
   )
 
-  const saveFile = useCallback(
-    async (): Promise<RepoMutationResultDto> => {
-      if (!activePath) return { synced: false }
-      const path = activePath
-      const activeContent = tabs.find((t) => t.entry.path === path)?.content ?? ''
-      return withPending(path, async () => {
-        const data = await adminFileManagerService.saveFile(path, activeContent)
-        updateTab(path, (t) => ({ ...t, savedContent: activeContent }))
-        setLastMutation(data)
-        void refresh(parentOf(path))
-        void refreshGit()
-        return data
-      })
-    },
-    [activePath, tabs, withPending, updateTab, refresh, refreshGit],
-  )
-
   const createEntry = useCallback(
     async (
       path: string,
@@ -793,7 +585,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
           type,
           content,
         )
-        setLastMutation(data)
         void refresh(parentOf(path))
         if (type === 'folder') setExpanded((prev) => new Set(prev).add(path))
         // Keep the search index fresh only when it was actually loaded —
@@ -810,7 +601,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     async (from: string, to: string): Promise<RepoMutationResultDto> => {
       return withPending(from, async () => {
         const data = await adminFileManagerService.renameFileEntry(from, to)
-        setLastMutation(data)
         // Update the cached tree in place, then refresh both parents.
         setChildren((prev) => {
           const next = { ...prev }
@@ -833,15 +623,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         })
         void refresh(parentOf(from))
         if (parentOf(to) !== parentOf(from)) void refresh(parentOf(to))
-        // Keep any open tabs pointed at the renamed file.
-        setTabs((prev) =>
-          prev.map((t) =>
-            t.entry.path === from
-              ? { ...t, entry: { ...t.entry, path: to, name: to.split('/').pop() ?? to } }
-              : t,
-          ),
-        )
-        setActivePath((prev) => (prev === from ? to : prev))
         // Keep the search index fresh only when it was actually loaded —
         // otherwise a mutation would pay for a full walk nobody asked for.
         if (treeIndexRef.current !== undefined) void refreshTree()
@@ -856,7 +637,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     async (path: string): Promise<RepoMutationResultDto> => {
       return withPending(path, async () => {
         const data = await adminFileManagerService.deleteFileEntry(path)
-        setLastMutation(data)
         const parent = parentOf(path)
         setChildren((prev) => {
           const next = { ...prev }
@@ -865,7 +645,6 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
           return next
         })
         void refresh(parent)
-        closeTab(path)
         // Keep the search index fresh only when it was actually loaded —
         // otherwise a mutation would pay for a full walk nobody asked for.
         if (treeIndexRef.current !== undefined) void refreshTree()
@@ -873,7 +652,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
         return data
       })
     },
-    [withPending, refresh, closeTab, refreshTree, refreshGit],
+    [withPending, refresh, refreshTree, refreshGit],
   )
 
   return {
@@ -890,23 +669,7 @@ export function useAdminFileManager(): UseAdminFileManagerReturn {
     treeError,
     treeLoading,
     refreshTree,
-    tabs,
-    activePath,
-    activateTab,
-    closeTab,
-    openFileEntry,
-    content,
-    savedContent,
-    isDirty,
-    fileLoading,
-    fileError,
-    openFile,
-    forceOpenFile,
-    setContent,
-    closeFile,
     pending,
-    lastMutation,
-    saveFile,
     createEntry,
     renameEntry,
     deleteEntry,

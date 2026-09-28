@@ -701,7 +701,6 @@ export default function AdminSettingsPage() {
                       aria-checked={active}
                       onClick={() => {
                         setTheme(opt.id)
-                        success(`Interface theme set to: ${opt.label}`)
                       }}
                       className={cn(
                         'flex items-center justify-center space-x-2 py-2 px-2.5 rounded-lg text-xs font-medium transition-colors duration-100 active:opacity-[0.82] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',

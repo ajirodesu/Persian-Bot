@@ -1,5 +1,5 @@
 import { Field } from '@/components/ui/forms/Field'
-import Input from '@/components/ui/forms/Input'
+import PasswordInput from '@/components/ui/forms/PasswordInput'
 import type { Platform } from '@/features/users/dtos/bot.dto'
 import { Platforms } from '@/constants/platform.constants'
 
@@ -32,10 +32,11 @@ export function PlatformFieldInputs({
         <>
           <Field.Root>
             <Field.Label>Discord Token</Field.Label>
-            <Input
+            <PasswordInput
               placeholder="Bot token from Discord Developer Portal"
               value={fields.discordToken}
               onChange={(e) => onChange('discordToken', e.target.value)}
+              autoComplete="off"
             />
           </Field.Root>
         </>
@@ -45,10 +46,11 @@ export function PlatformFieldInputs({
       return (
         <Field.Root>
           <Field.Label>Telegram Token</Field.Label>
-          <Input
+          <PasswordInput
             placeholder="Token from @BotFather"
             value={fields.telegramToken}
             onChange={(e) => onChange('telegramToken', e.target.value)}
+            autoComplete="off"
           />
         </Field.Root>
       )
@@ -57,10 +59,11 @@ export function PlatformFieldInputs({
       return (
         <Field.Root>
           <Field.Label>Fluxer Token</Field.Label>
-          <Input
+          <PasswordInput
             placeholder="Bot token from Fluxer"
             value={fields.fluxerToken}
             onChange={(e) => onChange('fluxerToken', e.target.value)}
+            autoComplete="off"
           />
         </Field.Root>
       )

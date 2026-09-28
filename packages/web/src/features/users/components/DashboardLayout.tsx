@@ -398,7 +398,11 @@ const UserMenu = memo(function UserMenu() {
         aria-expanded={open}
         aria-label={`${displayName} — account menu`}
         className={cn(
-          'flex items-center gap-1.5 rounded-[var(--radius-input)] px-2 py-1.5 transition-colors duration-fast',
+          'flex items-center gap-1.5 rounded-[var(--radius-input)] transition-colors duration-fast',
+          // Mobile: 36px centered box — same footprint as the hamburger
+          // (H_ICON_BTN_MOBILE), so both header edges align. Desktop keeps
+          // the avatar-plus-chevron pill.
+          'h-9 w-9 justify-center md:h-auto md:w-auto md:justify-start md:px-2 md:py-1.5',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
@@ -416,7 +420,7 @@ const UserMenu = memo(function UserMenu() {
         <ChevronDown
           className={cn(
             H_CHEVRON,
-            'text-on-surface-variant transition-transform duration-fast hidden sm:block',
+            'text-on-surface-variant transition-transform duration-fast hidden md:block',
             open && 'rotate-180',
           )}
         />

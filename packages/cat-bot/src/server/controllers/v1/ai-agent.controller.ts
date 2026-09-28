@@ -7,20 +7,28 @@ import {
   recordAiAgentSuccess,
 } from '@/engine/repos/ai-agent-config.repo.js';
 import {
-  fetchCapabilities,
+  probeConnection,
   resolveNeedleConfig,
+  DEFAULT_TIMEOUT_MS,
+  MAX_TIMEOUT_MS,
 } from '@/engine/agent/lib/needle-client.lib.js';
+import type { ConnectionProbe } from '@/engine/agent/lib/needle-client.lib.js';
 
 /**
- * AI Agent Controller — Admin API for the external Cactus Needle 3 integration.
+ * AI Agent Controller — Admin API for the hosted Cactus Needle 3 service.
  *
  *   GET  /api/v1/admin/ai-agent               — effective settings (secret masked)
  *   PUT  /api/v1/admin/ai-agent               — update URL / token / enabled / limits
- *   POST /api/v1/admin/ai-agent/test          — real authenticated connection test
- *   GET  /api/v1/admin/ai-agent/capabilities  — live capability detection
+ *   POST /api/v1/admin/ai-agent/test          — REAL probe: model + /complete
+ *   GET  /api/v1/admin/ai-agent/capabilities  — live detection (5-min cache)
  *
- * Secret handling: the Needle token is NEVER returned to the browser
- * (`tokenConfigured: true/false` only) and NEVER logged. Writes go through
+ * Authentication model: the hosted service may be unauthenticated (no token
+ * needed — normal) or guarded by a deployment-level Service Token. There is
+ * NO "Cactus API Key" concept here: a Cactus Platform key is only for
+ * Platform fine-tuning/jobs and is never sent to /complete.
+ *
+ * Secret handling: the Service Token is NEVER returned to the browser
+ * (`tokenConfigured` / `authMode` only) and NEVER logged. Writes go through
  * the server-side encrypted store (AES-256-GCM at rest).
  */
 
@@ -38,11 +46,16 @@ function toPublicSettings(settings: Awaited<ReturnType<typeof getAiAgentSettings
     enabled: settings.enabled,
     needleUrl: settings.needleUrl,
     tokenConfigured: settings.tokenConfigured,
+    authMode: settings.tokenConfigured ? 'token' : 'none',
     timeoutMs: settings.timeoutMs,
     confidenceThreshold: settings.confidenceThreshold,
     updatedAt: settings.updatedAt,
     lastSuccessAt: getAiAgentLastSuccess(),
   };
+}
+
+function toProbeResponse(probe: ConnectionProbe) {
+  return probe;
 }
 
 class AiAgentController {
@@ -83,9 +96,9 @@ class AiAgentController {
       return;
     }
     const timeout =
-      timeoutMs === undefined ? 30000 : Number(timeoutMs);
-    if (!Number.isFinite(timeout) || timeout < 1000 || timeout > 120000) {
-      res.status(400).json({ error: 'timeoutMs must be between 1000 and 120000' });
+      timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : Number(timeoutMs);
+    if (!Number.isFinite(timeout) || timeout < 1000 || timeout > MAX_TIMEOUT_MS) {
+      res.status(400).json({ error: `timeoutMs must be between 1000 and ${MAX_TIMEOUT_MS}` });
       return;
     }
     const confidence =
@@ -110,31 +123,47 @@ class AiAgentController {
     }
   }
 
-  /** POST /api/v1/admin/ai-agent/test — real authenticated probe. */
+  /** POST /api/v1/admin/ai-agent/test — REAL probe, cache bypassed. */
   async testConnection(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
     try {
       const config = await resolveNeedleConfig();
-      const { status, capabilities } = await fetchCapabilities(config);
-      if (status === 'Connected') recordAiAgentSuccess();
-      res.status(200).json({ status, capabilities });
+      const probe = await probeConnection({ config, bypassCache: true });
+      if (probe.status === 'Connected') recordAiAgentSuccess();
+      res.status(200).json(toProbeResponse(probe));
     } catch (error) {
       console.error('[AiAgentController.testConnection]', error);
-      res.status(500).json({ status: 'Unavailable', capabilities: null });
+      res.status(500).json({
+        status: 'Service unavailable',
+        detail: 'Connection test failed unexpectedly.',
+        capabilities: null,
+        model: null,
+        endpoint: null,
+        latencyMs: null,
+        lastCheckedAt: new Date().toISOString(),
+      });
     }
   }
 
-  /** GET /api/v1/admin/ai-agent/capabilities — live detection. */
+  /** GET /api/v1/admin/ai-agent/capabilities — live detection (5-min cache). */
   async getCapabilities(req: Request, res: Response): Promise<void> {
     if (!(await requireAdmin(req, res))) return;
     try {
       const config = await resolveNeedleConfig();
-      const { status, capabilities } = await fetchCapabilities(config);
-      if (status === 'Connected') recordAiAgentSuccess();
-      res.status(200).json({ status, capabilities });
+      const probe = await probeConnection({ config });
+      if (probe.status === 'Connected') recordAiAgentSuccess();
+      res.status(200).json(toProbeResponse(probe));
     } catch (error) {
       console.error('[AiAgentController.getCapabilities]', error);
-      res.status(500).json({ status: 'Unavailable', capabilities: null });
+      res.status(500).json({
+        status: 'Service unavailable',
+        detail: 'Capability check failed unexpectedly.',
+        capabilities: null,
+        model: null,
+        endpoint: null,
+        latencyMs: null,
+        lastCheckedAt: new Date().toISOString(),
+      });
     }
   }
 }

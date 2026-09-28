@@ -49,10 +49,10 @@ const AdminAiAgentPage = lazy(
   () => import('@/pages/admin/dashboard/ai-agent'),
 )
 const AdminFilesPage = lazy(() => import('@/pages/admin/dashboard/files'))
-const AdminGitPage = lazy(() => import('@/pages/admin/dashboard/git'))
 const AdminFileEditorPage = lazy(
   () => import('@/pages/admin/dashboard/file-editor'),
 )
+const AdminGitPage = lazy(() => import('@/pages/admin/dashboard/git'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/dashboard/settings'))
 
 /**
