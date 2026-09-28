@@ -7,4 +7,5 @@ packages/cat-bot/dist
 packages/database/dist
 packages/web/dist
 packages/cat-bot/.env
+packages/cat-bot/data
 .compile-cache

@@ -154,3 +154,11 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/turso/src/server/github-config.repo.js';
+
+// --- AI AGENT CONFIG (Cactus Needle 3 connection settings) ---
+export {
+  getAiAgentConfigStore,
+  saveAiAgentConfigStore,
+  clearAiAgentConfigStore,
+} from '../adapters/turso/src/server/ai-agent-config.repo.js';
+export type { AiAgentConfigStoreValue } from '../adapters/turso/src/server/ai-agent-config.repo.js';
