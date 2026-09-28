@@ -50,6 +50,10 @@ with no management controls.
 
 ## 5. Configuration (Persian-Bot side)
 
+Quick local start: `cp packages/cat-bot/.env.example packages/cat-bot/.env`
+(Turso `file:` DB works offline), then `npm run dev -w packages/cat-bot`.
+The dev `.env` is gitignored; only `.env.example` is committed.
+
 | Variable | Default | Meaning |
 | -------- | ------- | ------- |
 | `NEEDLE_ENABLED` | `false` | master switch (or dashboard toggle) |
