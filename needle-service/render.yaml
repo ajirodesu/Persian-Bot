@@ -1,0 +1,37 @@
+# Render deployment — Cactus Needle 3 (Service B).
+#
+# Persian-Bot itself is Render Service A. This service is Service B.
+# The two communicate over authenticated HTTPS (NEEDLE_URL + NEEDLE_AUTH_TOKEN
+# configured on Service A / in the AI Agent dashboard). Never use localhost
+# for production service-to-service communication.
+#
+# Option 1 — native Docker deploy (recommended):
+#   Render → New → Web Service → point at this repo → Docker → Dockerfile Path:
+#   needle-service/Dockerfile
+#   Health check path: /health
+#
+# Option 2 — Python deploy:
+#   Build command:  pip install -r needle-service/requirements.txt
+#   Start command:  python needle-service/app.py
+
+services:
+  - type: web
+    name: persian-bot-needle3
+    env: docker
+    dockerfilePath: ./needle-service/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: NEEDLE_AUTH_TOKEN
+        sync: false # set a long random secret; must match Persian-Bot NEEDLE_AUTH_TOKEN
+      - key: NEEDLE_GENERATION
+        value: '3'
+      - key: NEEDLE_MAX_NEW_TOKENS
+        value: '512'
+      - key: NEEDLE_SESSION_TTL_SECONDS
+        value: '1800'
+      # Optional: tuned weights file mounted/downloaded on the host.
+      # - key: NEEDLE_WEIGHTS_PATH
+      #   value: /data/needle3-tuned.cact
+      # Optional: retrieval index persistence for large toolsets.
+      # - key: NEEDLE_TOOL_INDEX_PATH
+      #   value: /data/tool-index

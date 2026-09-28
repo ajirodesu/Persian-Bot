@@ -261,3 +261,22 @@ export const getGitHubConfigStore = m.getGitHubConfigStore;
 export const saveGitHubConfigStore = m.saveGitHubConfigStore;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 export const clearGitHubConfigStore = m.clearGitHubConfigStore;
+
+// --- AI AGENT CONFIG ---
+// Deployment-level Cactus Needle 3 connection settings (enabled, URL,
+// encrypted Bearer token, timeouts). Set through the Admin → AI Agent page.
+// Adapter-agnostic interface.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getAiAgentConfigStore = m.getAiAgentConfigStore;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const saveAiAgentConfigStore = m.saveAiAgentConfigStore;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const clearAiAgentConfigStore = m.clearAiAgentConfigStore;
+export type AiAgentConfigStoreValue = {
+  enabled: boolean;
+  needleUrl: string;
+  encryptedToken: string;
+  timeoutMs: number;
+  confidenceThreshold: number;
+  updatedAt: string;
+};

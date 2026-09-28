@@ -74,6 +74,15 @@ interface EnvConfig {
   // Security
   readonly ENCRYPTION_KEY: string;
 
+  // Cactus Needle 3 (AI Agent) — all optional. When unset, the AI Agent
+  // dashboard store is the source of truth; env vars are the fallback.
+  // The bot MUST start with Needle offline (AI gracefully unavailable).
+  readonly NEEDLE_URL?: string | undefined;
+  readonly NEEDLE_AUTH_TOKEN?: string | undefined;
+  readonly NEEDLE_ENABLED?: string | undefined;
+  readonly NEEDLE_TIMEOUT_MS?: string | undefined;
+  readonly NEEDLE_CONFIDENCE_THRESHOLD?: string | undefined;
+
   // Derived boolean helpers
   readonly isDevelopment: boolean;
   readonly isProduction: boolean;
@@ -309,6 +318,25 @@ export const env: EnvConfig = {
 
   // Security
   ENCRYPTION_KEY: getRequiredEnv('ENCRYPTION_KEY'),
+
+  // Cactus Needle 3 — optional; a missing or malformed value degrades to
+  // "AI unavailable" instead of crashing boot (the bot must start with
+  // Needle offline). getOptionalUrl would throw on malformed input, so parse
+  // tolerantly here and let the AI Agent dashboard report the real state.
+  NEEDLE_URL: (() => {
+    try {
+      return getOptionalUrl('NEEDLE_URL');
+    } catch {
+      console.warn(
+        '[ENV] Ignoring malformed NEEDLE_URL — AI will report "Configuration incomplete".',
+      );
+      return undefined;
+    }
+  })(),
+  NEEDLE_AUTH_TOKEN: getOptionalEnv('NEEDLE_AUTH_TOKEN'),
+  NEEDLE_ENABLED: getOptionalEnv('NEEDLE_ENABLED'),
+  NEEDLE_TIMEOUT_MS: getOptionalEnv('NEEDLE_TIMEOUT_MS'),
+  NEEDLE_CONFIDENCE_THRESHOLD: getOptionalEnv('NEEDLE_CONFIDENCE_THRESHOLD'),
 
   // Derived boolean helpers for convenience
   isDevelopment: nodeEnv === 'development',
