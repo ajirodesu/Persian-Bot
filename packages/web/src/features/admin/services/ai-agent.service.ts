@@ -50,6 +50,18 @@ export interface AiAgentTestDto {
   lastCheckedAt: string
 }
 
+export interface AiAgentRemoteStatusDto {
+  model: string | null
+  generation: number | null
+  packageVersion: string | null
+  toolCalling: boolean
+  streaming: boolean
+  queueDepth: number | null
+  uptimeS: number | null
+  initialized: boolean | null
+  latencyMs: number
+}
+
 // ── Service ──────────────────────────────────────────────────────────────────
 
 class AiAgentService {
@@ -89,6 +101,14 @@ class AiAgentService {
   async getCapabilities(): Promise<AiAgentTestDto> {
     const response = await apiClient.get<AiAgentTestDto>(
       '/api/v1/admin/ai-agent/capabilities',
+    )
+    return response.data
+  }
+
+  /** GET /api/v1/admin/ai-agent/remote — server-reported capabilities. */
+  async getRemoteStatus(): Promise<AiAgentRemoteStatusDto> {
+    const response = await apiClient.get<AiAgentRemoteStatusDto>(
+      '/api/v1/admin/ai-agent/remote',
     )
     return response.data
   }

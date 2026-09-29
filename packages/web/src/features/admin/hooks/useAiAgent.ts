@@ -3,6 +3,7 @@ import { aiAgentService } from '@/features/admin/services/ai-agent.service'
 import type {
   AiAgentCapabilitiesDto,
   AiAgentConnectionStatus,
+  AiAgentRemoteStatusDto,
   AiAgentSettingsDto,
   AiAgentTestDto,
 } from '@/features/admin/services/ai-agent.service'
@@ -16,6 +17,7 @@ export interface UseAiAgentState {
   endpoint: string | null
   latencyMs: number | null
   lastCheckedAt: string | null
+  remote: AiAgentRemoteStatusDto | null
   loading: boolean
   saving: boolean
   testing: boolean
@@ -43,6 +45,7 @@ export function useAiAgent(): UseAiAgentState {
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null)
+  const [remote, setRemote] = useState<AiAgentRemoteStatusDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -68,6 +71,12 @@ export function useAiAgent(): UseAiAgentState {
       ])
       setSettings(s)
       applyProbe(c)
+      try {
+        const r = await aiAgentService.getRemoteStatus()
+        setRemote(r)
+      } catch {
+        setRemote(null)
+      }
     } catch {
       setError('Failed to load AI Agent settings.')
     } finally {
@@ -119,6 +128,7 @@ export function useAiAgent(): UseAiAgentState {
     endpoint,
     latencyMs,
     lastCheckedAt,
+    remote,
     loading,
     saving,
     testing,

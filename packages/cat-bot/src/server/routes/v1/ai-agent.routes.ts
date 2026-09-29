@@ -30,4 +30,9 @@ aiAgentRouter.get('/capabilities', (req, res) => {
   void aiAgentController.getCapabilities(req, res);
 });
 
+// GET /api/v1/admin/ai-agent/remote — server-reported capabilities (view)
+aiAgentRouter.get('/remote', (req, res) => {
+  void aiAgentController.getRemoteStatus(req, res);
+});
+
 export default aiAgentRouter;

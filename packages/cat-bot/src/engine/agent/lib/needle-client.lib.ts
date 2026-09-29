@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getAiAgentSettings } from '@/engine/repos/ai-agent-config.repo.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import type { NeedleToolDefinition } from './tool-schema.lib.js';
@@ -350,6 +351,7 @@ async function requestJson(opts: {
 }): Promise<RawResponse> {
   const started = Date.now();
   const url = `${opts.cfg.url}${opts.path}`;
+  const requestId = randomUUID();
   const attempt = async (): Promise<RawResponse> => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -360,6 +362,7 @@ async function requestJson(opts: {
         headers: {
           ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           ...authHeaders(opts.cfg),
+          'X-Request-ID': requestId,
         },
         ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
         signal: controller.signal,
@@ -681,5 +684,187 @@ export async function probeConnection(opts?: {
       latencyMs: null,
       lastCheckedAt: stamp(),
     };
+  }
+}
+
+export interface NeedleRemoteCapabilities {
+  model: string | null;
+  generation: number | null;
+  packageVersion: string | null;
+  toolCalling: boolean;
+  streaming: boolean;
+  queueDepth: number | null;
+  uptimeS: number | null;
+  initialized: boolean | null;
+}
+
+/**
+ * Live server capabilities: GET {base}/v1/capabilities. Additive read-only
+ * view for the admin dashboard — never throws for missing fields, maps HTTP
+ * errors to NeedleClientError like the rest of this client.
+ */
+export async function fetchRemoteCapabilities(
+  config?: NeedleConfig,
+): Promise<{ capabilities: NeedleRemoteCapabilities; latencyMs: number }> {
+  const cfg = config ?? (await resolveNeedleConfig());
+  requireUsable(cfg);
+  const started = Date.now();
+  const url = `${cfg.url}/v1/capabilities`;
+  const controller = new AbortController();
+  const timeoutMs = Math.min(cfg.timeoutMs, HEALTH_PROBE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  (timer as NodeJS.Timeout).unref?.();
+  try {
+    const http = await fetch(url, {
+      method: 'GET',
+      headers: { ...authHeaders(cfg), 'X-Request-ID': randomUUID() },
+      signal: controller.signal,
+    });
+    let data: unknown = null;
+    try {
+      data = await http.json();
+    } catch {
+      data = null;
+    }
+    throwForStatus(http.status, '/v1/capabilities', data);
+    const raw = (data ?? {}) as Record<string, unknown>;
+    const capabilities: NeedleRemoteCapabilities = {
+      model: typeof raw['model'] === 'string' ? raw['model'] : null,
+      generation: typeof raw['generation'] === 'number' ? raw['generation'] : null,
+      packageVersion:
+        typeof raw['package_version'] === 'string' ? raw['package_version'] : null,
+      toolCalling: raw['tool_calling'] === true,
+      streaming: raw['streaming'] === true,
+      queueDepth: typeof raw['queue_depth'] === 'number' ? raw['queue_depth'] : null,
+      uptimeS: typeof raw['uptime_s'] === 'number' ? raw['uptime_s'] : null,
+      initialized: typeof raw['initialized'] === 'boolean' ? raw['initialized'] : null,
+    };
+    return { capabilities, latencyMs: Date.now() - started };
+  } catch (err) {
+    if (err instanceof NeedleClientError) throw err;
+    throw mapNetworkError(err, timeoutMs);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export interface StreamTurnEvent {
+  type: 'started' | 'result' | 'done';
+  requestId?: string;
+  turn?: NeedleTurnResult;
+  latencyMs?: number;
+}
+
+/**
+ * Streaming turn: POST {base}/v1/complete/stream (SSE). The engine returns a
+ * single turn dict, so the stream carries framing (`started` immediately for
+ * TTFB, then `result`, then `done`) rather than partial tokens. Falls back
+ * to unary completeTurn when the server has no stream endpoint (404).
+ */
+export async function completeTurnStream(
+  opts: CompleteTurnOptions & {
+    signal?: AbortSignal;
+    onEvent?: (event: StreamTurnEvent) => void;
+  },
+): Promise<{ turn: NeedleTurnResult; latencyMs: number; streamed: boolean }> {
+  const cfg = opts.config ?? (await resolveNeedleConfig());
+  requireUsable(cfg);
+  if (typeof opts.query !== 'string' || opts.query.trim() === '') {
+    throw new NeedleClientError('INVALID', 'query must be a non-empty string.');
+  }
+  const body: Record<string, unknown> = {
+    query: opts.query,
+    ...(opts.system !== undefined && opts.system !== '' ? { system: opts.system } : {}),
+    tools: opts.tools,
+    max_new_tokens:
+      opts.maxNewTokens !== undefined ? clampMaxTokens(opts.maxNewTokens) : cfg.maxNewTokens,
+  };
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+  (timer as NodeJS.Timeout).unref?.();
+  const forwardAbort = (): void => controller.abort();
+  opts.signal?.addEventListener('abort', forwardAbort, { once: true });
+  try {
+    const res = await fetch(`${cfg.url}/v1/complete/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...authHeaders(cfg),
+        'X-Request-ID': randomUUID(),
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (res.status === 404) {
+      const fallback = await completeTurn(opts);
+      return { turn: fallback.turn, latencyMs: fallback.latencyMs, streamed: false };
+    }
+    let data: unknown = null;
+    const contentType = res.headers.get('content-type') ?? '';
+    if (!contentType.includes('text/event-stream')) {
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      throwForStatus(res.status, '/v1/complete/stream', data);
+      return { turn: parseTurnResult(data), latencyMs: Date.now() - started, streamed: false };
+    }
+    throwForStatus(res.status, '/v1/complete/stream', null);
+    const text = await res.text();
+    let turn: NeedleTurnResult | null = null;
+    let serverLatency: number | null = null;
+    for (const chunk of text.split('\n\n')) {
+      const lines = chunk.split('\n');
+      let event = '';
+      const dataLines: string[] = [];
+      for (const line of lines) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+      }
+      if (event === '' && dataLines.length === 0) continue;
+      let payload: Record<string, unknown> = {};
+      try {
+        const joined = dataLines.join('\n');
+        if (joined !== '') payload = JSON.parse(joined) as Record<string, unknown>;
+      } catch {
+        throw new NeedleClientError('MALFORMED', 'Needle 3 stream sent malformed JSON.');
+      }
+      if (event === 'started') {
+        const requestId = typeof payload['request_id'] === 'string' ? payload['request_id'] : undefined;
+        opts.onEvent?.(
+          requestId !== undefined ? { type: 'started', requestId } : { type: 'started' },
+        );
+      } else if (event === 'result') {
+        const rawResult: unknown = payload['result'];
+        turn = parseTurnResult(rawResult);
+        const latencyRaw: unknown = payload['latency_ms'];
+        serverLatency =
+          typeof latencyRaw === 'number' && Number.isFinite(latencyRaw) ? latencyRaw : null;
+        opts.onEvent?.({
+          type: 'result',
+          ...(turn !== null ? { turn } : {}),
+          ...(serverLatency !== null ? { latencyMs: serverLatency } : {}),
+        });
+      } else if (event === 'done') {
+        opts.onEvent?.({ type: 'done' });
+      } else if (event === 'error') {
+        const message =
+          typeof payload['error'] === 'string' ? payload['error'] : 'stream failed';
+        throw new NeedleClientError('NEEDLE_ERROR', `Needle 3 stream error: ${message}`);
+      }
+    }
+    if (turn === null) {
+      throw new NeedleClientError('MALFORMED', 'Needle 3 stream ended without a result.');
+    }
+    return { turn, latencyMs: serverLatency ?? Date.now() - started, streamed: true };
+  } catch (err) {
+    if (err instanceof NeedleClientError) throw err;
+    throw mapNetworkError(err, cfg.timeoutMs);
+  } finally {
+    opts.signal?.removeEventListener('abort', forwardAbort);
+    clearTimeout(timer);
   }
 }

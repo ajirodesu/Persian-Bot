@@ -180,6 +180,7 @@ export default function AdminAiAgentPage() {
     endpoint,
     latencyMs,
     lastCheckedAt,
+    remote,
     loading,
     saving,
     testing,
@@ -527,6 +528,9 @@ export default function AdminAiAgentPage() {
               [
                 ['Endpoint', endpoint ?? '—'],
                 ['Model', model ?? capabilities?.model ?? '—'],
+                ['Remote version', remote?.packageVersion ?? '—'],
+                ['Streaming', remote ? (remote.streaming ? 'Supported' : 'Unsupported') : '—'],
+                ['Remote queue', remote?.queueDepth !== null && remote?.queueDepth !== undefined ? String(remote.queueDepth) : '—'],
                 ['Last latency', formatLatency(latencyMs)],
                 ['Connection state', status ?? '—'],
                 ['Status detail', detail ?? '—'],

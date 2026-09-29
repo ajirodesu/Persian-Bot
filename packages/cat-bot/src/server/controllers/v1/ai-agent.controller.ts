@@ -9,6 +9,7 @@ import {
 import {
   probeConnection,
   resolveNeedleConfig,
+  fetchRemoteCapabilities,
   DEFAULT_TIMEOUT_MS,
   DEFAULT_MAX_NEW_TOKENS,
   MAX_TIMEOUT_MS,
@@ -173,6 +174,19 @@ class AiAgentController {
         latencyMs: null,
         lastCheckedAt: new Date().toISOString(),
       });
+    }
+  }
+
+  /** GET /api/v1/admin/ai-agent/remote — server-reported capabilities view. */
+  async getRemoteStatus(req: Request, res: Response): Promise<void> {
+    if (!(await requireAdmin(req, res))) return;
+    try {
+      const config = await resolveNeedleConfig();
+      const { capabilities, latencyMs } = await fetchRemoteCapabilities(config);
+      res.status(200).json({ ...capabilities, latencyMs });
+    } catch (error) {
+      console.error('[AiAgentController.getRemoteStatus]', error);
+      res.status(502).json({ error: 'Failed to reach Needle 3 capabilities endpoint' });
     }
   }
 }
