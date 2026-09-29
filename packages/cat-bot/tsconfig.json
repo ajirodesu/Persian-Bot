@@ -24,6 +24,5 @@
       "@cat-bot/*": ["./src/*"]
     }
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**", "vitest.setup.ts"]
+  "include": ["src"]
 }

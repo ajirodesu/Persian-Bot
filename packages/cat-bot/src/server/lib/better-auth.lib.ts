@@ -35,10 +35,9 @@ const isMongo = env.DATABASE_TYPE === 'mongodb';
 const isTurso = env.DATABASE_TYPE === 'turso';
 
 // Trusted browser origins for better-auth's origin check (POST /api/auth/*).
-// Both the served frontend and the API share the same origin (PORT, default
-// :5000), and the vite dev proxy forwards /api to the API port — without this
-// list every sign-in/sign-up POST fails with INVALID_ORIGIN. Both localhost
-// spellings
+// The dev frontend (vite) serves on :5000 while the API listens on :3000, so the
+// browser origin NEVER matches BETTER_AUTH_URL on its own — without this list
+// every sign-in/sign-up POST fails with INVALID_ORIGIN. Both localhost spellings
 // are covered because browsers treat http://localhost and http://127.0.0.1 as
 // distinct origins. VITE_URL (production frontend / custom dev URL) leads.
 const trustedOrigins = [

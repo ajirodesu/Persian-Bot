@@ -146,11 +146,3 @@ export {
   saveGitHubConfigStore,
   clearGitHubConfigStore,
 } from '../adapters/mongodb/src/server/github-config.repo.js';
-
-// --- AI AGENT CONFIG (Cactus Needle 3 connection settings) ---
-export {
-  getAiAgentConfigStore,
-  saveAiAgentConfigStore,
-  clearAiAgentConfigStore,
-} from '../adapters/mongodb/src/server/ai-agent-config.repo.js';
-export type { AiAgentConfigStoreValue } from '../adapters/mongodb/src/server/ai-agent-config.repo.js';

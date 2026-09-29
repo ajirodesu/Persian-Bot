@@ -45,9 +45,6 @@ const AdminResetPasswordPage = lazy(() => import('@/pages/admin/ResetPassword'))
 const AdminDashboardPage = lazy(() => import('@/pages/admin/dashboard'))
 const AdminUsersPage = lazy(() => import('@/pages/admin/dashboard/users'))
 const AdminBotsPage = lazy(() => import('@/pages/admin/dashboard/bots'))
-const AdminAiAgentPage = lazy(
-  () => import('@/pages/admin/dashboard/ai-agent'),
-)
 const AdminFilesPage = lazy(() => import('@/pages/admin/dashboard/files'))
 const AdminFileEditorPage = lazy(
   () => import('@/pages/admin/dashboard/file-editor'),
@@ -199,10 +196,6 @@ export const router = createBrowserRouter([
               {
                 path: ROUTES.ADMIN.BOTS,
                 element: withSuspense(<AdminBotsPage />),
-              },
-              {
-                path: ROUTES.ADMIN.AI_AGENT,
-                element: withSuspense(<AdminAiAgentPage />),
               },
               {
                 path: ROUTES.ADMIN.GIT,

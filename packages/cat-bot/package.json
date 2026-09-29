@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch --conditions source src/engine/app.ts",
-    "build": "npm run build --prefix ../database && tsc && tsc-alias && mkdir -p dist/agent && cp agent/system_prompt.md dist/agent/system_prompt.md",
+    "build": "npm run build --prefix ../database && tsc && tsc-alias",
     "lint": "eslint .",
     "format": "prettier --write .",
     "start": "node dist/engine/app.js",
