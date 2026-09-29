@@ -57,6 +57,7 @@ export interface AiAgentRemoteStatusDto {
   toolCalling: boolean
   streaming: boolean
   queueDepth: number | null
+  runningS: number | null
   uptimeS: number | null
   initialized: boolean | null
   latencyMs: number

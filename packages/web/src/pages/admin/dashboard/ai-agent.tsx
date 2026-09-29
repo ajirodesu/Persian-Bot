@@ -531,6 +531,7 @@ export default function AdminAiAgentPage() {
                 ['Remote version', remote?.packageVersion ?? '—'],
                 ['Streaming', remote ? (remote.streaming ? 'Supported' : 'Unsupported') : '—'],
                 ['Remote queue', remote?.queueDepth !== null && remote?.queueDepth !== undefined ? String(remote.queueDepth) : '—'],
+                ['Remote job age', remote?.runningS !== null && remote?.runningS !== undefined ? `${remote.runningS} s` : 'idle'],
                 ['Last latency', formatLatency(latencyMs)],
                 ['Connection state', status ?? '—'],
                 ['Status detail', detail ?? '—'],

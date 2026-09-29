@@ -694,6 +694,8 @@ export interface NeedleRemoteCapabilities {
   toolCalling: boolean;
   streaming: boolean;
   queueDepth: number | null;
+  /** Age of the currently running server inference, null when idle. */
+  runningS: number | null;
   uptimeS: number | null;
   initialized: boolean | null;
 }
@@ -736,6 +738,7 @@ export async function fetchRemoteCapabilities(
       toolCalling: raw['tool_calling'] === true,
       streaming: raw['streaming'] === true,
       queueDepth: typeof raw['queue_depth'] === 'number' ? raw['queue_depth'] : null,
+      runningS: typeof raw['running_s'] === 'number' ? raw['running_s'] : null,
       uptimeS: typeof raw['uptime_s'] === 'number' ? raw['uptime_s'] : null,
       initialized: typeof raw['initialized'] === 'boolean' ? raw['initialized'] : null,
     };
