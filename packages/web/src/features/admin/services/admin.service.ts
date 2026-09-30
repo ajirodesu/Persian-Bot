@@ -12,6 +12,11 @@ export interface AdminBotItemDto {
   isRunning: boolean
   userName?: string
   userEmail?: string
+  /** The bot's own platform ID (Discord client ID / Telegram token prefix).
+   *  Absent for Fluxer and when credentials are missing. */
+  botId?: string
+  /** The bot's platform username — not persisted by any adapter yet. */
+  botUsername?: string
 }
 
 export interface GetAdminBotsResponseDto {
@@ -84,11 +89,13 @@ class AdminService {
     page = 1,
     limit = 10,
     search = '',
+    signal?: AbortSignal,
   ): Promise<GetAdminBotsResponseDto> {
     const response = await apiClient.get<GetAdminBotsResponseDto>(
       '/api/v1/admin/bots',
       {
         params: { page, limit, search },
+        signal,
       },
     )
     return response.data
@@ -98,11 +105,13 @@ class AdminService {
     page = 1,
     limit = 10,
     search = '',
+    signal?: AbortSignal,
   ): Promise<GetAdminUserListResponseDto> {
     const response = await apiClient.get<GetAdminUserListResponseDto>(
       '/api/v1/admin/users',
       {
         params: { page, limit, search },
+        signal,
       },
     )
     return response.data

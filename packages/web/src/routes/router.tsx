@@ -1,7 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { lazy, Suspense } from 'react'
-import { createBrowserRouter, Outlet } from 'react-router-dom'
+import { createBrowserRouter, Outlet, useLocation } from 'react-router-dom'
 import { ROUTES, ROUTE_SEGMENTS } from '@/constants/routes.constants'
+import Skeleton from '@/components/ui/feedback/Skeleton'
+import RouteErrorBoundary from '@/components/ui/feedback/RouteErrorBoundary'
 
 // Layout shells — NOT lazy-loaded; must render immediately so nav chrome
 // appears before any page bundle resolves.
@@ -65,15 +67,77 @@ function AdminLayout() {
   )
 }
 
-/**
- * Wraps lazy pages in a Suspense boundary. The blank surface fallback matches
- * the body background to prevent a flash of white during bundle resolution.
- */
-const withSuspense = (node: React.ReactElement) => (
-  <Suspense fallback={<div className="min-h-screen bg-surface-container-lowest" />}>
-    {node}
-  </Suspense>
+const withSuspense = (
+  node: React.ReactElement,
+  fallback?: React.ReactNode,
+) => (
+  <SuspenseWithBoundary fallback={fallback}>{node}</SuspenseWithBoundary>
 )
+
+/**
+ * Landing-shaped placeholder: badge, headline, copy, CTAs, and a visual
+ * block in the same max-width/column structure as the home page, so the
+ * footer below doesn't jump when the chunk lands.
+ */
+function LandingFallback() {
+  return (
+    <div
+      className="w-full max-w-md mx-auto px-5 pt-6 pb-12 flex flex-col gap-10 lg:max-w-6xl lg:px-8"
+      aria-hidden="true"
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+        <div className="flex flex-col gap-5 pt-2">
+          <Skeleton variant="pill" width={120} height={24} />
+          <Skeleton variant="rounded" width="100%" height={44} />
+          <Skeleton variant="rounded" width="70%" height={44} />
+          <Skeleton variant="text" width="100%" />
+          <Skeleton variant="text" width="85%" />
+          <div className="flex gap-3 pt-2">
+            <Skeleton variant="rounded" width={150} height={48} />
+            <Skeleton variant="rounded" width={150} height={48} />
+          </div>
+        </div>
+        <Skeleton variant="rounded" width="100%" height={280} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Skeleton variant="rounded" width="100%" height={140} />
+        <Skeleton variant="rounded" width="100%" height={140} />
+        <Skeleton variant="rounded" width="100%" height={140} />
+      </div>
+    </div>
+  )
+}
+
+function SuspenseWithBoundary({
+  children,
+  fallback,
+}: {
+  children: React.ReactElement
+  fallback?: React.ReactNode
+}) {
+  const { pathname } = useLocation()
+  return (
+    <RouteErrorBoundary resetKey={pathname}>
+      <Suspense
+        fallback={
+          fallback ?? (
+            <div
+              className="p-4 md:p-6 max-w-7xl w-full mx-auto flex flex-col gap-3"
+              aria-hidden="true"
+            >
+              <Skeleton variant="rounded" width="100%" height={56} />
+              <Skeleton variant="rounded" width="100%" height={180} />
+              <Skeleton variant="text" width="60%" />
+              <Skeleton variant="text" width="85%" />
+            </div>
+          )
+        }
+      >
+        {children}
+      </Suspense>
+    </RouteErrorBoundary>
+  )
+}
 
 export const router = createBrowserRouter([
   // ── Public shell (marketing + auth pages) ──────────────────────────────
@@ -82,7 +146,7 @@ export const router = createBrowserRouter([
     element: <Layout />,
     errorElement: <InternalServerError />,
     children: [
-      { index: true, element: withSuspense(<HomePage />) },
+      { index: true, element: withSuspense(<HomePage />, <LandingFallback />) },
       {
         element: <PublicRoute />,
         children: [

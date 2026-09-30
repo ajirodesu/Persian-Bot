@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-client.lib'
 import { botService } from '@/features/users/services/bot.service'
 import type { GetBotListItemDto } from '@/features/users/dtos/bot.dto'
 
@@ -9,41 +10,19 @@ interface UseBotListReturn {
 }
 
 export function useBotList(): UseBotListReturn {
-  const [bots, setBots] = useState<GetBotListItemDto[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data, isPending, error } = useQuery({
+    queryKey: queryKeys.bots,
+    // TanStack's signal aborts the fetch when a newer request supersedes it
+    // or the last subscriber unmounts — stale requests are cancelled, not
+    // merely ignored. Cached data renders instantly on revisit.
+    queryFn: ({ signal }) => botService.listBots(signal),
+  })
 
-  useEffect(() => {
-    // The cancelled flag prevents stale state updates when the component unmounts
-    // before the request resolves — avoids the React StrictMode double-invoke warning.
-    let cancelled = false
-
-    const fetchBots = async (): Promise<void> => {
-      setIsLoading(true)
-      setError(null)
-
-      try {
-        const result = await botService.listBots()
-        if (!cancelled) {
-          setBots(result.bots)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load bots')
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    void fetchBots()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return { bots, isLoading, error }
+  return {
+    bots: data?.bots ?? [],
+    // isPending (not isFetching) so cached revisits and background
+    // revalidations never flash a full-page spinner.
+    isLoading: isPending,
+    error: error ? (error.message ?? 'Failed to load bots') : null,
+  }
 }

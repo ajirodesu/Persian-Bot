@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Settings as SettingsIcon,
   Plus,
+  ShieldCheck,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react'
@@ -22,6 +23,12 @@ import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import { DashboardSidebarProvider } from '@/contexts/DashboardSidebarContext'
 import { cn } from '@/utils/cn.util'
+import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
+import {
+  prefetchDashboardHome,
+  prefetchChatRoom,
+  prefetchDashboardSettings,
+} from '@/lib/route-prefetch.lib'
 import IconButton from '@/components/ui/buttons/IconButton'
 import { ROUTES } from '@/constants/routes.constants'
 import { getSocket } from '@/lib/socket.lib'
@@ -50,6 +57,16 @@ const NAV_ITEMS = [
   { path: ROUTES.DASHBOARD.CHAT_ROOM, label: 'Chat Room', icon: MessageSquare },
   { path: ROUTES.DASHBOARD.SETTINGS, label: 'Settings', icon: SettingsIcon },
 ] as const
+
+/**
+ * Hover/focus chunk prefetch per nav destination — warms the route bundle
+ * while the pointer is still travelling toward the click.
+ */
+const NAV_PREFETCH: Record<string, () => void> = {
+  [ROUTES.DASHBOARD.ROOT]: prefetchDashboardHome,
+  [ROUTES.DASHBOARD.CHAT_ROOM]: prefetchChatRoom,
+  [ROUTES.DASHBOARD.SETTINGS]: prefetchDashboardSettings,
+}
 
 /** Width of the desktop sidebar when collapsed to an icon-only rail. */
 const COLLAPSED_SIDEBAR_W = 'w-[4.75rem]' as const
@@ -164,6 +181,8 @@ const SidebarNav = memo(function SidebarNav({
             <Link
               key={path}
               to={path}
+              onMouseEnter={NAV_PREFETCH[path]}
+              onFocus={NAV_PREFETCH[path]}
               onClick={(e) => {
                 if (isActive) {
                   // Desktop: tapping the current page collapses the sidebar
@@ -349,7 +368,13 @@ const UserMenu = memo(function UserMenu() {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  const { user, logout } = useUserAuth()
+  const { user, logout, isLoading } = useUserAuth()
+
+  // Admin status comes from the server-verified better-auth session
+  // (user.role) — never a client-supplied flag. While the session is
+  // still resolving, admin-only items render nothing: no flash for
+  // non-admins, no layout shift when the session lands.
+  const isAdmin = !isLoading && user?.role === 'admin'
 
   useEffect(() => {
     if (!open) return
@@ -457,6 +482,23 @@ const UserMenu = memo(function UserMenu() {
               </p>
             </div>
           </div>
+
+          {/* Admin shortcut — rendered ONLY for confirmed admins. Absent
+              from the DOM entirely otherwise (not hidden, not disabled). */}
+          {isAdmin && (
+            <Link
+              to={ROUTES.ADMIN.DASHBOARD}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={cn(
+                H_DROPDOWN_ITEM,
+                'font-medium text-primary hover:bg-primary/[var(--state-hover-opacity)] transition-colors duration-fast',
+              )}
+            >
+              <ShieldCheck className={cn(H_DROPDOWN_ICON, 'shrink-0')} />
+              Admin Dashboard
+            </Link>
+          )}
 
           {/* Logout */}
           <button
@@ -631,6 +673,7 @@ export default function DashboardLayout() {
 
   return (
     <DashboardSidebarProvider open={mobileOpen} onOpenChange={setMobileOpen}>
+      <RouteProgressBar />
       <div className="min-h-screen flex bg-surface-container-high">
         {/* Desktop sidebar — permanent, collapses to icon rail on desktop,
             hidden entirely below md (mobile uses the off-canvas drawer) */}

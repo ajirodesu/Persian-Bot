@@ -6,6 +6,7 @@ import Button from '@/components/ui/buttons/Button'
 import IconButton from '@/components/ui/buttons/IconButton'
 import UILink from '@/components/ui/typography/Link'
 import { cn } from '@/utils/cn.util'
+import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { ROUTES } from '@/constants/routes.constants'
 import ScrollToTop from '@/components/ScrollToTop'
@@ -48,6 +49,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface text-on-surface">
+      <RouteProgressBar />
       {/* ── Bot Manager AppHeader: h-14, px-5, sidebar-weight separator ── */}
       <header className={cn('sticky top-0 z-[100] bg-surface border-b', H_SEPARATOR)}>
         <nav

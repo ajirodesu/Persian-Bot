@@ -12,10 +12,12 @@ import {
   X,
   Files,
   GitBranch,
+  ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
+import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { AdminHeaderProvider, useAdminHeader } from '@/contexts/AdminHeaderContext'
 import Logo from '@/components/ui/Logo'
@@ -311,6 +313,22 @@ function AdminAvatarMenu({
             </div>
           </div>
 
+          {/* Back to Main Dashboard — client-side Link to the existing
+              Main Dashboard route; lives in the profile menu so it is
+              reachable on desktop and mobile wherever the header is. */}
+          <Link
+            to={ROUTES.DASHBOARD.ROOT}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className={cn(
+              H_DROPDOWN_ITEM,
+              'font-medium text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)] transition-colors duration-fast',
+            )}
+          >
+            <ArrowLeft className={cn(H_DROPDOWN_ICON, 'shrink-0')} />
+            Back to Main Dashboard
+          </Link>
+
           {/* Logout */}
           <button
             type="button"
@@ -399,6 +417,7 @@ export default function AdminSidebarLayout() {
 
   return (
     <AdminHeaderProvider>
+    <RouteProgressBar />
     <div className="min-h-screen flex bg-surface-container-high">
       {/* Desktop sidebar */}
       <aside

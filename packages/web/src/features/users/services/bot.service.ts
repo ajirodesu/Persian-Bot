@@ -97,9 +97,10 @@ class BotService {
     return response.data
   }
 
-  async getBot(id: string): Promise<GetBotDetailResponseDto> {
+  async getBot(id: string, signal?: AbortSignal): Promise<GetBotDetailResponseDto> {
     const response = await apiClient.get<GetBotDetailResponseDto>(
       `/api/v1/bots/${id}`,
+      { signal },
     )
     return response.data
   }
@@ -117,8 +118,10 @@ class BotService {
 
   // Auth is cookie-based (credentials: 'include' set in ApiClient), so no
   // explicit token header is needed — the session cookie travels automatically.
-  async listBots(): Promise<GetBotListResponseDto> {
-    const response = await apiClient.get<GetBotListResponseDto>('/api/v1/bots')
+  async listBots(signal?: AbortSignal): Promise<GetBotListResponseDto> {
+    const response = await apiClient.get<GetBotListResponseDto>('/api/v1/bots', {
+      signal,
+    })
     return response.data
   }
 
@@ -128,10 +131,11 @@ class BotService {
     page = 1,
     limit = 12,
     search = '',
+    signal?: AbortSignal,
   ): Promise<GetBotCommandsResponseDto> {
     const response = await apiClient.get<GetBotCommandsResponseDto>(
       `/api/v1/bots/${sessionId}/commands`,
-      { params: { page, limit, search } },
+      { params: { page, limit, search }, signal },
     )
     return response.data
   }
@@ -204,10 +208,11 @@ class BotService {
     page = 1,
     limit = 12,
     search = '',
+    signal?: AbortSignal,
   ): Promise<GetBotEventsResponseDto> {
     const response = await apiClient.get<GetBotEventsResponseDto>(
       `/api/v1/bots/${sessionId}/events`,
-      { params: { page, limit, search } },
+      { params: { page, limit, search }, signal },
     )
     return response.data
   }

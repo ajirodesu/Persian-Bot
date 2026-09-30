@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { queryClient, queryKeys } from '@/lib/query-client.lib'
 import { botService } from '@/features/users/services/bot.service'
 import type { GetBotDetailResponseDto } from '@/features/users/dtos/bot.dto'
 
@@ -10,42 +12,40 @@ interface UseBotDetailReturn {
 }
 
 export function useBotDetail(id: string): UseBotDetailReturn {
-  const [bot, setBot] = useState<GetBotDetailResponseDto | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const key = queryKeys.botDetail(id)
+  const { data, isPending, error } = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => botService.getBot(id, signal),
+    enabled: !!id,
+  })
 
-  useEffect(() => {
-    if (!id) return
-    let cancelled = false
+  // Local-write escape hatch (used after settings saves) — writes straight
+  // into the same cache the query reads, so UI and cache never diverge.
+  const setBot = useCallback<UseBotDetailReturn['setBot']>(
+    (action) => {
+      queryClient.setQueryData<GetBotDetailResponseDto | undefined>(
+        key,
+        (prev) => {
+          const current = prev ?? null
+          const next =
+            typeof action === 'function'
+              ? (
+                  action as (
+                    p: GetBotDetailResponseDto | null,
+                  ) => GetBotDetailResponseDto | null
+                )(current)
+              : action
+          return next ?? undefined
+        },
+      )
+    },
+    [key],
+  )
 
-    const fetchBot = async (): Promise<void> => {
-      setIsLoading(true)
-      setError(null)
-
-      try {
-        const result = await botService.getBot(id)
-        if (!cancelled) {
-          setBot(result)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Failed to load bot details',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    void fetchBot()
-
-    return () => {
-      cancelled = true
-    }
-  }, [id])
-
-  return { bot, setBot, isLoading, error }
+  return {
+    bot: data ?? null,
+    setBot,
+    isLoading: isPending,
+    error: error ? (error.message ?? 'Failed to load bot details') : null,
+  }
 }

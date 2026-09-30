@@ -13,6 +13,7 @@ import type {
 } from '@cat-bot/server/dtos/bot.dto.js';
 import type { GetAdminBotListResponseDto } from '@cat-bot/server/dtos/admin.dto.js';
 import { encrypt, decrypt } from '@cat-bot/engine/utils/crypto.util.js';
+import { deriveBotPlatformId } from '@cat-bot/engine/modules/platform/bot-identity.util.js';
 
 // NOTE: MongoDB transactions require a replica set. Atlas M0/M2/M5 free-tier clusters do
 // NOT support replica-set transactions. Operations here are intentionally non-transactional
@@ -435,6 +436,52 @@ export class BotRepo {
           { $sort: { userId: 1 } },
           { $skip: (page - 1) * limit },
           { $limit: limit },
+          // Bot platform identity comes from the session's stored
+          // credentials (same request, no extra round-trips, no platform
+          // API calls) — joined after pagination so only the visible page
+          // pays for the lookups.
+          {
+            $lookup: {
+              from: 'botCredentialDiscord',
+              let: { uid: '$userId', pid: '$platformId', sid: '$sessionId' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$uid'] },
+                        { $eq: ['$platformId', '$$pid'] },
+                        { $eq: ['$sessionId', '$$sid'] },
+                      ],
+                    },
+                  },
+                },
+                { $project: { discordClientId: 1, _id: 0 } },
+              ],
+              as: 'cred_discord',
+            },
+          },
+          {
+            $lookup: {
+              from: 'botCredentialTelegram',
+              let: { uid: '$userId', pid: '$platformId', sid: '$sessionId' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ['$userId', '$$uid'] },
+                        { $eq: ['$platformId', '$$pid'] },
+                        { $eq: ['$sessionId', '$$sid'] },
+                      ],
+                    },
+                  },
+                },
+                { $project: { telegramToken: 1, _id: 0 } },
+              ],
+              as: 'cred_telegram',
+            },
+          },
         ],
       },
     });
@@ -492,6 +539,12 @@ export class BotRepo {
           isRunning: (r.isRunning as boolean | undefined) ?? false,
           userName: r.owner?.name ?? undefined,
           userEmail: r.owner?.email ?? undefined,
+          botId:
+            deriveBotPlatformId(
+              r.platformId as number,
+              r.cred_discord?.[0]?.discordClientId ?? null,
+              r.cred_telegram?.[0]?.telegramToken ?? null,
+            ) ?? undefined,
         };
       }),
       total,

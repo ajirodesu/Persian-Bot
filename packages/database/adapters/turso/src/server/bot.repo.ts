@@ -13,6 +13,7 @@ import type {
 } from '@cat-bot/server/dtos/bot.dto.js';
 import type { GetAdminBotListResponseDto } from '@cat-bot/server/dtos/admin.dto.js';
 import { encrypt, decrypt } from '@cat-bot/engine/utils/crypto.util.js';
+import { deriveBotPlatformId } from '@cat-bot/engine/modules/platform/bot-identity.util.js';
 
 export class BotRepo {
   async create(
@@ -401,9 +402,15 @@ export class BotRepo {
       sql: `
       SELECT bs.user_id, bs.session_id, bs.platform_id, bs.nickname, bs.prefix, bs.is_running,
              u.name AS user_name,
-             u.email AS user_email
+             u.email AS user_email,
+             cd.discord_client_id,
+             ct.telegram_token
       FROM bot_session bs
       LEFT JOIN "user" u ON u.id = bs.user_id
+      LEFT JOIN bot_credential_discord cd
+        ON cd.user_id = bs.user_id AND cd.platform_id = bs.platform_id AND cd.session_id = bs.session_id
+      LEFT JOIN bot_credential_telegram ct
+        ON ct.user_id = bs.user_id AND ct.platform_id = bs.platform_id AND ct.session_id = bs.session_id
       ${whereClause}
       ORDER BY bs.user_id
       LIMIT :limit OFFSET :offset
@@ -455,6 +462,8 @@ export class BotRepo {
           is_running: number;
           user_name: string | null;
           user_email: string | null;
+          discord_client_id: string | null;
+          telegram_token: string | null;
         }>
       ).map((r) => ({
         sessionId: r.session_id,
@@ -467,6 +476,7 @@ export class BotRepo {
         isRunning: intToBool(r.is_running),
         userName: r.user_name ?? undefined,
         userEmail: r.user_email ?? undefined,
+        botId: deriveBotPlatformId(r.platform_id, r.discord_client_id, r.telegram_token),
       })),
       total,
       page,

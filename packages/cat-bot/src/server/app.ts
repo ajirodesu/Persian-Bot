@@ -16,6 +16,7 @@ import { env } from '@/engine/config/env.config.js';
 import { toNodeHandler } from 'better-auth/node';
 import { auth, adminAuth } from '@/server/lib/better-auth.lib.js';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -91,6 +92,13 @@ export function createApp(): Application {
   });
 
   // Parse JSON bodies before any route handler runs.
+  // Gzip ( negotiated — brotli/deflate when the client offers it via the
+  // compression package defaults) for JSON API responses and any text the
+  // server emits. Mounted after the raw-body consumers (better-auth,
+  // Telegram webhook) and before the routers so every downstream response
+  // compresses. Threshold 1kB keeps tiny payloads from growing.
+  app.use(compression({ threshold: 1024 }));
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
@@ -124,8 +132,21 @@ export function createApp(): Application {
   // Serve SPA if the built dist folder exists — fallback for React Router
   const webDistPath = path.resolve(__dirname, '../../../web/dist');
   if (fs.existsSync(webDistPath)) {
-    app.use(express.static(webDistPath));
+    // Vite emits content-hashed filenames under /assets, so those are
+    // immutable for a year — repeat visits serve everything from disk
+    // cache. Entry files (index.html, favicon) keep Express's default
+    // ETag revalidation, and index.html is forced no-cache so clients
+    // never pin a stale shell after a deploy.
+    app.use(
+      '/assets',
+      express.static(path.join(webDistPath, 'assets'), {
+        maxAge: '1y',
+        immutable: true,
+      }),
+    );
+    app.use(express.static(webDistPath, { index: false }));
     app.get('/{*splat}', (_req, res) => {
+      res.set('Cache-Control', 'no-cache');
       res.sendFile(path.join(webDistPath, 'index.html'));
     });
   }

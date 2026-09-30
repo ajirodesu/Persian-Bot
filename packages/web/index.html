@@ -2,11 +2,8 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <!-- Preconnect to the font origins so the Google Fonts stylesheet and
-         font binaries start loading in parallel with the document instead
-         of after CSS discovery — faster first text render. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fonts are self-hosted (src/assets/fonts, hashed + immutable), so no
+         third-party font origin remains — no preconnect needed. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- interactive-widget=resizes-content makes the layout viewport (and
          therefore `dvh` units) actually shrink when the on-screen keyboard

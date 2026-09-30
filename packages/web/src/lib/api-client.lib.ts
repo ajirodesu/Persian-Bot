@@ -14,12 +14,37 @@ interface ApiResponse<T = unknown> {
   headers: Headers
 }
 
+import { notifySlowFirstRequest } from './cold-start.lib'
+
 interface ApiError extends Error {
   response?: {
     status: number
     data: unknown
   }
   isAborted?: boolean // Flag for aborted requests
+}
+
+// Cold-start detection (Render free-tier sleep): the page's first request
+// arms a 2s timer; if nothing has settled by then the backend is likely
+// waking up, so the UI gets one signal to explain the wait instead of
+// spinning silently. Armed once per page load.
+let coldStartTimer: ReturnType<typeof setTimeout> | null = null
+let coldStartDone = false
+
+function armColdStartTimer(): void {
+  if (coldStartDone || coldStartTimer) return
+  coldStartTimer = setTimeout(() => {
+    coldStartTimer = null
+    notifySlowFirstRequest()
+  }, 2000)
+}
+
+function disarmColdStartTimer(): void {
+  if (coldStartTimer) {
+    clearTimeout(coldStartTimer)
+    coldStartTimer = null
+  }
+  coldStartDone = true
 }
 
 class ApiClient {
@@ -132,6 +157,8 @@ class ApiClient {
     const { body: processedBody, headers: processedHeaders } =
       this.prepareRequest(body, headers)
 
+    armColdStartTimer()
+
     try {
       const response = await fetch(url, {
         method,
@@ -142,6 +169,7 @@ class ApiClient {
       })
 
       clearTimeout(timeoutId)
+      disarmColdStartTimer()
 
       // Parse response based on content type
       let data: T
@@ -166,6 +194,7 @@ class ApiClient {
       }
     } catch (error) {
       clearTimeout(timeoutId)
+      disarmColdStartTimer()
 
       // Handle abort (from external signal or timeout)
       if (error instanceof Error && error.name === 'AbortError') {

@@ -52,6 +52,29 @@ function platformTileClasses(platform: string): string {
   }
 }
 
+/**
+ * Formats the bot's platform username the way each platform displays it —
+ * Telegram handles carry @, Discord/others render bare. Missing usernames
+ * (not persisted yet) read "Unknown".
+ */
+function formatBotUsername(platform: string, username?: string): string {
+  if (!username) return 'Unknown'
+  if (platform === Platforms.Telegram) {
+    return username.startsWith('@') ? username : `@${username}`
+  }
+  return username
+}
+
+/** Best-effort clipboard copy for bot ids — silent by design, like the
+ *  dashboard's prefix copy. */
+async function copyBotId(botId: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(botId)
+  } catch {
+    // Clipboard unavailable (permissions / insecure context) — no-op.
+  }
+}
+
 function BotRowSkeleton() {
   return (
     <div className="p-3.5 flex items-center justify-between" aria-hidden="true">
@@ -265,6 +288,40 @@ export default function AdminBotsPage() {
                           ) : (
                             // Fall back to raw cuid2 when the user row was deleted from the auth DB.
                             <span className="font-mono">{session.userId}</span>
+                          )}
+                        </span>
+                        {/* Bot platform identity — username platform-formatted
+                            (@handle on Telegram), id as muted mono with full
+                            value on hover; id click copies it (best-effort).
+                            Usernames aren't persisted yet, so missing reads
+                            "Unknown" without breaking the row. */}
+                        <span className="text-xs text-on-surface-variant truncate mt-0.5 flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="truncate"
+                            title={session.botUsername ?? 'Unknown'}
+                          >
+                            {formatBotUsername(session.platform, session.botUsername)}
+                          </span>
+                          {session.botId ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <button
+                                type="button"
+                                onClick={() => void copyBotId(session.botId ?? '')}
+                                title={`Copy bot id ${session.botId}`}
+                                aria-label={`Copy bot id ${session.botId}`}
+                                className="font-mono text-on-surface-variant/70 hover:text-primary truncate transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+                              >
+                                {session.botId}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="font-mono text-on-surface-variant/50">
+                                no id
+                              </span>
+                            </>
                           )}
                         </span>
                         <span className="flex items-center space-x-1.5 mt-1 flex-wrap gap-y-1">

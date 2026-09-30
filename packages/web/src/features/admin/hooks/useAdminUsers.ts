@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-client.lib'
 import { adminService } from '@/features/admin/services/admin.service'
 import type {
   AdminUserItemDto,
@@ -20,35 +21,22 @@ export function useAdminUsers(
   limit = 10,
   search = '',
 ): UseAdminUsersReturn {
-  const [data, setData] = useState<GetAdminUserListResponseDto | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchUsers = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const result = await adminService.getAdminUsers(page, limit, search)
-      setData(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [page, limit, search])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard async data-fetching: setState is deferred to .then/.catch microtasks
-    void fetchUsers()
-  }, [fetchUsers])
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: queryKeys.adminUsers(page, limit, search),
+    queryFn: ({ signal }) =>
+      adminService.getAdminUsers(page, limit, search, signal),
+    placeholderData: keepPreviousData,
+  })
 
   return {
     users: data?.users ?? [],
     total: data?.total ?? 0,
     totalPages: data?.totalPages ?? 0,
     stats: data?.stats ?? null,
-    isLoading,
-    error,
-    refetch: fetchUsers,
+    isLoading: isPending,
+    error: error ? (error.message ?? 'Failed to load users') : null,
+    refetch: async () => {
+      await refetch()
+    },
   }
 }

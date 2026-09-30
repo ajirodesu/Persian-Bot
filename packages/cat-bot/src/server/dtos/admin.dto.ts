@@ -19,6 +19,14 @@ export interface GetAdminBotListItemDto {
   // Optional — absent only when the owning user account no longer exists in the auth DB.
   userName?: string | undefined;
   userEmail?: string | undefined;
+  // The bot's own platform identity, derived from stored session credentials
+  // (never a live platform lookup, so listing stays a single DB round-trip):
+  // Discord exposes its client (application) ID, Telegram embeds the numeric
+  // bot ID in the token prefix. Usernames are not persisted anywhere, so
+  // botUsername stays absent until identity is stored at connect time.
+  // Absent for Fluxer (opaque token) and when credentials are missing.
+  botId?: string | undefined;
+  botUsername?: string | undefined;
 }
 
 export interface GetAdminBotListResponseDto {

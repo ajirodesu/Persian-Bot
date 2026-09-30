@@ -28,7 +28,27 @@
   serif or proportional face would break alignment in code
   blocks and tabular data.
   ----------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* -----------------------------------------------------------
+  Self-hosted fonts (same-origin, immutable-hashed by Vite).
+  Variable woff2, latin subset, font-display: swap — text paints
+  immediately with system fallbacks, no third-party connection,
+  no css2 round-trip, no invisible-text flash. Family names match
+  the --font-family-* tokens exactly, so no other CSS changes.
+  ----------------------------------------------------------- */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/inter-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono-latin.woff2') format('woff2');
+}
 
 /* -----------------------------------------------------------
   Tailwind CSS v4 — CSS-first config.

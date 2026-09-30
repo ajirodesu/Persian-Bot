@@ -37,6 +37,10 @@ export interface ChatMessage {
   replyTo?: string | null;
   buttons?: BotButton[][];
   attachments?: ChatAttachment[];
+  /** Bot-only emoji reactions on this message (any unicode emoji). Appended
+   *  by reactToMessage — the webchat half of the engine-wide react-on-success
+   *  touch. Users have no affordance to add reactions themselves. */
+  reactions?: string[];
 }
 
 export interface BotButton {
@@ -395,6 +399,38 @@ export class WebChatApi extends UnifiedApi {
       session.messages.splice(idx, 1);
     }
     this.socket.emit('chatroom:bot_delete', { id: messageID });
+  }
+
+  /**
+   * Records a bot reaction on a chat-room message and pushes it live to the
+   * client — the webchat equivalent of Discord/Telegram/Fluxer's
+   * reactToMessage. The engine's command dispatcher fires this automatically
+   * after every successfully executed command (react-on-success, using the
+   * session's configured emoji or the platform default), so web users get the
+   * exact same automatic acknowledgement reactions as every other platform.
+   *
+   * Bot-only by design: there is no client affordance (and no socket event)
+   * for users to add reactions themselves — the frontend renders these badges
+   * display-only. Any unicode emoji is accepted, matching the validation rule
+   * for non-Discord/Telegram platforms (isValidReactionEmoji passes through).
+   */
+  override async reactToMessage(
+    _threadID: string,
+    messageID: string,
+    emoji: string,
+  ): Promise<void> {
+    if (!emoji) return;
+    const session = this.sessionProvider(this.sessionId);
+    const target = session.messages.find((m) => m.id === messageID);
+    if (!target) return;
+    const reactions = target.reactions ?? (target.reactions = []);
+    if (reactions.includes(emoji)) return;
+    reactions.push(emoji);
+    this.socket.emit('chatroom:reaction', {
+      id: messageID,
+      emoji,
+      reactions: [...reactions],
+    });
   }
 
   override async getUserInfo(

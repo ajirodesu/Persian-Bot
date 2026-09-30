@@ -20,6 +20,8 @@ import {
   useRef,
   useCallback,
   memo,
+  lazy,
+  Suspense,
   type RefObject,
   type KeyboardEvent as ReactKeyboardEvent,
   type ChangeEvent,
@@ -37,7 +39,6 @@ import {
   ChevronDown,
   Plus,
   FileText,
-  Check,
   CheckCheck,
   Sparkles,
   Zap,
@@ -51,18 +52,12 @@ import {
   Download,
   Music2,
   Maximize2,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react'
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { getSocket } from '@/lib/socket.lib'
 import { cn } from '@/utils/cn.util'
 import Logo from '@/components/ui/Logo'
 import IconButton from '@/components/ui/buttons/IconButton'
-import Button from '@/components/ui/buttons/Button'
-import Dialog from '@/components/ui/overlay/Dialog'
-import { Field } from '@/components/ui/forms/Field'
-import Input from '@/components/ui/forms/Input'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import { useTimezone } from '@/contexts/TimezoneContext'
 import { useDashboardSidebar } from '@/contexts/DashboardSidebarContext'
@@ -73,25 +68,39 @@ import {
   H_CHEVRON,
   H_ICON_BTN_MOBILE,
   H_SEPARATOR,
+  H_AVATAR,
+  H_DROPDOWN_ITEM,
+  H_DROPDOWN_ICON,
 } from '@/constants/header.constants'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface BotButton {
-  id: string
-  label: string
-  style?: string
-}
+import type {
+  BotButton,
+  ChatAttachment,
+} from './chat-room/chat-room.types'
+import {
+  DEFAULT_PREFIX,
+  DEFAULT_NICKNAME,
+} from './chat-room/chat-room.types'
 
-interface ChatAttachment {
-  type: 'image' | 'video' | 'audio' | 'file'
-  url?: string
-  name?: string
-  localUrl?: string
-  file?: File
-  /** Explicit MIME type sent by the server — used by <audio> to pick the right decoder. */
-  mime?: string
-}
+// Below-fold UI ships in separate chunks so opening the chat never waits
+// for them: the photo lightbox mounts only on image tap, and each settings
+// modal mounts only on menu action. Local <Suspense fallback={null}>
+// wrappers (not the page-level boundary) keep the chat itself on screen
+// while these resolve.
+const ImageLightbox = lazy(
+  () => import('./chat-room/ImageLightbox'),
+)
+const NicknameModal = lazy(() =>
+  import('./chat-room/ChatRoomModals').then((m) => ({ default: m.NicknameModal })),
+)
+const PrefixModal = lazy(() =>
+  import('./chat-room/ChatRoomModals').then((m) => ({ default: m.PrefixModal })),
+)
+const ClearModal = lazy(() =>
+  import('./chat-room/ChatRoomModals').then((m) => ({ default: m.ClearModal })),
+)
 
 /** All audio file extensions the bot can send. */
 const AUDIO_EXTS = new Set([
@@ -109,6 +118,11 @@ interface ChatMessage {
   replyTo?: string | null
   buttons?: BotButton[][]
   attachments?: ChatAttachment[]
+  /** Bot-only emoji reactions (any unicode emoji) — appended by the server
+   *  via `chatroom:reaction` when the bot acknowledges a message
+   *  (react-on-success, same as Discord/Telegram). Rendered display-only;
+   *  users cannot add reactions themselves. */
+  reactions?: string[]
 }
 
 interface ReplyTarget {
@@ -125,8 +139,6 @@ const PREFIX_KEY      = 'catbot-chatroom-prefix'
 const NICKNAME_KEY    = 'catbot-chatroom-nickname'
 const MESSAGES_KEY    = 'catbot-chatroom-messages'
 
-const DEFAULT_PREFIX   = '/'
-const DEFAULT_NICKNAME = 'Cat-Bot'
 // Caps how large a single attachment can be before we refuse to send it —
 // data: URLs are ~33% bigger than the source file and socket.io messages
 // aren't meant to carry huge payloads.
@@ -181,6 +193,48 @@ function deriveUsername(fullName: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '')
   return handle || 'user'
+}
+
+/** Groups a message's reaction emojis into {emoji, count} pairs so repeated
+ *  reactions collapse into a single badge (e.g. ❤️ 2), matching the
+ *  Telegram/Discord reaction-row treatment. Accepts any unicode emoji. */
+function groupReactions(reactions: string[]): { emoji: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const emoji of reactions) {
+    if (!emoji) continue
+    counts.set(emoji, (counts.get(emoji) ?? 0) + 1)
+  }
+  return [...counts.entries()].map(([emoji, count]) => ({ emoji, count }))
+}
+
+/** Display-only bot reaction badges for a user bubble — no picker, no
+ *  interaction. Only the bot can react (via `chatroom:reaction`); users have
+ *  no affordance to add reactions themselves. */
+function BotReactionBadges({
+  reactions,
+  botNickname,
+}: {
+  reactions: string[]
+  botNickname: string
+}) {
+  const grouped = groupReactions(reactions)
+  if (grouped.length === 0) return null
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {grouped.map(({ emoji, count }) => (
+        <span
+          key={emoji}
+          title={`Reacted by ${botNickname}`}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#182533]/80 border border-[#38628b]/60 text-xs shadow-sm select-none"
+        >
+          <span>{emoji}</span>
+          {count > 1 && (
+            <span className="text-[10px] text-[#9ab7d6] font-mono font-medium">{count}</span>
+          )}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function formatTime(ts: number, timezone: string): string {
@@ -656,6 +710,17 @@ function renderMarkdown(text: string): string {
   // Anything left over is a fenced block with no language directive.
   html = html.replace(/```([\s\S]*?)```/g, (_, code: string) => pushCodeBlock(code, ''))
 
+  // Markdown images — converted BEFORE inline code/links so `![alt](src)`
+  // never degrades into a "!" + link pair. Renders a full-bleed, correctly
+  // scaled image (same geometry as flush photo attachments) instead of text.
+  // Fenced code is already placeholder-extracted above, so code samples
+  // containing image syntax are never touched here.
+  html = html.replace(
+    /!\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+"([^"]*)")?\s*\)/g,
+    (_match, alt: string, src: string, title: string | undefined) =>
+      `<img src="${src}" alt="${alt}"${title ? ` title="${title}"` : ''} class="chatmd-img" loading="lazy" decoding="async" draggable="false" />`,
+  )
+
   html = html.replace(/`([^`\n]+)`/g, '<code class="chatmd-code">$1</code>')
   html = html.replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
   html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
@@ -907,178 +972,6 @@ function AudioPlayer({
 }
 
 // ── Image Lightbox ────────────────────────────────────────────────────────────
-
-/** Renders the currently active lightbox image with its own load/zoom state — mounted fresh (via a `key` on index) each time the active image changes, so state resets naturally instead of via an effect. */
-function LightboxImage({ url, fileName }: { url: string; fileName: string }) {
-  const [isLoading, setIsLoading] = useState(true)
-  const [isZoomed, setIsZoomed] = useState(false)
-
-  return (
-    <>
-      {isLoading && (
-        <span className="absolute h-8 w-8 rounded-full border-[3px] border-on-surface/25 border-t-on-surface animate-spin" />
-      )}
-      <img
-        src={url}
-        alt={fileName}
-        onLoad={() => setIsLoading(false)}
-        onClick={() => setIsZoomed((z) => !z)}
-        draggable={false}
-        className={cn(
-          'rounded-[var(--radius-input)] select-none transition-transform duration-200 ease-out',
-          isZoomed
-            ? 'max-w-none max-h-none scale-[1.9] cursor-zoom-out'
-            : 'max-w-[94vw] max-h-[86vh] object-contain cursor-zoom-in',
-          isLoading && 'opacity-0',
-        )}
-      />
-    </>
-  )
-}
-
-/**
- * Fullscreen photo viewer for chat image attachments. Supports click-to-zoom,
- * download, keyboard navigation (Esc to close, ←/→ to switch), and a
- * filmstrip + prev/next controls when the triggering message has more than
- * one image attached.
- */
-function ImageLightbox({
-  images,
-  index,
-  onIndexChange,
-  onClose,
-}: {
-  images: ChatAttachment[]
-  index: number
-  onIndexChange: (i: number) => void
-  onClose: () => void
-}) {
-  const current = images[index]
-  const url = current?.localUrl ?? current?.url ?? ''
-  const fileName = current?.name ?? 'image'
-  const hasMultiple = images.length > 1
-
-  const goPrev = useCallback(() => {
-    onIndexChange((index - 1 + images.length) % images.length)
-  }, [index, images.length, onIndexChange])
-
-  const goNext = useCallback(() => {
-    onIndexChange((index + 1) % images.length)
-  }, [index, images.length, onIndexChange])
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowLeft' && hasMultiple) goPrev()
-      else if (e.key === 'ArrowRight' && hasMultiple) goNext()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose, goPrev, goNext, hasMultiple])
-
-  // Lock background scroll while the lightbox is open
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prevOverflow
-    }
-  }, [])
-
-  if (!current || !url) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-modal-backdrop flex items-center justify-center bg-scrim/95 [backdrop-filter:var(--surface-blur-md)]"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{ animation: 'cr-fadeInFast 140ms ease both' }}
-    >
-      {/* Top bar */}
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-scrim/70 to-transparent z-10">
-        <div className="flex items-center gap-2 min-w-0">
-          <ImageIcon className="h-4 w-4 text-on-surface/70 shrink-0" />
-          <span className="text-sm text-on-surface/90 font-medium truncate max-w-[46vw]">{fileName}</span>
-          {hasMultiple && (
-            <span className="text-xs text-on-surface/50 tabular-nums shrink-0">{index + 1} / {images.length}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <a
-            href={url}
-            download={fileName}
-            aria-label="Download image"
-            className="p-2 rounded-full text-on-surface/80 hover:bg-on-surface/10 hover:text-on-surface transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Download className="h-[18px] w-[18px]" />
-          </a>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="p-2 rounded-full text-on-surface/80 hover:bg-on-surface/10 hover:text-on-surface transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Prev / next */}
-      {hasMultiple && (
-        <>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); goPrev() }}
-            aria-label="Previous image"
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-hairline transition-colors z-10"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); goNext() }}
-            aria-label="Next image"
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-scrim/40 text-on-surface/80 hover:bg-scrim/60 hover:text-on-surface border border-hairline transition-colors z-10"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </>
-      )}
-
-      {/* Image */}
-      <div
-        className="relative max-w-[94vw] max-h-[86vh] flex items-center justify-center overflow-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <LightboxImage key={index} url={url} fileName={fileName} />
-      </div>
-
-      {/* Filmstrip for multi-image messages */}
-      {hasMultiple && (
-        <div
-          className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-1.5 px-4 py-3 bg-gradient-to-t from-scrim/70 to-transparent overflow-x-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {images.map((img, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onIndexChange(i)}
-              aria-label={`View image ${i + 1}`}
-              className={cn(
-                'h-10 w-10 rounded-[var(--radius-input)] overflow-hidden border-2 transition-all shrink-0',
-                i === index ? 'border-primary opacity-100 scale-105' : 'border-transparent opacity-50 hover:opacity-80',
-              )}
-            >
-              <img src={img.localUrl ?? img.url} alt="" className="h-full w-full object-cover" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Attachment View ───────────────────────────────────────────────────────────
 
 /** Resolves a playable audio MIME type — prefers the server-provided MIME,
@@ -1139,6 +1032,7 @@ function FlushMedia({
   timestamp,
   disableFullscreen,
   onMediaLoad,
+  fitNatural,
 }: {
   att: ChatAttachment
   onOpen?: () => void
@@ -1153,6 +1047,10 @@ function FlushMedia({
   /** Fired once the image/video has actually loaded and the bubble has
    *  settled at its final height. */
   onMediaLoad?: () => void
+  /** Size to the image's own natural dimensions (capped by the bubble's
+   *  max width / 340px height) instead of stretching full-bleed — used
+   *  for lone bot photos so the bubble auto-fits the image format. */
+  fitNatural?: boolean
 }) {
   const { timezone } = useTimezone()
   const url = att.localUrl ?? att.url
@@ -1180,7 +1078,7 @@ function FlushMedia({
             decoding="async"
             draggable={false}
             onLoad={onMediaLoad}
-            className="block w-full h-auto max-h-[340px] object-cover select-none"
+            className="block w-full h-auto max-h-[340px] object-contain select-none"
           />
           {isGif && <GifBadge />}
           {MetaOverlay}
@@ -1206,7 +1104,9 @@ function FlushMedia({
           decoding="async"
           draggable={false}
           onLoad={onMediaLoad}
-          className="block w-full h-auto max-h-[340px] object-cover select-none"
+          className={fitNatural
+            ? 'block w-auto max-w-full h-auto max-h-[340px] object-contain select-none mx-auto'
+            : 'block w-full h-auto max-h-[340px] object-contain select-none'}
         />
         {isGif && <GifBadge />}
         <div className="absolute inset-0 flex items-center justify-center bg-scrim/0 group-hover/photo:bg-scrim/20 transition-colors duration-200">
@@ -1389,25 +1289,29 @@ const BotButtonRow = memo(function BotButtonRow({
   messageId: string
 }) {
   return (
-    <div className="flex flex-col gap-1.5 mt-2.5">
+    <div className="flex flex-col gap-1.5 mt-1.5 w-full">
       {buttons.map((row, rowIdx) => (
-        <div key={rowIdx} className="flex flex-wrap gap-1.5">
+        // Each backend-defined row is an equal-width grid — the Telegram
+        // inline-keyboard contract: one button fills the row, N buttons
+        // share it evenly. min-w-0 + truncate keeps long labels from
+        // blowing out narrow columns on phones.
+        <div
+          key={rowIdx}
+          className="grid gap-1.5 w-full"
+          style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
+        >
           {row.map((btn) => (
             <button
               key={btn.id}
               type="button"
               onClick={() => onButtonClick(btn.id, messageId)}
               className={cn(
-                'px-3.5 py-1.5 rounded-[var(--radius-input)] text-xs font-semibold transition-all',
-                'border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-                btn.style === 'danger'
-                  ? 'border-error/50 text-error hover:bg-error/10 active:scale-95'
-                  : btn.style === 'success'
-                    ? 'border-success/50 text-success hover:bg-success/10 active:scale-95'
-                    : 'border-primary/40 text-primary hover:bg-primary/10 active:scale-95',
+                'w-full min-w-0 bg-[#243242] hover:bg-[#2e3e52] active:bg-[#34475e] text-white/95 rounded-xl py-2.5 px-4 text-[13px] font-semibold leading-snug flex items-center justify-center transition-colors shadow-sm active:scale-[0.99] border border-[#2b3c50] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50',
+                btn.style === 'danger' && 'text-red-300 border-red-500/30 hover:bg-red-500/10',
+                btn.style === 'success' && 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10',
               )}
             >
-              {btn.label}
+              <span className="truncate">{btn.label}</span>
             </button>
           ))}
         </div>
@@ -1463,7 +1367,7 @@ const ReplyQuote = memo(function ReplyQuote({
 
   return (
     <div className={cn('flex flex-col gap-0.5 max-w-[min(80%,420px)]', isBot ? 'items-start' : 'items-end')}>
-      <div className={cn('flex items-center gap-1 px-1 text-[11px] text-on-surface-variant/55', isBot ? 'flex-row' : 'flex-row-reverse')}>
+      <div className={cn('flex items-center gap-1 px-1 text-[11px] text-[#93a6b9]', isBot ? 'flex-row' : 'flex-row-reverse')}>
         <Reply className="h-3 w-3 shrink-0" />
         <span className="truncate">{label}</span>
       </div>
@@ -1472,7 +1376,7 @@ const ReplyQuote = memo(function ReplyQuote({
         onClick={onClick}
         className={cn(
           'min-w-0 max-w-full overflow-hidden text-left cursor-pointer active:opacity-70 transition-opacity',
-          'rounded-[var(--radius-card)] bg-on-surface/10 text-on-surface-variant px-3.5 py-2 text-[12.5px] leading-tight',
+          'rounded-2xl bg-[#182533]/80 border border-[#2b3c50] text-[#9ab7d6] px-3.5 py-2 text-[12.5px] leading-tight',
         )}
       >
         {/* Up to three lines of the original message, ellipsis-truncated
@@ -1581,6 +1485,9 @@ const MessageBubble = memo(function MessageBubble({
   }, [msg.id, msg.text, msg.type, onReply])
   const hasButtons = (msg.buttons?.length ?? 0) > 0
   const hasText = !!msg.text?.trim()
+  // Bot-only reactions render on user bubbles only — the bot never reacts to
+  // its own messages, and users have no reaction affordance at all.
+  const hasReactions = !isBot && (msg.reactions?.length ?? 0) > 0
   const imageAttachments = (msg.attachments ?? []).filter(
     (a) => a.type === 'image' && (a.localUrl ?? a.url),
   )
@@ -1594,6 +1501,18 @@ const MessageBubble = memo(function MessageBubble({
   const pillAttachments = (msg.attachments ?? []).filter((a) => !mediaAttachments.includes(a))
   const hasMedia = mediaAttachments.length > 0
   const hasPills = pillAttachments.length > 0
+  // Auto-fit: a lone bot photo (no pills or buttons — caption allowed)
+  // sizes its own bubble dynamically from the image's intrinsic size once
+  // loaded: small images keep natural size, large ones fit within the caps,
+  // portraits stay narrow, landscapes go wide. The min-width guard keeps
+  // captioned bubbles from collapsing to a sliver under tiny photos.
+  // Anything else keeps the standard full-width bubble.
+  const isAutoFitImage =
+    isBot &&
+    mediaAttachments.length === 1 &&
+    mediaAttachments[0].type === 'image' &&
+    !hasPills &&
+    !hasButtons
   // Consecutive images collapse into a single grid unit (see ImageGrid) so a
   // message with several photos reads as an album instead of a long stack of
   // full-width bubbles; video/audio and lone images render individually.
@@ -1626,7 +1545,7 @@ const MessageBubble = memo(function MessageBubble({
       )}
       <div
       className={cn(
-        'group/msg relative flex w-full items-end gap-1 px-3 py-1',
+        'group/msg relative flex w-full items-end gap-1 py-1',
         isBot ? 'justify-start' : 'justify-end',
       )}
       onTouchStart={handleTouchStart}
@@ -1643,8 +1562,8 @@ const MessageBubble = memo(function MessageBubble({
           swipeReplyVisible ? 'opacity-70' : 'opacity-0',
         )}
       >
-        <div className="h-7 w-7 rounded-full bg-on-surface/10 flex items-center justify-center">
-          <Reply className="h-3.5 w-3.5 text-on-surface-variant" />
+        <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center">
+          <Reply className="h-3.5 w-3.5 text-[#9ab7d6]" />
         </div>
       </div>
 
@@ -1660,7 +1579,7 @@ const MessageBubble = memo(function MessageBubble({
         onClick={() => onReply({ id: msg.id, text: msg.text, type: msg.type })}
         className={cn(
           'hidden md:flex items-center justify-center h-7 w-7 rounded-full shrink-0 self-center',
-          'text-on-surface-variant/50 hover:text-on-surface hover:bg-on-surface/10',
+          'text-[#9ab7d6]/60 hover:text-white hover:bg-white/10',
           'opacity-0 group-hover/msg:opacity-100 focus-visible:opacity-100 transition-opacity duration-150',
           isBot ? 'order-last' : 'order-first',
         )}
@@ -1668,40 +1587,47 @@ const MessageBubble = memo(function MessageBubble({
         <Reply className="h-3.5 w-3.5" />
       </button>
 
-      {/* Bubble column — media bubbles get a *definite* width (not just a
-          cap) so image/video/audio all render at exactly the bubble's max
-          size, consistently, instead of shrink-wrapping to their own
-          natural content size. Text-only bubbles keep the normal
-          shrink-to-fit behavior. */}
+      {/* Bubble column — stitch: bot max-w-[92%] / user pl-8 + max-w-[85%].
+          Media bubbles get a definite width so image/video/audio render at
+          exactly the bubble's max size — EXCEPT lone bot photos, which hug
+          their own natural size (see isAutoFitImage). */}
       <div
         ref={bubbleColRef}
         className={cn(
-          // A fixed "standard" cap (420px) — like Messenger's own desktop
-          // bubble width — with an 80% viewport fallback so bubbles never
-          // overflow on narrow/mobile screens.
-          'flex flex-col relative max-w-[min(80%,420px)]',
-          hasMedia && 'w-full',
-          isBot ? 'items-start order-first' : 'items-end order-last',
+          'flex flex-col relative',
+          isBot ? 'max-w-[92%] sm:max-w-[85%] items-start order-first' : 'w-full pl-8 items-end order-last',
+          hasMedia && !isAutoFitImage && 'w-full',
+          isAutoFitImage && 'w-fit',
         )}
         style={{ minWidth: 0 }}
       >
-        {/* Bubble body — outer shell clips to rounded corners so flush media
-            fuses seamlessly with no independent border/radius of its own */}
+        {/* Bubble body — stitch Telegram geometry + shadow + hairline border */}
         <div
           className={cn(
-            'flex flex-col overflow-hidden min-w-[52px]',
-            hasMedia && 'w-full',
+            'flex flex-col overflow-hidden min-w-[52px] bubble-shadow',
+            hasMedia && !isAutoFitImage && 'w-full',
+            isAutoFitImage && 'w-fit max-w-full',
+            // Captioned bubbles never collapse under tiny photos — lone
+            // photos keep their exact natural size with no minimum.
+            isAutoFitImage && hasText && 'min-w-[min(240px,100%)]',
             isBot
-              ? 'bg-[var(--bubble-bot)] text-[var(--bubble-bot-text)] rounded-[var(--radius-card)]'
-              : 'bg-[var(--bubble-user)] text-[var(--bubble-user-text)] rounded-[var(--radius-card)]',
-            'shadow-md',
+              ? cn('bg-[#182533] text-white bubble-in border border-[#213244]/40', !isAutoFitImage && 'w-full')
+              : 'bg-[#2b5278] text-white bubble-out border border-[#38628b]/40 max-w-[85%]',
           )}
         >
           {(hasText || hasPills) && (
             <div
-              className="px-3.5 py-2.5"
+              className={cn(isBot ? 'px-3.5 pt-3 pb-2' : 'px-3.5 pt-2.5 pb-1.5')}
               style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
             >
+              {isBot && (
+                <div className="mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-emerald-400">{botNickname}</span>
+                    <span className="px-1 py-0.5 text-[9px] uppercase font-mono font-medium tracking-wide bg-emerald-500/15 text-emerald-300 rounded border border-emerald-500/20">bot</span>
+                  </div>
+                </div>
+              )}
               {hasPills && (
                 <div className={cn('flex flex-col gap-2', hasText && 'mb-2')}>
                   {pillAttachments.map((att, i) => (
@@ -1711,21 +1637,31 @@ const MessageBubble = memo(function MessageBubble({
               )}
 
               {hasText && (
-                <div className="text-[13.5px] leading-relaxed">
-                  <MarkdownText text={msg.text} style={msg.style} />
+                <div className={cn(isBot ? 'text-[12.5px] leading-relaxed text-[#dbe5f0]' : 'text-[14px] font-mono text-[#dbe9ff] font-medium leading-normal')}>
+                  {/* Media-carrying bot messages always render as markdown:
+                      bot captions conventionally contain formatting (bold,
+                      links, code, lists) but commands don't always set the
+                      style flag — without this, raw asterisks/backticks show.
+                      User input stays plain-text so typed symbols (*, _, `)
+                      are never mangled into formatting. */}
+                  <MarkdownText text={msg.text} style={hasMedia && isBot ? 'markdown' : msg.style} />
                 </div>
               )}
 
-              {/* Meta row — shown here whenever there's no trailing *visual*
-                  media (image/video), since only those provide a canvas for
-                  an overlaid timestamp; audio-last or media-less bubbles
-                  show the timestamp in the normal flow instead. */}
+              {/* Meta row — stitch: bot timestamp bottom-right #71869a;
+                  user timestamp + double-check #9ab7d6 / #5bb6ff, with
+                  bot-only reaction badges pinned to the opposite side. */}
               {(!hasMedia || !trailingIsVisual) && (
-                <div className={cn('flex items-center gap-1 mt-1', isBot ? 'justify-start' : 'justify-end')}>
-                  <span className="text-[10px] opacity-40 leading-none select-none tabular-nums">
-                    {formatTime(msg.timestamp, timezone)}
+                <div className={cn('flex items-center gap-3 mt-1', isBot ? 'justify-end' : hasReactions ? 'justify-between' : 'justify-end')}>
+                  {!isBot && hasReactions && (
+                    <BotReactionBadges reactions={msg.reactions!} botNickname={botNickname} />
+                  )}
+                  <span className="flex items-center gap-1">
+                    <span className={cn('text-[10px] leading-none select-none tabular-nums', isBot ? 'text-[#71869a]' : 'text-[#9ab7d6]')}>
+                      {formatTime(msg.timestamp, timezone)}
+                    </span>
+                    {!isBot && <CheckCheck className="h-3.5 w-3.5 text-[#5bb6ff] inline-block shrink-0" />}
                   </span>
-                  {!isBot && <CheckCheck className="h-3 w-3 opacity-40 shrink-0" />}
                 </div>
               )}
             </div>
@@ -1766,6 +1702,7 @@ const MessageBubble = memo(function MessageBubble({
                     isBot={isBot}
                     timestamp={msg.timestamp}
                     onMediaLoad={onMediaLoad}
+                    fitNatural={isAutoFitImage}
                   />
                 )
               })}
@@ -1799,11 +1736,13 @@ const MessageBubble = memo(function MessageBubble({
  */
 function ChatSettingsMenu({
   isConnected,
+  botNickname,
   onClearChat,
   onEditPrefix,
   onEditNickname,
 }: {
   isConnected: boolean
+  botNickname: string
   onClearChat: () => void
   onEditPrefix: () => void
   onEditNickname: () => void
@@ -1818,6 +1757,15 @@ function ChatSettingsMenu({
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [open])
 
   return (
@@ -1866,23 +1814,46 @@ function ChatSettingsMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 z-[150] w-[248px] rounded-[var(--radius-card)] border border-hairline bg-surface-container/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-3 overflow-hidden"
-          style={{ animation: 'cr-fadeIn 140ms ease both' }}
+          aria-label="Chat Room settings"
+          className={cn(
+            'absolute right-0 top-full mt-1.5 z-dropdown min-w-[210px]',
+            'rounded-[var(--radius-input)] border border-outline-variant bg-surface-container-low',
+            'shadow-elevation-3 py-1 overflow-hidden',
+            '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
+          )}
         >
-          <div className="px-4 pt-3.5 pb-2.5 border-b border-outline-variant/30">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/55">
-              Chat Room Settings
-            </p>
-            <p className="text-[11px] mt-0.5">
-              {isConnected ? (
-                <span className="text-success/80 font-medium">Online</span>
-              ) : (
-                <span className="text-on-surface-variant/60">Connecting…</span>
+          {/* Bot identity header — mirrors the dashboard UserMenu's
+              avatar + name + subline block, with a live status dot. */}
+          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-hairline">
+            <span
+              className={cn(
+                'relative flex items-center justify-center rounded-full shrink-0 bg-primary-container ring-2 ring-primary/20',
+                H_AVATAR,
               )}
-            </p>
+            >
+              <Logo className="h-4 w-4 text-on-primary-container" />
+              <span
+                className={cn(
+                  'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-surface-container-low transition-colors duration-500',
+                  isConnected ? 'bg-success' : 'bg-on-surface-variant/30',
+                )}
+              />
+            </span>
+            <div className="min-w-0">
+              <p className="text-label-md font-semibold text-on-surface truncate">
+                {botNickname}
+              </p>
+              <p className="text-label-xs truncate">
+                {isConnected ? (
+                  <span className="text-success font-medium">Online</span>
+                ) : (
+                  <span className="text-on-surface-variant/70">Connecting…</span>
+                )}
+              </p>
+            </div>
           </div>
 
-          <div className="py-1.5">
+          <div className="py-1">
             <DotsMenuItem
               icon={Tag}
               label="Edit Bot Nickname"
@@ -1895,9 +1866,9 @@ function ChatSettingsMenu({
             />
           </div>
 
-          <div className="h-px bg-outline-variant/30 mx-3" />
+          <div className="h-px bg-hairline mx-3" />
 
-          <div className="py-1.5">
+          <div className="py-1">
             <DotsMenuItem
               icon={Trash2}
               label="Clear Chat"
@@ -1911,8 +1882,9 @@ function ChatSettingsMenu({
   )
 }
 
-/** Single row inside the Chat Room settings dropdown — icon in a soft
- *  rounded chip, label, consistent hover/active affordance. */
+/** Single row inside the bot profile menu — the dashboard-wide dropdown
+ *  row spec (H_DROPDOWN_ITEM + H_DROPDOWN_ICON), identical to the Bot
+ *  Manager UserMenu rows, with the error treatment for destructive rows. */
 function DotsMenuItem({
   icon: Icon,
   label,
@@ -1930,212 +1902,16 @@ function DotsMenuItem({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-3 px-3.5 py-2.5 mx-1 rounded-[var(--radius-input)] text-sm font-medium transition-colors tactile-press cursor-pointer',
-        'w-[calc(100%-8px)]',
+        H_DROPDOWN_ITEM,
+        'font-medium transition-colors duration-fast',
         danger
-          ? 'text-error hover:bg-error/10'
-          : 'text-on-surface hover:bg-on-surface/8',
+          ? 'text-error hover:bg-error/[var(--state-hover-opacity)]'
+          : 'text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
       )}
     >
-      <span
-        className={cn(
-          'flex items-center justify-center h-9 w-9 rounded-lg border shrink-0',
-          danger
-            ? 'bg-error/10 border-error/30 text-error'
-            : 'bg-surface-container-high border-hairline text-primary',
-        )}
-      >
-        <Icon className="h-4 w-4" strokeWidth={2} />
-      </span>
+      <Icon className={cn(H_DROPDOWN_ICON, 'shrink-0')} strokeWidth={2} />
       {label}
     </button>
-  )
-}
-
-// ── Nickname Modal ─────────────────────────────────────────────────────────────
-
-function NicknameModal({
-  current,
-  onSave,
-  onClose,
-}: {
-  current: string
-  onSave: (n: string) => void
-  onClose: () => void
-}) {
-  const [value, setValue] = useState(current)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [])
-
-  const handleSave = () => {
-    const trimmed = value.trim().slice(0, 32) || DEFAULT_NICKNAME
-    onSave(trimmed)
-  }
-
-  return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
-      <Dialog.Positioner position="center">
-        <Dialog.Backdrop />
-        <Dialog.Content size="sm">
-          <Dialog.Header>
-            <Dialog.Title>Bot Nickname</Dialog.Title>
-            <Dialog.CloseTrigger />
-          </Dialog.Header>
-          <Dialog.Body>
-            <p className="text-body-md text-on-surface-variant mb-4">
-              Give your bot a custom name. Say its name or use the prefix to trigger it.
-            </p>
-            <Field.Root>
-              <Input
-                ref={inputRef}
-                type="text"
-                value={value}
-                maxLength={32}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSave()
-                }}
-                placeholder="e.g. Cat-Bot, Aria, Nexus…"
-                leftIcon={<Tag className="h-4 w-4" />}
-              />
-            </Field.Root>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <Dialog.CloseTrigger asChild>
-              <Button variant="text" color="neutral" size="sm">
-                Cancel
-              </Button>
-            </Dialog.CloseTrigger>
-            <Button
-              variant="filled"
-              color="primary"
-              size="sm"
-              onClick={handleSave}
-              leftIcon={<Check className="w-3.5 h-3.5" strokeWidth={2.5} />}
-            >
-              Save
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
-  )
-}
-
-// ── Prefix Modal ──────────────────────────────────────────────────────────────
-
-function PrefixModal({
-  current,
-  onSave,
-  onClose,
-}: {
-  current: string
-  onSave: (p: string) => void
-  onClose: () => void
-}) {
-  const [value, setValue] = useState(current)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [])
-
-  const handleSave = () => {
-    const trimmed = value.trim().slice(0, 10) || DEFAULT_PREFIX
-    onSave(trimmed)
-  }
-
-  return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
-      <Dialog.Positioner position="center">
-        <Dialog.Backdrop />
-        <Dialog.Content size="sm">
-          <Dialog.Header>
-            <Dialog.Title>Edit Command Prefix</Dialog.Title>
-            <Dialog.CloseTrigger />
-          </Dialog.Header>
-          <Dialog.Body>
-            <p className="text-body-md text-on-surface-variant mb-4">
-              Commands starting with this symbol trigger the bot.
-            </p>
-            <Field.Root>
-              <Input
-                ref={inputRef}
-                type="text"
-                value={value}
-                maxLength={10}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSave()
-                }}
-                placeholder="e.g. / or ! or +"
-                leftIcon={<Hash className="h-4 w-4" />}
-              />
-            </Field.Root>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <Dialog.CloseTrigger asChild>
-              <Button variant="text" color="neutral" size="sm">
-                Cancel
-              </Button>
-            </Dialog.CloseTrigger>
-            <Button
-              variant="filled"
-              color="primary"
-              size="sm"
-              onClick={handleSave}
-              leftIcon={<Check className="w-3.5 h-3.5" strokeWidth={2.5} />}
-            >
-              Save
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
-  )
-}
-
-// ── Clear Confirm Modal ───────────────────────────────────────────────────────
-
-function ClearModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
-  return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
-      <Dialog.Positioner position="center">
-        <Dialog.Backdrop />
-        <Dialog.Content size="sm">
-          <Dialog.Header>
-            <Dialog.Title>Clear Chat?</Dialog.Title>
-            <Dialog.CloseTrigger />
-          </Dialog.Header>
-          <Dialog.Body>
-            <p className="text-body-md text-on-surface-variant">
-              All messages in this session will be permanently removed.
-            </p>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <Dialog.CloseTrigger asChild>
-              <Button variant="text" color="neutral" size="sm">
-                Cancel
-              </Button>
-            </Dialog.CloseTrigger>
-            <Button
-              variant="filled"
-              color="error"
-              size="sm"
-              onClick={() => { onConfirm(); onClose() }}
-              leftIcon={<Trash2 className="w-3.5 h-3.5" strokeWidth={2.5} />}
-            >
-              Clear Chat
-            </Button>
-          </Dialog.Footer>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
   )
 }
 
@@ -2152,22 +1928,22 @@ function GetStartedScreen({
 }) {
   const features = [
     {
-      icon: <Zap className="h-4 w-4 text-primary" strokeWidth={2} />,
+      icon: <Zap className="h-4 w-4 text-emerald-400" strokeWidth={2} />,
       title: 'Instant Commands',
       desc: `Type ${prefix}help to explore everything the bot can do.`,
     },
     {
-      icon: <DollarSign className="h-4 w-4 text-info" strokeWidth={2} />,
+      icon: <DollarSign className="h-4 w-4 text-[#5bb6ff]" strokeWidth={2} />,
       title: 'Economy & Games',
       desc: 'Earn coins, check balance, play slots — economy commands tied to your account.',
     },
     {
-      icon: <MessageCircle className="h-4 w-4 text-success" strokeWidth={2} />,
+      icon: <MessageCircle className="h-4 w-4 text-emerald-400" strokeWidth={2} />,
       title: 'Rich Responses',
       desc: 'Markdown, buttons, images, and files — all supported.',
     },
     {
-      icon: <Shield className="h-4 w-4 text-tertiary" strokeWidth={2} />,
+      icon: <Shield className="h-4 w-4 text-[#8b95a2]" strokeWidth={2} />,
       title: 'Persistent History',
       desc: 'Your messages are saved — pick up right where you left off.',
     },
@@ -2177,20 +1953,20 @@ function GetStartedScreen({
     <div className="flex-1 flex flex-col items-center justify-center gap-8 px-6 py-10 min-h-0">
       {/* Hero avatar */}
       <div className="relative">
-        <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center shadow-elevation-3 ring-1 ring-primary/20">
-          <Logo className="h-12 w-12 text-primary" />
+        <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-500/30 to-emerald-500/10 flex items-center justify-center shadow-2xl ring-1 ring-emerald-500/20">
+          <Logo className="h-12 w-12 text-emerald-400" />
         </div>
-        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-success border-[3px] border-[var(--chatroom-bg)] flex items-center justify-center">
-          <Sparkles className="h-3 w-3 text-on-success" />
+        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-[#10b981] border-[3px] border-[#0e1621] flex items-center justify-center">
+          <Sparkles className="h-3 w-3 text-black" />
         </div>
       </div>
 
       {/* Headline */}
       <div className="text-center max-w-xs">
-        <h1 className="text-2xl font-extrabold text-on-surface mb-2 leading-tight tracking-tight">
+        <h1 className="text-2xl font-extrabold text-white mb-2 leading-tight tracking-tight">
           Meet {botNickname}
         </h1>
-        <p className="text-sm text-on-surface-variant leading-relaxed">
+        <p className="text-sm text-[#8b95a2] leading-relaxed">
           Your personal bot — right inside the dashboard. Send commands, get rich responses, and explore everything it can do.
         </p>
       </div>
@@ -2200,14 +1976,14 @@ function GetStartedScreen({
         {features.map((f, i) => (
           <div
             key={i}
-            className="rounded-xl border border-hairline bg-surface-container-low p-3.5 flex flex-col gap-2.5"
+            className="rounded-xl border border-[#242930] bg-[#182533] p-3.5 flex flex-col gap-2.5"
           >
-            <div className="w-9 h-9 rounded-lg border border-hairline bg-surface-container-high flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-lg border border-[#2b3c50] bg-[#0a1017]/50 flex items-center justify-center shrink-0">
               {f.icon}
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-on-surface leading-tight">{f.title}</span>
-              <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">{f.desc}</p>
+              <span className="text-xs font-bold text-white leading-tight">{f.title}</span>
+              <p className="text-[11px] text-[#8b95a2] leading-relaxed mt-0.5">{f.desc}</p>
             </div>
           </div>
         ))}
@@ -2218,13 +1994,13 @@ function GetStartedScreen({
         <button
           type="button"
           onClick={onStart}
-          className="w-full h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-sm flex items-center justify-center gap-2 transition-all tactile-press focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
+          className="w-full h-11 px-4 rounded-xl bg-[#10b981] hover:bg-emerald-400 active:brightness-90 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-[#0e1621]"
         >
           <Sparkles className="h-4 w-4" />
           <span>Get Started</span>
         </button>
-        <p className="text-[11px] text-on-surface-variant/50 select-none">
-          Press <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded-[var(--radius-compact)] text-[10px]">Enter</kbd> to send &middot; <kbd className="font-mono bg-on-surface/8 px-1.5 py-0.5 rounded-[var(--radius-compact)] text-[10px]">Shift+Enter</kbd> for new line
+        <p className="text-[11px] text-[#5d6775] select-none">
+          Press <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px]">Enter</kbd> to send &middot; <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px]">Shift+Enter</kbd> for new line
         </p>
       </div>
     </div>
@@ -2309,14 +2085,17 @@ function AttachmentPicker({
       className="absolute bottom-full mb-2 left-0 z-[120]"
       style={{ animation: 'cr-fadeIn 110ms ease both' }}
     >
-      <div className="rounded-xl border border-hairline bg-surface-container-low shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
+      {/* Cat-Bot Web UI panel — same surface, hairline, radius, and chip
+          treatment as the Chat Room settings menu (DotsMenuItem), so every
+          chat-room popup reads as one design language. */}
+      <div className="rounded-[var(--radius-card)] border border-hairline bg-surface-container-low shadow-elevation-3 p-1.5 flex flex-col min-w-[140px]">
         {options.map((opt) => (
           <label
             key={opt.id}
             htmlFor={opt.id}
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm text-on-surface hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors"
+            className="flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--radius-input)] text-sm font-medium text-on-surface hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors"
           >
-            <span className="w-9 h-9 rounded-lg border border-hairline bg-surface-container-high flex items-center justify-center shrink-0 text-on-surface-variant">{opt.icon}</span>
+            <span className="w-9 h-9 rounded-lg border border-hairline bg-surface-container-high flex items-center justify-center shrink-0 text-primary">{opt.icon}</span>
             {opt.label}
             <input
               id={opt.id}
@@ -2351,14 +2130,14 @@ function ReplyPreviewBar({
   displayName: string
 }) {
   return (
-    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-high border border-outline-variant/20">
-      <div className="w-0.5 h-9 rounded-full bg-primary shrink-0" />
+    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-[#182533] border border-[#2b3c50]">
+      <div className="w-0.5 h-9 rounded-full bg-emerald-500 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
+        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
           {target.type === 'bot' ? botNickname : displayName}
         </p>
         <p
-          className="text-xs text-on-surface-variant leading-snug line-clamp-3 whitespace-pre-wrap"
+          className="text-xs text-[#93a6b9] leading-snug line-clamp-3 whitespace-pre-wrap"
           style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
         >
           {target.text || '📎 Attachment'}
@@ -2368,7 +2147,7 @@ function ReplyPreviewBar({
         type="button"
         onClick={onDismiss}
         aria-label="Cancel reply"
-        className="p-1.5 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-on-surface/10 transition-colors shrink-0"
+        className="p-1.5 rounded-full text-[#71869a] hover:text-white hover:bg-white/10 transition-colors shrink-0"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -2381,13 +2160,13 @@ function ReplyPreviewBar({
 function EmptyChatState({ prefix, botNickname }: { prefix: string; botNickname: string }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
-      <div className="w-11 h-11 rounded-lg border border-primary/30 bg-primary/10 flex items-center justify-center shrink-0">
-        <Logo className="h-5 w-5 text-primary" />
+      <div className="w-11 h-11 rounded-xl border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-center shrink-0">
+        <Logo className="h-5 w-5 text-emerald-400" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-on-surface mb-1">Start chatting with {botNickname}</p>
-        <p className="text-xs text-on-surface-variant">
-          Type <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-high text-primary border-primary/30 border">{prefix}help</span> to see all commands, or say its name to trigger the bot.
+        <p className="text-sm font-semibold text-white mb-1">Start chatting with {botNickname}</p>
+        <p className="text-xs text-[#8b95a2]">
+          Type <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#182533] text-emerald-400 border-emerald-500/30 border">{prefix}help</span> to see all commands, or say its name to trigger the bot.
         </p>
       </div>
     </div>
@@ -2608,46 +2387,39 @@ const Composer = memo(function Composer({
 
   return (
     <>
-      {/* ChatGPT-style rounded composer — the message bar itself. Filled
-          with the same frosted glass as the page header (glass-surface) so
-          the two bars read as one consistent tone, top and bottom. The bar
-          is the capsule only — no shadow/glow hanging outside the ring. */}
+      {/* Stitch floating capsule — exact provided-design geometry */}
       <div
-        className={cn(
-          'relative rounded-[28px] transition-all',
-          'glass-surface ring-[1.5px] ring-inset ring-[var(--input-border)]',
-          'focus-within:ring-[var(--input-border-focus)]',
-        )}
+        className="bg-[#182533] border border-[#242930] focus-within:border-emerald-500/60 rounded-3xl p-1.5 sm:p-2 flex items-end gap-1.5 shadow-2xl transition-all relative"
       >
         {/* Pending attachments row — images shown in the message bar */}
         {pendingAttachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
+          <div className="absolute bottom-full mb-2 left-0 right-0 flex flex-wrap gap-2 px-1 pb-1">
             {pendingAttachments.map((att, i) => (
               <div key={i} className="relative group/att">
                 {att.type === 'image' && att.localUrl ? (
-                  <div className="relative h-16 w-16 rounded-[var(--radius-input)] overflow-hidden border border-hairline shadow-sm">
+                  <div className="relative h-16 w-16 rounded-xl overflow-hidden border border-[#2b3c50] shadow-sm">
                     <img
                       src={att.localUrl}
                       alt={att.name}
                       className="h-full w-full object-cover"
                     />
                     {isGifAttachment(att) && (
-                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded-[var(--radius-compact)] bg-scrim/55 text-on-surface text-[7px] font-bold tracking-wide [backdrop-filter:var(--surface-blur-sm)] pointer-events-none select-none">
+                      <span className="absolute top-1 left-1 px-1 py-[1px] rounded bg-black/55 text-white text-[7px] font-bold tracking-wide pointer-events-none select-none">
                         GIF
                       </span>
                     )}
                   </div>
                 ) : (
-                  <div className="h-16 w-16 rounded-[var(--radius-input)] bg-on-surface/5 border border-hairline flex flex-col items-center justify-center gap-1 p-1">
-                    {<FileText className="h-4 w-4 text-on-surface-variant" />}
-                    <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
+                  <div className="h-16 w-16 rounded-xl bg-white/5 border border-[#2b3c50] flex flex-col items-center justify-center gap-1 p-1">
+                    {<FileText className="h-4 w-4 text-[#8b95a2]" />}
+                    <span className="text-[8px] text-[#8b95a2] truncate w-full text-center px-1">{att.name}</span>
                   </div>
                 )}
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(i)}
                   aria-label="Remove attachment"
-                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container border border-hairline flex items-center justify-center text-on-surface-variant hover:text-error transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#182533] border border-[#2b3c50] flex items-center justify-center text-[#8b95a2] hover:text-red-300 transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -2659,64 +2431,58 @@ const Composer = memo(function Composer({
         {/* Hidden mirror row — exists purely to measure whether the
             current text would wrap within the single-line row's text
             column. It uses the EXACT same attach/text/send widths and
-            gaps as the real single-line row below, so its measured
-            width always matches the real one — without hardcoding any
-            pixel math — but it's absolutely positioned, invisible, and
-            never interacted with, so nothing about switching modes can
-            ever change what it measures. That's what breaks the
-            feedback loop that caused the earlier "reverts to single
-            line" bug: mode is now decided entirely by the text itself,
-            never by the visible textarea's current layout. */}
+            gaps as the real single-line row below (w-9 buttons, gap-1.5,
+            p-1.5 capsule padding), so its measured width always matches
+            the real one — without hardcoding any pixel math — but it's
+            absolutely positioned, invisible, and never interacted with,
+            so nothing about switching modes can ever change what it
+            measures. Mode is decided entirely by the text itself, never
+            by the visible textarea's current layout. */}
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 top-0 flex gap-2 px-2 py-1.5 opacity-0 pointer-events-none -z-10"
+          className="absolute inset-x-0 top-0 flex gap-1.5 px-1.5 py-1.5 opacity-0 pointer-events-none -z-10"
         >
-          <div className="h-10 w-10 shrink-0" />
+          <div className="h-9 w-9 shrink-0" />
           <div
             ref={mirrorRef}
             className="min-w-0 flex-1 py-1 text-[16px] md:text-[15px] leading-relaxed whitespace-pre-wrap break-words"
+            style={{ fontFamily: "Inter, system-ui, sans-serif" }}
           />
-          <div className="h-10 w-10 shrink-0" />
+          <div className="h-9 w-9 shrink-0" />
         </div>
 
-        {/* Attach · text · send — three permanent siblings whose only
-            the CSS arrangement (never their mount identity) changes
-            between states, so the textarea never remounts and never
-            loses focus/cursor position mid-type.
-            - Single line: one row, DOM order = attach → text → send.
-            - Wrapped (2+ lines): text is forced onto its own full-
-              width line (`basis-full`), which pushes attach/send onto
-              a second flex line together; `justify-between` then
-              pins attach to that line's left edge and send to its
-              right edge — matching the reference composer exactly.
-            isComposerMultiline itself comes from the hidden mirror
-            above, never from this textarea's own scrollHeight, so
-            widening the textarea here can't loop back into the
-            decision that widened it. */}
+        {/* Attach · text · send — ORIGINAL responsive behaviour, stitch skin.
+            Three permanent siblings whose only CSS arrangement (never their
+            mount identity) changes between states, so the textarea never
+            remounts and never loses focus/cursor position mid-type.
+            - Single line (mobile, tablet, desktop): one row,
+              DOM order = attach → text → send.
+            - Wrapped (2+ lines, any viewport): text is forced onto its own
+              full-width line (`basis-full`), which pushes attach/send onto
+              a second flex line together; `justify-between` then pins
+              attach to that line's left edge and send to its right edge.
+            isComposerMultiline itself comes from the hidden mirror above,
+            never from this textarea's own scrollHeight, so widening the
+            textarea here can't loop back into the decision that widened it. */}
         <div
           className={cn(
-            'flex flex-wrap items-center',
+            'flex flex-wrap items-center w-full',
             isComposerMultiline
-              ? 'justify-between gap-x-2 gap-y-1.5 px-3 pt-3 pb-1.5'
-              : 'gap-2 px-2 py-1.5',
+              ? 'justify-between gap-x-1.5 gap-y-1.5 px-2.5 pt-2.5 pb-1.5'
+              : 'gap-1.5',
           )}
         >
-          {/* Attachment button */}
+          {/* Attachment button — stitch plus */}
           <div
             id="attach-picker-root"
             className={cn('relative shrink-0', isComposerMultiline && 'order-2')}
           >
             <button
               type="button"
-              aria-label="Attach file"
+              aria-label="Add attachment or action"
               aria-expanded={showAttachPicker}
               onClick={onToggleAttachPicker}
-              className={cn(
-                'flex items-center justify-center h-10 w-10 rounded-full transition-colors',
-                showAttachPicker
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-on-surface-variant/60 hover:text-on-surface-variant hover:bg-on-surface/8',
-              )}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-[#8b95a2] hover:text-white hover:bg-white/10 shrink-0 transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
               <Plus className="h-5 w-5" />
             </button>
@@ -2725,58 +2491,43 @@ const Composer = memo(function Composer({
             )}
           </div>
 
-          {/* Auto-resizing textarea */}
+          {/* Auto-resizing textarea — stitch colours, original sizing:
+              16px minimum on mobile (anything smaller makes iOS Safari
+              auto-zoom the page on focus); 15px on md+ (tablet/desktop). */}
           <textarea
             ref={inputRef}
             value={inputText}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            // Tells mobile virtual keyboards to render a "return"
-            // (newline) key instead of "Next"/"Go"/"Send", matching
-            // the actual behaviour: Enter always inserts a line
-            // break here, never submits.
             enterKeyHint="enter"
             placeholder={isConnected ? `Message ${botNickname} or use ${prefix}help` : 'Connecting…'}
             rows={1}
             disabled={!isConnected}
             className={cn(
-              // 16px minimum on mobile — anything smaller makes iOS
-              // Safari auto-zoom the whole page in when the field is
-              // focused, which is exactly the "page keeps resizing
-              // itself" instability on mobile. Desktop keeps the
-              // original 15px.
-              'cr-input-scroll min-w-0 py-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
-              'placeholder:text-on-surface-variant/40 focus:outline-none resize-none overflow-y-auto',
+              'cr-input-scroll min-w-0 py-1 bg-transparent text-[16px] md:text-[15px] text-[#F1F4F8] leading-relaxed',
+              'placeholder:text-[#5D6775] focus:outline-none resize-none overflow-y-auto',
               !isConnected && 'opacity-40 cursor-not-allowed',
               isComposerMultiline ? 'order-1 basis-full w-full px-1' : 'flex-1',
             )}
-            style={{ maxHeight: '200px' }}
+            style={{ maxHeight: '200px', fontFamily: "Inter, system-ui, sans-serif" }}
           />
 
-          {/* Send button */}
+          {/* Send button — stitch INACTIVE/ACTIVE states */}
           <button
             type="button"
             aria-label="Send message"
             onClick={handleSend}
             disabled={!canSend}
             className={cn(
-              // Same plain, unmarked footprint as the attach (+)
-              // button — and when active, the exact same soft
-              // highlight treatment it uses (bg-primary/15 +
-              // text-primary), so both controls read as one
-              // consistent visual language.
-              'flex items-center justify-center h-10 w-10 rounded-full transition-colors shrink-0',
+              'w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all shadow-none',
               isComposerMultiline && 'order-3',
               canSend
-                ? 'bg-primary/15 text-primary active:scale-95'
-                : 'text-on-surface-variant/30 cursor-not-allowed',
+                ? 'bg-[#10B981] text-black hover:bg-emerald-400 active:scale-95 cursor-pointer'
+                : 'bg-[#242930] text-[#5D6775] cursor-not-allowed',
             )}
           >
-            {/* The arrow is always visible; it only switches from a
-                faint outline to the "full" active send icon once
-                there's text (or an attachment) to send. */}
-            <ArrowUp className="h-5 w-5" />
+            <ArrowUp className="h-5 w-5" strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -2789,18 +2540,50 @@ const Composer = memo(function Composer({
 // Hoisted out of the component so this large, fully-static string is
 // allocated once at module load instead of being rebuilt on every render
 // (e.g. on every keystroke in the composer).
+// ── Stitch "Jea — Bot Manager Chat Room" design tokens ─────────────────────
+// Pixel-faithful port of the provided stitch html: Telegram dark wallpaper,
+// bubble geometry, 4px scrollbars, markdown + syntax token colors re-hued to
+// the stitch emerald-on-dark palette. The page header is intentionally
+// excluded here — it stays on the shared unified header tokens.
 const CR_STYLES = `
         :root {
-          /* Matches the dashboard shell's content background
-             (DashboardLayout uses bg-surface-container-high) so the
-             chat page blends seamlessly into the rest of the app. */
-          --chatroom-bg: rgb(var(--color-surface-container-high));
-          --bubble-bot: rgb(var(--color-surface-container-highest));
-          --bubble-bot-text: rgb(var(--color-on-surface));
-          --bubble-user: rgb(var(--color-primary));
-          --bubble-user-text: rgb(var(--color-on-primary));
-          --input-border: var(--color-input-border);
-          --input-border-focus: rgb(var(--color-primary) / 0.45);
+          --chatroom-bg: #0e1621;
+          --bubble-bot: #182533;
+          --bubble-bot-text: #ffffff;
+          --bubble-user: #2b5278;
+          --bubble-user-text: #ffffff;
+          --input-border: #242930;
+          --input-border-focus: rgba(16, 185, 129, 0.6);
+        }
+
+        /* Subtle Telegram dark pattern wallpaper background — exact stitch rule */
+        .tg-chat-bg {
+          background-color: #0e1621;
+          background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                            radial-gradient(rgba(255, 255, 255, 0.02) 1px, #0e1621 1px);
+          background-size: 24px 24px;
+          background-position: 0 0, 12px 12px;
+        }
+        .bubble-in {
+          border-radius: 18px 18px 18px 4px;
+        }
+        .bubble-out {
+          border-radius: 18px 18px 4px 18px;
+        }
+        .bubble-shadow {
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        }
+
+        /* Stitch chat scrollbars — 4px thumb #242930 on transparent track */
+        .cr-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #242930 transparent;
+        }
+        .cr-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+        .cr-scroll::-webkit-scrollbar-track { background: transparent; }
+        .cr-scroll::-webkit-scrollbar-thumb {
+          background: #242930;
+          border-radius: 9999px;
         }
 
 
@@ -2815,30 +2598,9 @@ const CR_STYLES = `
         }
 
         /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
-        .cr-highlight-flash { background-color: rgb(var(--color-primary) / 0.16); }
+        .cr-highlight-flash { background-color: rgba(16, 185, 129, 0.16); }
 
-        /* ── Auto-hiding scroll bar — thumb only appears while actively
-               scrolling, then fades out, instead of sitting on screen
-               permanently. Applied to the message list scroll container. */
-        .cr-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: transparent transparent;
-        }
-        .cr-scroll.is-scrolling {
-          scrollbar-color: rgb(var(--color-outline-variant) / 0.6) transparent;
-        }
-        .cr-scroll::-webkit-scrollbar { width: 6px; }
-        .cr-scroll::-webkit-scrollbar-track { background: transparent; }
-        .cr-scroll::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 999px;
-          transition: background-color 200ms ease;
-        }
-        .cr-scroll.is-scrolling::-webkit-scrollbar-thumb {
-          background: rgb(var(--color-outline-variant) / 0.6);
-        }
-
-        /* ── Composer wrapper — safe-area-aware bottom padding ─────────────
+        /* ── Composer wrapper — safe-area-aware bottom padding ───────────── */
                Adds the iOS/Android home-indicator inset on top of the
                normal padding instead of the input bar sitting flush under
                it, and keeps the same visual spacing on devices/browsers
@@ -2892,26 +2654,26 @@ const CR_STYLES = `
 
         .cr-audio-player audio { display: none; }
 
-        /* Markdown styles */
+        /* Markdown styles — stitch emerald-on-dark */
         .chatmd strong { font-weight: 700; }
         .chatmd em { font-style: italic; }
         .chatmd del { text-decoration: line-through; opacity: 0.65; }
         .chatmd u { text-decoration: underline; }
 
         .chatmd-code {
-          font-family: var(--font-family-mono);
+          font-family: 'JetBrains Mono', monospace;
           font-size: 0.8em;
           padding: 0.1em 0.38em;
           border-radius: 5px;
-          background: rgb(var(--color-surface-container-highest) / 0.9);
-          border: 1px solid rgb(var(--color-outline-variant) / 0.6);
-          color: rgb(var(--color-primary) / 0.9);
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.08);
+          color: #34d399;
         }
         .chatmd-pre {
           margin: 6px 0;
           border-radius: 10px;
-          background: rgb(var(--color-surface-container-highest) / 0.7);
-          border: 1px solid rgb(var(--color-outline-variant) / 0.5);
+          background: rgba(10,16,23,0.6);
+          border: 1px solid #27394d;
           padding: 10px 14px;
           overflow-x: auto;
         }
@@ -2925,22 +2687,22 @@ const CR_STYLES = `
           font-weight: 700;
           letter-spacing: 0.06em;
           text-transform: uppercase;
-          color: rgb(var(--color-on-surface-variant) / 0.7);
+          color: rgba(139,149,162,0.7);
           user-select: none;
           pointer-events: none;
         }
         .chatmd-pre-wrap:has(.chatmd-pre-lang) .chatmd-pre { padding-top: 22px; }
-        /* Syntax token colors — theme-driven semantic roles (re-hue per theme) */
-        .tok-keyword  { color: rgb(var(--color-primary)); }
-        .tok-string   { color: rgb(var(--color-warning)); }
-        .tok-comment  { color: rgb(var(--color-on-surface-variant)); font-style: italic; }
-        .tok-number   { color: rgb(var(--color-success)); }
-        .tok-function { color: rgb(var(--color-on-surface)); }
-        .tok-type     { color: rgb(var(--color-tertiary)); }
-        .tok-property { color: rgb(var(--color-info)); }
-        .tok-tag      { color: rgb(var(--color-primary)); }
-        .tok-attr     { color: rgb(var(--color-info)); }
-        .tok-punct    { color: rgb(var(--color-outline)); }
+        /* Syntax token colors — stitch Dark+ emerald palette */
+        .tok-keyword  { color: #34d399; }
+        .tok-string   { color: #fbbf24; }
+        .tok-comment  { color: #5d6775; font-style: italic; }
+        .tok-number   { color: #34d399; }
+        .tok-function { color: #dbe5f0; }
+        .tok-type     { color: #5bb6ff; }
+        .tok-property { color: #5bb6ff; }
+        .tok-tag      { color: #34d399; }
+        .tok-attr     { color: #5bb6ff; }
+        .tok-punct    { color: #71869a; }
         .chatmd-copy-btn {
           position: absolute;
           top: 12px;
@@ -2950,9 +2712,9 @@ const CR_STYLES = `
           line-height: 1;
           padding: 4px 8px;
           border-radius: 6px;
-          background: rgb(var(--color-on-surface) / 0.08);
-          border: 1px solid rgb(var(--color-outline) / 0.4);
-          color: rgb(var(--color-on-surface-variant));
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          color: #8b95a2;
           opacity: 0.7;
           transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
           cursor: pointer;
@@ -2962,35 +2724,48 @@ const CR_STYLES = `
           opacity: 1;
         }
         .chatmd-copy-btn:hover {
-          background: rgb(var(--color-on-surface) / 0.16);
-          color: rgb(var(--color-on-surface));
+          background: rgba(255,255,255,0.16);
+          color: #f1f4f8;
         }
-        .chatmd-copy-btn:disabled { cursor: default; color: rgb(var(--color-success)); }
+        .chatmd-copy-btn:disabled { cursor: default; color: #10b981; }
         .chatmd-code-block {
-          font-family: var(--font-family-mono);
+          font-family: 'JetBrains Mono', monospace;
           font-size: 0.78em;
           white-space: pre-wrap;
           word-break: break-all;
           display: block;
         }
+        /* Markdown images — full-bleed correct scaling: fills the bubble
+           width, natural aspect ratio, capped at the same 340px height as
+           flush photo attachments, with matching rounded corners. */
+        .chatmd-img {
+          display: block;
+          width: 100%;
+          height: auto;
+          max-height: 340px;
+          object-fit: contain;
+          border-radius: 10px;
+          margin: 6px 0;
+          user-select: none;
+        }
         .chatmd-link {
-          color: rgb(var(--color-primary));
+          color: #34d399;
           text-decoration: underline;
           text-underline-offset: 2px;
           word-break: break-all;
           overflow-wrap: anywhere;
         }
-        .chatmd-link:hover { color: rgb(var(--color-primary) / 0.85); }
-        .chatmd-link:visited { color: rgb(var(--color-tertiary)); }
+        .chatmd-link:hover { color: rgba(52,211,153,0.85); }
+        .chatmd-link:visited { color: #5bb6ff; }
         .chatmd-h1 { display: block; font-size: 1.12em; font-weight: 800; margin: 5px 0 2px; }
         .chatmd-h2 { display: block; font-size: 1.06em; font-weight: 700; margin: 4px 0 1px; }
         .chatmd-h3 { display: block; font-size: 1em; font-weight: 600; margin: 3px 0 1px; }
-        .chatmd-hr { border: none; border-top: 1px solid rgb(var(--color-outline-variant) / 0.7); margin: 7px 0; }
+        .chatmd-hr { border: none; border-top: 1px solid #27394d; margin: 7px 0; }
         .chatmd-li { display: block; padding-left: 4px; margin: 1px 0; }
         .chatmd-oli { display: block; padding-left: 4px; margin: 1px 0; }
         .chatmd-quote {
           display: block;
-          border-left: 2px solid rgb(var(--color-primary) / 0.4);
+          border-left: 2px solid rgba(16,185,129,0.4);
           padding-left: 8px;
           margin: 2px 0;
           opacity: 0.78;
@@ -3170,6 +2945,21 @@ export default function ChatRoomPage() {
       setMessages((prev) => prev.filter((m) => m.id !== data.id))
     }
 
+    // Bot-only reaction on a message (react-on-success, same pipeline as
+    // Discord/Telegram) — appends the emoji badge to the target bubble.
+    // Users have no reaction affordance; this event is server-emitted only.
+    const onReaction = (data: { id: string; emoji: string; reactions?: string[] }) => {
+      if (!data?.id || !data?.emoji) return
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== data.id) return m
+          const current = m.reactions ?? []
+          if (current.includes(data.emoji)) return m
+          return { ...m, reactions: [...current, data.emoji] }
+        }),
+      )
+    }
+
     const onCleared = () => {
       setMessages([])
       setAwaitingReply(false)
@@ -3192,6 +2982,7 @@ export default function ChatRoomPage() {
     socket.on('chatroom:bot_edit', onBotEdit)
     socket.on('chatroom:bot_delete', onBotDelete)
     socket.on('chatroom:message_deleted', onMsgDeleted)
+    socket.on('chatroom:reaction', onReaction)
     socket.on('chatroom:cleared', onCleared)
     socket.on('chatroom:prefix_updated', onPrefixUpdated)
     socket.on('chatroom:error', onError)
@@ -3210,6 +3001,7 @@ export default function ChatRoomPage() {
       socket.off('chatroom:bot_edit', onBotEdit)
       socket.off('chatroom:bot_delete', onBotDelete)
       socket.off('chatroom:message_deleted', onMsgDeleted)
+      socket.off('chatroom:reaction', onReaction)
       socket.off('chatroom:cleared', onCleared)
       socket.off('chatroom:prefix_updated', onPrefixUpdated)
       socket.off('chatroom:error', onError)
@@ -3473,8 +3265,13 @@ export default function ChatRoomPage() {
         <title>Chat Room · Cat-Bot</title>
       </Helmet>
 
-      {/* Fills the dashboard's content column — sidebar stays visible alongside it */}
-      <div className="flex flex-col h-full min-h-0 bg-[var(--chatroom-bg)] overflow-hidden">
+      {/* Fills the dashboard's content column — sidebar stays visible alongside it.
+          NOTE: header below is the LOCKED unified header — do not restyle. Only
+          the chat body + composer follow the stitch design. */}
+      <div
+        className="flex flex-col h-full min-h-0 overflow-hidden bg-[#0A0C0E] text-[#F1F4F8] antialiased selection:bg-emerald-500/30 selection:text-emerald-300"
+        style={{ fontFamily: "Inter, system-ui, -apple-system, sans-serif" }}
+      >
 
         {/* ── Header ─────────────────────────────────────────────────────────────
               Single unified header for this page (the shared dashboard content
@@ -3533,6 +3330,7 @@ export default function ChatRoomPage() {
           <div className="ml-auto">
             <ChatSettingsMenu
               isConnected={isConnected}
+              botNickname={botNickname}
               onClearChat={() => setShowClearModal(true)}
               onEditPrefix={() => setShowPrefixModal(true)}
               onEditNickname={() => setShowNicknameModal(true)}
@@ -3540,11 +3338,11 @@ export default function ChatRoomPage() {
           </div>
         </header>
 
-        {/* ── Message area ─────────────────────────────────────────────────── */}
-        <div className="flex-1 min-h-0 relative">
+        {/* ── Message area — stitch Telegram chat stream ─────────────────── */}
+        <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden tg-chat-bg">
           <div
             ref={scrollAreaRef}
-            className="cr-scroll h-full overflow-y-auto overflow-x-hidden"
+            className="cr-scroll flex-1 overflow-y-auto px-3.5 md:px-6 pt-4 pb-24"
           >
             {!hasStarted ? (
               <div className="flex flex-col h-full">
@@ -3555,24 +3353,21 @@ export default function ChatRoomPage() {
                 <EmptyChatState prefix={prefix} botNickname={botNickname} />
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-[48rem] flex flex-col py-3 px-3 md:px-6">
+              <div className="max-w-[420px] md:max-w-[48rem] mx-auto space-y-3.5">
                 {messages.map((msg, i) => {
                   const prevMsg = i > 0 ? messages[i - 1] : null
                   const showDate =
                     !prevMsg ||
                     dayKeyInTimezone(msg.timestamp, timezone) !==
                       dayKeyInTimezone(prevMsg.timestamp, timezone)
-                  const showSpacing = !prevMsg || prevMsg.type !== msg.type
 
                   return (
-                    <div key={msg.id} data-message-id={msg.id} className={cn(showSpacing && 'mt-3', 'rounded-[var(--radius-card)] transition-colors duration-300')}>
+                    <div key={msg.id} data-message-id={msg.id} className="transition-colors duration-300">
                       {showDate && (
-                        <div className="flex items-center gap-3 my-4 px-4">
-                          <div className="flex-1 h-px bg-outline-variant/20" />
-                          <span className="text-[10px] font-semibold text-on-surface-variant/40 px-2 select-none uppercase tracking-widest">
+                        <div className="flex justify-center my-1">
+                          <span className="px-2.5 py-0.5 rounded-full bg-[#0a1017]/70 text-[#7e8f9f] text-[11px] font-medium tracking-wide shadow-sm">
                             {formatDateLabel(msg.timestamp, timezone)}
                           </span>
-                          <div className="flex-1 h-px bg-outline-variant/20" />
                         </div>
                       )}
                       <MessageBubble
@@ -3590,17 +3385,13 @@ export default function ChatRoomPage() {
                   )
                 })}
 
-                {/* Typing bubble — shown while the bot is working (server
-                    chatroom:typing refresh every ~4s, or the local
-                    awaitingReply right after the user sends). It is a
-                    client-side bubble only — never persisted, cleared the
-                    moment the bot's real reply lands. */}
+                {/* Typing bubble — stitch incoming geometry, three dots */}
                 {(awaitingReply || botTyping) && (
-                  <div className="flex w-full px-3 pt-3 justify-start" aria-label="Bot is typing">
-                    <div className="flex items-center gap-1.5 bg-[var(--bubble-bot)] text-[var(--bubble-bot-text)] rounded-[var(--radius-card)] shadow-md px-4 py-3.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="flex flex-col items-start max-w-[92%] sm:max-w-[85%]" aria-label="Bot is typing">
+                    <div className="flex items-center gap-1.5 bg-[#182533] bubble-in bubble-shadow border border-[#213244]/40 px-4 py-3.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#8b95a2] opacity-70 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#8b95a2] opacity-70 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#8b95a2] opacity-70 animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                   </div>
                 )}
@@ -3610,9 +3401,7 @@ export default function ChatRoomPage() {
             )}
           </div>
 
-          {/* Scroll-to-bottom pill — centred above the composer, matching
-              the floating centred affordance used by ChatGPT/Claude-style
-              chat UIs instead of sitting off to one side. */}
+          {/* Scroll-to-bottom pill — centred above the composer */}
           {showScrollBtn && (
             <button
               type="button"
@@ -3621,22 +3410,23 @@ export default function ChatRoomPage() {
                 isNearBottomRef.current = true
                 scrollToBottom()
               }}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container border border-hairline shadow-elevation-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-[#182533] border border-[#2b3c50] shadow-2xl text-[#8b95a2] hover:text-white hover:bg-[#1e232a] transition-colors"
             >
               <ChevronDown className="h-5 w-5" />
             </button>
           )}
         </div>
 
-        {/* ── Input area ───────────────────────────────────────────────────── */}
+        {/* ── Input area — stitch floating capsule pinned at bottom ────────
+            Safe-area-aware bottom padding keeps the capsule clear of the
+            iOS/Android home indicator on phones, identical spacing on
+            tablet/desktop where the inset reports 0px. */}
         {hasStarted && (
-          // No background/panel here — this row is pure spacing so the
-          // composer pill below is the *only* visible surface, floating
-          // directly over the message list like ChatGPT's input bar,
-          // identically on mobile and desktop.
-          <div className="cr-input-safe-pb shrink-0 px-3 md:px-6 pt-2 md:pt-4">
-            {/* Capped + centred on desktop — full-bleed pill only makes sense on phones */}
-            <div className="mx-auto w-full max-w-[48rem]">
+          <div
+            className="absolute bottom-0 left-0 right-0 z-40 px-3 md:px-6 pt-0 pointer-events-none"
+            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+          >
+            <div className="max-w-[420px] md:max-w-[48rem] mx-auto pointer-events-auto">
               {/* Reply preview */}
               {replyTarget && (
                 <ReplyPreviewBar
@@ -3666,34 +3456,43 @@ export default function ChatRoomPage() {
         )}
       </div>
 
-      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      {/* ── Modals & lightbox — lazy chunks with local Suspense so the
+          chat itself never unmounts while they resolve. ─────────────── */}
       {showPrefixModal && (
-        <PrefixModal
-          current={prefix}
-          onSave={handleSavePrefix}
-          onClose={() => setShowPrefixModal(false)}
-        />
+        <Suspense fallback={null}>
+          <PrefixModal
+            current={prefix}
+            onSave={handleSavePrefix}
+            onClose={() => setShowPrefixModal(false)}
+          />
+        </Suspense>
       )}
       {showClearModal && (
-        <ClearModal
-          onConfirm={handleClearChat}
-          onClose={() => setShowClearModal(false)}
-        />
+        <Suspense fallback={null}>
+          <ClearModal
+            onConfirm={handleClearChat}
+            onClose={() => setShowClearModal(false)}
+          />
+        </Suspense>
       )}
       {showNicknameModal && (
-        <NicknameModal
-          current={botNickname}
-          onSave={handleSaveNickname}
-          onClose={() => setShowNicknameModal(false)}
-        />
+        <Suspense fallback={null}>
+          <NicknameModal
+            current={botNickname}
+            onSave={handleSaveNickname}
+            onClose={() => setShowNicknameModal(false)}
+          />
+        </Suspense>
       )}
       {lightbox && (
-        <ImageLightbox
-          images={lightbox.images}
-          index={lightbox.index}
-          onIndexChange={(i) => setLightbox((prev) => (prev ? { ...prev, index: i } : prev))}
-          onClose={() => setLightbox(null)}
-        />
+        <Suspense fallback={null}>
+          <ImageLightbox
+            images={lightbox.images}
+            index={lightbox.index}
+            onIndexChange={(i) => setLightbox((prev) => (prev ? { ...prev, index: i } : prev))}
+            onClose={() => setLightbox(null)}
+          />
+        </Suspense>
       )}
 
       {/* ── Scoped styles ──────────────────────────────────────────────────── */}

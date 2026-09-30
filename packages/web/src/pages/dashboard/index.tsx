@@ -1,5 +1,5 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Plus, ChevronRight, Check } from 'lucide-react'
 import Alert from '@/components/ui/feedback/Alert'
@@ -8,6 +8,7 @@ import EmptyState from '@/components/ui/data-display/EmptyState'
 import { ROUTES } from '@/constants/routes.constants'
 import { useBotList } from '@/features/users/hooks/useBotList'
 import { useBotStatus } from '@/features/users/hooks/useBotStatus'
+import { prefetchBotDetail, prefetchNewBot, usePrefetchOnVisible } from '@/lib/route-prefetch.lib'
 import type { GetBotListItemDto } from '@/features/users/dtos/bot.dto'
 import { getPlatformIcon } from '@/components/icons/platform-icon.util'
 import { Platforms } from '@/constants/platform.constants'
@@ -70,22 +71,29 @@ function BotRow({
   isActive,
   onOpen,
   onCopyPrefix,
+  onPrefetch,
 }: {
   bot: GetBotListItemDto
   isActive: boolean
   onOpen: () => void
   onCopyPrefix: () => void
+  onPrefetch?: () => void
 }) {
   // Rendered element (not a component reference) so no component is
   // created during render — satisfies react-hooks/static-components.
   const platformIcon = getPlatformIcon(bot.platform, 'w-4 h-4')
+  const rowRef = useRef<HTMLElement | null>(null)
+  usePrefetchOnVisible(rowRef, onPrefetch)
 
   return (
     <article
       role="button"
       tabIndex={0}
+      ref={rowRef}
       aria-label={`Configure ${bot.nickname} bot`}
       onClick={onOpen}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
@@ -377,6 +385,8 @@ export default function BotManagerPage() {
           type="button"
           id="btn-create-bot"
           onClick={() => navigate(ROUTES.DASHBOARD.CREATE_NEW_BOT)}
+          onMouseEnter={prefetchNewBot}
+          onFocus={prefetchNewBot}
           className="w-full h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-sm flex items-center justify-center space-x-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface shadow-[0_1px_2px_0_rgba(0,0,0,0.35)]"
         >
           <Plus className="w-4 h-4" strokeWidth={2.2} />
@@ -436,6 +446,7 @@ export default function BotManagerPage() {
                 onOpen={() =>
                   navigate(`${ROUTES.DASHBOARD.BOT}?id=${bot.sessionId}`)
                 }
+                onPrefetch={() => prefetchBotDetail(bot.sessionId)}
                 onCopyPrefix={() => void handleCopyPrefix(bot.prefix)}
               />
             ))}
