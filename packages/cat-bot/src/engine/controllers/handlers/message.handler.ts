@@ -40,6 +40,7 @@ import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.uti
 // BaseCtx construction delegated to shared factory — eliminates ~35-line duplication across handlers
 import { buildBaseCtx } from '../factories/ctx.factory.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import { perfNow, perfMark } from '@/engine/lib/perf-trace.lib.js';
 
 /**
  * Resolves the bot's own @username on Telegram so a command sent with a stuck mention
@@ -106,6 +107,7 @@ export async function handleMessage(
   prefix: string,
   native: NativeContext = { platform: 'unknown' },
 ): Promise<void> {
+  const tReceive = perfNow();
   const baseCtx = buildBaseCtx(api, event, commands, native, prefix);
   // Destructure chat for direct use in the "no prefix" and "command not found" reply paths below
   const { chat } = baseCtx;
@@ -190,6 +192,7 @@ export async function handleMessage(
 
   // Intercept valid invocations and unrecognized prefix sequences for onCommand middleware execution
   if (isCommandInvocation) {
+    perfMark('msg.parse+lookup', tReceive);
     const commandCtx: OnCommandCtx = {
       ...baseCtx,
       parsed,
@@ -264,6 +267,7 @@ export async function handleMessage(
           }
         }
 
+        const tDispatch = perfNow();
         await dispatchCommand(
           p,
           commandCtx,
@@ -271,6 +275,7 @@ export async function handleMessage(
           event['threadID'] as string,
           prefix,
         );
+        perfMark('msg.dispatch', tDispatch);
       },
     );
   }

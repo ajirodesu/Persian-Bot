@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:admin": "tsx scripts/seed-admin.ts",
+    "bench": "tsx --conditions source scripts/bench/latency-bench.ts",
     "reset:password": "tsx scripts/reset-password.ts"
   },
   "keywords": [],
