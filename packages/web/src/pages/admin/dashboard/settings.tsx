@@ -778,7 +778,7 @@ export default function AdminSettingsPage() {
               </div>
             </article>
             {timezoneEditorOpen && (
-              <div className="p-3.5 pt-0 space-y-2.5">
+              <div className="p-3.5 pt-3 space-y-3">
                 <TimezoneInlinePicker
                   value={timezoneValue}
                   onChange={(tz) => setTimezoneDraft(tz)}

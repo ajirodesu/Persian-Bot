@@ -83,7 +83,7 @@ export default function TimezoneInlinePicker({
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3 pt-1">
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
