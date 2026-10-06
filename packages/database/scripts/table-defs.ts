@@ -147,6 +147,24 @@ export const tablesDef = [
     },
   },
   {
+    jsonKey: 'botUserMcpSkill',
+    table: 'bot_user_mcp_skills',
+    cols: {
+      id: 'id',
+      userId: 'user_id',
+      kind: 'kind',
+      name: 'name',
+      config: 'config',
+      risk: 'risk',
+      minRole: 'min_role',
+      status: 'status',
+      dangerReasons: 'danger_reasons',
+      approvedBy: 'approved_by',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+  },
+  {
     jsonKey: 'botUser',
     table: 'bot_users',
     cols: {

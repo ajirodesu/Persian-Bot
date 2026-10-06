@@ -116,6 +116,31 @@ export async function initDb(): Promise<void> {
     );
   `);
 
+  // User-added MCP servers and Skills for the AI agent (see engine/ai/mcp/).
+  // One row per integration, owned by a dashboard user. Dangerous entries are
+  // auto-restricted (status + min_role) by the scanner and can only be
+  // approved/edited/deleted by a system admin from the admin dashboard.
+  await tursoClient.execute(`
+    CREATE TABLE IF NOT EXISTS bot_user_mcp_skills (
+      id              TEXT PRIMARY KEY,
+      user_id         TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      config          TEXT NOT NULL,
+      risk            INTEGER NOT NULL DEFAULT 0,
+      min_role        INTEGER NOT NULL DEFAULT 0,
+      status          TEXT NOT NULL DEFAULT 'active',
+      danger_reasons  TEXT,
+      approved_by     TEXT,
+      created_at      TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at      TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+  await tursoClient.execute(`
+    CREATE INDEX IF NOT EXISTS idx_bot_user_mcp_skills_user
+      ON bot_user_mcp_skills(user_id);
+  `);
+
   // Discord channel identity (name/type) — same idempotent-outside-the-fast-path
   // pattern as the tables above so already-initialised databases receive the new
   // columns without a manual migration. Fresh databases get them from the

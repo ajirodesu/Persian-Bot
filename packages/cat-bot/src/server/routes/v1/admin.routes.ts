@@ -84,4 +84,19 @@ adminRouter.post('/reset-database', (req, res) => {
   void adminController.resetAllDatabase(req, res);
 });
 
+// GET /api/v1/admin/mcp-skills — every user's MCP servers and Skills with owner identity
+adminRouter.get('/mcp-skills', (req, res) => {
+  void adminController.listMcpSkills(req, res);
+});
+
+// PUT /api/v1/admin/mcp-skills/:id — edit any entry (approve / restrict / disable)
+adminRouter.put('/mcp-skills/:id', (req, res) => {
+  void adminController.updateMcpSkill(req, res);
+});
+
+// DELETE /api/v1/admin/mcp-skills/:id — delete any user's entry
+adminRouter.delete('/mcp-skills/:id', (req, res) => {
+  void adminController.deleteMcpSkill(req, res);
+});
+
 export default adminRouter;

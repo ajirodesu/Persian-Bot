@@ -32,6 +32,17 @@ import {
   getMaintenanceModeEnabled,
   setMaintenanceModeEnabled,
 } from '@/engine/repos/maintenance-mode.repo.js';
+import {
+  listAllIntegrations,
+  getIntegrationById,
+  updateIntegration,
+  deleteIntegrationById,
+  type McpConfig,
+  type SkillConfig,
+} from '@/engine/repos/mcp-skills.repo.js';
+import { validateIntegrationInput } from '@/engine/ai/mcp/validate.js';
+import { scanIntegration } from '@/engine/ai/mcp/scan.js';
+import { clearIntegrationCache } from '@/engine/ai/mcp/integrations.js';
 
 /** Max length for a system admin ID — generous enough for any platform's native ID format (Discord/Telegram snowflakes, UUIDs, etc). */
 const SYSTEM_ADMIN_ID_MAX_LENGTH = 128;
@@ -442,6 +453,186 @@ class AdminController {
     } catch (error) {
       console.error('[AdminController.deleteBot]', error);
       res.status(500).json({ error: 'Failed to delete bot session' });
+    }
+  }
+
+  // ── MCP & Skills oversight ───────────────────────────────────────────────
+  // Every user's integrations in one place. Admins can approve flagged
+  // entries, restrict or disable them, edit their config, or delete them.
+  // Sealed secrets are masked in responses and preserved on masked re-save.
+
+  // GET /api/v1/admin/mcp-skills — all users' integrations with owner identity
+  async listMcpSkills(req: Request, res: Response): Promise<void> {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    try {
+      const items = await listAllIntegrations();
+      res.status(200).json({
+        items: items.map((item) => {
+          const raw = item.config as unknown as Record<string, unknown>;
+          const config: Record<string, unknown> = { ...raw };
+          const headers = raw.headers;
+          if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+            const masked: Record<string, string> = {};
+            for (const [k, v] of Object.entries(headers as Record<string, unknown>)) {
+              masked[k] =
+                typeof v === 'string' && v.startsWith('enc:v1:') ? '••••••' : String(v);
+            }
+            config.headers = masked;
+          }
+          return {
+            id: item.id,
+            userId: item.userId,
+            userEmail: item.userEmail,
+            userName: item.userName,
+            kind: item.kind,
+            name: item.name,
+            config,
+            risk: item.risk,
+            minRole: item.minRole,
+            status: item.status,
+            dangerReasons: item.dangerReasons,
+            approvedBy: item.approvedBy,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+          };
+        }),
+      });
+    } catch (error) {
+      console.error('[AdminController.listMcpSkills]', error);
+      res.status(500).json({ error: 'Failed to fetch MCP & Skills' });
+    }
+  }
+
+  // PUT /api/v1/admin/mcp-skills/:id — edit any entry; explicit admin status wins.
+  async updateMcpSkill(req: Request, res: Response): Promise<void> {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    const id = String(req.params['id'] ?? '');
+    if (!id) {
+      res.status(400).json({ error: 'Missing id param' });
+      return;
+    }
+    try {
+      const record = await getIntegrationById(id);
+      if (!record) {
+        res.status(404).json({ error: 'Integration not found.' });
+        return;
+      }
+
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const patch: {
+        name?: string;
+        config?: McpConfig | SkillConfig;
+        risk?: 0 | 1 | 2;
+        minRole?: number;
+        status?: 'active' | 'pending_review' | 'restricted' | 'disabled';
+        dangerReasons?: string[];
+        approvedBy?: string | null;
+      } = {};
+
+      let nextName = record.name;
+      let nextConfig: McpConfig | SkillConfig = record.config;
+      if (typeof body.name === 'string' || body.config !== undefined) {
+        const mergedRaw = {
+          kind: record.kind,
+          name: typeof body.name === 'string' ? body.name : record.name,
+          config: body.config ?? (record.config as unknown),
+        };
+        const validated = validateIntegrationInput(mergedRaw);
+        if (!validated.ok) {
+          res.status(400).json({ error: validated.error });
+          return;
+        }
+        nextName = validated.value.name;
+        nextConfig = validated.value.config;
+        const nextHeaders = (nextConfig as unknown as Record<string, unknown>).headers;
+        const storedHeaders = (
+          record.config as unknown as Record<string, unknown>
+        ).headers as Record<string, string> | undefined;
+        if (storedHeaders && (!nextHeaders || typeof nextHeaders !== 'object' || Array.isArray(nextHeaders))) {
+          // URL/name-only edit — keep the stored headers (secrets stay sealed).
+          (nextConfig as unknown as Record<string, unknown>).headers = { ...storedHeaders };
+        } else if (nextHeaders && typeof nextHeaders === 'object' && !Array.isArray(nextHeaders)) {
+          const merged: Record<string, string> = {};
+          for (const [k, v] of Object.entries(nextHeaders as Record<string, string>)) {
+            merged[k] =
+              typeof v === 'string' && v.includes('•') && storedHeaders?.[k]
+                ? storedHeaders[k]!
+                : v;
+          }
+          (nextConfig as unknown as Record<string, unknown>).headers = merged;
+        }
+        patch.name = nextName;
+        patch.config = nextConfig;
+      }
+
+      // Advisory re-scan: fresh danger reasons always recorded. Explicit admin
+      // risk/minRole/status win outright (admin supremacy); otherwise the scan
+      // floor applies so an edit cannot silently de-restrict.
+      const nextCfg = nextConfig as unknown as Record<string, unknown>;
+      const verdict = scanIntegration({
+        kind: record.kind,
+        name: nextName,
+        url: nextCfg.url as string | undefined,
+        headers: nextCfg.headers as Record<string, string> | undefined,
+        parameters: nextCfg.parameters,
+        instructions: nextCfg.instructions as string | undefined,
+        skillMode: nextCfg.mode as 'tool' | 'prompt' | undefined,
+      });
+      patch.dangerReasons = verdict.reasons;
+
+      if (typeof body.risk === 'number' && [0, 1, 2].includes(body.risk)) {
+        patch.risk = body.risk as 0 | 1 | 2;
+      } else {
+        patch.risk = verdict.risk;
+      }
+      if (typeof body.minRole === 'number' && body.minRole >= 0 && body.minRole <= 4) {
+        patch.minRole = Math.trunc(body.minRole);
+      } else {
+        patch.minRole = Math.max(verdict.minRole, record.minRole);
+      }
+
+      const STATUSES = ['active', 'pending_review', 'restricted', 'disabled'] as const;
+      if (typeof body.status === 'string' && (STATUSES as readonly string[]).includes(body.status)) {
+        patch.status = body.status as (typeof STATUSES)[number];
+        patch.approvedBy = patch.status === 'active' ? admin.id : null;
+      } else if (verdict.status !== 'active') {
+        patch.status = verdict.status;
+        patch.approvedBy = null;
+      }
+
+      await updateIntegration(id, patch);
+      clearIntegrationCache();
+      const updated = await getIntegrationById(id);
+      res.status(200).json({ item: updated });
+    } catch (error) {
+      console.error('[AdminController.updateMcpSkill]', error);
+      res.status(500).json({ error: 'Failed to update integration' });
+    }
+  }
+
+  // DELETE /api/v1/admin/mcp-skills/:id — delete any user's entry
+  async deleteMcpSkill(req: Request, res: Response): Promise<void> {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    const id = String(req.params['id'] ?? '');
+    if (!id) {
+      res.status(400).json({ error: 'Missing id param' });
+      return;
+    }
+    try {
+      const record = await getIntegrationById(id);
+      if (!record) {
+        res.status(404).json({ error: 'Integration not found.' });
+        return;
+      }
+      await deleteIntegrationById(id);
+      clearIntegrationCache();
+      res.status(200).json({ status: 'deleted' });
+    } catch (error) {
+      console.error('[AdminController.deleteMcpSkill]', error);
+      res.status(500).json({ error: 'Failed to delete integration' });
     }
   }
 }

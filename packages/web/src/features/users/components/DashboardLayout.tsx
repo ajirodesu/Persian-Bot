@@ -10,6 +10,7 @@ import {
   Bot,
   MessageSquare,
   Settings as SettingsIcon,
+  Sparkles,
   Plus,
   ShieldCheck,
   PanelLeftClose,
@@ -27,6 +28,7 @@ import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
 import {
   prefetchDashboardHome,
   prefetchChatRoom,
+  prefetchAIAgent,
   prefetchDashboardSettings,
 } from '@/lib/route-prefetch.lib'
 import IconButton from '@/components/ui/buttons/IconButton'
@@ -55,6 +57,7 @@ import {
 const NAV_ITEMS = [
   { path: ROUTES.DASHBOARD.ROOT, label: 'Bot Manager', icon: Bot },
   { path: ROUTES.DASHBOARD.CHAT_ROOM, label: 'Chat Room', icon: MessageSquare },
+  { path: ROUTES.DASHBOARD.AI_AGENT, label: 'AI Agent', icon: Sparkles },
   { path: ROUTES.DASHBOARD.SETTINGS, label: 'Settings', icon: SettingsIcon },
 ] as const
 
@@ -65,6 +68,7 @@ const NAV_ITEMS = [
 const NAV_PREFETCH: Record<string, () => void> = {
   [ROUTES.DASHBOARD.ROOT]: prefetchDashboardHome,
   [ROUTES.DASHBOARD.CHAT_ROOM]: prefetchChatRoom,
+  [ROUTES.DASHBOARD.AI_AGENT]: prefetchAIAgent,
   [ROUTES.DASHBOARD.SETTINGS]: prefetchDashboardSettings,
 }
 

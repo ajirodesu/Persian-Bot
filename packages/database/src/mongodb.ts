@@ -134,6 +134,24 @@ export {
   deleteUserTimezone,
 } from '../adapters/mongodb/src/server/timezone.repo.js';
 
+// --- USER AI CONFIG ---
+export {
+  getUserAiConfig,
+  saveUserAiConfig,
+  deleteUserAiConfig,
+} from '../adapters/mongodb/src/server/ai-config.repo.js';
+
+// --- USER MCP & SKILLS ---
+export {
+  listUserMcpSkills,
+  getMcpSkillById,
+  listAllMcpSkills,
+  createMcpSkill,
+  updateMcpSkill,
+  deleteMcpSkill,
+  deleteMcpSkillById,
+} from '../adapters/mongodb/src/server/mcp-skills.repo.js';
+
 // --- MAINTENANCE MODE ---
 export {
   getMaintenanceModeEnabled,

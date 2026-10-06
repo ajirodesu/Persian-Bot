@@ -426,6 +426,25 @@ export async function initDb(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- User-added MCP servers and Skills for the AI agent. Dangerous entries
+    -- are auto-restricted by the scanner and gated to system admins.
+    CREATE TABLE IF NOT EXISTS bot_user_mcp_skills (
+      id              TEXT PRIMARY KEY,
+      user_id         TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      config          TEXT NOT NULL,
+      risk            INTEGER NOT NULL DEFAULT 0,
+      min_role        INTEGER NOT NULL DEFAULT 0,
+      status          TEXT NOT NULL DEFAULT 'active',
+      danger_reasons  TEXT,
+      approved_by     TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_bot_user_mcp_skills_user
+      ON bot_user_mcp_skills(user_id);
+
     -- Global maintenance-mode switch: single key/value row (see maintenance-mode.repo.ts).
     CREATE TABLE IF NOT EXISTS system_settings (
       setting_key     TEXT PRIMARY KEY,

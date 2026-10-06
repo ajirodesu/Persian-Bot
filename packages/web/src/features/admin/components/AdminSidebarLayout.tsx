@@ -12,6 +12,7 @@ import {
   X,
   Files,
   GitBranch,
+  Puzzle,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -49,6 +50,7 @@ const NAV_ITEMS = [
   { path: ROUTES.ADMIN.BOTS,      label: 'Bot Sessions',  icon: Bot },
   { path: ROUTES.ADMIN.GIT,       label: 'Git',           icon: GitBranch },
   { path: ROUTES.ADMIN.FILES,     label: 'Files',         icon: Files },
+  { path: ROUTES.ADMIN.MCP_SKILLS, label: 'MCP & Skills', icon: Puzzle },
   { path: ROUTES.ADMIN.SETTINGS,  label: 'Settings',      icon: Settings },
 ] as const
 

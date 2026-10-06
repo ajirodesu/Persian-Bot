@@ -41,4 +41,10 @@ export const queryKeys = {
     ['admin', 'users', page, limit, search] as const,
   adminBots: (page: number, limit: number, search: string) =>
     ['admin', 'bots', page, limit, search] as const,
+  aiStatus: ['ai', 'status'] as const,
+  aiConfig: ['ai', 'config'] as const,
+  aiTools: ['ai', 'tools'] as const,
+  aiRouting: ['ai', 'routing'] as const,
+  aiAudit: (limit: number) => ['ai', 'audit', limit] as const,
+  aiIntegrations: ['ai', 'integrations'] as const,
 }

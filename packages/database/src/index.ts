@@ -233,6 +233,34 @@ export const deleteUser = m.deleteUser;
 export const resetAllDatabase = m.resetAllDatabase;
 
 // --- USER AI PROVIDER KEY ---
+// --- USER AI CONFIG ---
+// Per-dashboard-user AI configuration (provider keys encrypted at rest,
+// provider models, default provider, + agent_settings JSON blob for agents,
+// memory, execution and moderation tuning). Scoped to the user's own account.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getUserAiConfig = m.getUserAiConfig;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const saveUserAiConfig = m.saveUserAiConfig;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteUserAiConfig = m.deleteUserAiConfig;
+
+// --- USER MCP & SKILLS ---
+// User-added MCP servers and Skills for the AI agent. Dangerous entries are
+// auto-restricted by the scanner; system admins can list/edit/delete all.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const listUserMcpSkills = m.listUserMcpSkills;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const getMcpSkillById = m.getMcpSkillById;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const listAllMcpSkills = m.listAllMcpSkills;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const createMcpSkill = m.createMcpSkill;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const updateMcpSkill = m.updateMcpSkill;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteMcpSkill = m.deleteMcpSkill;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+export const deleteMcpSkillById = m.deleteMcpSkillById;
 // --- USER TIMEZONE ---
 // Per-user dashboard timezone preference (IANA identifier, e.g. "Asia/Manila").
 // Scoped to a single user's own account.

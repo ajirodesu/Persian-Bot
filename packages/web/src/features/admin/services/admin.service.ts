@@ -81,6 +81,35 @@ export interface GetMaintenanceModeResponseDto {
   enabled: boolean
 }
 
+export interface AdminMcpSkillDto {
+  id: string
+  userId: string
+  userEmail: string | null
+  userName: string | null
+  kind: 'mcp' | 'skill'
+  name: string
+  config: Record<string, unknown>
+  risk: 0 | 1 | 2
+  minRole: number
+  status: 'active' | 'pending_review' | 'restricted' | 'disabled'
+  dangerReasons: string[]
+  approvedBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GetAdminMcpSkillsResponseDto {
+  items: AdminMcpSkillDto[]
+}
+
+export interface UpdateAdminMcpSkillDto {
+  name?: string
+  config?: Record<string, unknown>
+  risk?: 0 | 1 | 2
+  minRole?: number
+  status?: 'active' | 'pending_review' | 'restricted' | 'disabled'
+}
+
 // ── Service class ──────────────────────────────────────────────────────────────
 
 class AdminService {
@@ -213,6 +242,34 @@ class AdminService {
       { confirmationPhrase },
     )
     return response.data
+  }
+
+  // GET /api/v1/admin/mcp-skills — every user's MCP servers and Skills
+  async getMcpSkills(signal?: AbortSignal): Promise<GetAdminMcpSkillsResponseDto> {
+    const response = await apiClient.get<GetAdminMcpSkillsResponseDto>(
+      '/api/v1/admin/mcp-skills',
+      { signal },
+    )
+    return response.data
+  }
+
+  // PUT /api/v1/admin/mcp-skills/:id — edit any entry (approve / restrict / disable)
+  async updateMcpSkill(
+    id: string,
+    dto: UpdateAdminMcpSkillDto,
+  ): Promise<{ item: AdminMcpSkillDto | null }> {
+    const response = await apiClient.put<{ item: AdminMcpSkillDto | null }>(
+      `/api/v1/admin/mcp-skills/${encodeURIComponent(id)}`,
+      dto,
+    )
+    return response.data
+  }
+
+  // DELETE /api/v1/admin/mcp-skills/:id — delete any user's entry
+  async deleteMcpSkill(id: string): Promise<void> {
+    await apiClient.delete(
+      `/api/v1/admin/mcp-skills/${encodeURIComponent(id)}`,
+    )
   }
 }
 

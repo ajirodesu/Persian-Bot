@@ -22,6 +22,7 @@ export const ROUTES = {
     SETTINGS: '/dashboard/settings',
     CREATE_NEW_BOT: '/dashboard/create-new-bot',
     CHAT_ROOM: '/dashboard/chat-room',
+    AI_AGENT: '/dashboard/ai-agent',
     BOT: '/dashboard/bot',
     BOT_COMMANDS: '/dashboard/bot/commands',
     BOT_EVENTS: '/dashboard/bot/events',
@@ -38,6 +39,7 @@ export const ROUTES = {
     FILES: '/admin/dashboard/files',
     FILES_EDIT: '/admin/dashboard/files/edit',
     GIT: '/admin/dashboard/git',
+    MCP_SKILLS: '/admin/dashboard/mcp-skills',
     SETTINGS: '/admin/dashboard/settings',
   },
 } as const
@@ -60,6 +62,7 @@ export const ROUTE_SEGMENTS = {
   SETTINGS: 'settings',
   CREATE_NEW_BOT: 'create-new-bot',
   CHAT_ROOM: 'chat-room',
+  AI_AGENT: 'ai-agent',
   BOT: 'bot',
   DATABASE: 'database',
   ADMIN: 'admin',
@@ -71,5 +74,6 @@ export const ROUTE_SEGMENTS = {
   ADMIN_BOTS: 'bots',
   ADMIN_FILES: 'files',
   ADMIN_GIT: 'git',
+  ADMIN_MCP_SKILLS: 'mcp-skills',
   ADMIN_SETTINGS: 'settings',
 } as const

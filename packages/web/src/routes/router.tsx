@@ -36,6 +36,7 @@ const BotLayout = lazy(
   () => import('@/features/users/components/DashboardBotLayout'),
 )
 const ChatRoomPage = lazy(() => import('@/pages/dashboard/chat-room'))
+const AIAgentPage = lazy(() => import('@/pages/dashboard/ai-agent'))
 const BotConsolePage = lazy(() => import('@/pages/dashboard/bot/index'))
 const BotCommandsPage = lazy(() => import('@/pages/dashboard/bot/commands'))
 const BotEventsPage = lazy(() => import('@/pages/dashboard/bot/events'))
@@ -52,6 +53,7 @@ const AdminFileEditorPage = lazy(
   () => import('@/pages/admin/dashboard/file-editor'),
 )
 const AdminGitPage = lazy(() => import('@/pages/admin/dashboard/git'))
+const AdminMcpSkillsPage = lazy(() => import('@/pages/admin/dashboard/mcp-skills'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/dashboard/settings'))
 
 /**
@@ -194,6 +196,10 @@ export const router = createBrowserRouter([
             element: withSuspense(<ChatRoomPage />),
           },
           {
+            path: ROUTE_SEGMENTS.AI_AGENT,
+            element: withSuspense(<AIAgentPage />),
+          },
+          {
             path: ROUTE_SEGMENTS.BOT,
             element: withSuspense(<BotLayout />),
             children: [
@@ -264,6 +270,10 @@ export const router = createBrowserRouter([
               {
                 path: ROUTES.ADMIN.GIT,
                 element: withSuspense(<AdminGitPage />),
+              },
+              {
+                path: ROUTES.ADMIN.MCP_SKILLS,
+                element: withSuspense(<AdminMcpSkillsPage />),
               },
               {
                 path: ROUTES.ADMIN.FILES,
