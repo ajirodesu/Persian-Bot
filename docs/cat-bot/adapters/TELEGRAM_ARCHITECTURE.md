@@ -34,7 +34,7 @@ so one failing Telegram account never affects Discord/Fluxer sessions
 
 ## File Map
 
-```
+```text
 src/engine/adapters/platform/telegram/
 ├── index.ts                 — public facade; re-exports createTelegramListener + TelegramConfig only
 ├── types.ts                 — TelegramConfig { botToken, prefix, userId, sessionId }; TelegramEmitter
@@ -71,13 +71,13 @@ src/engine/adapters/platform/telegram/
 
 grammy string-filter syntax replaces Telegraf listeners:
 
-| grammy registration | Unified emit |
-| --- | --- |
-| `bot.on('message:new_chat_members', …)` (`handlers.ts:52`) | `event` (join) |
-| `bot.on('message:left_chat_member', …)` (`handlers.ts:60`) | `event` (leave) |
+| grammy registration                                                                            | Unified emit                |
+| ---------------------------------------------------------------------------------------------- | --------------------------- |
+| `bot.on('message:new_chat_members', …)` (`handlers.ts:52`)                                     | `event` (join)              |
+| `bot.on('message:left_chat_member', …)` (`handlers.ts:60`)                                     | `event` (leave)             |
 | `bot.on('message', …)` (`handlers.ts:71`) — matches ALL message updates incl. service messages | `message` / `message_reply` |
-| `bot.on('message_reaction', …)` (`handlers.ts:120`) | `message_reaction` |
-| `bot.on('callback_query', …)` (`handlers.ts:132`) | `button_action` |
+| `bot.on('message_reaction', …)` (`handlers.ts:120`)                                            | `message_reaction`          |
+| `bot.on('callback_query', …)` (`handlers.ts:132`)                                              | `button_action`             |
 
 Button acknowledgement: `ctx.answerCallbackQuery()` must fire within ~10 s to
 dismiss the spinner. The handler deliberately does NOT ack inline —
@@ -89,9 +89,9 @@ unauthorized clicks (`handlers.ts:133,155-159`).
 All calls go through `ctx.api` (grammy wrappers):
 
 - **reply** — `sendMessage(chatId, text, { entities, parse_mode: MarkdownV2,
-  reply_parameters, reply_markup })` (`lib/replyMessage.ts:227-230`); media is
+reply_parameters, reply_markup })` (`lib/replyMessage.ts:227-230`); media is
   dispatched by extension to `sendPhoto / sendVideo / sendAnimation / sendAudio /
-  sendDocument / sendMediaGroup` (`lib/replyMessage.ts:243-350`); rich style via
+sendDocument / sendMediaGroup` (`lib/replyMessage.ts:243-350`); rich style via
   `sendRichMessage` raw call (`lib/replyMessage.ts:89`). Media uploads also emit
   fire-and-forget `sendChatAction` flashes (`lib/replyMessage.ts:126-128`).
 - **send** — `ctx.api.sendMessage(targetChatId, text)`, returns `message_id` as
@@ -101,7 +101,7 @@ All calls go through `ctx.api` (grammy wrappers):
   `editMessageMedia(chatId, mId, InputMedia, …)` (`lib/editMessage.ts:169,188`);
   rich via raw `editMessageText` with `rich_message` (`lib/editMessage.ts:104`).
 - **react** — `ctx.api.setMessageReaction(chatId, Number(msgId),
-  [{ type: 'emoji', emoji }])` (`lib/reactToMessage.ts:15-20`).
+[{ type: 'emoji', emoji }])` (`lib/reactToMessage.ts:15-20`).
 - **typing** — `ctx.api.sendChatAction(chatId, ACTION_MAP[action])`
   (`lib/sendTypingIndicator.ts:39-47`).
 - **mentions** — `buildTelegramMentionEntities` translates `{ tag, user_id }` to

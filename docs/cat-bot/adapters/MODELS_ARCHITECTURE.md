@@ -34,7 +34,7 @@ This means:
 
 ## Module File Tree
 
-```
+```text
 src/engine/adapters/models/
 │
 ├── index.ts                                    — Barrel: single public import surface for the entire
@@ -230,7 +230,7 @@ src/engine/adapters/models/
 
 The models directory is organized as a **four-layer dependency stack**. Lower layers have no knowledge of higher layers — the dependency edges only point downward.
 
-```
+```text
 Layer 4 — Barrel (index.ts)
   └── re-exports everything; single import point for all consumers
 
@@ -278,7 +278,7 @@ The `interfaces/` and `prototypes/` directories, along with `thread.model.ts` an
 
 Each of the four platform adapters consumes the models layer in the same three-phase pattern:
 
-```
+```text
 src/engine/adapters/platform/{platform}/
 │
 ├── wrapper.ts          — Extends UnifiedApi; implements each method by delegating to lib/;
@@ -305,7 +305,7 @@ The `native` field in every emitted payload carries the platform-specific contex
 
 The path from a native platform event to a command handler call crosses the models layer twice:
 
-```
+```text
 Platform native event (discord.js MessageCreateEvent / grammy Context / fca MQTT delta / Graph API webhook entry)
   │
   ▼  platform event-router calls formatEvent()

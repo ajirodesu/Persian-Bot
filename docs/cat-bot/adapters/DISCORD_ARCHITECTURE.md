@@ -28,7 +28,7 @@ The adapter is structured as a four-layer stack: **orchestration → client life
 
 ## Module File Tree
 
-```
+```text
 src/engine/adapters/platform/discord/
 │
 ├── index.ts                          — Orchestrator: composes client, slash-commands, and event-handlers
@@ -192,7 +192,7 @@ After all three phases succeed, the slash-sync callback is registered with `pref
 
 The Discord adapter emits five distinct event types on the unified `EventEmitter`. Each payload carries three fields: `api` (the `UnifiedApi` adapter), `event` (the normalized event object), and `native` (platform context including `userId`, `sessionId`, and the raw discord.js object for consumers that need it).
 
-```
+```text
 discord/event-handlers.ts emits:
 
 ├── 'message'           — messageCreate (non-bot, no reply reference)

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "esnext",
+    "lib": ["esnext"],
+    "types": ["node"],
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  "include": [".opencode/tools/**/*.ts", ".opencode/plugins/**/*.ts"],
+  "exclude": ["node_modules", ".opencode/node_modules", "packages/*/dist"]
+}

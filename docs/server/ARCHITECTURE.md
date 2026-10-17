@@ -28,7 +28,7 @@ The server is organized into eight sub-systems: bootstrap, auth, routes, control
 
 ## Module File Tree
 
-```
+```text
 src/server/
 │
 ├── server.ts                                ← HTTP server bootstrap and Socket.IO initializer
@@ -62,7 +62,6 @@ src/server/
 │   │                                          any session row is written; adminAuth additionally gates
 │   │                                          sign-in to role === 'admin' users only
 │   │
-   │
 │   └── mailer.lib.ts                        ← Gmail SMTP Mailer Singleton
 │                                              Lazily initialized transactional email dispatcher;
 │                                              gracefully skips delivery if env vars are missing
@@ -137,7 +136,6 @@ src/server/
 │   │                                          triggers slash command re-registration on Discord/Telegram
 │   │                                          sessions fire-and-forget after a command toggle write
 │   │
-   │
 │   ├── admin-file-manager.controller.ts / bot-database.controller.ts / timezone.controller.ts
 │   │
 │   └── validation.controller.ts             ← Credential validation handlers
@@ -233,11 +231,11 @@ src/server/
 │                                              (system admins) that user-facing endpoints must never return;
 │                                              separation enforces the boundary at the type level
 │
-└── utils/
+├── utils/
     └── hash.util.ts                         ← Per-session Telegram webhook secret derivation (SHA-256)
                                                generateVerifyToken(userId): SHA-256 of userId+'verify'
-│                                              64 lowercase hex chars — within Telegram's secret-token charset
-│                                              verify_token so Meta can prove ownership without storing
+                                               64 lowercase hex chars — within Telegram's secret-token charset
+                                               verify_token so Meta can prove ownership without storing
 │
 └── validators/                              ← Cross-cutting request validation
     ├── auth-session.validator.ts            ← Centralized requireSession and requireAdmin guards
@@ -254,7 +252,7 @@ src/server/
 
 `createApp()` enforces a strict middleware registration order that is not stylistic but structurally required:
 
-```
+```text
 src/server/app.ts registration order:
 │
 ├── cors()                         ← Must precede all handlers so OPTIONS preflight
@@ -291,7 +289,7 @@ src/server/app.ts registration order:
 
 Two independent `betterAuth()` instances share the same underlying database adapter but write session cookies under separate prefixes, making the user portal and admin portal session surfaces structurally isolated:
 
-```
+```text
 lib/better-auth.lib.ts:
 │
 ├── auth                           ← User portal
@@ -316,7 +314,7 @@ The active database backend is selected at runtime by `DATABASE_TYPE` and the sa
 
 All REST API routes are versioned under `/api/v1`. The only route mounted outside it is the per-session Telegram webhook receiver (it must read the raw body stream before `express.json()` runs).
 
-```
+```text
 routes/v1/index.ts mounts:
 │
 ├── /bots                  → bot.routes.ts                  ← Session CRUD + command/event toggles
@@ -339,7 +337,7 @@ The Fluxer validation controller (`validation.controller.ts`) performs a live RE
 
 `BotService` is the only orchestration layer that touches both the database (via `botRepo`) and the runtime engine (via `spawnDynamicSession`, `sessionManager`, `prefixManager`). Every lifecycle operation follows a DB-first, transport-second ordering — state is persisted before the transport change takes effect so a process restart always reflects the last committed intent.
 
-```
+```text
 services/bot.service.ts lifecycle order:
 │
 ├── createBot  → UUID generation → DB write → spawnDynamicSession (fire-and-forget)
@@ -359,7 +357,7 @@ The server-layer `botRepo` wraps the raw database adapter with the same LRU cach
 
 Socket.IO is initialized once in `server.ts` after the HTTP server is created. Two handler groups are registered immediately after initialization:
 
-```
+```text
 server.ts socket registration:
 │
 ├── registerValidationHandlers(io) ← Cookie-auth middleware (io.use()) runs first;
@@ -379,7 +377,7 @@ The authentication middleware in `validation.socket.ts` extracts the better-auth
 
 ### Data Contracts
 
-```
+```text
 dtos/ and models/ dependency directions:
 │
 ├── dtos/bot.dto.ts                ← Controllers read this; service + repo implement it

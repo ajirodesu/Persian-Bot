@@ -25,14 +25,14 @@ sessions live and die with their Socket.IO connection instead.
 `class WebChatApi extends UnifiedApi` (`api.ts:86-87`,
 `override platform = Platforms.Webchat`).
 
-| Method | Socket event |
-| --- | --- |
-| `sendTypingIndicator` (`:299-304`) | `chatroom:typing { threadID, action }` |
-| `sendMessage` (`:306-318`) | `chatroom:bot_message` |
-| `replyMessage` (`:320-341`) | `chatroom:bot_message` (text + style + buttons + attachments) |
-| `editMessage` (`:343-393`) | `chatroom:bot_edit` |
-| `unsendMessage` (`:395-402`) | `chatroom:bot_delete { id }` |
-| `reactToMessage` (`:417-434`, bot-only) | `chatroom:reaction` |
+| Method                                  | Socket event                                                  |
+| --------------------------------------- | ------------------------------------------------------------- |
+| `sendTypingIndicator` (`:299-304`)      | `chatroom:typing { threadID, action }`                        |
+| `sendMessage` (`:306-318`)              | `chatroom:bot_message`                                        |
+| `replyMessage` (`:320-341`)             | `chatroom:bot_message` (text + style + buttons + attachments) |
+| `editMessage` (`:343-393`)              | `chatroom:bot_edit`                                           |
+| `unsendMessage` (`:395-402`)            | `chatroom:bot_delete { id }`                                  |
+| `reactToMessage` (`:417-434`, bot-only) | `chatroom:reaction`                                           |
 
 Identity/group helpers (single-user 1:1 room semantics):
 

@@ -26,7 +26,7 @@ Registered in `src/engine/modules/platform/platform.constants.ts:20-44` as
 
 ## File Map
 
-```
+```text
 src/engine/adapters/platform/fluxer/
 ├── index.ts                 — createFluxerListener({ token, prefix, userId, sessionId });
 │                              start(commands) / stop() via runManagedSession;
@@ -58,12 +58,12 @@ src/engine/adapters/platform/fluxer/
 
 ## Event Routing (`event-handlers.ts:40-172`)
 
-| SDK event | Unified emit |
-| --- | --- |
-| `MessageCreate` (plain) (`:53-85`) | `message` |
-| `MessageCreate` (reply) | `message_reply` |
-| `MessageReactionAdd` (`:88-119`) | `message_reaction` |
-| `MessageDelete` (`:122-134`) | `message_unsend` |
+| SDK event                                           | Unified emit         |
+| --------------------------------------------------- | -------------------- |
+| `MessageCreate` (plain) (`:53-85`)                  | `message`            |
+| `MessageCreate` (reply)                             | `message_reply`      |
+| `MessageReactionAdd` (`:88-119`)                    | `message_reaction`   |
+| `MessageDelete` (`:122-134`)                        | `message_unsend`     |
 | `GuildMemberAdd` / `GuildMemberRemove` (`:137-169`) | `event` (join/leave) |
 
 Button taps arrive through the same `message`/`button_action` unified path as

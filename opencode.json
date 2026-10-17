@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "autoupdate": true,
+  "share": "disabled",
+  "default_agent": "orchestrator",
+  "permission": {
+    "edit": "ask",
+    "webfetch": "allow",
+    "skill": { "*": "allow" },
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "ls*": "allow",
+      "cat*": "allow",
+      "grep*": "allow",
+      "rg*": "allow",
+      "npm run*": "allow",
+      "npx tsc*": "allow",
+      "git push*": "deny",
+      "rm -rf*": "deny"
+    }
+  },
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": { "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}" },
+      "enabled": true
+    },
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer {env:GITHUB_TOKEN}" },
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest", "--headless"],
+      "enabled": true
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "enabled": true
+    },
+    "memory": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
+      "environment": { "MEMORY_FILE_PATH": ".opencode/memory.json" },
+      "enabled": true
+    }
+  },
+  "tools": {
+    "context7_*": false,
+    "github_*": false,
+    "playwright_*": false,
+    "sequential-thinking_*": false,
+    "memory_*": false
+  }
+}

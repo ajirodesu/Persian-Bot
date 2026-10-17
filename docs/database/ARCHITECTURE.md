@@ -28,7 +28,7 @@ The three adapters are structurally parallel: each implements the same set of re
 
 ## Monorepo Position
 
-```
+```text
 Cat-Bot/
 └── packages/
     ├── cat-bot/                         ← Imports from 'database'; owns LRU cache layer in src/engine/repos/
@@ -41,7 +41,7 @@ Cat-Bot/
 
 ## Package File Tree
 
-```
+```text
 packages/database/
 │
 ├── src/                                 ← Unified public surface; always import from here
@@ -113,7 +113,6 @@ packages/database/
 
 ├── scripts/                             ← Cross-adapter data migration utilities
 │   ├── load-env.ts                      ← Shared dotenv loader for migration scripts
-│   ├── load-env.ts                      ← Shared dotenv loader for migration scripts
 │   ├── table-defs.ts                    ← Shared table definitions for cross-adapter copies
 │   ├── migrate-mongodb-to-neondb.ts
 │   ├── migrate-mongodb-to-turso.ts
@@ -141,7 +140,7 @@ Every adapter implements the same set of named exports. The `src/index.ts` entry
 
 The full exported API surface covers these domain groups:
 
-```
+```text
 Bot Session Commands  — upsertSessionCommands, findSessionCommands, setCommandEnabled, isCommandEnabled
 Bot Session Events    — upsertSessionEvents, findSessionEvents, setEventEnabled, isEventEnabled
 Credentials           — findDiscord/TelegramCredentialState, updateDiscord/TelegramCredentialCommandHash,
@@ -202,7 +201,7 @@ Unlike neondb's `pool` (a raw `pg.Pool` passed straight to `betterAuth({ databas
 
 `src/index.ts` reads `DATABASE_TYPE` at module evaluation time and dynamic-imports the appropriate barrel:
 
-```
+```text
 DATABASE_TYPE=mongodb      → src/mongodb.ts       → adapters/mongodb/src/
 DATABASE_TYPE=neondb       → src/neondb.ts        → adapters/neondb/src/
 (unset or turso)   → src/turso.ts → adapters/turso/src/
@@ -226,7 +225,7 @@ Migration scripts are intended for one-time data transfer operations when switch
 
 Better-auth requires access to the database to manage `user`, `session`, `account`, and `verification` tables. Integration is handled in `packages/cat-bot/src/server/lib/better-auth.lib.ts`, not inside the database package itself. The integration strategy differs per adapter:
 
-```
+```text
 turso  → betterAuth({ database: { dialect: new LibsqlDialect({ client: tursoClient }), type: 'sqlite' } })
                  No official better-auth libSQL adapter exists — a Kysely dialect is passed directly
 mongodb        → betterAuth({ database: mongodbAdapter(mongoClient, { dbName: MONGO_DATABASE_NAME }) })
@@ -244,7 +243,7 @@ The four better-auth tables (`user`, `session`, `account`, `verification`) are d
 The `database` package is strictly passive, but it serves as the foundation tying the Web, Server, and Engine together structurally:
 
 - **Shared Connections:** The Engine's bot runtime (via `cat-bot/repos`) and the Server's authentication system (via `better-auth`) both consume these identical raw adapter singletons. A Web dashboard user viewing their profile and a Discord user triggering a command theoretically query through the same physical connection pool (e.g., the NeonDB `pg.Pool`).
-- **Cache Authority Boundary:** The database package enforces the boundary of *raw truth*. The Engine's LRU cache (`cat-bot/src/engine/repos`) sits *above* this package. This guarantees that cross-adapter migration scripts (`scripts/migrate-*`) can safely read and write massive datasets natively without accidentally poisoning or triggering the Engine's operational memory cache.
+- **Cache Authority Boundary:** The database package enforces the boundary of _raw truth_. The Engine's LRU cache (`cat-bot/src/engine/repos`) sits _above_ this package. This guarantees that cross-adapter migration scripts (`scripts/migrate-*`) can safely read and write massive datasets natively without accidentally poisoning or triggering the Engine's operational memory cache.
 - **Auth & Bot Coexistence:** Because the schemas (libSQL, Postgres, Mongo) embed both `better-auth` tables (`user`, `session`) and Bot tables (`BotSession`, `BotThread`) side-by-side, the Server can perform high-efficiency SQL joins (like `bot.repo.ts` listing bots with their `user` owners) without making cross-database HTTP requests.
 
 ---

@@ -68,4 +68,4 @@ and stop when you have what you need.
   page/panel/tab (`./screenshots/`): public pages, user dashboard
   (manager, settings, create-new-bot wizard per platform, chat room),
   and the full admin portal (overview, users + edit dialog, bot sessions
-  + delete dialog, git, files, file editor, settings).
+  - delete dialog, git, files, file editor, settings).

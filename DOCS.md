@@ -25,24 +25,28 @@
 
 ## Table of Contents
 
-### Setup & Core Concepts
+**Setup & Core Concepts**
+
 - [Quick Start](#quick-start)
 - [High-Level Architecture Tree](#high-level-architecture-tree)
 - [CRITICAL: Multi-Instance Data Safety Rules](#critical-multi-instance-data-safety-rules)
 - [Event Pipeline — Under the Hood](#event-pipeline--under-the-hood)
 
-### Handlers & Lifecycle
+**Handlers & Lifecycle**
+
 - [Module Structure](#module-structure)
 - [Lifecycle Hooks](#lifecycle-hooks)
 
-### Core Context & APIs
+**Core Context & APIs**
+
 - [The Context Object — AppCtx](#the-context-object--appctx)
 - [Chat API](#chat-api)
 - [State API — Conversation Flows](#state-api--conversation-flows)
 - [Button API — Interactive Buttons](#button-api--interactive-buttons)
 - [Database Collections](#database-collections)
 
-### Advanced Context & Constants
+**Advanced Context & Constants**
+
 - [session — Auto-Resolved Flow Context](#session--auto-resolved-flow-context)
 - [args and options](#args-and-options)
 - [Remaining Context Fields](#remaining-context-fields)
@@ -52,13 +56,15 @@
 - [ButtonStyle](#buttonstyle)
 - [Platform Filtering](#platform-filtering)
 
-### Advanced Engine Features
+**Advanced Engine Features**
+
 - [Native Platform Access](#native-platform-access)
 - [Extending the Middleware Pipeline](#extending-the-middleware-pipeline)
 - [Repos Reference — Database Cache Layer](#repos-reference--database-cache-layer)
 - [Adapters Models Reference — Event & Data Structures](#adapters-models-reference--event--data-structures)
 
-### Examples & Migration
+**Examples & Migration**
+
 - [Full Examples](#full-examples)
 - [Migration Notes — From Global-Variable Bots](#migration-notes--from-global-variable-bots)
 
@@ -141,6 +147,7 @@ packages/cat-bot/src/
 ```
 
 **How it relates to your code:**
+
 1. **Adapters** catch raw events from Discord/Telegram/Fluxer/WebChat and convert them into a single format.
 2. **Middleware** checks if the user is banned, on cooldown, or lacks permissions before your command ever runs.
 3. **Controllers** look at the event type and route it to the exact `onCommand`, `onEvent`, or `onReact` function in your `app/` modules.
@@ -186,10 +193,10 @@ If you intentionally use in-memory state (ephemeral caches, rate-limit counters 
 
 **Required key formats:**
 
-| Scope | Required key format | Example value |
-|---|---|---|
+| Scope                   | Required key format                        | Example value             |
+| ----------------------- | ------------------------------------------ | ------------------------- |
 | Thread-scoped in-memory | `` `${userId}:${sessionId}:${threadID}` `` | `"user1:sess1:thread123"` |
-| User-scoped in-memory | `` `${userId}:${sessionId}:${userID}` `` | `"user1:sess1:user456"` |
+| User-scoped in-memory   | `` `${userId}:${sessionId}:${userID}` ``   | `"user1:sess1:user456"`   |
 
 `userId` and `sessionId` are always available from `native.userId` and `native.sessionId` inside any handler.
 
@@ -214,14 +221,14 @@ export const onCommand = async ({ native, event, chat }: AppCtx) => {
 
 #### Best-practice summary
 
-| Scenario | Correct approach | Anti-pattern to avoid |
-|---|---|---|
-| Persistent per-user data | `db.users.collection(senderID)` | Writing to `users.json` |
-| Persistent per-thread data | `db.threads.collection(threadID)` | Writing to `threads.json` |
-| Economy / coin balance | `currencies.getMoney / increaseMoney / decreaseMoney` | Flat `economy.json` |
-| Session-level bot settings | `db` collection scoped to the bot session | Module-level `let config = {}` |
+| Scenario                                      | Correct approach                                          | Anti-pattern to avoid             |
+| --------------------------------------------- | --------------------------------------------------------- | --------------------------------- |
+| Persistent per-user data                      | `db.users.collection(senderID)`                           | Writing to `users.json`           |
+| Persistent per-thread data                    | `db.threads.collection(threadID)`                         | Writing to `threads.json`         |
+| Economy / coin balance                        | `currencies.getMoney / increaseMoney / decreaseMoney`     | Flat `economy.json`               |
+| Session-level bot settings                    | `db` collection scoped to the bot session                 | Module-level `let config = {}`    |
 | Ephemeral in-memory (restart-loss acceptable) | `Map` keyed by `` `${userId}:${sessionId}:${threadID}` `` | Unscoped `Map.set(threadID, ...)` |
-| Any `*.json` file for mutable state | ❌ Use `db` collections — never flat files | Flat file on disk |
+| Any `*.json` file for mutable state           | ❌ Use `db` collections — never flat files                | Flat file on disk                 |
 
 ---
 
@@ -229,7 +236,7 @@ export const onCommand = async ({ native, event, chat }: AppCtx) => {
 
 When a user sends a message or triggers an event, it travels through this fixed pipeline:
 
-```
+```text
 [User Event] → [Platform Transport] → [Middleware Chain] → [Controller Dispatch]
 ```
 
@@ -242,7 +249,7 @@ the shared `EventEmitter`. Your command and event modules never import `discord.
 
 The payload emitted to `app.ts` always has three fields:
 
-```
+```text
 { api: UnifiedApi, event: Record<string, unknown>, native: NativeContext }
 ```
 
@@ -257,7 +264,7 @@ triggers a command. If the message matches a command (prefixed or `hasPrefix: fa
 `onCommand` chain runs next. Each guard calls `next()` to continue or returns without
 calling it to halt:
 
-```
+```text
 onCommand: enforceNotBanned → enforcePermission → enforceCooldown → validateCommandOptions
 onChat:    chatPassthrough (thread/user DB sync) → chatLogThread
 onReply:   replyStateValidation
@@ -274,11 +281,11 @@ up-to-date records when your `onCommand` executes.
 
 After middleware, the controller layer routes to the correct handler based on event type:
 
-| Handler | Triggered by | What it does |
-|---|---|---|
-| `handleMessage` | `message`, `message_reply` | Runs `onChat` fan-out → checks `onReply` state → prefix-parses → dispatches `onCommand` |
-| `handleEvent` | `event`, `message_reaction`, `message_unsend` | Checks `onReact` state → routes by `logMessageType` to `onEvent` handlers |
-| `handleButtonAction` | `button_action` | Runs `onButtonClick` middleware → calls `button[id].onClick` |
+| Handler              | Triggered by                                  | What it does                                                                            |
+| -------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `handleMessage`      | `message`, `message_reply`                    | Runs `onChat` fan-out → checks `onReply` state → prefix-parses → dispatches `onCommand` |
+| `handleEvent`        | `event`, `message_reaction`, `message_unsend` | Checks `onReact` state → routes by `logMessageType` to `onEvent` handlers               |
+| `handleButtonAction` | `button_action`                               | Runs `onButtonClick` middleware → calls `button[id].onClick`                            |
 
 #### Priority rules
 
@@ -303,44 +310,44 @@ skips duplicate calls for aliased modules automatically.
 
 All fields you can set on `export const meta: CommandMeta`:
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | `string` | ✅ | Command name, lowercase. Matched after the prefix is stripped. |
-| `version` | `string` | ✅ | Semantic version (e.g. `'1.0.0'`). Shown in help output. |
-| `role` | `RoleLevel` | ✅ | Minimum role to invoke. Use `Role.ANYONE` for public commands. See [Role](#role). |
-| `author` | `string` | ✅ | Author name shown in help and error context. |
-| `description` | `string` | ✅ | One-line description shown in Discord's `/` menu and `help`. |
-| `cooldown` | `number` | ✅ | Per-user cooldown in **seconds**. `0` disables cooldown. |
-| `usage` | `string \| string[]` | — | Argument pattern(s) shown by `ctx.usage()`. A single string (e.g. `'<add\|list\|remove> [uid]'`) renders as one line; an array renders each item as its own prefixed bullet line — useful for commands with 2–3 distinct signatures. |
-| `hasPrefix` | `boolean` | — | Set `false` for prefix-less commands. Defaults to `true`. |
-| `aliases` | `string[]` | — | Alternative command names that map to the same handler. |
-| `category` | `string` | — | Display group in help output (e.g. `'Admin'`, `'Fun'`). |
-| `platform` | `PlatformName[]` | — | Restrict to specific platforms. Absent = all platforms. See [Platform Filtering](#platform-filtering). |
-| `options` | `CommandOption[]` | — | Typed named options for Discord slash commands and `key:value` parsing. See [args and options](#args-and-options). |
-| `guide` | `string[]` | — | Multi-line usage guide. Each string is one line. Takes precedence over `usage`. |
+| Field         | Type                 | Required | Description                                                                                                                                                                                                                          |
+| ------------- | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`        | `string`             | ✅       | Command name, lowercase. Matched after the prefix is stripped.                                                                                                                                                                       |
+| `version`     | `string`             | ✅       | Semantic version (e.g. `'1.0.0'`). Shown in help output.                                                                                                                                                                             |
+| `role`        | `RoleLevel`          | ✅       | Minimum role to invoke. Use `Role.ANYONE` for public commands. See [Role](#role).                                                                                                                                                    |
+| `author`      | `string`             | ✅       | Author name shown in help and error context.                                                                                                                                                                                         |
+| `description` | `string`             | ✅       | One-line description shown in Discord's `/` menu and `help`.                                                                                                                                                                         |
+| `cooldown`    | `number`             | ✅       | Per-user cooldown in **seconds**. `0` disables cooldown.                                                                                                                                                                             |
+| `usage`       | `string \| string[]` | —        | Argument pattern(s) shown by `ctx.usage()`. A single string (e.g. `'<add\|list\|remove> [uid]'`) renders as one line; an array renders each item as its own prefixed bullet line — useful for commands with 2–3 distinct signatures. |
+| `hasPrefix`   | `boolean`            | —        | Set `false` for prefix-less commands. Defaults to `true`.                                                                                                                                                                            |
+| `aliases`     | `string[]`           | —        | Alternative command names that map to the same handler.                                                                                                                                                                              |
+| `category`    | `string`             | —        | Display group in help output (e.g. `'Admin'`, `'Fun'`).                                                                                                                                                                              |
+| `platform`    | `PlatformName[]`     | —        | Restrict to specific platforms. Absent = all platforms. See [Platform Filtering](#platform-filtering).                                                                                                                               |
+| `options`     | `CommandOption[]`    | —        | Typed named options for Discord slash commands and `key:value` parsing. See [args and options](#args-and-options).                                                                                                                   |
+| `guide`       | `string[]`           | —        | Multi-line usage guide. Each string is one line. Takes precedence over `usage`.                                                                                                                                                      |
 
 #### EventMeta
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | `string` | ✅ | Handler name registered in the dashboard. |
-| `type` | `string[]` | ✅ | Unified event type strings to subscribe to. A single module can subscribe to multiple types. |
-| `version` | `string` | ✅ | Semantic version. |
-| `author` | `string` | ✅ | Author name. |
-| `description` | `string` | ✅ | One-line description. |
-| `platform` | `PlatformName[]` | — | Restrict to specific platforms. |
+| Field         | Type             | Required | Description                                                                                  |
+| ------------- | ---------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `name`        | `string`         | ✅       | Handler name registered in the dashboard.                                                    |
+| `type`        | `string[]`       | ✅       | Unified event type strings to subscribe to. A single module can subscribe to multiple types. |
+| `version`     | `string`         | ✅       | Semantic version.                                                                            |
+| `author`      | `string`         | ✅       | Author name.                                                                                 |
+| `description` | `string`         | ✅       | One-line description.                                                                        |
+| `platform`    | `PlatformName[]` | —        | Restrict to specific platforms.                                                              |
 
 **Common `type` values:**
 
-| Value | Meaning |
-|---|---|
-| `'log:subscribe'` | Member(s) joined a group |
-| `'log:unsubscribe'` | Member left or was removed |
-| `'log:thread-name'` | Group name changed |
-| `'log:thread-image'` | Group photo changed |
-| `'log:thread-icon'` | Group emoji changed |
-| `'log:user-nickname'` | A nickname was changed |
-| `'change_thread_admins'` | Admin status changed |
+| Value                    | Meaning                    |
+| ------------------------ | -------------------------- |
+| `'log:subscribe'`        | Member(s) joined a group   |
+| `'log:unsubscribe'`      | Member left or was removed |
+| `'log:thread-name'`      | Group name changed         |
+| `'log:thread-image'`     | Group photo changed        |
+| `'log:thread-icon'`      | Group emoji changed        |
+| `'log:user-nickname'`    | A nickname was changed     |
+| `'change_thread_admins'` | Admin status changed       |
 
 ---
 
@@ -493,28 +500,28 @@ export const onCommand = async ({
 
 Top-level fields:
 
-| Field | Type | Available in | Description |
-|---|---|---|---|
-| `chat` | `ChatContext` | All hooks | Send, edit, react to messages |
-| `thread` | `ThreadContext` | All hooks | Group operations (rename, set image, add/remove users) |
-| `user` | `UserContext` | All hooks | Look up user info and avatars |
-| `bot` | `BotContext` | All hooks | Get the bot's own platform user ID; make the bot leave a thread |
-| `state` | `StateContext['state']` | onCommand, onReply, onReact, onClick | Manage pending conversation states |
-| `button` | `ButtonContext['button']` | onCommand, onClick | Generate and manage interactive button IDs |
-| `session` | `{ id, context, command, state }` | onReply, onReact, onClick | Auto-resolved conversation context |
-| `args` | `string[]` | onCommand | Space-separated tokens after the command name |
-| `options` | `OptionsMap` | onCommand | Named options parsed from the message body or Discord slash interaction |
-| `parsed` | `{ name, args }` | onCommand | Parsed command name and raw args |
-| `event` | `Record<string, unknown>` | All hooks | The raw unified event (senderID, threadID, messageID, message, …) |
-| `native` | `NativeContext` | All hooks | Bot session identity — `platform` (which platform dispatched the event), `userId` (bot owner's dashboard account ID — not the message sender), `sessionId` (this bot instance's ID) |
-| `db` | `{ users, threads, bot }` | All hooks | Per-user, per-thread, and per-bot-session data collections |
-| `logger` | `SessionLogger` | All hooks | Structured logger scoped to this session |
-| `prefix` | `string` | onCommand | The active command prefix (e.g. `'!'`, `'/'`) |
-| `usage` | `() => Promise<void>` | onCommand | Reply with a formatted usage guide for this command |
-| `currencies` | `CurrenciesContext` | onCommand, onReply, onReact, onClick | Economy: getMoney / increaseMoney / decreaseMoney |
-| `startTime` | `number` | All hooks | `Date.now()` at the moment the event entered the pipeline |
-| `messageID` | `string` | onReact, onClick | The message ID the reaction or button click targeted |
-| `emoji` | `string` | onReact | The emoji string that was reacted with |
+| Field        | Type                              | Available in                         | Description                                                                                                                                                                         |
+| ------------ | --------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat`       | `ChatContext`                     | All hooks                            | Send, edit, react to messages                                                                                                                                                       |
+| `thread`     | `ThreadContext`                   | All hooks                            | Group operations (rename, set image, add/remove users)                                                                                                                              |
+| `user`       | `UserContext`                     | All hooks                            | Look up user info and avatars                                                                                                                                                       |
+| `bot`        | `BotContext`                      | All hooks                            | Get the bot's own platform user ID; make the bot leave a thread                                                                                                                     |
+| `state`      | `StateContext['state']`           | onCommand, onReply, onReact, onClick | Manage pending conversation states                                                                                                                                                  |
+| `button`     | `ButtonContext['button']`         | onCommand, onClick                   | Generate and manage interactive button IDs                                                                                                                                          |
+| `session`    | `{ id, context, command, state }` | onReply, onReact, onClick            | Auto-resolved conversation context                                                                                                                                                  |
+| `args`       | `string[]`                        | onCommand                            | Space-separated tokens after the command name                                                                                                                                       |
+| `options`    | `OptionsMap`                      | onCommand                            | Named options parsed from the message body or Discord slash interaction                                                                                                             |
+| `parsed`     | `{ name, args }`                  | onCommand                            | Parsed command name and raw args                                                                                                                                                    |
+| `event`      | `Record<string, unknown>`         | All hooks                            | The raw unified event (senderID, threadID, messageID, message, …)                                                                                                                   |
+| `native`     | `NativeContext`                   | All hooks                            | Bot session identity — `platform` (which platform dispatched the event), `userId` (bot owner's dashboard account ID — not the message sender), `sessionId` (this bot instance's ID) |
+| `db`         | `{ users, threads, bot }`         | All hooks                            | Per-user, per-thread, and per-bot-session data collections                                                                                                                          |
+| `logger`     | `SessionLogger`                   | All hooks                            | Structured logger scoped to this session                                                                                                                                            |
+| `prefix`     | `string`                          | onCommand                            | The active command prefix (e.g. `'!'`, `'/'`)                                                                                                                                       |
+| `usage`      | `() => Promise<void>`             | onCommand                            | Reply with a formatted usage guide for this command                                                                                                                                 |
+| `currencies` | `CurrenciesContext`               | onCommand, onReply, onReact, onClick | Economy: getMoney / increaseMoney / decreaseMoney                                                                                                                                   |
+| `startTime`  | `number`                          | All hooks                            | `Date.now()` at the moment the event entered the pipeline                                                                                                                           |
+| `messageID`  | `string`                          | onReact, onClick                     | The message ID the reaction or button click targeted                                                                                                                                |
+| `emoji`      | `string`                          | onReact                              | The emoji string that was reacted with                                                                                                                                              |
 
 ---
 
@@ -581,15 +588,15 @@ state.create({
 
 **Common options for both `chat.reply` and `chat.replyMessage`:**
 
-| Option | Type | Description |
-|---|---|---|
-| `message` | `string` | Text content |
-| `style` | `MessageStyleValue` | `MessageStyle.MARKDOWN` or `MessageStyle.TEXT` |
-| `attachment` | `NamedStreamAttachment[]` | File attachments as streams or Buffers |
-| `attachment_url` | `NamedUrlAttachment[]` | File attachments as `{ name, url }` — downloaded before send |
-| `button` | `string[] \| string[][]` | Button IDs from `button.generateID()`. Flat = one row; nested = multiple rows |
-| `thread_id` / `threadID` | `string` | Override target thread (defaults to event thread) |
-| `reply_to_message_id` | `string` | Quote-reply to a specific message ID (`replyMessage` sets this automatically) |
+| Option                   | Type                      | Description                                                                   |
+| ------------------------ | ------------------------- | ----------------------------------------------------------------------------- |
+| `message`                | `string`                  | Text content                                                                  |
+| `style`                  | `MessageStyleValue`       | `MessageStyle.MARKDOWN` or `MessageStyle.TEXT`                                |
+| `attachment`             | `NamedStreamAttachment[]` | File attachments as streams or Buffers                                        |
+| `attachment_url`         | `NamedUrlAttachment[]`    | File attachments as `{ name, url }` — downloaded before send                  |
+| `button`                 | `string[] \| string[][]`  | Button IDs from `button.generateID()`. Flat = one row; nested = multiple rows |
+| `thread_id` / `threadID` | `string`                  | Override target thread (defaults to event thread)                             |
+| `reply_to_message_id`    | `string`                  | Quote-reply to a specific message ID (`replyMessage` sets this automatically) |
 
 **Attachment — `stream` accepts `Buffer` or `Readable`:**
 
@@ -657,14 +664,14 @@ await chat.editMessage({
 })
 ```
 
-| Option | Type | Description |
-|---|---|---|
-| `message_id_to_edit` | `string` | ID of the message to edit |
-| `message` | `string` | New text content |
-| `style` | `MessageStyleValue` | Rendering style |
-| `button` | `string[] \| string[][]` | New button layout |
-| `attachment` | `NamedStreamAttachment[]` | Replace file attachments |
-| `attachment_url` | `NamedUrlAttachment[]` | Replace with URL-based attachments |
+| Option               | Type                      | Description                        |
+| -------------------- | ------------------------- | ---------------------------------- |
+| `message_id_to_edit` | `string`                  | ID of the message to edit          |
+| `message`            | `string`                  | New text content                   |
+| `style`              | `MessageStyleValue`       | Rendering style                    |
+| `button`             | `string[] \| string[][]`  | New button layout                  |
+| `attachment`         | `NamedStreamAttachment[]` | Replace file attachments           |
+| `attachment_url`     | `NamedUrlAttachment[]`    | Replace with URL-based attachments |
 
 #### chat.reactMessage
 
@@ -792,11 +799,11 @@ each re-render).
 
 **`button.update(options)`**
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `id` | `string` | ✅ | The scoped button ID returned by `button.generateID()` |
-| `label` | `string` | — | New button label text; at least one of `label` or `style` must be provided |
-| `style` | `ButtonStyleValue` | — | New visual style (see [ButtonStyle](#buttonstyle)) |
+| Parameter | Type               | Required | Description                                                                |
+| --------- | ------------------ | -------- | -------------------------------------------------------------------------- |
+| `id`      | `string`           | ✅       | The scoped button ID returned by `button.generateID()`                     |
+| `label`   | `string`           | —        | New button label text; at least one of `label` or `style` must be provided |
+| `style`   | `ButtonStyleValue` | —        | New visual style (see [ButtonStyle](#buttonstyle))                         |
 
 ```ts
 const scopedId = button.generateID({ id: BUTTON_ID.refresh })
@@ -839,10 +846,10 @@ static entry (`label`, `style`, `onClick`).
 
 **When to use each:**
 
-| Scenario | Method |
-|---|---|
+| Scenario                                                           | Method            |
+| ------------------------------------------------------------------ | ----------------- |
 | Change the label or style of an existing `export const button` key | `button.update()` |
-| Add a button at runtime with no static `export const button` key | `button.create()` |
+| Add a button at runtime with no static `export const button` key   | `button.create()` |
 
 #### Connecting buttons to handlers
 
@@ -938,6 +945,7 @@ export const onCommand = async ({ chat, button: btn }: AppCtx) => {
 ```
 
 **Platform notes for 2D grids:**
+
 - **Discord** — each inner array is one `ActionRow`; max 5 buttons per row, max 5 rows total per message.
 - **Telegram** — each inner array is one inline keyboard row; no hard per-row button limit.
 - **Fluxer** — row structure is ignored; all buttons are flattened to a numbered text menu appended to the message body.
@@ -980,30 +988,30 @@ export const onCommand = async ({ db, event }: AppCtx) => {
 
 **CollectionHandle methods** (all async, all operate on dot-path keys):
 
-| Method | Description |
-|---|---|
-| `get(path?)` | Read value at dot-path; no path = entire collection |
-| `getAll(path?)` | Returns the full collection object (or sub-object) in a single read |
-| `set(path, value)` | Write value |
-| `update(path, value)` | Shallow-merge objects; overwrite primitives |
-| `delete(path?)` | Delete at path; no path = clear entire collection |
-| `increment(path, amount?)` | Numeric add (default +1) |
-| `decrement(path, amount?)` | Numeric subtract (default -1) |
-| `push(path, value)` | Append to array |
-| `pull(path, value)` | Remove matching element from array |
-| `unshift(path, value)` | Prepend to array |
-| `shift(path)` | Remove and return first element of array |
-| `pop(path)` | Remove and return last element of array |
-| `splice(path, index, ...items)` | Remove elements at index and insert new ones |
-| `exists(path)` | Returns `boolean` |
-| `keys(path?)` | Returns `string[]` of object keys |
-| `length(path)` | Array or object key count |
-| `clear(path?)` | Empty array or object at path |
-| `reset(path, defaultValue)` | Set value at path to defaultValue |
-| `upsert(path, value)` | Unconditional set (alias for set, clearer intent) |
-| `merge(path, value)` | Always shallow-merge into object at path |
-| `find(path, predicate)` | Filter array elements |
-| `findOne(path, predicate)` | First matching element |
+| Method                          | Description                                                         |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `get(path?)`                    | Read value at dot-path; no path = entire collection                 |
+| `getAll(path?)`                 | Returns the full collection object (or sub-object) in a single read |
+| `set(path, value)`              | Write value                                                         |
+| `update(path, value)`           | Shallow-merge objects; overwrite primitives                         |
+| `delete(path?)`                 | Delete at path; no path = clear entire collection                   |
+| `increment(path, amount?)`      | Numeric add (default +1)                                            |
+| `decrement(path, amount?)`      | Numeric subtract (default -1)                                       |
+| `push(path, value)`             | Append to array                                                     |
+| `pull(path, value)`             | Remove matching element from array                                  |
+| `unshift(path, value)`          | Prepend to array                                                    |
+| `shift(path)`                   | Remove and return first element of array                            |
+| `pop(path)`                     | Remove and return last element of array                             |
+| `splice(path, index, ...items)` | Remove elements at index and insert new ones                        |
+| `exists(path)`                  | Returns `boolean`                                                   |
+| `keys(path?)`                   | Returns `string[]` of object keys                                   |
+| `length(path)`                  | Array or object key count                                           |
+| `clear(path?)`                  | Empty array or object at path                                       |
+| `reset(path, defaultValue)`     | Set value at path to defaultValue                                   |
+| `upsert(path, value)`           | Unconditional set (alias for set, clearer intent)                   |
+| `merge(path, value)`            | Always shallow-merge into object at path                            |
+| `find(path, predicate)`         | Filter array elements                                               |
+| `findOne(path, predicate)`      | First matching element                                              |
 
 **Per-thread collections** follow the same API via `db.threads.collection(threadId)`:
 
@@ -1037,11 +1045,11 @@ sessions never interfere with each other's balances.
 
 **Methods:**
 
-| Method | Signature | Returns | Description |
-|---|---|---|---|
-| `getMoney` | `getMoney(userId: string)` | `Promise<number>` | Returns the user's current coin balance. Returns `0` when the user has no record yet — safe to call without an existence check. |
-| `increaseMoney` | `increaseMoney({ user_id: string, money: number })` | `Promise<void>` | Adds `money` coins to the user's balance. Creates the money record automatically on first call — no prior `createCollection` call is needed. |
-| `decreaseMoney` | `decreaseMoney({ user_id: string, money: number })` | `Promise<void>` | Subtracts `money` coins from the user's balance. **Does not enforce a floor** — the balance can go below zero if the caller does not validate first. Always check the balance before calling. |
+| Method          | Signature                                           | Returns           | Description                                                                                                                                                                                   |
+| --------------- | --------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getMoney`      | `getMoney(userId: string)`                          | `Promise<number>` | Returns the user's current coin balance. Returns `0` when the user has no record yet — safe to call without an existence check.                                                               |
+| `increaseMoney` | `increaseMoney({ user_id: string, money: number })` | `Promise<void>`   | Adds `money` coins to the user's balance. Creates the money record automatically on first call — no prior `createCollection` call is needed.                                                  |
+| `decreaseMoney` | `decreaseMoney({ user_id: string, money: number })` | `Promise<void>`   | Subtracts `money` coins from the user's balance. **Does not enforce a floor** — the balance can go below zero if the caller does not validate first. Always check the balance before calling. |
 
 **Basic usage:**
 
@@ -1185,7 +1193,7 @@ Reading context data:
 
 Plain token array from the raw message body, after the command name is stripped:
 
-```
+```text
 User sends: !weather New York City
 args = ['New', 'York', 'City']
 args.join(' ') = 'New York City'
@@ -1315,12 +1323,12 @@ const admins = await listBotAdmins(event['senderID'] as string, platform, sessio
 
 **Quick reference — `native` vs `event` identity fields:**
 
-| Field | What it represents | Example value | Primary use |
-|---|---|---|---|
-| `native.userId` | Bot owner's dashboard account ID | `'cm3k7abc...'` | First argument to every repo / `db` call |
-| `native.platform` | Platform that delivered this event | `'discord'` | Runtime platform branching; part of DB composite key |
-| `native.sessionId` | This bot instance's identifier | `'gaming-server-bot'` | Third argument to every repo / `db` call |
-| `event['senderID']` | Platform user ID of the message sender | `'987654321'` | Identifying who typed the message in chat |
+| Field               | What it represents                     | Example value         | Primary use                                          |
+| ------------------- | -------------------------------------- | --------------------- | ---------------------------------------------------- |
+| `native.userId`     | Bot owner's dashboard account ID       | `'cm3k7abc...'`       | First argument to every repo / `db` call             |
+| `native.platform`   | Platform that delivered this event     | `'discord'`           | Runtime platform branching; part of DB composite key |
+| `native.sessionId`  | This bot instance's identifier         | `'gaming-server-bot'` | Third argument to every repo / `db` call             |
+| `event['senderID']` | Platform user ID of the message sender | `'987654321'`         | Identifying who typed the message in chat            |
 
 #### usage
 
@@ -1358,23 +1366,23 @@ const groupIds = await db.threads.getGroupIds()
 
 Declared in `config.role`. Enforced before `onCommand` runs — no boilerplate needed inside the handler.
 
-| Constant | Value | Who can invoke |
-|---|---|---|
-| `Role.ANYONE` | `0` | All users (default) |
-| `Role.THREAD_ADMIN` | `1` | Thread/group admins only |
-| `Role.BOT_ADMIN` | `2` | Bot admins added via `/admin add` |
-| `Role.PREMIUM` | `3` | Premium users; inherits ANYONE + THREAD_ADMIN |
-| `Role.SYSTEM_ADMIN` | `4` | System-level admins; global authority |
+| Constant            | Value | Who can invoke                                |
+| ------------------- | ----- | --------------------------------------------- |
+| `Role.ANYONE`       | `0`   | All users (default)                           |
+| `Role.THREAD_ADMIN` | `1`   | Thread/group admins only                      |
+| `Role.BOT_ADMIN`    | `3`   | Bot admins added via `/admin add`             |
+| `Role.PREMIUM`      | `2`   | Premium users; inherits ANYONE + THREAD_ADMIN |
+| `Role.SYSTEM_ADMIN` | `4`   | System-level admins; global authority         |
 
 **Access Truth Table — invoker role (rows) vs required command role (columns):**
 
 | Invoker ↓ / Required → | ANYONE (0) | THREAD_ADMIN (1) | PREMIUM (2) | BOT_ADMIN (3) | SYSTEM_ADMIN (4) |
-|---|---|---|---|---|---|
-| **Any user** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **THREAD_ADMIN** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **PREMIUM** | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **BOT_ADMIN** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **SYSTEM_ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ---------------------- | ---------- | ---------------- | ----------- | ------------- | ---------------- |
+| **Any user**           | ✅         | ❌               | ❌          | ❌            | ❌               |
+| **THREAD_ADMIN**       | ✅         | ✅               | ❌          | ❌            | ❌               |
+| **PREMIUM**            | ✅         | ✅               | ✅          | ❌            | ❌               |
+| **BOT_ADMIN**          | ✅         | ✅               | ✅          | ✅            | ❌               |
+| **SYSTEM_ADMIN**       | ✅         | ✅               | ✅          | ✅            | ✅               |
 
 > **System Admin Setup:** System admin IDs are registered in the web dashboard at
 > `/admin/dashboard/settings`. Only users who are already system admins can grant or
@@ -1397,10 +1405,10 @@ Higher roles automatically inherit access to commands requiring lower roles (e.g
 
 Controls how message text is rendered on each platform:
 
-| Value | Discord | Telegram | Fluxer / WebChat |
-|---|---|---|---|
-| `MessageStyle.MARKDOWN` | Renders natively | `MarkdownV2` parse mode | Converts `**bold**`, `_italic_`, `` `code` `` → Unicode styled text |
-| `MessageStyle.TEXT` | Markdown syntax is escaped — displays literally | No parse mode | Raw text sent as-is |
+| Value                   | Discord                                         | Telegram                | Fluxer / WebChat                                                    |
+| ----------------------- | ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------- |
+| `MessageStyle.MARKDOWN` | Renders natively                                | `MarkdownV2` parse mode | Converts `**bold**`, `_italic_`, `` `code` `` → Unicode styled text |
+| `MessageStyle.TEXT`     | Markdown syntax is escaped — displays literally | No parse mode           | Raw text sent as-is                                                 |
 
 ```ts
 import { MessageStyle } from '@/engine/constants/message-style.constants.js'
@@ -1417,12 +1425,12 @@ When `style` is omitted, the historic platform default is preserved (backward co
 
 Visual hint for button appearance. Only meaningful on Discord; Telegram and Fluxer/WebChat use the label exclusively.
 
-| Constant | Discord color |
-|---|---|
-| `ButtonStyle.PRIMARY` | Blue |
+| Constant                | Discord color  |
+| ----------------------- | -------------- |
+| `ButtonStyle.PRIMARY`   | Blue           |
 | `ButtonStyle.SECONDARY` | Grey (default) |
-| `ButtonStyle.SUCCESS` | Green |
-| `ButtonStyle.DANGER` | Red |
+| `ButtonStyle.SUCCESS`   | Green          |
+| `ButtonStyle.DANGER`    | Red            |
 
 ```ts
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js'
@@ -1453,12 +1461,12 @@ export const meta = {
 
 **Platform identifiers:**
 
-| Constant | Value | Notes |
-|---|---|---|
-| `Platforms.Discord` | `'discord'` | |
-| `Platforms.Telegram` | `'telegram'` | |
-| `Platforms.Fluxer` | `'fluxer'` | @fluxerjs/core guild/chat |
-| `Platforms.Webchat` | `'webchat'` | Socket.IO in-app chat — no credentials to verify |
+| Constant             | Value        | Notes                                            |
+| -------------------- | ------------ | ------------------------------------------------ |
+| `Platforms.Discord`  | `'discord'`  |                                                  |
+| `Platforms.Telegram` | `'telegram'` |                                                  |
+| `Platforms.Fluxer`   | `'fluxer'`   | @fluxerjs/core guild/chat                        |
+| `Platforms.Webchat`  | `'webchat'`  | Socket.IO in-app chat — no credentials to verify |
 
 When `platform` is absent or an empty array, the command runs on all platforms.
 
@@ -1515,11 +1523,11 @@ export const onCommand = async ({ native, chat }: AppCtx) => {
 
 The Telegram adapter uses **grammy v1 (Telegram Bot API)**. Every event type delivers the same `ctx` — a full [`Context`](https://grammy.js.org/) object bound to the current update.
 
-| Event | Native fields |
-|---|---|
-| `message`, `message_reply` | `ctx: Context` |
-| `event` (join / leave) | `ctx: Context` |
-| `message_reaction` | `ctx: Context` |
+| Event                            | Native fields                            |
+| -------------------------------- | ---------------------------------------- |
+| `message`, `message_reply`       | `ctx: Context`                           |
+| `event` (join / leave)           | `ctx: Context`                           |
+| `message_reaction`               | `ctx: Context`                           |
 | `button_action` (callback query) | `ctx: Context`, `ack(text?, showAlert?)` |
 
 **`ctx`** — The grammy `Context` for this update. Exposes `ctx.telegram` (every raw Bot API method), `ctx.chat`, `ctx.from`, `ctx.message`, and all grammy shortcut methods.
@@ -1564,11 +1572,11 @@ The Discord adapter uses **discord.js v14**. The `native` shape differs by event
 
 **Text-prefix message events (`message`, `message_reply`)**
 
-| Field | Type |
-|---|---|
-| `message` | `discord.js Message` |
-| `userId` | `string` (bot owner's better-auth user ID) |
-| `sessionId` | `string` |
+| Field       | Type                                       |
+| ----------- | ------------------------------------------ |
+| `message`   | `discord.js Message`                       |
+| `userId`    | `string` (bot owner's better-auth user ID) |
+| `sessionId` | `string`                                   |
 
 ```ts
 import { Platforms } from '@/engine/modules/platform/platform.constants.js'
@@ -1597,8 +1605,8 @@ export const onCommand = async ({ native }: AppCtx) => {
 
 Slash commands are dispatched internally as `message` events. The `interaction` field replaces `message`.
 
-| Field | Type |
-|---|---|
+| Field         | Type                                     |
+| ------------- | ---------------------------------------- |
 | `interaction` | `discord.js ChatInputCommandInteraction` |
 
 ```ts
@@ -1621,10 +1629,10 @@ export const onCommand = async ({ native }: AppCtx) => {
 
 **Button interactions (`button_action`)**
 
-| Field | Type |
-|---|---|
+| Field         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
 | `interaction` | `discord.js ButtonInteraction` (via `RepliableInteraction`) |
-| `ack(text?)` | Sends an ephemeral follow-up if `text` is provided |
+| `ack(text?)`  | Sends an ephemeral follow-up if `text` is provided          |
 
 ```ts
 import { Platforms } from '@/engine/modules/platform/platform.constants.js'
@@ -1651,8 +1659,8 @@ export const button = {
 
 **Guild member events (`event`)**
 
-| Field | Type |
-|---|---|
+| Field    | Type                                           |
+| -------- | ---------------------------------------------- |
 | `member` | `discord.js GuildMember \| PartialGuildMember` |
 
 ```ts
@@ -1673,10 +1681,10 @@ export const onEvent = async ({ native }: AppCtx) => {
 
 **Reaction events (`message_reaction`)**
 
-| Field | Type |
-|---|---|
+| Field      | Type                                                      |
+| ---------- | --------------------------------------------------------- |
 | `reaction` | `discord.js MessageReaction` (fully fetched, not partial) |
-| `user` | `discord.js User` |
+| `user`     | `discord.js User`                                         |
 
 ```ts
 import { Platforms } from '@/engine/modules/platform/platform.constants.js'
@@ -1701,11 +1709,11 @@ The Fluxer adapter uses **`@fluxerjs/core`** with a persistent gateway connectio
 same way Discord is (no webhook handshake — there is no `webhooks.repo.ts` in
 this fork). Every event delivers the session identity plus one per-event extra.
 
-| Event | Native fields |
-|---|---|
+| Event                                        | Native fields                                                  |
+| -------------------------------------------- | -------------------------------------------------------------- |
 | `message`, `message_reply`, `message_unsend` | `platform`, `userId`, `sessionId`, `message` (raw SDK message) |
-| `event` (join / leave) | `platform`, `userId`, `sessionId`, `member` (raw SDK member) |
-| `message_reaction` | `platform`, `userId`, `sessionId` |
+| `event` (join / leave)                       | `platform`, `userId`, `sessionId`, `member` (raw SDK member)   |
+| `message_reaction`                           | `platform`, `userId`, `sessionId`                              |
 
 **`message` / `member`** — The raw `@fluxerjs/core` SDK objects before
 normalisation (`src/engine/adapters/platform/fluxer/event-handlers.ts:46-49,
@@ -1753,7 +1761,6 @@ export const onCommand = async ({ native, chat }: AppCtx) => {
 See `docs/cat-bot/adapters/WEBCHAT_ARCHITECTURE.md` for the socket event map
 (`chatroom:bot_message`, `chatroom:bot_edit`, `chatroom:bot_delete`,
 `chatroom:reaction`, `chatroom:typing`).
-
 
 #### Safe-Narrowing Pattern
 
@@ -1803,19 +1810,19 @@ Middleware is a function that sits between the event system and your handler. Th
 
 The built-in middleware chains run automatically before your handler on every event:
 
-| Hook | Middleware (in order) | What it does |
-|---|---|---|
-| `onCommand` | `enforceNotBanned` | Silently drops commands from banned users or threads |
-| | `enforcePermission` | Enforces `config.role`; rejects unauthorised callers |
-| | `enforceCooldown` | Rate-limits per-user command invocations |
-| | `validateCommandOptions` | Parses and validates `config.options` |
-| `onChat` | `chatPassthrough` | Syncs thread and sender data to the database |
-| | `chatLogThread` | Logs every incoming message to the session logger |
-| `onReply` | `replyStateValidation` | Passthrough; extend here for conversation timeouts |
-| `onReact` | `reactStateValidation` | Passthrough; extend here for emoji allowlists |
-| `onButtonClick` | `enforceButtonScope` | Enforces per-user button scope ownership |
-| `onEvent` | `enforceCommandKick` | Suppresses `leave.ts` when a member is removed via command (`kick`, `badwords`) |
-| | `enforceWarnBan` | Suppresses `join`/`leave` messages during warn-ban flows |
+| Hook            | Middleware (in order)    | What it does                                                                    |
+| --------------- | ------------------------ | ------------------------------------------------------------------------------- |
+| `onCommand`     | `enforceNotBanned`       | Silently drops commands from banned users or threads                            |
+|                 | `enforcePermission`      | Enforces `config.role`; rejects unauthorised callers                            |
+|                 | `enforceCooldown`        | Rate-limits per-user command invocations                                        |
+|                 | `validateCommandOptions` | Parses and validates `config.options`                                           |
+| `onChat`        | `chatPassthrough`        | Syncs thread and sender data to the database                                    |
+|                 | `chatLogThread`          | Logs every incoming message to the session logger                               |
+| `onReply`       | `replyStateValidation`   | Passthrough; extend here for conversation timeouts                              |
+| `onReact`       | `reactStateValidation`   | Passthrough; extend here for emoji allowlists                                   |
+| `onButtonClick` | `enforceButtonScope`     | Enforces per-user button scope ownership                                        |
+| `onEvent`       | `enforceCommandKick`     | Suppresses `leave.ts` when a member is removed via command (`kick`, `badwords`) |
+|                 | `enforceWarnBan`         | Suppresses `join`/`leave` messages during warn-ban flows                        |
 
 **When to use middleware:**
 
@@ -1859,14 +1866,14 @@ use.onCommand([myGuard])
 
 #### Available registration hooks
 
-| Hook | Runs when | Common uses |
-|---|---|---|
-| `use.onCommand([...])` | After prefix match, before `onCommand` | Permission checks, rate limiting, feature flags |
-| `use.onChat([...])` | Every message before the `onChat` fan-out | Audit logging, spam detection, passive analytics |
-| `use.onReply([...])` | Reply flow matched, before the step handler | Conversation timeouts, input sanitisation |
-| `use.onReact([...])` | Reaction flow matched, before the emoji handler | Emoji allowlist enforcement, per-reaction cooldowns |
-| `use.onButtonClick([...])` | Button click matched, before `onClick` | Additional ownership or feature-flag checks |
-| `use.onEvent([...])` | Event type matched, before `onEvent` handler | Event-level guards, logging, feature flags |
+| Hook                       | Runs when                                       | Common uses                                         |
+| -------------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| `use.onCommand([...])`     | After prefix match, before `onCommand`          | Permission checks, rate limiting, feature flags     |
+| `use.onChat([...])`        | Every message before the `onChat` fan-out       | Audit logging, spam detection, passive analytics    |
+| `use.onReply([...])`       | Reply flow matched, before the step handler     | Conversation timeouts, input sanitisation           |
+| `use.onReact([...])`       | Reaction flow matched, before the emoji handler | Emoji allowlist enforcement, per-reaction cooldowns |
+| `use.onButtonClick([...])` | Button click matched, before `onClick`          | Additional ownership or feature-flag checks         |
+| `use.onEvent([...])`       | Event type matched, before `onEvent` handler    | Event-level guards, logging, feature flags          |
 
 #### Short-circuit contract
 
@@ -1897,7 +1904,7 @@ Middlewares execute in registration order within each hook. The engine's built-i
 runs first; your additions append to the end unless you edit `src/engine/middleware/index.ts`
 directly to insert at a specific position:
 
-```
+```text
 onCommand:    enforceNotBanned → enforcePermission → enforceCooldown
               → validateCommandOptions → [your middlewares]
 onChat:       chatPassthrough → chatLogThread → [your middlewares]
@@ -1943,16 +1950,17 @@ import {
 } from '@/engine/repos/banned.repo.js'
 ```
 
-| Function | Signature | Description |
-|---|---|---|
-| `banUser` | `(userId, platform, sessionId, botUserId, reason?)` → `Promise<void>` | Bans a user; writes `true` to cache immediately |
-| `unbanUser` | `(userId, platform, sessionId, botUserId)` → `Promise<void>` | Removes ban; writes `false` to cache immediately |
-| `isUserBanned` | `(userId, platform, sessionId, botUserId)` → `Promise<boolean>` | Cache-first ban check |
-| `banThread` | `(userId, platform, sessionId, botThreadId, reason?)` → `Promise<void>` | Bans a thread; writes `true` to cache immediately |
-| `unbanThread` | `(userId, platform, sessionId, botThreadId)` → `Promise<void>` | Removes thread ban; writes `false` to cache immediately |
-| `isThreadBanned` | `(userId, platform, sessionId, botThreadId)` → `Promise<boolean>` | Cache-first thread ban check |
+| Function         | Signature                                                               | Description                                             |
+| ---------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| `banUser`        | `(userId, platform, sessionId, botUserId, reason?)` → `Promise<void>`   | Bans a user; writes `true` to cache immediately         |
+| `unbanUser`      | `(userId, platform, sessionId, botUserId)` → `Promise<void>`            | Removes ban; writes `false` to cache immediately        |
+| `isUserBanned`   | `(userId, platform, sessionId, botUserId)` → `Promise<boolean>`         | Cache-first ban check                                   |
+| `banThread`      | `(userId, platform, sessionId, botThreadId, reason?)` → `Promise<void>` | Bans a thread; writes `true` to cache immediately       |
+| `unbanThread`    | `(userId, platform, sessionId, botThreadId)` → `Promise<void>`          | Removes thread ban; writes `false` to cache immediately |
+| `isThreadBanned` | `(userId, platform, sessionId, botThreadId)` → `Promise<boolean>`       | Cache-first thread ban check                            |
 
 **Parameters:**
+
 - `userId` — the bot owner's better-auth user ID (from `native.userId`)
 - `platform` — platform string e.g. `'discord'` (from `native.platform`)
 - `sessionId` — bot session ID (from `native.sessionId`)
@@ -1986,39 +1994,39 @@ import {
 
 **Discord / Telegram Credentials**
 
-| Function | Description |
-|---|---|
-| `findDiscordCredentialState(userId, sessionId)` | Returns `{ isCommandRegister, commandHash } \| null`; cache-first |
-| `updateDiscordCredentialCommandHash(userId, sessionId, data)` | Updates command hash; clears discord state + all-discord list from cache |
-| `findAllDiscordCredentials()` | All Discord credentials; cached under a singleton key |
-| `findTelegramCredentialState(userId, sessionId)` | Returns `{ isCommandRegister, commandHash } \| null`; cache-first |
+| Function                                                       | Description                                                                |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `findDiscordCredentialState(userId, sessionId)`                | Returns `{ isCommandRegister, commandHash } \| null`; cache-first          |
+| `updateDiscordCredentialCommandHash(userId, sessionId, data)`  | Updates command hash; clears discord state + all-discord list from cache   |
+| `findAllDiscordCredentials()`                                  | All Discord credentials; cached under a singleton key                      |
+| `findTelegramCredentialState(userId, sessionId)`               | Returns `{ isCommandRegister, commandHash } \| null`; cache-first          |
 | `updateTelegramCredentialCommandHash(userId, sessionId, data)` | Updates command hash; clears telegram state + all-telegram list from cache |
-| `findAllTelegramCredentials()` | All Telegram credentials; cached under a singleton key |
-| `findAllFluxerCredentials()` | All Fluxer credentials; cached under a singleton key |
-| `findAllBotSessions()` | All bot sessions across all platforms; cached under `SESSIONS_ALL_KEY` |
+| `findAllTelegramCredentials()`                                 | All Telegram credentials; cached under a singleton key                     |
+| `findAllFluxerCredentials()`                                   | All Fluxer credentials; cached under a singleton key                       |
+| `findAllBotSessions()`                                         | All bot sessions across all platforms; cached under `SESSIONS_ALL_KEY`     |
 
 **Bot Admin Management**
 
-| Function | Signature | Description |
-|---|---|---|
-| `isBotAdmin` | `(userId, platform, sessionId, adminId)` → `Promise<boolean>` | Checks membership in the cached admin list (does not create a per-user cache entry) |
-| `addBotAdmin` | `(userId, platform, sessionId, adminId)` → `Promise<void>` | Adds admin; write-through patches the list cache; clears `bot:detail` and `bot:list` dashboard caches |
-| `removeBotAdmin` | `(userId, platform, sessionId, adminId)` → `Promise<void>` | Removes admin; write-through filters the list cache; clears dashboard caches |
-| `listBotAdmins` | `(userId, platform, sessionId)` → `Promise<string[]>` | Returns full admin ID array; cached per session |
+| Function         | Signature                                                     | Description                                                                                           |
+| ---------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `isBotAdmin`     | `(userId, platform, sessionId, adminId)` → `Promise<boolean>` | Checks membership in the cached admin list (does not create a per-user cache entry)                   |
+| `addBotAdmin`    | `(userId, platform, sessionId, adminId)` → `Promise<void>`    | Adds admin; write-through patches the list cache; clears `bot:detail` and `bot:list` dashboard caches |
+| `removeBotAdmin` | `(userId, platform, sessionId, adminId)` → `Promise<void>`    | Removes admin; write-through filters the list cache; clears dashboard caches                          |
+| `listBotAdmins`  | `(userId, platform, sessionId)` → `Promise<string[]>`         | Returns full admin ID array; cached per session                                                       |
 
 **Premium User Management**
 
-| Function | Signature | Description |
-|---|---|---|
-| `isBotPremium` | `(userId, platform, sessionId, premiumId)` → `Promise<boolean>` | Checks membership in the cached premium list |
-| `addBotPremium` | `(userId, platform, sessionId, premiumId)` → `Promise<void>` | Adds premium user; write-through patches list cache; clears dashboard caches |
-| `removeBotPremium` | `(userId, platform, sessionId, premiumId)` → `Promise<void>` | Removes premium user; write-through filters list cache; clears dashboard caches |
-| `listBotPremiums` | `(userId, platform, sessionId)` → `Promise<string[]>` | Returns full premium ID array; cached per session |
+| Function           | Signature                                                       | Description                                                                     |
+| ------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `isBotPremium`     | `(userId, platform, sessionId, premiumId)` → `Promise<boolean>` | Checks membership in the cached premium list                                    |
+| `addBotPremium`    | `(userId, platform, sessionId, premiumId)` → `Promise<void>`    | Adds premium user; write-through patches list cache; clears dashboard caches    |
+| `removeBotPremium` | `(userId, platform, sessionId, premiumId)` → `Promise<void>`    | Removes premium user; write-through filters list cache; clears dashboard caches |
+| `listBotPremiums`  | `(userId, platform, sessionId)` → `Promise<string[]>`           | Returns full premium ID array; cached per session                               |
 
 **Session Prefix**
 
-| Function | Signature | Description |
-|---|---|---|
+| Function                 | Signature                                                 | Description                                                                                                                     |
+| ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `updateBotSessionPrefix` | `(userId, platform, sessionId, prefix)` → `Promise<void>` | Persists new prefix; clears `SESSIONS_ALL_KEY` and dashboard caches so the next `findAllBotSessions` returns the updated prefix |
 
 **`SESSIONS_ALL_KEY`** is an exported string constant shared with `server/repos/bot.repo.ts` — both repos invalidate it on session mutations so `session-loader` always reads an up-to-date list.
@@ -2031,8 +2039,8 @@ Read on every AI command invocation and every passive `onChat` trigger phrase ch
 import { getBotNickname } from '@/engine/repos/session.repo.js'
 ```
 
-| Function | Signature | Description |
-|---|---|---|
+| Function         | Signature                                                   | Description                                                                                                                                                |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `getBotNickname` | `(userId, platform, sessionId)` → `Promise<string \| null>` | Returns the configured display name for this session, or `null` when none is set. Callers should fall back to a generic identity when `null`. Cache-first. |
 
 **Invalidation:** uses TTL-based expiry only. Nickname updates flow through `bot.repo.ts` in the server layer (which clears `bot:detail` and `bot:list`) — the nickname key here expires on its own schedule, providing eventual consistency without cross-repo coupling.
@@ -2047,8 +2055,8 @@ crowding the LRU cache with O(unique_senders) false entries.
 import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js'
 ```
 
-| Function | Signature | Description |
-|---|---|---|
+| Function        | Signature                                | Description                                                                                                                                         |
+| --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `isSystemAdmin` | `(adminId: string)` → `Promise<boolean>` | Loads the full system admin ID set on first miss; subsequent calls for any sender resolve via `Set.has()` in O(1) without writing new cache entries |
 
 **Invalidation:** TTL-based only. System admin mutations happen through the web dashboard — the 5-minute TTL provides sufficient eventual consistency since these changes are infrequent.
@@ -2067,24 +2075,25 @@ import {
 } from '@/engine/repos/threads.repo.js'
 ```
 
-| Function | Signature | Description |
-|---|---|---|
-| `upsertThread(data)` | `(data: any)` → `Promise<void>` | Writes thread to DB; sets `threadExists=true` and populates a `Set<string>` of admin IDs in cache for O(1) `isThreadAdmin` lookups |
-| `threadExists(platform, threadId)` | → `Promise<boolean>` | Cache-first existence check |
-| `threadSessionExists(userId, platform, sessionId, threadId)` | → `Promise<boolean>` | Cache-first session row existence check |
-| `upsertThreadSession(userId, platform, sessionId, threadId)` | → `Promise<void>` | Creates/updates session row; stamps `sessionExists=true` and `updatedAt=now` in cache optimistically; evicts group IDs list |
-| `isThreadAdmin(threadId, userId)` | → `Promise<boolean>` | Resolves via cached `Set.has()` if `upsertThread` has run; falls through to DB on cold start |
-| `getThreadName(threadId)` | → `Promise<string>` | Cache-first thread display name |
-| `getThreadSessionData(userId, platform, sessionId, botThreadId)` | → `Promise<Record<string, unknown>>` | Cache-first per-thread-session data blob (prefix, toggles, etc.) |
-| `setThreadSessionData(userId, platform, sessionId, botThreadId, data)` | → `Promise<void>` | Writes data blob; shallow-copies into cache immediately |
-| `getAllGroupThreadIds(userId, platform, sessionId)` | → `Promise<string[]>` | Returns all group thread IDs for this session; used for broadcast commands |
-| `getThreadSessionUpdatedAt(userId, platform, sessionId, threadId)` | → `Promise<Date \| null>` | Returns last-sync timestamp; `null` means the thread has never been synced |
+| Function                                                               | Signature                            | Description                                                                                                                        |
+| ---------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `upsertThread(data)`                                                   | `(data: any)` → `Promise<void>`      | Writes thread to DB; sets `threadExists=true` and populates a `Set<string>` of admin IDs in cache for O(1) `isThreadAdmin` lookups |
+| `threadExists(platform, threadId)`                                     | → `Promise<boolean>`                 | Cache-first existence check                                                                                                        |
+| `threadSessionExists(userId, platform, sessionId, threadId)`           | → `Promise<boolean>`                 | Cache-first session row existence check                                                                                            |
+| `upsertThreadSession(userId, platform, sessionId, threadId)`           | → `Promise<void>`                    | Creates/updates session row; stamps `sessionExists=true` and `updatedAt=now` in cache optimistically; evicts group IDs list        |
+| `isThreadAdmin(threadId, userId)`                                      | → `Promise<boolean>`                 | Resolves via cached `Set.has()` if `upsertThread` has run; falls through to DB on cold start                                       |
+| `getThreadName(threadId)`                                              | → `Promise<string>`                  | Cache-first thread display name                                                                                                    |
+| `getThreadSessionData(userId, platform, sessionId, botThreadId)`       | → `Promise<Record<string, unknown>>` | Cache-first per-thread-session data blob (prefix, toggles, etc.)                                                                   |
+| `setThreadSessionData(userId, platform, sessionId, botThreadId, data)` | → `Promise<void>`                    | Writes data blob; shallow-copies into cache immediately                                                                            |
+| `getAllGroupThreadIds(userId, platform, sessionId)`                    | → `Promise<string[]>`                | Returns all group thread IDs for this session; used for broadcast commands                                                         |
+| `getThreadSessionUpdatedAt(userId, platform, sessionId, threadId)`     | → `Promise<Date \| null>`            | Returns last-sync timestamp; `null` means the thread has never been synced                                                         |
 
 **Admin ID caching strategy:** `upsertThread` stores `data.adminIDs` as a `Set<string>` under a single
 key rather than one boolean per (thread, user) pair. This keeps the cache at O(threads) entries
 instead of O(threads × participants).
 
 **Invalidation summary:**
+
 - `upsertThread` → refreshes exists + name; replaces admin Set
 - `upsertThreadSession` → stamps sessionExists + updatedAt; evicts group IDs list
 - `setThreadSessionData` → replaces data blob in cache
@@ -2102,19 +2111,20 @@ import {
 } from '@/engine/repos/users.repo.js'
 ```
 
-| Function | Signature | Description |
-|---|---|---|
-| `upsertUser(data)` | `(data: any)` → `Promise<void>` | Writes user to DB; sets `exists=true` and caches display name immediately |
-| `userExists(platform, userId)` | → `Promise<boolean>` | Cache-first existence check |
-| `userSessionExists(userId, platform, sessionId, botUserId)` | → `Promise<boolean>` | Cache-first session row check |
-| `upsertUserSession(userId, platform, sessionId, botUserId)` | → `Promise<void>` | Creates/updates session row; stamps `sessionExists=true` and `updatedAt=now` in cache |
-| `getUserName(userId)` | → `Promise<string>` | Cache-first display name |
-| `getUserSessionData(userId, platform, sessionId, botUserId)` | → `Promise<Record<string, unknown>>` | Cache-first per-user session data blob |
-| `setUserSessionData(userId, platform, sessionId, botUserId, data)` | → `Promise<void>` | Writes data blob; patches the matching slot in the aggregate `getAllUserSessionData` cache rather than evicting the whole list — rank leaderboard reads see fresh data without a full re-fetch |
-| `getAllUserSessionData(userId, platform, sessionId)` | → `Promise<Array<{ botUserId: string; data: Record<string, unknown> }>>` | Returns all user session blobs for this session; used for leaderboard/top commands |
-| `getUserSessionUpdatedAt(userId, platform, sessionId, botUserId)` | → `Promise<Date \| null>` | Returns last-sync timestamp; `null` means the user has never been synced |
+| Function                                                           | Signature                                                                | Description                                                                                                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `upsertUser(data)`                                                 | `(data: any)` → `Promise<void>`                                          | Writes user to DB; sets `exists=true` and caches display name immediately                                                                                                                      |
+| `userExists(platform, userId)`                                     | → `Promise<boolean>`                                                     | Cache-first existence check                                                                                                                                                                    |
+| `userSessionExists(userId, platform, sessionId, botUserId)`        | → `Promise<boolean>`                                                     | Cache-first session row check                                                                                                                                                                  |
+| `upsertUserSession(userId, platform, sessionId, botUserId)`        | → `Promise<void>`                                                        | Creates/updates session row; stamps `sessionExists=true` and `updatedAt=now` in cache                                                                                                          |
+| `getUserName(userId)`                                              | → `Promise<string>`                                                      | Cache-first display name                                                                                                                                                                       |
+| `getUserSessionData(userId, platform, sessionId, botUserId)`       | → `Promise<Record<string, unknown>>`                                     | Cache-first per-user session data blob                                                                                                                                                         |
+| `setUserSessionData(userId, platform, sessionId, botUserId, data)` | → `Promise<void>`                                                        | Writes data blob; patches the matching slot in the aggregate `getAllUserSessionData` cache rather than evicting the whole list — rank leaderboard reads see fresh data without a full re-fetch |
+| `getAllUserSessionData(userId, platform, sessionId)`               | → `Promise<Array<{ botUserId: string; data: Record<string, unknown> }>>` | Returns all user session blobs for this session; used for leaderboard/top commands                                                                                                             |
+| `getUserSessionUpdatedAt(userId, platform, sessionId, botUserId)`  | → `Promise<Date \| null>`                                                | Returns last-sync timestamp; `null` means the user has never been synced                                                                                                                       |
 
 **Invalidation summary:**
+
 - `upsertUser` → refreshes exists + name
 - `upsertUserSession` → stamps sessionExists + updatedAt
 - `setUserSessionData` → patches individual blob + patches aggregate list in place; evicts aggregate only when the user has no existing entry in it
@@ -2141,14 +2151,14 @@ The `packages/cat-bot/src/engine/adapters/models/` directory is the single sourc
 
 Discriminant values for the top-level `type` field on every event object.
 
-| Constant | Value | Description |
-|---|---|---|
-| `EventType.MESSAGE` | `'message'` | Standard chat message — text, attachments, or both |
-| `EventType.MESSAGE_REPLY` | `'message_reply'` | A reply to a specific earlier message in the thread |
-| `EventType.MESSAGE_REACTION` | `'message_reaction'` | Emoji reaction added to a message |
-| `EventType.MESSAGE_UNSEND` | `'message_unsend'` | A sent message was retracted by its sender |
-| `EventType.EVENT` | `'event'` | Thread-level administrative event; narrowed further by `logMessageType` |
-| `EventType.BUTTON_ACTION` | `'button_action'` | A user clicked an interactive button (Discord, Telegram, Fluxer/WebChat) |
+| Constant                     | Value                | Description                                                              |
+| ---------------------------- | -------------------- | ------------------------------------------------------------------------ |
+| `EventType.MESSAGE`          | `'message'`          | Standard chat message — text, attachments, or both                       |
+| `EventType.MESSAGE_REPLY`    | `'message_reply'`    | A reply to a specific earlier message in the thread                      |
+| `EventType.MESSAGE_REACTION` | `'message_reaction'` | Emoji reaction added to a message                                        |
+| `EventType.MESSAGE_UNSEND`   | `'message_unsend'`   | A sent message was retracted by its sender                               |
+| `EventType.EVENT`            | `'event'`            | Thread-level administrative event; narrowed further by `logMessageType`  |
+| `EventType.BUTTON_ACTION`    | `'button_action'`    | A user clicked an interactive button (Discord, Telegram, Fluxer/WebChat) |
 
 #### AttachmentType Enum
 
@@ -2156,12 +2166,12 @@ Discriminant values for the top-level `type` field on every event object.
 
 Discriminant values for the `type` field on every attachment object inside `event['attachments']`.
 
-| Constant | Value | Description |
-|---|---|---|
-| `AttachmentType.PHOTO` | `'photo'` | Static image |
-| `AttachmentType.VIDEO` | `'video'` | Playable video file |
-| `AttachmentType.AUDIO` | `'audio'` | Playable audio file or voice message |
-| `AttachmentType.ANIMATED_IMAGE` | `'animated_image'` | Animated GIF or WebP image |
+| Constant                        | Value              | Description                          |
+| ------------------------------- | ------------------ | ------------------------------------ |
+| `AttachmentType.PHOTO`          | `'photo'`          | Static image                         |
+| `AttachmentType.VIDEO`          | `'video'`          | Playable video file                  |
+| `AttachmentType.AUDIO`          | `'audio'`          | Playable audio file or voice message |
+| `AttachmentType.ANIMATED_IMAGE` | `'animated_image'` | Animated GIF or WebP image           |
 
 #### LogMessageType Enum
 
@@ -2169,16 +2179,16 @@ Discriminant values for the `type` field on every attachment object inside `even
 
 Discriminant values for the `logMessageType` field on `EventType.EVENT` objects. Use these strings as `type` values in your `EventMeta` to subscribe to specific thread administrative events.
 
-| Constant | Value | Description |
-|---|---|---|
-| `LogMessageType.SUBSCRIBE` | `'log:subscribe'` | One or more users were added to the group |
-| `LogMessageType.UNSUBSCRIBE` | `'log:unsubscribe'` | A user was removed or left the group |
-| `LogMessageType.THREAD_NAME` | `'log:thread-name'` | The conversation / group name was changed |
-| `LogMessageType.THREAD_COLOR` | `'log:thread-color'` | The group theme colour was changed |
-| `LogMessageType.THREAD_ICON` | `'log:thread-icon'` | The group emoji icon was changed |
-| `LogMessageType.THREAD_IMAGE` | `'log:thread-image'` | The group photo was changed or removed |
-| `LogMessageType.USER_NICKNAME` | `'log:user-nickname'` | A participant's nickname inside this thread was set or cleared |
-| `LogMessageType.CHANGE_THREAD_ADMINS` | `'change_thread_admins'` | A participant's admin status in the group was changed |
+| Constant                              | Value                    | Description                                                    |
+| ------------------------------------- | ------------------------ | -------------------------------------------------------------- |
+| `LogMessageType.SUBSCRIBE`            | `'log:subscribe'`        | One or more users were added to the group                      |
+| `LogMessageType.UNSUBSCRIBE`          | `'log:unsubscribe'`      | A user was removed or left the group                           |
+| `LogMessageType.THREAD_NAME`          | `'log:thread-name'`      | The conversation / group name was changed                      |
+| `LogMessageType.THREAD_COLOR`         | `'log:thread-color'`     | The group theme colour was changed                             |
+| `LogMessageType.THREAD_ICON`          | `'log:thread-icon'`      | The group emoji icon was changed                               |
+| `LogMessageType.THREAD_IMAGE`         | `'log:thread-image'`     | The group photo was changed or removed                         |
+| `LogMessageType.USER_NICKNAME`        | `'log:user-nickname'`    | A participant's nickname inside this thread was set or cleared |
+| `LogMessageType.CHANGE_THREAD_ADMINS` | `'change_thread_admins'` | A participant's admin status in the group was changed          |
 
 #### UnifiedEvent — All Event Shapes
 
@@ -2188,110 +2198,110 @@ Every event object your handler receives is one of the shapes below, discriminat
 
 Emitted for every standard chat message. Routed to `onChat` (all messages) and then to `onCommand` after prefix parsing.
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'message'` | Discriminant |
-| `senderID` | `string` | Platform user ID of the sender; use with `user.getInfo(senderID)` |
-| `message` | `string` | The message body text |
-| `threadID` | `string` | Platform thread/channel/chat ID; use with `db.threads.collection(threadID)` |
-| `messageID` | `string` | Platform-assigned message ID; use as the key for `state.create()` and `button.createContext()` |
-| `attachments` | `unknown[]` | Array of attachment objects — may be empty; narrow each item on `(att as {type:string}).type` (see Attachment Data Shapes) |
-| `mentions` | `Record<string, string>` | Map of `userID → mentionedText` (e.g. `{ '12345': '@Alice' }`) |
-| `timestamp` | `string \| number \| null` | @fluxerjs/core sends a string ms timestamp; Discord/Telegram send a number; `null` when unavailable |
-| `isGroup` | `boolean` | `false` in 1:1 DMs; `true` in group chats, channels, and servers |
+| Field         | Type                       | Notes                                                                                                                      |
+| ------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `type`        | `'message'`                | Discriminant                                                                                                               |
+| `senderID`    | `string`                   | Platform user ID of the sender; use with `user.getInfo(senderID)`                                                          |
+| `message`     | `string`                   | The message body text                                                                                                      |
+| `threadID`    | `string`                   | Platform thread/channel/chat ID; use with `db.threads.collection(threadID)`                                                |
+| `messageID`   | `string`                   | Platform-assigned message ID; use as the key for `state.create()` and `button.createContext()`                             |
+| `attachments` | `unknown[]`                | Array of attachment objects — may be empty; narrow each item on `(att as {type:string}).type` (see Attachment Data Shapes) |
+| `mentions`    | `Record<string, string>`   | Map of `userID → mentionedText` (e.g. `{ '12345': '@Alice' }`)                                                             |
+| `timestamp`   | `string \| number \| null` | @fluxerjs/core sends a string ms timestamp; Discord/Telegram send a number; `null` when unavailable                        |
+| `isGroup`     | `boolean`                  | `false` in 1:1 DMs; `true` in group chats, channels, and servers                                                           |
 
 **`message_reply`**
 
 Emitted when a user sends a quote-reply to a specific earlier message. Checked against the `onReply` state store first; falls through to `onCommand` / `onChat` if no matching state is registered.
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'message_reply'` | Discriminant |
-| `threadID` | `string` | |
-| `messageID` | `string` | ID of the reply message itself (not the original) |
-| `senderID` | `string` | Who sent this reply |
-| `attachments` | `unknown[]` | Attachments on the reply |
-| `args` | `string[]` | Reply body split on whitespace — pre-tokenised |
-| `message` | `string` | The reply body text |
-| `isGroup` | `boolean` | |
-| `mentions` | `Record<string, string>` | |
-| `timestamp` | `number \| null` | |
-| `messageReply` | `object \| null` | The quoted/replied-to message (see nested shape below); `null` when the platform could not fetch it |
+| Field          | Type                     | Notes                                                                                               |
+| -------------- | ------------------------ | --------------------------------------------------------------------------------------------------- |
+| `type`         | `'message_reply'`        | Discriminant                                                                                        |
+| `threadID`     | `string`                 |                                                                                                     |
+| `messageID`    | `string`                 | ID of the reply message itself (not the original)                                                   |
+| `senderID`     | `string`                 | Who sent this reply                                                                                 |
+| `attachments`  | `unknown[]`              | Attachments on the reply                                                                            |
+| `args`         | `string[]`               | Reply body split on whitespace — pre-tokenised                                                      |
+| `message`      | `string`                 | The reply body text                                                                                 |
+| `isGroup`      | `boolean`                |                                                                                                     |
+| `mentions`     | `Record<string, string>` |                                                                                                     |
+| `timestamp`    | `number \| null`         |                                                                                                     |
+| `messageReply` | `object \| null`         | The quoted/replied-to message (see nested shape below); `null` when the platform could not fetch it |
 
 **Nested `messageReply` object** (the original message being quoted):
 
-| Field | Type | Notes |
-|---|---|---|
-| `threadID` | `string` | Same as the outer `threadID` |
-| `messageID` | `string` | ID of the message being replied to — this is the key used in `state.create()` for `onReply` flows |
-| `senderID` | `string` | Who sent the original message |
-| `attachments` | `unknown[]` | Attachments on the original message |
-| `args` | `string[]` | Original message body split on whitespace |
-| `message` | `string` | Original message body text |
-| `isGroup` | `boolean` | |
-| `mentions` | `Record<string, string>` | |
-| `timestamp` | `number` | Number ms — @fluxerjs/core uses a number here, unlike the outer event which uses a string |
+| Field         | Type                     | Notes                                                                                             |
+| ------------- | ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `threadID`    | `string`                 | Same as the outer `threadID`                                                                      |
+| `messageID`   | `string`                 | ID of the message being replied to — this is the key used in `state.create()` for `onReply` flows |
+| `senderID`    | `string`                 | Who sent the original message                                                                     |
+| `attachments` | `unknown[]`              | Attachments on the original message                                                               |
+| `args`        | `string[]`               | Original message body split on whitespace                                                         |
+| `message`     | `string`                 | Original message body text                                                                        |
+| `isGroup`     | `boolean`                |                                                                                                   |
+| `mentions`    | `Record<string, string>` |                                                                                                   |
+| `timestamp`   | `number`                 | Number ms — @fluxerjs/core uses a number here, unlike the outer event which uses a string         |
 
 **`message_reaction`**
 
 Emitted when a user adds an emoji reaction to a message. Checked against the `onReact` state store; then falls through to generic event handling.
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'message_reaction'` | Discriminant |
-| `threadID` | `string` | Thread where the reaction occurred |
-| `messageID` | `string` | ID of the message that received the reaction |
-| `reaction` | `string` | The emoji string placed on the message, e.g. `'❤️'` |
-| `senderID` | `string` | Who placed the reaction |
-| `userID` | `string` | Whose message received the reaction (the original message author) |
-| `timestamp` | `number \| null` | Unix ms when the reaction was set; `null` when the platform does not surface it |
+| Field       | Type                 | Notes                                                                           |
+| ----------- | -------------------- | ------------------------------------------------------------------------------- |
+| `type`      | `'message_reaction'` | Discriminant                                                                    |
+| `threadID`  | `string`             | Thread where the reaction occurred                                              |
+| `messageID` | `string`             | ID of the message that received the reaction                                    |
+| `reaction`  | `string`             | The emoji string placed on the message, e.g. `'❤️'`                             |
+| `senderID`  | `string`             | Who placed the reaction                                                         |
+| `userID`    | `string`             | Whose message received the reaction (the original message author)               |
+| `timestamp` | `number \| null`     | Unix ms when the reaction was set; `null` when the platform does not surface it |
 
 **`message_unsend`**
 
 Emitted when a sender retracts a previously sent message.
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'message_unsend'` | Discriminant |
-| `threadID` | `string` | |
-| `messageID` | `string` | ID of the retracted message |
-| `senderID` | `string` | Who retracted the message |
-| `deletionTimestamp` | `number` | Unix ms when the deletion occurred |
-| `timestamp` | `number \| undefined` | Original send timestamp — `undefined` (not `null`) intentionally preserves the @fluxerjs/core sentinel so consumers can distinguish "timestamp not present" from `timestamp === 0` |
+| Field               | Type                  | Notes                                                                                                                                                                              |
+| ------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`              | `'message_unsend'`    | Discriminant                                                                                                                                                                       |
+| `threadID`          | `string`              |                                                                                                                                                                                    |
+| `messageID`         | `string`              | ID of the retracted message                                                                                                                                                        |
+| `senderID`          | `string`              | Who retracted the message                                                                                                                                                          |
+| `deletionTimestamp` | `number`              | Unix ms when the deletion occurred                                                                                                                                                 |
+| `timestamp`         | `number \| undefined` | Original send timestamp — `undefined` (not `null`) intentionally preserves the @fluxerjs/core sentinel so consumers can distinguish "timestamp not present" from `timestamp === 0` |
 
 **`event` — Thread Administrative Events**
 
 Emitted for group-level administrative actions. The top-level `type` is always `'event'`; the actual sub-type is in `logMessageType`. Register your `EventMeta.type` with one or more `LogMessageType` values to receive specific sub-events.
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'event'` | Discriminant |
-| `threadID` | `string` | |
-| `logMessageType` | `string` | One of the `LogMessageType` values — use this to distinguish sub-events |
-| `logMessageData` | `Record<string, unknown> \| null` | Payload shape varies by `logMessageType` (see table below) |
-| `logMessageBody` | `string` | Human-readable English description produced by the platform (e.g. `'Alice named the group …'`) |
-| `author` | `string` | userID of the actor who triggered this event |
+| Field            | Type                              | Notes                                                                                          |
+| ---------------- | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `type`           | `'event'`                         | Discriminant                                                                                   |
+| `threadID`       | `string`                          |                                                                                                |
+| `logMessageType` | `string`                          | One of the `LogMessageType` values — use this to distinguish sub-events                        |
+| `logMessageData` | `Record<string, unknown> \| null` | Payload shape varies by `logMessageType` (see table below)                                     |
+| `logMessageBody` | `string`                          | Human-readable English description produced by the platform (e.g. `'Alice named the group …'`) |
+| `author`         | `string`                          | userID of the actor who triggered this event                                                   |
 
 **`logMessageData` payload shape by `logMessageType`:**
 
-| `logMessageType` | `logMessageData` shape |
-|---|---|
-| `'log:subscribe'` | `{ addedParticipants: AddedParticipant[] }` |
-| `'log:unsubscribe'` | `{ leftParticipantFbId: string }` |
-| `'log:thread-name'` | `{ name: string }` |
-| `'log:thread-image'` | `{ image: { attachmentID: string \| null, width: number \| null, height: number \| null, url: string \| null } }` — `image` is `null` when a group photo is removed |
-| `'log:thread-color'` | Raw `untypedData` object (shape varies by Facebook API version) |
-| `'log:thread-icon'` | Raw `untypedData` object (shape varies by Facebook API version) |
-| `'log:user-nickname'` | `{ nickname: string, participant_id: string }` |
-| `'change_thread_admins'` | `{ TARGET_ID: string, ADMIN_TYPE: string }` |
+| `logMessageType`         | `logMessageData` shape                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'log:subscribe'`        | `{ addedParticipants: AddedParticipant[] }`                                                                                                                         |
+| `'log:unsubscribe'`      | `{ leftParticipantFbId: string }`                                                                                                                                   |
+| `'log:thread-name'`      | `{ name: string }`                                                                                                                                                  |
+| `'log:thread-image'`     | `{ image: { attachmentID: string \| null, width: number \| null, height: number \| null, url: string \| null } }` — `image` is `null` when a group photo is removed |
+| `'log:thread-color'`     | Raw `untypedData` object (shape varies by Facebook API version)                                                                                                     |
+| `'log:thread-icon'`      | Raw `untypedData` object (shape varies by Facebook API version)                                                                                                     |
+| `'log:user-nickname'`    | `{ nickname: string, participant_id: string }`                                                                                                                      |
+| `'change_thread_admins'` | `{ TARGET_ID: string, ADMIN_TYPE: string }`                                                                                                                         |
 
 **`AddedParticipant` shape** (each item in `logMessageData['addedParticipants']` for `'log:subscribe'`):
 
-| Field | Type | Notes |
-|---|---|---|
-| `firstName` | `string` | |
-| `fullName` | `string` | Prefer over `firstName` — this is the display name shown in the UI |
-| `userFbId` | `string` | Platform user ID of the added member |
+| Field       | Type     | Notes                                                              |
+| ----------- | -------- | ------------------------------------------------------------------ |
+| `firstName` | `string` |                                                                    |
+| `fullName`  | `string` | Prefer over `firstName` — this is the display name shown in the UI |
+| `userFbId`  | `string` | Platform user ID of the added member                               |
 
 **Reading `logMessageData` in `onEvent` handlers:**
 
@@ -2331,15 +2341,15 @@ export const onEvent = async ({ event }: AppCtx) => {
 
 Emitted when a user clicks an interactive button. Routed to `handleButtonAction` → `button[id].onClick`. In typical `onClick` handlers you read context via `session.context` rather than raw event fields.
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'button_action'` | Discriminant |
-| `platform` | `string` | Source platform identifier (e.g. `'discord'`, `'telegram'`) |
-| `threadID` | `string` | |
-| `senderID` | `string` | Who clicked the button |
-| `messageID` | `string` | ID of the message that contained the button |
-| `buttonId` | `string` | Fully-qualified ID in `"commandName:buttonId"` format; used by `handleButtonAction` for routing |
-| `timestamp` | `number \| null` | |
+| Field       | Type              | Notes                                                                                           |
+| ----------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| `type`      | `'button_action'` | Discriminant                                                                                    |
+| `platform`  | `string`          | Source platform identifier (e.g. `'discord'`, `'telegram'`)                                     |
+| `threadID`  | `string`          |                                                                                                 |
+| `senderID`  | `string`          | Who clicked the button                                                                          |
+| `messageID` | `string`          | ID of the message that contained the button                                                     |
+| `buttonId`  | `string`          | Fully-qualified ID in `"commandName:buttonId"` format; used by `handleButtonAction` for routing |
+| `timestamp` | `number \| null`  |                                                                                                 |
 
 #### Attachment Data Shapes
 
@@ -2368,38 +2378,38 @@ for (const att of attachments) {
 
 **`photo`**
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'photo'` | |
-| `url` | `string` | Full-resolution URL |
+| Field  | Type      | Notes               |
+| ------ | --------- | ------------------- |
+| `type` | `'photo'` |                     |
+| `url`  | `string`  | Full-resolution URL |
 
 **`video`**
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'video'` | |
-| `url` | `string` | Playable video URL |
+| Field  | Type      | Notes              |
+| ------ | --------- | ------------------ |
+| `type` | `'video'` |                    |
+| `url`  | `string`  | Playable video URL |
 
 **`audio`**
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'audio'` | |
-| `url` | `string` | |
+| Field  | Type      | Notes |
+| ------ | --------- | ----- |
+| `type` | `'audio'` |       |
+| `url`  | `string`  |       |
 
 **`file`**
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'file'` | |
-| `url` | `string` | |
+| Field  | Type     | Notes |
+| ------ | -------- | ----- |
+| `type` | `'file'` |       |
+| `url`  | `string` |       |
 
 **`animated_image`**
 
-| Field | Type | Notes |
-|---|---|---|
-| `type` | `'animated_image'` | |
-| `url` | `string` | URL of the animated GIF / WebP |
+| Field  | Type               | Notes                          |
+| ------ | ------------------ | ------------------------------ |
+| `type` | `'animated_image'` |                                |
+| `url`  | `string`           | URL of the animated GIF / WebP |
 
 ---
 
@@ -2589,18 +2599,18 @@ export const onCommand = async ({ chat, db, event }: AppCtx) => {
 
 If you are familiar with GoatBot, Mirai, or similar `global.client.handleReply` / `global.client.handleReaction` patterns, here is the direct mapping:
 
-| Old pattern | Cat-Bot equivalent |
-|---|---|
-| `global.client.handleReply.push({ name, messageID, author, ... })` | `state.create({ id: state.generateID({ id: messageID }), state: 'step_name', context: { ... } })` |
-| `global.client.handleReaction.push({ name, messageID, author, answer })` | `state.create({ id: state.generateID({ id: messageID }), state: [emoji1, emoji2], context: { answer } })` |
-| `module.exports.handleReply = async ({ handleReply }) => { switch (handleReply.type) }` | `export const onReply = { [STATE.step_name]: async ({ session }) => { ... } }` |
-| `module.exports.handleReaction = async ({ handleReaction }) => { if (event.reaction == '👍') }` | `export const onReact = { ['👍']: async ({ session }) => { ... } }` |
-| `api.sendMessage(body, threadID, callback)` | `await chat.replyMessage({ message: body })` |
-| `api.sendMessage(body, threadID, messageID)` | `await chat.reply({ message: body })` — thread-level, no quote-reply |
-| `api.sendMessage(body, adminUID)` | `await chat.reply({ message: body, thread_id: adminUID })` |
-| `const name = await usersData.getName(uid)` | `const name = await user.getName(uid)` |
-| `handleReply.author != event.senderID` | Not needed — `state.generateID({ public: false })` (default) scopes automatically |
-| `global.utils.randomString(10)` | `Math.random().toString(36).substring(2, 12)` |
-| `global.moduleData.shortcut = new Map()` | `db.threads.collection(threadID)` + collection API |
+| Old pattern                                                                                     | Cat-Bot equivalent                                                                                        |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `global.client.handleReply.push({ name, messageID, author, ... })`                              | `state.create({ id: state.generateID({ id: messageID }), state: 'step_name', context: { ... } })`         |
+| `global.client.handleReaction.push({ name, messageID, author, answer })`                        | `state.create({ id: state.generateID({ id: messageID }), state: [emoji1, emoji2], context: { answer } })` |
+| `module.exports.handleReply = async ({ handleReply }) => { switch (handleReply.type) }`         | `export const onReply = { [STATE.step_name]: async ({ session }) => { ... } }`                            |
+| `module.exports.handleReaction = async ({ handleReaction }) => { if (event.reaction == '👍') }` | `export const onReact = { ['👍']: async ({ session }) => { ... } }`                                       |
+| `api.sendMessage(body, threadID, callback)`                                                     | `await chat.replyMessage({ message: body })`                                                              |
+| `api.sendMessage(body, threadID, messageID)`                                                    | `await chat.reply({ message: body })` — thread-level, no quote-reply                                      |
+| `api.sendMessage(body, adminUID)`                                                               | `await chat.reply({ message: body, thread_id: adminUID })`                                                |
+| `const name = await usersData.getName(uid)`                                                     | `const name = await user.getName(uid)`                                                                    |
+| `handleReply.author != event.senderID`                                                          | Not needed — `state.generateID({ public: false })` (default) scopes automatically                         |
+| `global.utils.randomString(10)`                                                                 | `Math.random().toString(36).substring(2, 12)`                                                             |
+| `global.moduleData.shortcut = new Map()`                                                        | `db.threads.collection(threadID)` + collection API                                                        |
 
 **The single biggest difference:** Cat-Bot never puts state in `global`. Every pending state is scoped to a specific bot message ID and a specific user or thread. Two users running the same command at the same time get completely independent state entries with no interference.

@@ -96,15 +96,15 @@ only for actually registered tools, so user JSON is never executed.
 Built-in tools (`builtin-tools.ts`, native command execution ported from
 upstream Cat-Bot's `engine/agent/tools/`):
 
-| Tool | Risk | Notes |
-|---|---|---|
-| `list_commands` | 0 read | Searches the live `commandRegistry`; role-filtered; never pasted into prompts |
-| `test_command` | 1 action | Silently previews commands against a mock API proxy (nothing reaches the chat); guard-checked (bans, full role matrix, dashboard toggles, platform, maintenance, admin-only, cooldown-checked-not-consumed); returns a key + LLM-readable captured calls incl. attachments/buttons |
-| `send_result` | 1 action | Delivers ONE synthesized message merging stored attachments (URL + binary), button grids, and text; single-use keys; drops buttons when files exceed one (platform rule) |
-| `get_context` | 0 read | Time, platform/thread, role, stored user memory |
-| `remember_fact` | 1 action | User-stated facts only; refuses secrets/credentials/forget-requests |
-| `get_server_info` | 0 read | Current server/channel the bot can see; cross-server lookups need BOT_ADMIN |
-| `list_servers` | 0 read | Session visibility; full inventory needs BOT_ADMIN |
+| Tool              | Risk     | Notes                                                                                                                                                                                                                                                                              |
+| ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_commands`   | 0 read   | Searches the live `commandRegistry`; role-filtered; never pasted into prompts                                                                                                                                                                                                      |
+| `test_command`    | 1 action | Silently previews commands against a mock API proxy (nothing reaches the chat); guard-checked (bans, full role matrix, dashboard toggles, platform, maintenance, admin-only, cooldown-checked-not-consumed); returns a key + LLM-readable captured calls incl. attachments/buttons |
+| `send_result`     | 1 action | Delivers ONE synthesized message merging stored attachments (URL + binary), button grids, and text; single-use keys; drops buttons when files exceed one (platform rule)                                                                                                           |
+| `get_context`     | 0 read   | Time, platform/thread, role, stored user memory                                                                                                                                                                                                                                    |
+| `remember_fact`   | 1 action | User-stated facts only; refuses secrets/credentials/forget-requests                                                                                                                                                                                                                |
+| `get_server_info` | 0 read   | Current server/channel the bot can see; cross-server lookups need BOT_ADMIN                                                                                                                                                                                                        |
+| `list_servers`    | 0 read   | Session visibility; full inventory needs BOT_ADMIN                                                                                                                                                                                                                                 |
 
 Command flow: `test_command` (preview, cooldowns never consumed) → agent reads
 the captured output → `send_result` (one delivery). When `send_result`
@@ -118,13 +118,13 @@ DB-backed integrations (see below). Secrets stay sealed server-side.
 
 All AI state lives in the database — no JSON files, no memory-only records:
 
-| State | Storage |
-|---|---|
+| State                                                                                         | Storage                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Per-user AI config (providers, keys encrypted, models, agents, memory, execution, moderation) | `bot_user_ai_config` (`provider*` columns + `agent_settings` blob) via `engine/repos/ai-config.repo.ts` (60s snapshot cache, explicit invalidation on save) |
-| User MCP servers & Skills | `bot_user_mcp_skills` via `engine/repos/mcp-skills.repo.ts` (secrets field-level encrypted, everything else reviewable) |
-| Conversation turns, summaries, profiles, facts | `db.users` / `db.threads` `ai_memory` collections (survives restarts) |
-| Moderation policies per thread | `db.threads` `ai_memory.moderation_policy` via `threadPolicyHandles()` |
-| Moderation audit trail | In-memory ring + `db.threads` `ai_memory.moderation_audit` (capped 100) via `threadAuditPersister()` |
+| User MCP servers & Skills                                                                     | `bot_user_mcp_skills` via `engine/repos/mcp-skills.repo.ts` (secrets field-level encrypted, everything else reviewable)                                     |
+| Conversation turns, summaries, profiles, facts                                                | `db.users` / `db.threads` `ai_memory` collections (survives restarts)                                                                                       |
+| Moderation policies per thread                                                                | `db.threads` `ai_memory.moderation_policy` via `threadPolicyHandles()`                                                                                      |
+| Moderation audit trail                                                                        | In-memory ring + `db.threads` `ai_memory.moderation_audit` (capped 100) via `threadAuditPersister()`                                                        |
 
 The hot chat path reads short-lived snapshots/caches so no message waits on
 a DB round-trip; dashboard saves write through and invalidate immediately.
@@ -265,48 +265,49 @@ in the collapsed rail). Native Settings-page vocabulary, all three themes,
 skeleton/Alert/empty states, explicit Save/Cancel with dirty tracking, masked
 API keys (never rendered raw), mobile drawer + collapsed rail support, hover
 prefetch, timezone-style searchable model pickers (live catalog + custom ids
-+ per-agent inherit/clear). Sections: Overview (with Test connection), General (with live-model
-picker), Agents, Memory, Tools (built-ins + own MCP/Skills with add/edit/test/
-delete), Execution, Moderation, Provider fallback.
+
+- per-agent inherit/clear). Sections: Overview (with Test connection), General (with live-model
+  picker), Agents, Memory, Tools (built-ins + own MCP/Skills with add/edit/test/
+  delete), Execution, Moderation, Provider fallback.
 
 ## API reference
 
 All under `/api/v1/ai/*`, dashboard-session authenticated:
 
-| Method & path | Purpose |
-|---|---|
-| `GET /ai/status` | Overview card data (enabled/configured/provider/model/candidates/tools) |
-| `GET /ai/config` | Full editable config, secrets masked (per-user, DB-backed) |
-| `PUT /ai/config` | Validate + persist to DB (empty key keeps stored secret) |
-| `POST /ai/test` | Live provider connectivity probe (provider/model/latency/attempts) |
-| `GET /ai/routing` | Per-agent attempt order |
-| `GET /ai/tools` | `{ builtIn, mcp, skills }` registry incl. own integrations |
-| `GET /ai/candidates?agent=` | Model candidates for one agent |
-| `GET /ai/providers/:provider/models` | Live model catalog for a provider |
-| `GET /ai/integrations` | Own MCP servers & Skills (secrets masked) |
-| `POST /ai/integrations` | Add MCP/Skill (validated + auto-scanned, max 20/user) |
-| `PUT /ai/integrations/:id` | Edit own entry (re-scanned, never de-restricted) |
-| `DELETE /ai/integrations/:id` | Delete own entry |
-| `POST /ai/integrations/:id/test` | Probe + rescan (auto-restricts new danger) |
-| `GET /admin/mcp-skills` | All users' integrations with owner identity (admin) |
-| `PUT /admin/mcp-skills/:id` | Admin edit incl. approve/restrict/disable (admin) |
-| `DELETE /admin/mcp-skills/:id` | Admin delete any entry (admin) |
-| `POST /ai/draft` | Editor draft (`instruction`, optional `original`) — never publishes |
-| `POST /ai/moderate` | Dry-run classification of one message |
-| `GET /ai/policy?threadId=` | Current thread policy |
-| `GET /ai/policy/default` | Blank policy shape |
-| `POST /ai/policy/compile` | NL order → validated patch + human diff (no apply) |
-| `POST /ai/policy/validate` | Validate a raw patch without applying |
-| `GET /ai/audit?limit=` | Recent moderation audit entries |
+| Method & path                        | Purpose                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| `GET /ai/status`                     | Overview card data (enabled/configured/provider/model/candidates/tools) |
+| `GET /ai/config`                     | Full editable config, secrets masked (per-user, DB-backed)              |
+| `PUT /ai/config`                     | Validate + persist to DB (empty key keeps stored secret)                |
+| `POST /ai/test`                      | Live provider connectivity probe (provider/model/latency/attempts)      |
+| `GET /ai/routing`                    | Per-agent attempt order                                                 |
+| `GET /ai/tools`                      | `{ builtIn, mcp, skills }` registry incl. own integrations              |
+| `GET /ai/candidates?agent=`          | Model candidates for one agent                                          |
+| `GET /ai/providers/:provider/models` | Live model catalog for a provider                                       |
+| `GET /ai/integrations`               | Own MCP servers & Skills (secrets masked)                               |
+| `POST /ai/integrations`              | Add MCP/Skill (validated + auto-scanned, max 20/user)                   |
+| `PUT /ai/integrations/:id`           | Edit own entry (re-scanned, never de-restricted)                        |
+| `DELETE /ai/integrations/:id`        | Delete own entry                                                        |
+| `POST /ai/integrations/:id/test`     | Probe + rescan (auto-restricts new danger)                              |
+| `GET /admin/mcp-skills`              | All users' integrations with owner identity (admin)                     |
+| `PUT /admin/mcp-skills/:id`          | Admin edit incl. approve/restrict/disable (admin)                       |
+| `DELETE /admin/mcp-skills/:id`       | Admin delete any entry (admin)                                          |
+| `POST /ai/draft`                     | Editor draft (`instruction`, optional `original`) — never publishes     |
+| `POST /ai/moderate`                  | Dry-run classification of one message                                   |
+| `GET /ai/policy?threadId=`           | Current thread policy                                                   |
+| `GET /ai/policy/default`             | Blank policy shape                                                      |
+| `POST /ai/policy/compile`            | NL order → validated patch + human diff (no apply)                      |
+| `POST /ai/policy/validate`           | Validate a raw patch without applying                                   |
+| `GET /ai/audit?limit=`               | Recent moderation audit entries                                         |
 
 ## Environment variables
 
-| Variable | Purpose |
-|---|---|
-| `AI_ENABLED` | Master switch (`true` default) |
-| `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` | Legacy single-provider shortcut |
-| `AI_MAX_TOKENS` / `AI_TEMPERATURE` | Global generation tuning |
-| `<NAME>_API_KEY` / `<NAME>_BASE_URL` / `<NAME>_MODELS` | Per-provider keys, e.g. `GROQ_API_KEY`, `OPENROUTER_MODELS` (comma-separated) |
+| Variable                                                  | Purpose                                                                       |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `AI_ENABLED`                                              | Master switch (`true` default)                                                |
+| `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` | Legacy single-provider shortcut                                               |
+| `AI_MAX_TOKENS` / `AI_TEMPERATURE`                        | Global generation tuning                                                      |
+| `<NAME>_API_KEY` / `<NAME>_BASE_URL` / `<NAME>_MODELS`    | Per-provider keys, e.g. `GROQ_API_KEY`, `OPENROUTER_MODELS` (comma-separated) |
 
 Dashboard-saved values persist per-user to the `bot_user_ai_config` table
 (keys encrypted at rest) under env-provided values in precedence:

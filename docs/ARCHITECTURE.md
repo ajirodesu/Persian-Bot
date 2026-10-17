@@ -28,7 +28,7 @@ The three packages have a strict one-directional dependency chain: `web` communi
 
 ## Monorepo Structure
 
-```
+```text
 Cat-Bot/
 │
 ├── packages/
@@ -97,7 +97,7 @@ Cat-Bot operates as a continuous reactive loop across its three packages. For ex
 
 `web` never imports from `database` or `cat-bot` source code. All data access goes through the `cat-bot` HTTP API, which the Vite dev server proxies same-origin.
 
-```
+```text
 packages/web/
   └── vite.config.ts proxy: /api/* → http://localhost:3000
       └── packages/cat-bot/src/server/   (REST + Socket.IO)
@@ -111,7 +111,7 @@ At production build time, `cat-bot` serves the compiled `web/dist/` as static fi
 
 ## `packages/cat-bot/` — Bot Engine and Server
 
-```
+```text
 src/
 ├── engine/
 │   ├── app.ts                       — Process entry point; loads commands and events, wires platform
@@ -188,7 +188,7 @@ src/
 
 **Application modules** (user-authored bot logic loaded dynamically at startup):
 
-```
+```text
 src/app/
 ├── commands/                        — One file per command module; exports meta + onCommand/onChat/onReply/onReact/button
 └── events/                          — One file per event module; exports meta (type[]) + onEvent
@@ -198,7 +198,7 @@ src/app/
 
 ## `packages/database/` — Data Persistence Layer
 
-```
+```text
 src/
 └── index.ts                         — Entry point: reads DATABASE_TYPE, dynamic-imports the correct barrel,
                                        re-exports every function individually so consumers are adapter-agnostic
@@ -233,7 +233,7 @@ All three adapters expose the same named export surface. The `src/index.ts` dyna
 
 ## `packages/web/` — Management Dashboard
 
-```
+```text
 src/
 ├── main.tsx                         — Bootstrap: synchronous theme init, provider tree, mount to #root
 ├── App.tsx                          — RouterProvider wrapper
@@ -296,7 +296,7 @@ src/
 
 Every platform adapter produces a uniform payload shape emitted on a shared EventEmitter. All five event types are emitted by all adapters; transports that cannot produce a given type simply never emit it.
 
-```
+```text
 PlatformEmitter event types and their payloads:
 
 ├── 'message'           — { api: UnifiedApi, event: UnifiedEvent, native: NativeContext }
@@ -351,7 +351,7 @@ The `UnifiedApi` abstract class is the platform write surface. Every platform wr
 
 Every incoming platform event that reaches the controller layer runs through a chain registered at startup via `MiddlewareRegistry`. The chain runs in middleware order and short-circuits on rejection.
 
-```
+```text
 onCommand chain:
 ├── enforceNotBanned       — checks isUserBanned and isThreadBanned; rejects banned senders
 ├── enforcePermission      — checks sender role against config.role (ANYONE/THREAD_ADMIN/BOT_ADMIN/PREMIUM/SYSTEM_ADMIN)
@@ -378,7 +378,7 @@ onButtonClick chain:
 
 Two independent `betterAuth()` instances share the same database adapter but use separate cookie names, separate base paths, and separate server instances. This makes the user portal and admin portal session surfaces structurally isolated — a compromised user-portal session has zero leverage on admin endpoints.
 
-```
+```text
 User portal
 ├── basePath:  /api/auth (default)
 ├── Cookie:    better-auth.session_token
@@ -396,14 +396,14 @@ Admin portal
 
 Each sub-system has detailed architecture documentation:
 
-| Document | Contents |
-|---|---|
-| `docs/cat-bot/ARCHITECTURE.md` | Full engine and server module tree with per-file annotations, database access pattern, platform adapter pattern, command and event module contract, key architectural invariants |
-| `docs/cat-bot/adapters/MODELS_ARCHITECTURE.md` | Unified data contract layer — `UnifiedApi`, context factories, event discriminated union, prototypes, four-layer dependency stack |
-| `docs/cat-bot/adapters/DISCORD_ARCHITECTURE.md` | Discord.js transport — slash command idempotency, dual-path API design, boot sequence, event routing |
-| `docs/cat-bot/adapters/TELEGRAM_ARCHITECTURE.md` | grammy transport — MarkdownV2 pipeline, four-scope slash menu management, pre-launch token validation |
-| `docs/cat-bot/adapters/FLUXER_ARCHITECTURE.md` | Native @fluxerjs/core transport — gateway login, event routing, server-hierarchy model |
-| `docs/cat-bot/adapters/WEBCHAT_ARCHITECTURE.md` | Native Socket.IO in-app chat — per-socket WebChatApi, socket event map |
-| `docs/database/ARCHITECTURE.md` | All three adapter implementations (neondb default), dynamic adapter selection, migration scripts, better-auth integration per adapter |
-| `docs/server/ARCHITECTURE.md` | Express registration order, dual better-auth instances, Socket.IO auth middleware, DB-first lifecycle ordering, cache cross-invalidation |
-| `docs/web/ARCHITECTURE.md` | Routing architecture, feature-based directory structure, design system token layers, real-time Socket.IO pattern, polymorphic component system |
+| Document                                         | Contents                                                                                                                                                                         |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/cat-bot/ARCHITECTURE.md`                   | Full engine and server module tree with per-file annotations, database access pattern, platform adapter pattern, command and event module contract, key architectural invariants |
+| `docs/cat-bot/adapters/MODELS_ARCHITECTURE.md`   | Unified data contract layer — `UnifiedApi`, context factories, event discriminated union, prototypes, four-layer dependency stack                                                |
+| `docs/cat-bot/adapters/DISCORD_ARCHITECTURE.md`  | Discord.js transport — slash command idempotency, dual-path API design, boot sequence, event routing                                                                             |
+| `docs/cat-bot/adapters/TELEGRAM_ARCHITECTURE.md` | grammy transport — MarkdownV2 pipeline, four-scope slash menu management, pre-launch token validation                                                                            |
+| `docs/cat-bot/adapters/FLUXER_ARCHITECTURE.md`   | Native @fluxerjs/core transport — gateway login, event routing, server-hierarchy model                                                                                           |
+| `docs/cat-bot/adapters/WEBCHAT_ARCHITECTURE.md`  | Native Socket.IO in-app chat — per-socket WebChatApi, socket event map                                                                                                           |
+| `docs/database/ARCHITECTURE.md`                  | All three adapter implementations (neondb default), dynamic adapter selection, migration scripts, better-auth integration per adapter                                            |
+| `docs/server/ARCHITECTURE.md`                    | Express registration order, dual better-auth instances, Socket.IO auth middleware, DB-first lifecycle ordering, cache cross-invalidation                                         |
+| `docs/web/ARCHITECTURE.md`                       | Routing architecture, feature-based directory structure, design system token layers, real-time Socket.IO pattern, polymorphic component system                                   |

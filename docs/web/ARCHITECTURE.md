@@ -28,7 +28,7 @@ The web package follows a feature-based directory structure: cross-cutting primi
 
 ## Package Layout
 
-```
+```text
 packages/web/
 │
 ├── index.html                            — Vite HTML entry; mounts React at #root
@@ -280,8 +280,6 @@ packages/web/
     │       │                               idle → nothing; validating → pulsing text;
     │       │                               success → green checkmark with bot name;
     │       │                               error → Alert with error message;
-    error → Alert with error message
-    (four phases only: idle / validating / success / error)
     │       │
     │       ├── dtos/
     │       │   └── bot.dto.ts            — Client-side type contracts matching the server DTOs
@@ -323,8 +321,6 @@ packages/web/
     │       │   │                           four phases (idle → validating → success / error);
     │       │   │                           no Socket.IO or OTP path in this fork;
     │       │   │                           See useBotValidation.ts:16-20.
-    │       │   │
-    │       │   │
     │       │   │
     │       │
     │       └── services/
@@ -490,7 +486,7 @@ packages/web/
 
 The router uses three sibling top-level route trees so each layout shell renders independently. Previously nesting `/dashboard` under `Layout` caused both the public navbar and the dashboard navbar to render simultaneously on dashboard routes.
 
-```
+```text
 createBrowserRouter([
 │
 ├── { path: '/', element: <Layout /> }           ← Public shell
@@ -537,7 +533,7 @@ All page components are loaded via `React.lazy()` wrapped in a `Suspense` bounda
 
 Two independent better-auth client instances communicate with two independent server-side `betterAuth()` instances. The isolation is complete — different base paths, different cookie names, and different server instances.
 
-```
+```text
 User portal                              Admin portal
 ─────────────────────────────────────    ─────────────────────────────────────
 better-auth-client.lib.ts                better-auth-admin-client.lib.ts
@@ -558,7 +554,7 @@ A user who signs out of the user portal retains their admin session. A compromis
 
 The web package maintains a single persistent Socket.IO connection managed by the `socket.lib.ts` singleton. The connection is established lazily when `getSocket()` is first called — typically by `DashboardLayout` on mount. Three distinct real-time concerns share this one connection.
 
-```
+```text
 socket.lib.ts singleton (one connection per browser tab)
 │
 ├── DashboardLayout.tsx                  ← Connectivity monitoring
@@ -586,7 +582,7 @@ The design system is a Material Design 3–inspired token system implemented ent
 
 **Token layers (applied in globals.css import order):**
 
-```
+```text
 theme/light.css   → --light-color-* and --color-* reference layer (default)
 theme/dark.css    → --dark-color-* and .dark override layer
 tokens.css        → Typography, spacing, motion, z-index, shadows, state opacity

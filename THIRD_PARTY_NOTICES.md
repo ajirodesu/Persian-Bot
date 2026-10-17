@@ -75,9 +75,11 @@ mock-API output capture, `send_result` unified delivery, the command result
 store, and the agent command guard) is derived from or inspired by:
 
 - Cat-Bot — https://github.com/johnlester-0369/Cat-Bot
-  (packages/cat-bot/src/engine/agent/: `tools/test_command.ts`,
+  (packages/cat-bot/src/engine/ai/: `tools/test_command.ts`,
   `tools/send_result.ts`, `lib/command-result-store.lib.ts`,
-  `agent-command-guard.lib.ts`)
+  `agent-command-guard.lib.ts` — these live in Persian-Bot's `engine/ai/`
+  subsystem as `builtin-tools.ts` (`test_command`/`send_result`),
+  `preview-store.ts`, `preview.ts`, and `command-guard.ts`)
 - Author: John Lester
 
 Cat-Bot is published under the ISC License (as recorded in this

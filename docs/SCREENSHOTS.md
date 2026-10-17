@@ -11,29 +11,87 @@ Files live in [`./screenshots/`](./screenshots/).
 
 ## Public pages (no sign-in)
 
-| Route | File |
-|---|---|
-| `/` landing | `screenshots/public-home.png` |
-| `/login` | `screenshots/public-login.png` (+ filled form: `public-login-filled.png`) |
-| `/signup` | `screenshots/public-signup.png` |
-| `/forgot-password` | `screenshots/public-forgot-password.png` |
-| `/reset-password` | `screenshots/public-reset-password.png` |
-| `/account-verification` | `screenshots/public-account-verification.png` |
-| unknown route (404) | `screenshots/public-404.png` |
+### Landing — `/`
+
+![Landing page](./screenshots/public-home.png)
+
+### Sign in — `/login`
+
+Empty form:
+
+![Sign-in page](./screenshots/public-login.png)
+
+With the form filled in:
+
+![Sign-in page with the form filled in](./screenshots/public-login-filled.png)
+
+### Sign up — `/signup`
+
+![Sign-up page](./screenshots/public-signup.png)
+
+### Forgot password — `/forgot-password`
+
+![Forgot-password page](./screenshots/public-forgot-password.png)
+
+### Reset password — `/reset-password`
+
+![Reset-password page](./screenshots/public-reset-password.png)
+
+### Account verification — `/account-verification`
+
+![Account-verification page](./screenshots/public-account-verification.png)
+
+### Unknown route — 404
+
+![Not-found page](./screenshots/public-404.png)
 
 ## User dashboard (`/dashboard`, signed in)
 
-| Route | File |
-|---|---|
-| `/dashboard` bot manager (empty state — this account owns no bots) | `screenshots/dashboard-manager.png` |
-| `/dashboard/settings` profile, theme, timezone, security, danger zone | `screenshots/dashboard-settings.png` |
-| `/dashboard/create-new-bot` step 1 Identity | `screenshots/dashboard-create-new-bot-identity.png` |
-| `/dashboard/create-new-bot` step 2 Platform, Discord selected | `screenshots/dashboard-create-new-bot-platform-discord.png` |
-| `/dashboard/create-new-bot` step 2 Platform, Telegram selected | `screenshots/dashboard-create-new-bot-platform-telegram.png` |
-| `/dashboard/create-new-bot` step 2 Platform, Fluxer selected | `screenshots/dashboard-create-new-bot-platform-fluxer.png` |
-| `/dashboard/chat-room` welcome panel | `screenshots/dashboard-chat-room-welcome.png` |
-| `/dashboard/chat-room` live chat UI (after Get Started) | `screenshots/dashboard-chat-room.png` |
-| `/dashboard/bot?id=<unknown>` not-found state | `screenshots/dashboard-bot-not-found.png` |
+### Bot manager — `/dashboard`
+
+Empty state — this account owns no bots.
+
+![Bot manager, empty state](./screenshots/dashboard-manager.png)
+
+### Settings — `/dashboard/settings`
+
+Profile, theme, timezone, security, danger zone.
+
+![Dashboard settings](./screenshots/dashboard-settings.png)
+
+### Create a bot — `/dashboard/create-new-bot`
+
+Step 1, identity:
+
+![Create-new-bot step 1: identity](./screenshots/dashboard-create-new-bot-identity.png)
+
+Step 2, platform — Discord selected:
+
+![Create-new-bot step 2: platform with Discord selected](./screenshots/dashboard-create-new-bot-platform-discord.png)
+
+Step 2, platform — Telegram selected:
+
+![Create-new-bot step 2: platform with Telegram selected](./screenshots/dashboard-create-new-bot-platform-telegram.png)
+
+Step 2, platform — Fluxer selected:
+
+![Create-new-bot step 2: platform with Fluxer selected](./screenshots/dashboard-create-new-bot-platform-fluxer.png)
+
+### Chat room — `/dashboard/chat-room`
+
+Welcome panel:
+
+![Chat room welcome panel](./screenshots/dashboard-chat-room-welcome.png)
+
+Live chat UI after _Get Started_:
+
+![Chat room live UI](./screenshots/dashboard-chat-room.png)
+
+### Bot detail — `/dashboard/bot?id=<unknown>`
+
+Not-found gate state (see the note below):
+
+![Bot detail not-found state](./screenshots/dashboard-bot-not-found.png)
 
 > **Bot detail tabs** (`/dashboard/bot`, `/commands`, `/events`, `/database`
 > with its Users/Groups tabs, `/settings`) render only for a bot session owned
@@ -48,20 +106,71 @@ Files live in [`./screenshots/`](./screenshots/).
 
 ## Admin portal (`/admin`, signed in as admin)
 
-| Route | File |
-|---|---|
-| `/admin` sign-in | `screenshots/admin-login.png` (+ filled: `admin-login-filled.png`) |
-| `/admin/forgot-password` | `screenshots/admin-forgot-password.png` |
-| `/admin/reset-password` | `screenshots/admin-reset-password.png` |
-| `/admin/dashboard` totals, platform distribution, recent registrations | `screenshots/admin-dashboard-overview.png` |
-| `/admin/dashboard/users` search + row actions (Ban/Edit/Delete) | `screenshots/admin-dashboard-users.png` |
-| … with Edit User dialog open | `screenshots/admin-dashboard-users-edit-dialog.png` |
-| `/admin/dashboard/bots` platform groups + session rows | `screenshots/admin-dashboard-bots.png` |
-| … with Delete Bot Session dialog open | `screenshots/admin-dashboard-bots-delete-dialog.png` |
-| `/admin/dashboard/git` repo status, commit/push/pull, changes, history | `screenshots/admin-dashboard-git.png` |
-| `/admin/dashboard/files` file browser | `screenshots/admin-dashboard-files.png` |
-| `/admin/dashboard/files/edit?path=package.json` code editor | `screenshots/admin-dashboard-file-editor.png` |
-| `/admin/dashboard/settings` profile, theme, timezone, admins, maintenance, git, security, danger zone | `screenshots/admin-dashboard-settings.png` |
+### Sign in — `/admin`
+
+Empty form:
+
+![Admin sign-in page](./screenshots/admin-login.png)
+
+With the form filled in:
+
+![Admin sign-in page with the form filled in](./screenshots/admin-login-filled.png)
+
+### Forgot password — `/admin/forgot-password`
+
+![Admin forgot-password page](./screenshots/admin-forgot-password.png)
+
+### Reset password — `/admin/reset-password`
+
+![Admin reset-password page](./screenshots/admin-reset-password.png)
+
+### Overview — `/admin/dashboard`
+
+Totals, platform distribution, recent registrations.
+
+![Admin dashboard overview](./screenshots/admin-dashboard-overview.png)
+
+### Users — `/admin/dashboard/users`
+
+Search + row actions (Ban/Edit/Delete):
+
+![Admin users list](./screenshots/admin-dashboard-users.png)
+
+Edit User dialog open:
+
+![Admin users list with the Edit User dialog open](./screenshots/admin-dashboard-users-edit-dialog.png)
+
+### Bots — `/admin/dashboard/bots`
+
+Platform groups + session rows:
+
+![Admin bots list](./screenshots/admin-dashboard-bots.png)
+
+Delete Bot Session dialog open:
+
+![Admin bots list with the Delete Bot Session dialog open](./screenshots/admin-dashboard-bots-delete-dialog.png)
+
+### Git — `/admin/dashboard/git`
+
+Repo status, commit/push/pull, changes, history.
+
+![Admin git page](./screenshots/admin-dashboard-git.png)
+
+### Files — `/admin/dashboard/files`
+
+File browser:
+
+![Admin file browser](./screenshots/admin-dashboard-files.png)
+
+Code editor (`/admin/dashboard/files/edit?path=package.json`):
+
+![Admin file editor](./screenshots/admin-dashboard-file-editor.png)
+
+### Settings — `/admin/dashboard/settings`
+
+Profile, theme, timezone, admins, maintenance, git, security, danger zone.
+
+![Admin settings](./screenshots/admin-dashboard-settings.png)
 
 Dialog captures were opened and dismissed with `Escape` — nothing was
 submitted, and no data was modified during the pass.
@@ -72,7 +181,7 @@ The capture script lives outside the repo at `/tmp/opencode/shots/shots.js`
 (kept out of git on purpose; asks for nothing — credentials are the seeded
 admin's). With the API on `:3001` and Vite proxying to it on `:5000`:
 
-```
+```bash
 node /tmp/opencode/shots/shots.js   # full pass → docs/screenshots/
 node /tmp/opencode/shots/wizard.js  # create-new-bot platform steps only
 ```

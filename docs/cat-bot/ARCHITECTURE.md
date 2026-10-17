@@ -24,7 +24,7 @@ Cat-Bot is a multi-platform bot framework that runs simultaneously on Discord, T
 
 The runtime event flow follows a strict three-stage pipeline:
 
-```
+```text
 [Platform Transport] → [Middleware Chain] → [Controller Dispatch]
 ```
 
@@ -34,7 +34,7 @@ Every incoming message or event from any platform passes through this pipeline i
 
 ## Monorepo Package Layout
 
-```
+```text
 Cat-Bot/
 │
 └── packages/
@@ -64,7 +64,7 @@ Cat-Bot/
 
 The engine is the entire bot runtime. It owns platform lifecycle, event routing, middleware execution, command dispatch, and database access. It is divided into eight sub-systems.
 
-```
+```text
 src/engine/
 │
 └── app.ts                               ← Process entry point and orchestration root
@@ -222,7 +222,7 @@ src/engine/
 
 The `app/` directory contains the user-authored bot logic loaded dynamically at startup.
 
-```
+```text
 src/app/
 │
 ├── commands/                            ← One file per command module; loaded by app.ts loadCommands()
@@ -241,7 +241,7 @@ Command and event modules are isolated from the engine internals. They author ag
 
 The server hosts the bot management dashboard API (REST + Socket.IO). Telegram webhooks are received per-session via the grammy webhook registry; there are no Fluxer routes (token login) and no Meta webhook routes in this fork.
 
-```
+```text
 src/server/
 │
 ├── server.ts                            ← startServer(): boots Express; mounts all route groups
@@ -296,7 +296,7 @@ src/server/
 
 The `database` package contains raw repository implementations with no caching. Cat-bot's `src/engine/repos/` files wrap these with an LRU cache layer. All consumers `import from 'database'` — the active adapter is selected at runtime via the `DATABASE_TYPE` environment variable.
 
-```
+```text
 packages/database/
 │
 ├── src/
@@ -324,7 +324,7 @@ packages/database/
 
 ### Database Access Pattern
 
-```
+```text
 packages/cat-bot/src/engine/repos/*.ts   ← LRU cache wrappers (cat-bot caching layer)
     ↓  imports from
 packages/database/src/index.ts           ← Unified adapter surface
@@ -340,7 +340,7 @@ The LRU cache layer in `cat-bot/repos/` applies write-through invalidation: ever
 
 Each platform adapter follows the same four-layer pattern. Detailed per-platform documentation is in `docs/cat-bot/adapters/`.
 
-```
+```text
 src/engine/adapters/platform/{platform}/
 │
 ├── index.ts                             ← Orchestrator: sequences boot phases; returns PlatformEmitter
@@ -360,7 +360,7 @@ src/engine/adapters/platform/{platform}/
 
 All five event types emitted by platform adapters:
 
-```
+```text
 PlatformEmitter events:
 ├── 'message'           ← Standard text / attachment message
 ├── 'message_reply'     ← User quoted (replied to) a message
@@ -376,7 +376,7 @@ PlatformEmitter events:
 
 Authors write against these exported types only. The engine loads modules dynamically from `src/app/commands/` and `src/app/events/` at startup.
 
-```
+```text
 Command module exports:
 ├── config: CommandMeta                ← name, version, role, author, description, cooldown
 │                                          Optional: aliases, hasPrefix, category, platform[], options[], guide[]
