@@ -2594,20 +2594,11 @@ const CR_STYLES = `
         /* ── Jump-to-message highlight (quote tap / swipe) ─────────────────── */
         .cr-highlight-flash { background-color: rgba(16, 185, 129, 0.16); }
 
-        /* ── Composer wrapper — safe-area-aware bottom padding ───────────── */
-               Adds the iOS/Android home-indicator inset on top of the
-               normal padding instead of the input bar sitting flush under
-               it, and keeps the same visual spacing on devices/browsers
-               that don't report a safe-area inset (env(...) falls back to
-               0px there, leaving the base value untouched). */
-        .cr-input-safe-pb {
-          padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-        }
-        @media (min-width: 768px) {
-          .cr-input-safe-pb {
-            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-          }
-        }
+        /* ── Composer bottom inset ────────────────────────────────────────────
+           Safe-area padding is NOT a class: the floating composer wrapper
+           applies \`paddingBottom: calc(1rem + env(safe-area-inset-bottom))\`
+           inline, so the capsule clears the iOS/Android home indicator and
+           spacing stays identical on devices that report no inset. */
 
         /* ── Composer textarea — scrollbar fully hidden ────────────────────
                The input still scrolls internally once its content exceeds
