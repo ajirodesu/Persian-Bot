@@ -1,11 +1,10 @@
 /**
  * Session Repo — LRU cache layer over the database adapter for bot_session reads.
  *
- * Bot nickname is read on every ai command invocation and every passive onChat
- * message that contains a trigger phrase. Without caching, each message would
- * incur a DB roundtrip for data that only changes when the bot admin edits the
- * session via the dashboard — potentially dozens of unnecessary reads per minute
- * in active group chats.
+ * Bot nickname is read on every command invocation. Without caching, each
+ * message would incur a DB roundtrip for data that only changes when the bot
+ * admin edits the session via the dashboard — potentially dozens of unnecessary
+ * reads per minute in active group chats.
  *
  * Invalidation: nickname updates flow through bot.repo.ts which already clears
  * `bot:detail:{userId}:{sessionId}` and `bot:list:{userId}`. The nickname key
@@ -60,7 +59,7 @@ export async function getBotNickname(
 // ── Bot Session Data ──────────────────────────────────────────────────────────
 
 // WHY: Caches the entire session data blob to prevent DB roundtrips on every command
-// that reads bot-level configuration or AI persona states.
+// that reads bot-level configuration or persona states.
 export async function getBotSessionData(
   userId: string,
   platform: string,

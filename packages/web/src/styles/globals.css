@@ -2,7 +2,7 @@
  * Global Styles Entry Point
  *
  * Composition order:
- *   fonts    → Fraunces from Google Fonts (unified serif across all text)
+ *   fonts    → Self-hosted Barlow / Barlow Condensed / JetBrains Mono
  *   theme/   → Per-theme CSS custom property values (color roles)
  *   tokens   → Design system tokens: typography, spacing, motion, layout, shadows
  *   base     → HTML element defaults and scrollbar normalization via @layer base
@@ -17,30 +17,79 @@
 
 /* -----------------------------------------------------------
   0. Web Fonts
-  Inter: the UI/body typeface — a clean, neutral, highly legible
-  grotesque that reads instantly modern and professional at app
-  scale (dense dashboards, tables, forms). Used for every piece
-  of body copy, labels, and controls via --font-family-plain.
-  Fraunces: the display/brand serif — loaded ONLY at its large
-  optical sizes and heavier weights so hero headlines and brand
-  marks keep a distinctive editorial voice (--font-family-brand).
-  JetBrains Mono: developer-grade monospace for code/data — a
-  serif or proportional face would break alignment in code
-  blocks and tabular data.
+  "Telemetry printout" pairing — three faces, three jobs:
+
+  Barlow Condensed — display/signage. Used at large sizes for
+  headings and brand marks only (--font-family-display), where
+  its narrow, engineered proportions read like printed
+  instrumentation lettering rather than editorial serif.
+
+  Barlow — reading/UI. Body copy, controls, tables, forms
+  (--font-family-plain). Neutral grotesque with a technical,
+  drawn-by-hand cadence that stays legible at app scale.
+
+  JetBrains Mono — data/labels/numerals. Code, metrics, IDs and
+  uppercase eyebrow labels (--font-family-mono); a proportional
+  face would break column alignment in code and tabular data.
   ----------------------------------------------------------- */
 /* -----------------------------------------------------------
   Self-hosted fonts (same-origin, immutable-hashed by Vite).
-  Variable woff2, latin subset, font-display: swap — text paints
-  immediately with system fallbacks, no third-party connection,
-  no css2 round-trip, no invisible-text flash. Family names match
-  the --font-family-* tokens exactly, so no other CSS changes.
+  Google Fonts publishes Barlow and Barlow Condensed as static
+  weights (no wght axis), so each latin woff2 is declared at its
+  own weight — the browser picks the exact cut, never a
+  synthesized one. font-display: swap paints text immediately
+  with system fallbacks; no third-party connection, no css2
+  round-trip, no invisible-text flash. Family names match the
+  --font-family-* tokens exactly, so no other CSS changes.
   ----------------------------------------------------------- */
 @font-face {
-  font-family: 'Inter';
+  font-family: 'Barlow';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
-  src: url('../assets/fonts/inter-latin.woff2') format('woff2');
+  src: url('../assets/fonts/barlow-latin-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/barlow-latin-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/barlow-latin-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/barlow-latin-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/barlow-condensed-latin-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/barlow-condensed-latin-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/barlow-condensed-latin-700.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
@@ -63,22 +112,22 @@
 /* -----------------------------------------------------------
   1. Theme Color Variables
 
-  Three selectable themes:
-   • aqua   — default theme, cyan/mint accent, iOS-style
-              shape/glass/glow tokens. Lives on :root so it
-              applies even before the switcher JS runs.
-   • burnt  — the warm amber-orange theme, opt-in via
+  Three selectable themes, all ink-black paper with a single
+  instrument accent — no gradient, glow, blur, or shadow finish:
+   • aqua   — signal lime on ink. The default, lives on :root
+              so it applies even before the switcher JS runs.
+   • burnt  — ember orange on warm ink, opt-in via
               html[data-theme="burnt"].
-   • indigo — the midnight-purple theme, opt-in via
+   • indigo — cobalt on cold ink, opt-in via
               html[data-theme="indigo"].
 
   Every theme shares the exact same shape (--radius-*), spacing,
   typography SIZE (--typography-*-font-size/-line-height/
-  -letter-spacing), and now font-family tokens from tokens.css
-  below and this file's Fraunces import — only color, glow, and
-  blur values are theme-specific. A theme file changing any size,
-  weight, line-height, or font-family value is a regression: open
-  its TYPOGRAPHY block and diff it against the other two themes.
+  -letter-spacing), and font-family tokens (tokens.css below plus
+  this file's self-hosted Barlow faces) — only color values are
+  theme-specific. A theme file changing any size, weight,
+  line-height, or font-family value is a regression: diff it
+  against the other two themes before merging.
   ----------------------------------------------------------- */
 @import './theme/aqua.css';
 @import './theme/burnt.css';

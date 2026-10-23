@@ -3225,7 +3225,7 @@ export default function ChatRoomPage() {
     setBotNickname(name)
     localStorage.setItem(NICKNAME_KEY, name)
     setShowNicknameModal(false)
-    // Sync updated nickname to server so ai command picks it up immediately
+    // Sync updated nickname to server so command handlers pick it up immediately
     socket.emit('chatroom:join', { sessionId, botNickname: name, userId: userIdRef.current, userName: displayNameRef.current, username: usernameRef.current, avatarUrl: avatarUrlRef.current })
   }, [socket, sessionId])
 

@@ -15,5 +15,8 @@ export default defineConfig({
     environment: 'node',
     exclude: ['**/dist/**', '**/node_modules/**'],
     setupFiles: ['./vitest.setup.ts'],
+    // The package's entire previous test suite was AI-only and was removed along
+    // with the AI-agent subsystem; no tests remain in this package yet.
+    passWithNoTests: true,
   },
 });

@@ -1,5 +1,5 @@
 // Vitest setup — minimal env so env.config.ts validation passes at import.
-// Provider keys are intentionally NOT set here; tests set them per-case.
+// Provider keys are intentionally NOT set here.
 process.env.NODE_ENV ??= 'test';
 process.env.DATABASE_TYPE ??= 'turso';
 process.env.BETTER_AUTH_SECRET ??= 'test-secret-for-vitest-only-32-chars';

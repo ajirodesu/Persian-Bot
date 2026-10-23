@@ -3,8 +3,8 @@ import { tursoClient } from '../client.js';
 /**
  * Global GitHub Config Store — the single deployment-level GitHub token.
  *
- * All GitHub authentication (bot commands /push, /installer, /update, the
- * admin_commit_push agent tool, and the Admin File Manager Git tab) uses ONE
+ * All GitHub authentication (bot commands /push, /installer, /update, and the
+ * Admin File Manager Git tab) uses ONE
  * token, set through the dashboard's Git tab. Stored as a JSON blob in the
  * system_settings table (DDL in client.ts initDb) under the `githubConfig` key,
  * upserted in place. The token itself is encrypted (AES-256-GCM, enc:v1:) by

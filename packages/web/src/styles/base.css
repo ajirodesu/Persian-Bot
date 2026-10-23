@@ -1,8 +1,12 @@
 /* ============================================================
    BASE LAYER
-   
+
    HTML element defaults, body/root configuration, and scrollbar
    normalization. Dark is the sole supported theme.
+
+   Type roles: Barlow Condensed for h1–h3 (signage), Barlow for
+   h4–h6 and all reading/UI text, JetBrains Mono for code and
+   tabular figures. Rules are flat: ink, hairline, no shadow.
    ============================================================ */
 
 @layer base {
@@ -12,9 +16,9 @@
     line-height: 1.6;
     letter-spacing: 0em;
     color-scheme: dark;
-    /* Inter is a variable font with an optical-size (opsz) axis — auto lets
-       the browser pick the right cut per rendered size; Fraunces (brand) is
-       loaded at display optical sizes only. */
+    /* Barlow ships as static weights (no optical-size axis) — keep
+       automatic optical sizing on so any future variable face still
+       picks the correct cut per rendered size. */
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -37,11 +41,11 @@
   /* -----------------------------------------------------------
     Global Custom Scrollbar Styles
 
-    Scrollbars stay invisible at rest and fade in only during
-    active scroll interaction. Every theme sets
-    --scrollbar-idle-opacity to 0 and ThemeProvider toggles
-    html[data-scrolling="true"] while the user is scrolling, so
-    this behavior is identical across Aqua, Burnt, and Indigo.
+    Scrollbars stay faint at rest (--scrollbar-idle-opacity, 0.35
+    in every theme) and go solid only during active scroll
+    interaction. ThemeProvider toggles html[data-scrolling="true"]
+    while the user is scrolling, so this behavior is identical
+    across Aqua, Burnt, and Indigo.
     ----------------------------------------------------------- */
   *:not(html) {
     scrollbar-width: thin;
@@ -77,20 +81,9 @@
     background: rgb(var(--color-outline) / 0.8);
   }
 
-  /* Bot Manager: Inter everywhere — no serif display face. */
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-family-plain);
-  }
-
-  h4,
-  h5,
-  h6 {
-    font-family: var(--font-family-plain);
-  }
-
+  /* h1–h3 are signage: condensed display face, tight leading. */
   h1 {
+    font-family: var(--font-family-display);
     font-size: var(--typography-display-large-font-size);
     line-height: var(--typography-display-large-line-height);
     font-weight: var(--typography-display-large-font-weight);
@@ -98,6 +91,7 @@
   }
 
   h2 {
+    font-family: var(--font-family-display);
     font-size: var(--typography-display-medium-font-size);
     line-height: var(--typography-display-medium-line-height);
     font-weight: var(--typography-display-medium-font-weight);
@@ -105,13 +99,16 @@
   }
 
   h3 {
+    font-family: var(--font-family-display);
     font-size: var(--typography-headline-large-font-size);
     line-height: var(--typography-headline-large-line-height);
     font-weight: var(--typography-headline-large-font-weight);
     letter-spacing: var(--typography-headline-large-letter-spacing);
   }
 
+  /* h4–h6 are in-document headings: reading face, not signage. */
   h4 {
+    font-family: var(--font-family-plain);
     font-size: var(--typography-headline-medium-font-size);
     line-height: var(--typography-headline-medium-line-height);
     font-weight: var(--typography-headline-medium-font-weight);
@@ -119,6 +116,7 @@
   }
 
   h5 {
+    font-family: var(--font-family-plain);
     font-size: var(--typography-headline-small-font-size);
     line-height: var(--typography-headline-small-line-height);
     font-weight: var(--typography-headline-small-font-weight);
@@ -126,6 +124,7 @@
   }
 
   h6 {
+    font-family: var(--font-family-plain);
     font-size: var(--typography-title-large-font-size);
     line-height: var(--typography-title-large-line-height);
     font-weight: var(--typography-title-large-font-weight);
@@ -148,7 +147,7 @@
     background-color: rgb(var(--color-surface-container-highest) / 1);
     color: rgb(var(--color-primary) / 0.9);
     padding: 0.15rem 0.35rem;
-    border-radius: 0.3rem;
+    border-radius: var(--radius-compact);
     letter-spacing: 0;
     border: 1px solid rgb(var(--color-outline-variant) / 0.5);
   }
@@ -157,9 +156,10 @@
     font-family: var(--font-family-mono);
     font-size: var(--typography-body-small-font-size);
     line-height: 1.6;
+    font-variant-numeric: tabular-nums;
     background-color: rgb(var(--color-surface-container-highest) / 1);
-    padding: var(--spacing-md);
-    border-radius: 0.75rem;
+    padding: var(--spacing-4);
+    border-radius: var(--radius-card);
     overflow-x: auto;
     border: 1px solid rgb(var(--color-outline-variant) / 0.5);
   }
@@ -171,15 +171,19 @@
     border: none;
   }
 
+  /* Numerals line up in data contexts only — never forced on prose. */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
   ::selection {
-    background-color: rgb(var(--color-primary) / 0.25);
-    color: rgb(var(--color-on-surface) / 1);
+    background: rgb(var(--color-primary));
+    color: rgb(var(--color-on-primary));
   }
 
   :focus-visible {
-    outline: 2px solid rgb(var(--color-primary) / 0.9);
+    outline: 2px solid rgb(var(--color-primary));
     outline-offset: 2px;
-    border-radius: 4px;
   }
 
   @media (prefers-reduced-motion: reduce) {

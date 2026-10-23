@@ -49,7 +49,7 @@ const MOBILE_MEDIA_QUERY = '(max-width: 639px)'
 /**
  * SearchableSelect — a Select with a live search field and a virtualized list.
  *
- * Built for large option sets (e.g. 400+ AI models) where a plain dropdown is
+ * Built for large option sets (e.g. hundreds of entries) where a plain dropdown is
  * unusable: only the rows on/near screen are ever mounted, and the filter runs
  * against a deferred copy of the query so each keystroke stays smooth. Mirrors
  * TimezoneSelect's behaviour — same positioning/keyboard-escape/click-outside

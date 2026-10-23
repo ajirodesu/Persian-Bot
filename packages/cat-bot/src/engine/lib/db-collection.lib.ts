@@ -433,7 +433,7 @@ export function createCollectionManager(
  * Since bot sessions are global to the credential identity, it requires no inner ID closures,
  * enabling direct usage like `db.bot.getCollection('name')`.
  *
- * WHY: Provides a globally scoped data store for the bot instance (e.g. global config, AI persona state)
+ * WHY: Provides a globally scoped data store for the bot instance (e.g. global config or persona state)
  * separate from user-specific or thread-specific data.
  */
 export function createBotCollectionManager(

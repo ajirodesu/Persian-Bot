@@ -33,9 +33,6 @@ export const prefetchDashboardHome = (): void =>
 export const prefetchChatRoom = (): void =>
   prefetchChunk('chat-room', () => import('@/pages/dashboard/chat-room'))
 
-export const prefetchAIAgent = (): void =>
-  prefetchChunk('ai-agent', () => import('@/pages/dashboard/ai-agent'))
-
 export const prefetchDashboardSettings = (): void =>
   prefetchChunk('dashboard-settings', () => import('@/pages/dashboard/settings'))
 

@@ -3,8 +3,8 @@ import { getMongoDb } from '../client.js';
 /**
  * Global GitHub Config Store — the single deployment-level GitHub token.
  *
- * All GitHub authentication (bot commands /push, /installer, /update, the
- * admin_commit_push agent tool, and the Admin File Manager Git tab) uses ONE
+ * All GitHub authentication (bot commands /push, /installer, /update, and the
+ * Admin File Manager Git tab) uses ONE
  * token, set through the dashboard's Git tab. Stored as a single document in
  * the systemSettings collection under the `githubConfig` id, upserted in
  * place. MongoDB is schemaless — no DDL required. The token itself is

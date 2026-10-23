@@ -1,175 +1,164 @@
 /* ============================================================
-   "INDIGO" THEME — the midnight-purple sibling of Aqua and Burnt
-   (formerly labeled "Night")
+   "INDIGO" THEME — cobalt on cold ink.
 
-   Mood: nocturnal, premium, a little mysterious — near-black
-   violet surfaces with a single vivid amethyst/periwinkle accent,
-   plus a soft magenta tertiary for contrast on code/data accents.
-   Same iOS-meets-developer finish quality as Aqua and Burnt —
-   frosted glass, soft layered shadows, glowing avatar rings,
-   springy motion — distinguished only by hue, never by polish.
+   Mood: blueprint telemetry. Cold near-black paper (#07090D) with
+   visible hairline rules (#1B202B) and a single cobalt accent
+   (#6E8BFF) for primary actions, active states, links, and focus
+   rings. Supporting neutrals are cool slate, so the page reads as a
+   printed schematic rather than a warm document.
 
    Values live under the explicit attribute selector; the switcher
-   sets html[data-theme="indigo"] the same way it does for the
-   other two themes.
+   sets html[data-theme="indigo"] the same way it does for the other
+   two themes.
+
+   Finish is flat: no gradients, frosted glass, ambient glow,
+   specular highlight, elevation shadows, or avatar glow. Gradient
+   tokens are kept by name but carry FLAT colors.
 
    Shape tokens (--radius-card, --radius-button, etc.) live once
    in tokens.css, not here — so sizing never drifts between themes.
    ============================================================ */
 
 html[data-theme='indigo'] {
-  /* ==================== PRIMARY (vivid amethyst/periwinkle) ====================
-     Scale reference: light #ede9ff → mid #9C87F5 → dark #241a4d */
-  --indigo-color-primary: 156 135 245;
-  --indigo-color-on-primary: 20 14 43;
-  --indigo-color-primary-container: 44 32 92;
-  --indigo-color-on-primary-container: 224 217 255;
+  /* ==================== PRIMARY (cobalt) ==================== */
+  --indigo-color-primary: 110 139 255;
+  --indigo-color-on-primary: 5 7 15;
+  --indigo-color-primary-container: 20 26 48;
+  --indigo-color-on-primary-container: 180 198 255;
 
-  /* ==================== SECONDARY (muted lavender-gray — supporting actions) ==================== */
-  --indigo-color-secondary: 170 161 196;
-  --indigo-color-on-secondary: 25 20 36;
-  --indigo-color-secondary-container: 38 32 54;
-  --indigo-color-on-secondary-container: 224 218 240;
+  /* ==================== SECONDARY (cool slate — supporting actions) ==================== */
+  --indigo-color-secondary: 145 154 170;
+  --indigo-color-on-secondary: 8 10 14;
+  --indigo-color-secondary-container: 22 26 34;
+  --indigo-color-on-secondary-container: 230 234 242;
 
-  /* ==================== TERTIARY (soft magenta — data/code accent) ==================== */
-  --indigo-color-tertiary: 232 121 199;
-  --indigo-color-on-tertiary: 46 10 38;
-  --indigo-color-tertiary-container: 74 22 63;
-  --indigo-color-on-tertiary-container: 253 209 240;
+  /* ==================== TERTIARY (cool slate — data/code accent) ==================== */
+  --indigo-color-tertiary: 145 154 170;
+  --indigo-color-on-tertiary: 8 10 14;
+  --indigo-color-tertiary-container: 22 26 34;
+  --indigo-color-on-tertiary-container: 230 234 242;
 
-  /* ==================== SURFACE SYSTEM (midnight purple) ==================== */
-  /* Base background: near-black deep violet #0b0714 */
-  --indigo-color-surface: 11 7 20;
-  --indigo-color-on-surface: 240 236 250;
-  --indigo-color-surface-variant: 70 62 90;
-  --indigo-color-on-surface-variant: 168 159 188;
-  --indigo-color-surface-container-lowest: 6 4 12;
-  --indigo-color-surface-container-low: 15 11 27;
-  --indigo-color-surface-container: 20 15 35;
-  --indigo-color-surface-container-high: 27 20 45;
-  --indigo-color-surface-container-highest: 35 27 56;
-  --indigo-color-surface-bright: 168 159 188;
-  --indigo-color-surface-dim: 6 4 12;
+  /* ==================== SURFACE SYSTEM (cold ink) ==================== */
+  /* Base paper: #07090D */
+  --indigo-color-surface: 7 9 13;
+  --indigo-color-on-surface: 230 234 242;
+  --indigo-color-surface-variant: 105 114 130;
+  --indigo-color-on-surface-variant: 152 161 177;
+  --indigo-color-surface-container-lowest: 4 6 9;
+  --indigo-color-surface-container-low: 11 14 20;
+  /* Card/surface background */
+  --indigo-color-surface-container: 11 14 20;
+  --indigo-color-surface-container-high: 18 22 31;
+  --indigo-color-surface-container-highest: 25 30 41;
+  --indigo-color-surface-bright: 230 234 242;
+  --indigo-color-surface-dim: 7 9 13;
 
   /* ==================== INVERSE ==================== */
-  --indigo-color-inverse-surface: 240 236 250;
-  --indigo-color-inverse-on-surface: 11 7 20;
-  --indigo-color-inverse-primary: 44 32 92;
+  --indigo-color-inverse-surface: 230 234 242;
+  --indigo-color-inverse-on-surface: 7 9 13;
+  --indigo-color-inverse-primary: 110 139 255;
 
   /* ==================== OUTLINE ==================== */
-  --indigo-color-outline: 111 100 138;
-  --indigo-color-outline-variant: 48 41 66;
+  --indigo-color-outline: 50 57 71;
+  --indigo-color-outline-variant: 30 35 45;
 
   /* ==================== SCRIM & SHADOW ==================== */
   --indigo-color-scrim: 0 0 0;
-  --indigo-color-shadow: 4 2 10;
+  --indigo-color-shadow: 0 0 0;
 
-  /* ==================== DANGER / ERROR (rose) ==================== */
-  --indigo-color-error: 248 87 118;
-  --indigo-color-on-error: 255 255 255;
-  --indigo-color-error-container: 51 15 27;
-  --indigo-color-on-error-container: 255 197 207;
+  /* ==================== ERROR (red ink) ==================== */
+  --indigo-color-error: 255 95 105;
+  --indigo-color-on-error: 20 4 6;
+  --indigo-color-error-container: 42 12 18;
+  --indigo-color-on-error-container: 255 160 175;
 
-  /* ==================== SUCCESS (green, kept crisp against violet) ==================== */
-  --indigo-color-success: 94 224 152;
-  --indigo-color-on-success: 4 30 18;
-  --indigo-color-success-container: 13 46 29;
-  --indigo-color-on-success-container: 178 246 202;
+  /* ==================== SUCCESS (green signal) ==================== */
+  --indigo-color-success: 70 210 150;
+  --indigo-color-on-success: 4 20 12;
+  --indigo-color-success-container: 10 34 24;
+  --indigo-color-on-success-container: 125 240 185;
 
-  /* ==================== WARNING (amber) ==================== */
-  --indigo-color-warning: 250 176 60;
-  --indigo-color-on-warning: 40 24 0;
-  --indigo-color-warning-container: 51 35 10;
-  --indigo-color-on-warning-container: 253 220 158;
+  /* ==================== WARNING (amber signal) ==================== */
+  --indigo-color-warning: 245 185 70;
+  --indigo-color-on-warning: 24 14 0;
+  --indigo-color-warning-container: 40 28 6;
+  --indigo-color-on-warning-container: 253 211 120;
 
-  /* ==================== INFO (amethyst — same family as primary) ==================== */
-  --indigo-color-info: 156 135 245;
-  --indigo-color-on-info: 20 14 43;
-  --indigo-color-info-container: 34 25 71;
-  --indigo-color-on-info-container: 224 217 255;
+  /* ==================== INFO (sky signal) ==================== */
+  --indigo-color-info: 120 190 255;
+  --indigo-color-on-info: 4 14 22;
+  --indigo-color-info-container: 10 28 44;
+  --indigo-color-on-info-container: 170 215 255;
 
   /* ==================== GRADIENTS ====================
-     Reserved for large, heavily-blurred ambient background
-     glows only — never flat fills on buttons/cards. */
-  --indigo-color-gradient-primary: linear-gradient(135deg, rgb(156 135 245) 0%, rgb(44 32 92) 100%);
-  --indigo-color-gradient-secondary: linear-gradient(135deg, rgb(170 161 196) 0%, rgb(70 62 90) 100%);
-  --indigo-color-gradient-tertiary: linear-gradient(135deg, rgb(232 121 199) 0%, rgb(74 22 63) 100%);
-  --indigo-color-gradient-error: linear-gradient(135deg, rgb(248 87 118) 0%, rgb(51 15 27) 100%);
-  --indigo-color-gradient-success: linear-gradient(135deg, rgb(94 224 152) 0%, rgb(13 46 29) 100%);
-  --indigo-color-gradient-warning: linear-gradient(135deg, rgb(250 176 60) 0%, rgb(51 35 10) 100%);
-  --indigo-color-gradient-info: linear-gradient(135deg, rgb(156 135 245) 0%, rgb(34 25 71) 100%);
+     Token names retained for existing consumers, but every value is
+     a FLAT color: there is no gradient anywhere in this design. */
+  --indigo-color-gradient-primary: rgb(110 139 255);
+  --indigo-color-gradient-secondary: rgb(145 154 170);
+  --indigo-color-gradient-tertiary: rgb(110 139 255);
+  --indigo-color-gradient-error: rgb(255 95 105);
+  --indigo-color-gradient-success: rgb(70 210 150);
+  --indigo-color-gradient-warning: rgb(245 185 70);
+  --indigo-color-gradient-info: rgb(110 139 255);
 
   /* ==================== HAIRLINE BORDERS ====================
-     Cool white at 8% opacity — mirrors Aqua/Burnt's hairline treatment */
-  --color-hairline-border: rgba(232, 225, 255, 0.08);
+     Solid 1px structural rule shared by shells, cards, and tables */
+  --color-hairline-border: #1b202b;
 
   /* ==================== HEADER SEPARATOR ====================
      The sidebar header's 1px line style — every page header uses
      this same token so all top bars divide with identical weight */
-  --color-separator: rgba(232, 225, 255, 0.14);
+  --color-separator: rgba(27, 32, 43, 0.55);
 
-  /* ==================== FROSTED GLASS ==================== */
-  --glass-bg: rgba(20, 15, 35, 0.55);
-  --glass-blur: 20px;
-  --glass-saturate: 180%;
-  --glass-border: rgba(232, 225, 255, 0.08);
+  /* ==================== FLAT SURFACES (no frosted glass) ==================== */
+  --glass-bg: #0b0e14;
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-border: #1b202b;
 
   /* ==================== INPUT SURFACES ==================== */
-  --color-input-bg: rgba(20, 15, 35, 0.55);
-  --color-input-border: rgba(232, 225, 255, 0.08);
+  --color-input-bg: #0d1119;
+  --color-input-border: #242b39;
 
-  /* ==================== SOFT iOS-STYLE SHADOW SCALE ==================== */
-  --shadow-soft-sm:
-    0 1px 2px rgba(4, 2, 10, 0.34),
-    0 2px 8px rgba(4, 2, 10, 0.28);
-  --shadow-soft-md:
-    0 1px 2px rgba(4, 2, 10, 0.36),
-    0 8px 24px rgba(4, 2, 10, 0.4);
-  --shadow-soft-lg:
-    0 2px 4px rgba(4, 2, 10, 0.38),
-    0 16px 40px rgba(4, 2, 10, 0.44),
-    0 32px 64px rgba(4, 2, 10, 0.32);
+  /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
+  --shadow-soft-sm: none;
+  --shadow-soft-md: none;
+  --shadow-soft-lg: none;
 
-  --shadow-card-rest: var(--shadow-soft-sm);
-  --shadow-card-hover: var(--shadow-soft-md);
+  --shadow-card-rest: none;
+  --shadow-card-hover: none;
 
-  /* Wide, soft accent glow ring for focused inputs */
-  --shadow-focus-ring: 0 0 0 4px rgba(156, 135, 245, 0.24);
+  /* Tight accent focus ring for inputs — outline, not bloom */
+  --shadow-focus-ring: 0 0 0 2px rgba(110, 139, 255, 0.45);
 
-  /* Avatar/portrait glow ring — amethyst counterpart to Aqua's mint glow */
-  --shadow-avatar-glow:
-    0 0 0 3px rgb(var(--indigo-color-surface) / 1),
-    0 0 0 5px rgba(156, 135, 245, 0.55),
-    0 0 32px rgba(156, 135, 245, 0.35);
+  /* No avatar glow in the printout finish */
+  --shadow-avatar-glow: none;
 
   /* ==================== TYPOGRAPHY ====================
-     Inter for body/UI, Fraunces for display/brand — the exact
-     same faces Aqua and Burnt use. Only font-family lives here;
-     every size/line-height/spacing token stays in tokens.css,
-     shared and untouched by any theme. */
-  --font-family-brand:
-    'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
-  --font-family-plain:
-    'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+     Barlow Condensed is the signage/display face
+     (--font-family-brand, mapped to --font-family-display).
+     Barlow drives body/UI, JetBrains Mono drives data. Identical
+     faces to Aqua and Burnt; only font-family lives here — every
+     size/line-height/spacing token stays in tokens.css, shared and
+     untouched by any theme. */
+  --font-family-brand: 'Barlow Condensed', 'Barlow', sans-serif;
+  --font-family-plain: 'Barlow', system-ui, -apple-system, sans-serif;
   --font-family-mono:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
 
-  /* ==================== AMBIENT BACKGROUND GLOW ==================== */
-  --ambient-glow-opacity: 1;
-  --ambient-glow-primary: rgba(156, 135, 245, 0.2);
-  --ambient-glow-secondary: rgba(232, 121, 199, 0.14);
+  /* ==================== AMBIENT BACKGROUND GLOW ====================
+     Disabled in the flat finish — transparent everywhere. */
+  --ambient-glow-opacity: 0;
+  --ambient-glow-primary: transparent;
+  --ambient-glow-secondary: transparent;
 
   /* ==================== SCROLLBAR ====================
-     Invisible at rest, matching Aqua/Burnt's refined behavior */
-  --scrollbar-idle-opacity: 0;
+     Faint at rest, solid while actively scrolling */
+  --scrollbar-idle-opacity: 0.35;
 
   /* ==================== SPECULAR HIGHLIGHT ====================
-     Matches Aqua/Burnt's top-edge glass highlight on raised surfaces */
-  --specular-highlight: linear-gradient(
-    180deg,
-    rgba(232, 225, 255, 0.06) 0%,
-    rgba(232, 225, 255, 0) 14%
-  );
+     Disabled in the flat finish. */
+  --specular-highlight: transparent;
 
   /* -------- Reference layer -------- */
   --color-primary: var(--indigo-color-primary);
@@ -191,11 +180,15 @@ html[data-theme='indigo'] {
   --color-on-surface: var(--indigo-color-on-surface);
   --color-surface-variant: var(--indigo-color-surface-variant);
   --color-on-surface-variant: var(--indigo-color-on-surface-variant);
-  --color-surface-container-lowest: var(--indigo-color-surface-container-lowest);
+  --color-surface-container-lowest: var(
+    --indigo-color-surface-container-lowest
+  );
   --color-surface-container-low: var(--indigo-color-surface-container-low);
   --color-surface-container: var(--indigo-color-surface-container);
   --color-surface-container-high: var(--indigo-color-surface-container-high);
-  --color-surface-container-highest: var(--indigo-color-surface-container-highest);
+  --color-surface-container-highest: var(
+    --indigo-color-surface-container-highest
+  );
   --color-surface-bright: var(--indigo-color-surface-bright);
   --color-surface-dim: var(--indigo-color-surface-dim);
 

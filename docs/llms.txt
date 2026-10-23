@@ -2030,7 +2030,7 @@ import {
 
 ### session.repo.ts — Bot Nickname
 
-Read on every AI command invocation and every passive `onChat` trigger phrase check.
+Read whenever a handler needs the bot's configured display name for a session.
 
 **Import path:**
 ```ts

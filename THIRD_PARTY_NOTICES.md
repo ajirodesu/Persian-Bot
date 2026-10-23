@@ -49,7 +49,7 @@ SOFTWARE.
 
 ### What was adapted
 
-The Persian-Bot implementation (`packages/cat-bot/src/engine/ai/`) re-expresses
+The former Persian-Bot AI subsystem (since removed) re-expressed
 Reze-Bot's AI/agent architecture — provider abstraction with fallback and
 rotation, bounded tool-calling agent loop, tolerant tool-call parser, tool
 registry with validation, deterministic prefetch, budgeted prompt assembly,
@@ -61,30 +61,44 @@ contract, `Role` permission levels, `db.users`/`db.threads`/`db.bot`
 collections, Winston logging, Express dashboard API, and the Aqua/Burnt/Indigo
 dashboard design system).
 
-No Telegram-specific bot runtime was copied: platform behaviour is implemented
+No Telegram-specific bot runtime was copied: platform behaviour was implemented
 against Persian-Bot's unified adapter layer. Persian-Bot's AI subsystem was
 built by the Persian-Bot contributors; upstream authorship is credited above
 and is not claimed by this project.
 
 ---
 
-## Cat-Bot Agent Tools (upstream command preview & delivery)
+## Cat-Bot Agent Tools (removed command preview & delivery)
 
-Persian-Bot's silent command-preview pipeline (`test_command` execution with
-mock-API output capture, `send_result` unified delivery, the command result
-store, and the agent command guard) is derived from or inspired by:
+Persian-Bot's former silent command-preview pipeline (`test_command` execution
+with mock-API output capture, `send_result` unified delivery, the command result
+store, and the agent command guard) was derived from or inspired by:
 
 - Cat-Bot — https://github.com/johnlester-0369/Cat-Bot
-  (packages/cat-bot/src/engine/ai/: `tools/test_command.ts`,
-  `tools/send_result.ts`, `lib/command-result-store.lib.ts`,
-  `agent-command-guard.lib.ts` — these live in Persian-Bot's `engine/ai/`
-  subsystem as `builtin-tools.ts` (`test_command`/`send_result`),
-  `preview-store.ts`, `preview.ts`, and `command-guard.ts`)
+  (the implementation was removed together with the AI subsystem)
 - Author: John Lester
 
-Cat-Bot is published under the ISC License (as recorded in this
-repository's `docs/CREDITS.md`). The implementation was re-expressed in
-Persian-Bot engine idioms (CommandMeta/onCommand modules, the Persian
-dispatchCommand signature, AppCtx-scoped contexts, native button-ID grids,
-five Role levels, session/thread admin-only modes, dashboard command
-toggles, and platform filtering).
+Cat-Bot is published under the ISC License (see the upstream Cat-Bot
+repository). The implementation was re-expressed in Persian-Bot engine idioms
+(CommandMeta/onCommand modules, the Persian dispatchCommand signature,
+AppCtx-scoped contexts, native button-ID grids, five Role levels,
+session/thread admin-only modes, dashboard command toggles, and platform
+filtering).
+
+---
+
+## leanrea (Reverse-Engineering Skill)
+
+`.opencode/skills/leanrea/` is a vendored copy of leanrea, pinned to
+`aicodeking/leanrea@09ba4aa0217f82cd880f855a60b877f59f39b22b` (upstream `main`, fetched 2026-10-23):
+
+- leanrea — https://github.com/aicodeking/leanrea
+- Author: AICodeKing
+- License: MIT (full text in `.opencode/skills/leanrea/LICENSE`)
+
+The `SKILL.md` body is reproduced verbatim from upstream; a verbatim copy of the
+upstream MIT `LICENSE` is vendored alongside it. The only local changes to
+`SKILL.md` are frontmatter fields (`compatibility`, `metadata`) and an appended
+"Local notes (Persian-Bot)" section covering Linux temp paths, the `cp -c` and
+`rm -rf` substitutions, the macOS-only tool rows, and precedence over the
+upstream commands. Upstream copyright remains with AICodeKing.

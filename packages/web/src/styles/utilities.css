@@ -13,38 +13,31 @@
 
 @layer utilities {
   /**
-   * Frosted-glass surface utility.
+   * Chrome surface utility (kept for compatibility).
    *
-   * Translucent surface fill + heavy backdrop blur + saturation
-   * boost + hairline border. Reserved for chrome-level surfaces
-   * (sidebar, header) rather than content cards. Every value
-   * comes from theme tokens, so the frosted-glass look renders
-   * identically across Aqua, Burnt, and Indigo.
+   * Reads its fill, border, blur, and saturation from theme tokens.
+   * Every theme sets --glass-blur to 0px and --glass-saturate to
+   * 100%, and --glass-bg to a flat ink value, so this renders as an
+   * opaque panel with a hairline border — no frosted glass.
    */
   .glass-surface {
     background-color: var(--glass-bg);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur))
+      saturate(var(--glass-saturate));
     backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
     border-color: var(--glass-border);
   }
 
   /**
-   * Ambient background glow utility.
+   * Ambient background glow utility — neutralized.
    *
-   * A single large, heavily-blurred radial color blob, meant to
-   * sit absolutely positioned and off-canvas behind hero-style
-   * sections. Never used as a flat gradient fill on buttons or
-   * cards. Colors are theme-controlled, but every theme keeps
-   * --ambient-glow-opacity at 1 so the effect renders identically
-   * across Aqua, Burnt, and Indigo.
+   * The class is retained so no component has to change markup or
+   * class names, but the "telemetry printout" direction has no
+   * ambient light: the element renders nothing at all. A page can
+   * keep the wrapper in place and still never paint a blob.
    */
   .ambient-glow {
-    position: absolute;
-    pointer-events: none;
-    border-radius: 9999px;
-    filter: blur(100px);
-    opacity: var(--ambient-glow-opacity, 0);
-    z-index: var(--z-deep);
+    display: none;
   }
 
   .ambient-glow-primary {
@@ -56,14 +49,11 @@
   }
 
   /**
-   * Specular highlight utility.
+   * Specular highlight utility — neutralized.
    *
-   * Lays a faint top-edge light catch across a raised surface —
-   * cards, sheets, pill buttons — via a pseudo-element so it never
-   * fights the element's own background/border-radius. Theme-driven
-   * (see --specular-highlight in theme/aqua.css, theme/burnt.css,
-   * and theme/indigo.css), so it reads as "glass catching light" in
-   * every theme without extra markup or JS.
+   * The pseudo-element survives (components rely on the class for
+   * stacking) but paints transparent, so no top-edge light catch,
+   * gradient, or highlight can appear on any surface.
    */
   .surface-specular {
     position: relative;
@@ -75,7 +65,7 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: var(--specular-highlight, transparent);
+    background: transparent;
     pointer-events: none;
     z-index: 1;
   }
@@ -134,8 +124,32 @@
     height: 0.4rem;
     border-radius: 9999px;
     background: rgb(var(--color-primary) / 1);
-    box-shadow: 0 0 8px rgb(var(--color-primary) / 0.9);
     flex-shrink: 0;
+  }
+
+  /**
+   * Rule label — hairline section marker used by later layout steps.
+   *
+   * Small uppercase monospace label followed by a rule that fills the
+   * remaining width, the way a technical printout separates fields.
+   * Flat by construction: one 1px line, no gradient or fade.
+   */
+  .rule-label {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-family-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgb(var(--color-on-surface-variant));
+  }
+
+  .rule-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgb(var(--color-outline-variant));
   }
 
   /**
@@ -158,20 +172,14 @@
   }
 
   /**
-   * Gradient headline text — subtle two-stop fade from on-surface
-   * white into the primary accent, used sparingly on the second
-   * line of a hero headline for a soft "catching light" effect.
+   * Accent text — flat primary ink.
+   *
+   * Previously a background-clip gradient; the printout direction
+   * has no text gradients, so this is a plain solid color swap.
    * Never used for body copy or anywhere legibility is critical.
    */
   .text-gradient-accent {
-    background: linear-gradient(
-      100deg,
-      rgb(var(--color-on-surface) / 1) 0%,
-      rgb(var(--color-primary) / 1) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: rgb(var(--color-primary));
   }
 
   /**

@@ -1,13 +1,18 @@
 /* ============================================================
    DESIGN SYSTEM TOKENS
-   
+
    All CSS custom properties for the design system scale.
    These are global (not theme-specific) — color roles live in
    theme/aqua.css, theme/burnt.css, and theme/indigo.css.
 
+   "Telemetry printout": flat ink-black technical document. Type
+   is condensed display + neutral grotesque + monospace data,
+   corners are barely rounded, and elevation is a printed-page
+   concern only (no soft shadow vocabulary at rest).
+
    Shape (--radius-*) also lives here, globally, so cards, buttons,
    and inputs render at identical sizes across every theme — themes
-   are only ever allowed to change color/glow/blur, never layout.
+   are only ever allowed to change color, never layout.
 
    Token groups:
    1. Typography (font sizes, line heights, weights, tracking)
@@ -21,104 +26,110 @@
 
 :root {
   /* ==================== TYPOGRAPHY ==================== */
-  /* Font Families are theme-specific — see theme/aqua.css,
-     theme/burnt.css, and theme/indigo.css (brand/plain/mono vary
-     per theme so each theme can express its own typographic
-     personality). */
+  /* Display family is global: Barlow Condensed is the signage face
+     for headings and brand marks. Brand/plain/mono families are
+     theme-specific — see theme/aqua.css, theme/burnt.css, and
+     theme/indigo.css. */
+  --font-family-display: 'Barlow Condensed', 'Barlow', sans-serif;
 
   --font-size-base: 1rem;
 
-  /* ==================== DISPLAY STYLES ==================== */
-  --typography-display-large-font-size: calc(var(--font-size-base) * 3.5625);
-  --typography-display-large-line-height: 1.12;
-  --typography-display-large-font-weight: 700;
-  --typography-display-large-letter-spacing: -0.025em;
-  --typography-display-medium-font-size: calc(var(--font-size-base) * 2.8125);
-  --typography-display-medium-line-height: 1.16;
-  --typography-display-medium-font-weight: 700;
-  --typography-display-medium-letter-spacing: -0.02em;
-  --typography-display-small-font-size: calc(var(--font-size-base) * 2.25);
-  --typography-display-small-line-height: 1.22;
+  /* ==================== DISPLAY STYLES ====================
+     Signage scale: tight leading, large jumps between steps so a
+     section title reads as a printed header, not a paragraph. */
+  --typography-display-large-font-size: clamp(3rem, 7vw, 5.25rem);
+  --typography-display-large-line-height: 0.92;
+  --typography-display-large-font-weight: 600;
+  --typography-display-large-letter-spacing: -0.01em;
+  --typography-display-medium-font-size: clamp(2.25rem, 4.5vw, 3.5rem);
+  --typography-display-medium-line-height: 0.96;
+  --typography-display-medium-font-weight: 600;
+  --typography-display-medium-letter-spacing: -0.008em;
+  --typography-display-small-font-size: clamp(1.875rem, 3vw, 2.5rem);
+  --typography-display-small-line-height: 1;
   --typography-display-small-font-weight: 600;
-  --typography-display-small-letter-spacing: -0.015em;
+  --typography-display-small-letter-spacing: -0.005em;
 
   /* ==================== HEADLINE STYLES ==================== */
-  --typography-headline-large-font-size: calc(var(--font-size-base) * 2);
-  --typography-headline-large-line-height: 1.25;
+  --typography-headline-large-font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+  --typography-headline-large-line-height: 1.1;
   --typography-headline-large-font-weight: 600;
-  --typography-headline-large-letter-spacing: -0.01em;
-  --typography-headline-medium-font-size: calc(var(--font-size-base) * 1.75);
-  --typography-headline-medium-line-height: 1.29;
+  --typography-headline-large-letter-spacing: -0.005em;
+  --typography-headline-medium-font-size: 1.375rem;
+  --typography-headline-medium-line-height: 1.15;
   --typography-headline-medium-font-weight: 600;
-  --typography-headline-medium-letter-spacing: -0.008em;
-  --typography-headline-small-font-size: calc(var(--font-size-base) * 1.5);
-  --typography-headline-small-line-height: 1.33;
+  --typography-headline-medium-letter-spacing: 0;
+  --typography-headline-small-font-size: 1.125rem;
+  --typography-headline-small-line-height: 1.25;
   --typography-headline-small-font-weight: 600;
-  --typography-headline-small-letter-spacing: -0.005em;
+  --typography-headline-small-letter-spacing: 0;
 
   /* ==================== TITLE STYLES ==================== */
-  --typography-title-large-font-size: calc(var(--font-size-base) * 1.375);
-  --typography-title-large-line-height: 1.27;
+  --typography-title-large-font-size: 1rem;
+  --typography-title-large-line-height: 1.4;
   --typography-title-large-font-weight: 600;
-  --typography-title-large-letter-spacing: -0.003em;
-  --typography-title-medium-font-size: calc(var(--font-size-base) * 1);
-  --typography-title-medium-line-height: 1.5;
-  --typography-title-medium-font-weight: 500;
-  --typography-title-medium-letter-spacing: 0em;
-  --typography-title-small-font-size: calc(var(--font-size-base) * 0.875);
-  --typography-title-small-line-height: 1.5;
-  --typography-title-small-font-weight: 500;
-  --typography-title-small-letter-spacing: 0em;
+  --typography-title-large-letter-spacing: 0;
+  --typography-title-medium-font-size: 0.9375rem;
+  --typography-title-medium-line-height: 1.45;
+  --typography-title-medium-font-weight: 600;
+  --typography-title-medium-letter-spacing: 0;
+  --typography-title-small-font-size: 0.8125rem;
+  --typography-title-small-line-height: 1.45;
+  --typography-title-small-font-weight: 600;
+  --typography-title-small-letter-spacing: 0;
 
-  /* ==================== BODY STYLES - WCAG 2.2 COMPLIANT ==================== */
-  --typography-body-large-font-size: calc(var(--font-size-base) * 1.125);
-  --typography-body-large-line-height: 1.6;
+  /* ==================== BODY STYLES - WCAG 2.2 COMPLIANT ====================
+     Generous leading: Barlow's tall x-height needs it to stay
+     comfortable in dense dashboard copy. */
+  --typography-body-large-font-size: 1.0625rem;
+  --typography-body-large-line-height: 1.65;
   --typography-body-large-font-weight: 400;
   --typography-body-large-letter-spacing: 0em;
 
-  --typography-body-medium-font-size: calc(var(--font-size-base) * 1);
-  --typography-body-medium-line-height: 1.5;
+  --typography-body-medium-font-size: 0.9375rem;
+  --typography-body-medium-line-height: 1.6;
   --typography-body-medium-font-weight: 400;
   --typography-body-medium-letter-spacing: 0em;
 
-  --typography-body-small-font-size: calc(var(--font-size-base) * 0.875);
-  --typography-body-small-line-height: 1.5;
+  --typography-body-small-font-size: 0.8125rem;
+  --typography-body-small-line-height: 1.55;
   --typography-body-small-font-weight: 400;
   --typography-body-small-letter-spacing: 0em;
 
-  /* ==================== LABEL STYLES ==================== */
-  --typography-label-large-font-size: calc(var(--font-size-base) * 0.875);
-  --typography-label-large-line-height: 1.5;
+  /* ==================== LABEL STYLES ====================
+     Small labels track open so uppercase mono/label runs stay
+     readable at 10–13px. */
+  --typography-label-large-font-size: 0.8125rem;
+  --typography-label-large-line-height: 1.4;
   --typography-label-large-font-weight: 500;
   --typography-label-large-letter-spacing: 0em;
 
-  --typography-label-medium-font-size: calc(var(--font-size-base) * 0.8125);
-  --typography-label-medium-line-height: 1.5;
+  --typography-label-medium-font-size: 0.6875rem;
+  --typography-label-medium-line-height: 1.4;
   --typography-label-medium-font-weight: 500;
-  --typography-label-medium-letter-spacing: 0.01em;
+  --typography-label-medium-letter-spacing: 0.06em;
 
-  --typography-label-small-font-size: calc(var(--font-size-base) * 0.75);
-  --typography-label-small-line-height: 1.5;
+  --typography-label-small-font-size: 0.625rem;
+  --typography-label-small-line-height: 1.4;
   --typography-label-small-font-weight: 500;
-  --typography-label-small-letter-spacing: 0.015em;
+  --typography-label-small-letter-spacing: 0.1em;
 
   /* ==================== SHAPE ====================
-     Confident but restrained corners — pill interactive controls, softly
-     rounded cards. 16px cards read crisper and more professional than the
-     previous 20px while still feeling friendly. Defined once, globally, so
-     every theme (Aqua / Burnt / Indigo) renders cards, buttons, and inputs
-     at identical sizes — only color/glow/blur values vary per theme. */
-  --radius-card: 1rem;        /* 16px */
-  --radius-card-lg: 1.25rem;  /* 20px */
-  --radius-button: 9999px;    /* fully pill */
-  --radius-input: 0.625rem;   /* 10px */
-  --radius-badge: 9999px;
-  /* Compact controls (checkbox) sit well below the --radius-input scale —
-     --radius-input's corner would read as nearly-circular on a
-     16–24px box. Formalized as its own token (value-identical to
-     Tailwind's `rounded` default) rather than a hardcoded class, per
+     Print-document corners: the smallest radius that still softens a
+     hairline frame (4px on cards/buttons, 2px on compact controls).
+     Defined once, globally, so every theme (Aqua / Burnt / Indigo)
+     renders cards, buttons, and inputs at identical sizes — only
+     color values vary per theme. */
+  --radius-card: 0.25rem; /* 4px */
+  --radius-card-lg: 0.375rem; /* 6px */
+  --radius-button: 0.25rem; /* 4px */
+  --radius-input: 0.25rem; /* 4px */
+  --radius-badge: 0.1875rem; /* 3px */
+  /* Compact controls (checkbox) sit below the --radius-input scale —
+     a 4px corner would read as nearly-circular on a 16–24px box.
+     Formalized as its own token rather than a hardcoded class, per
      the "every radius through the token system" rule. */
-  --radius-compact: 0.375rem; /* 6px */
+  --radius-compact: 0.125rem; /* 2px */
 
   /* ==================== SPACING ==================== */
   --spacing-base: 0.25rem;
@@ -154,7 +165,9 @@
   --spacing-80: calc(var(--spacing-base) * 80);
   --spacing-96: calc(var(--spacing-base) * 96);
 
-  /* ==================== MOTION ==================== */
+  /* ==================== MOTION ====================
+     Short, decisive timing — interface state changes read as
+     instrument updates, not as decorative easing. */
   --duration-short1: 50ms;
   --duration-short2: 100ms;
   --duration-short3: 150ms;
@@ -172,25 +185,25 @@
   --duration-extra-long3: 900ms;
   --duration-extra-long4: 1000ms;
 
-  --duration-instant: 50ms;
-  --duration-fast: 150ms;
-  --duration-normal: 300ms;
-  --duration-slow: 400ms;
-  --duration-slower: 500ms;
+  --duration-instant: 60ms;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 420ms;
   --duration-tooltip: 100ms;
-  --duration-fade: 150ms;
-  --duration-slide: 300ms;
-  --duration-expand: 350ms;
-  --duration-collapse: 300ms;
-  --duration-modal: 350ms;
-  --duration-page: 500ms;
+  --duration-fade: 120ms;
+  --duration-slide: 260ms;
+  --duration-expand: 280ms;
+  --duration-collapse: 240ms;
+  --duration-modal: 240ms;
+  --duration-page: 400ms;
 
   --easing-linear: cubic-bezier(0, 0, 1, 1);
   --easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --easing-standard-decelerate: cubic-bezier(0, 0, 0, 1);
   --easing-standard-accelerate: cubic-bezier(0.3, 0, 1, 1);
   --easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  --easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --easing-emphasized-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
   --easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
   --easing-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --easing-ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -212,63 +225,36 @@
   --z-overlay: 900;
   --z-max: 9999;
 
-  /* ==================== SHADOWS ==================== */
+  /* ==================== SHADOWS ====================
+     Flat printout: resting surfaces are ink plus a hairline rule.
+     Elevation 0–2 is none; 3–5 exist only for genuinely floating
+     layers (menus, dialogs) and read as a page lifted off a table,
+     never as a glow. */
   --shadow-elevation-0: none;
-  --shadow-elevation-1:
-    0px 1px 2px 0px rgb(var(--color-shadow) / 0.4),
-    0px 1px 3px 1px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-2:
-    0px 1px 2px 0px rgb(var(--color-shadow) / 0.4),
-    0px 2px 6px 2px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-3:
-    0px 1px 3px 0px rgb(var(--color-shadow) / 0.4),
-    0px 4px 8px 3px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-4:
-    0px 2px 3px 0px rgb(var(--color-shadow) / 0.4),
-    0px 6px 10px 4px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-5:
-    0px 4px 4px 0px rgb(var(--color-shadow) / 0.4),
-    0px 8px 12px 6px rgb(var(--color-shadow) / 0.2);
+  --shadow-elevation-1: none;
+  --shadow-elevation-2: none;
+  --shadow-elevation-3: 0 18px 40px -12px rgb(0 0 0 / 0.75);
+  --shadow-elevation-4: 0 24px 56px -16px rgb(0 0 0 / 0.8);
+  --shadow-elevation-5: 0 32px 72px -20px rgb(0 0 0 / 0.85);
 
-  --shadow-elevation-1-soft:
-    0px 1px 3px 0px rgb(var(--color-shadow) / 0.28),
-    0px 1px 5px 1px rgb(var(--color-shadow) / 0.14);
-  --shadow-elevation-1-medium:
-    0px 1px 2px 0px rgb(var(--color-shadow) / 0.4),
-    0px 1px 3px 1px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-1-hard:
-    0px 1px 1px 0px rgb(var(--color-shadow) / 0.52),
-    0px 1px 2px 1px rgb(var(--color-shadow) / 0.26);
-  --shadow-elevation-2-soft:
-    0px 1px 3px 0px rgb(var(--color-shadow) / 0.28),
-    0px 2px 9px 2px rgb(var(--color-shadow) / 0.14);
-  --shadow-elevation-2-medium:
-    0px 1px 2px 0px rgb(var(--color-shadow) / 0.4),
-    0px 2px 6px 2px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-2-hard:
-    0px 1px 1px 0px rgb(var(--color-shadow) / 0.52),
-    0px 2px 4px 2px rgb(var(--color-shadow) / 0.26);
-  --shadow-elevation-3-soft:
-    0px 1px 5px 0px rgb(var(--color-shadow) / 0.28),
-    0px 4px 12px 3px rgb(var(--color-shadow) / 0.14);
-  --shadow-elevation-3-medium:
-    0px 1px 3px 0px rgb(var(--color-shadow) / 0.4),
-    0px 4px 8px 3px rgb(var(--color-shadow) / 0.2);
-  --shadow-elevation-3-hard:
-    0px 1px 2px 0px rgb(var(--color-shadow) / 0.52),
-    0px 4px 5px 3px rgb(var(--color-shadow) / 0.26);
+  --shadow-elevation-1-soft: none;
+  --shadow-elevation-1-medium: none;
+  --shadow-elevation-1-hard: none;
+  --shadow-elevation-2-soft: none;
+  --shadow-elevation-2-medium: none;
+  --shadow-elevation-2-hard: none;
+  --shadow-elevation-3-soft: none;
+  --shadow-elevation-3-medium: none;
+  --shadow-elevation-3-hard: none;
 
-  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.06);
-  --shadow-inner-lg: inset 0 4px 6px 0 rgb(0 0 0 / 0.12);
+  --shadow-inner: none;
+  --shadow-inner-lg: none;
 
-  /* ==================== SURFACE MATERIALS (iOS vibrancy) ====================
-     The one deliberate exception to "no gradients": frosted-glass blur,
-     reserved for genuine overlay/floating surfaces (dialogs, sheets,
-     dropdowns, sticky headers, the drawer sidebar) — never resting
-     content surfaces like cards. Named here so every component reads
-     the same token instead of scattering inline `backdrop-blur-*`
-     values. Color/tint of the blurred surface still comes from each
-     theme's own --color-surface / --color-scrim. */
+  /* ==================== SURFACE MATERIALS ====================
+     Kept as tokens for compatibility with components that read
+     them, but the printout finish is opaque: themes set
+     --glass-blur to 0px and --glass-saturate to 100%, so these
+     resolve to a no-op blur. No frosted-glass look is rendered. */
   --surface-blur-sm: blur(8px) saturate(140%);
   --surface-blur-md: blur(16px) saturate(150%);
   --surface-blur-lg: blur(24px) saturate(160%);
@@ -289,65 +275,14 @@
   --state-disabled-opacity: 0.38;
   --state-disabled-container-opacity: 0.12;
 
-  /* ==================== DESKTOP LAYOUT SCALING ==================== */
-  --layout-content-max: 72rem;
-  --layout-nav-max: 72rem;
-  --layout-sidebar-w: 16rem;
-  --layout-main-p: 1.5rem;
-  --layout-section-px: 1.5rem;
-  --layout-section-py-lg: 6rem;
-}
-
-@media (min-width: 1280px) {
-  :root {
-    --layout-content-max: 80rem;
-    --layout-nav-max: 80rem;
-    --layout-main-p: 2rem;
-    --layout-section-px: 2rem;
-    --layout-section-py-lg: 7rem;
-  }
-}
-
-@media (min-width: 1536px) {
-  :root {
-    --layout-content-max: 90rem;
-    --layout-nav-max: 90rem;
-    --layout-sidebar-w: 17.5rem;
-    --layout-main-p: 2.5rem;
-    --layout-section-px: 3rem;
-    --layout-section-py-lg: 8rem;
-  }
-}
-
-@media (min-width: 1920px) {
-  :root {
-    --layout-content-max: 112rem;
-    --layout-nav-max: 112rem;
-    --layout-sidebar-w: 19rem;
-    --layout-main-p: 3rem;
-    --layout-section-px: 4rem;
-    --layout-section-py-lg: 10rem;
-  }
-}
-
-@media (min-width: 2560px) {
-  :root {
-    --layout-content-max: 150rem;
-    --layout-nav-max: 150rem;
-    --layout-sidebar-w: 22rem;
-    --layout-main-p: 4rem;
-    --layout-section-px: 5rem;
-    --layout-section-py-lg: 12rem;
-  }
-}
-
-@media (min-width: 3840px) {
-  :root {
-    --layout-content-max: 210rem;
-    --layout-nav-max: 210rem;
-    --layout-sidebar-w: 28rem;
-    --layout-main-p: 5rem;
-    --layout-section-px: 6rem;
-    --layout-section-py-lg: 15rem;
-  }
+  /* ==================== LAYOUT SCALING ====================
+     Fluid clamp() values replace the old per-breakpoint override
+     blocks: one declaration scales continuously from phone to
+     ultra-wide, so no media query has to re-declare the frame. */
+  --layout-content-max: 80rem;
+  --layout-nav-max: 80rem;
+  --layout-sidebar-w: clamp(15rem, 15vw, 17.5rem);
+  --layout-main-p: clamp(1rem, 2vw, 2rem);
+  --layout-section-px: clamp(1.25rem, 4vw, 3rem);
+  --layout-section-py-lg: clamp(4rem, 9vw, 7rem);
 }
