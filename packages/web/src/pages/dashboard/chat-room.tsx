@@ -68,6 +68,7 @@ import {
   H_CHEVRON,
   H_ICON_BTN_MOBILE,
   H_SEPARATOR,
+  H_SURFACE,
   H_AVATAR,
   H_DROPDOWN_ITEM,
   H_DROPDOWN_ICON,
@@ -1956,7 +1957,7 @@ function GetStartedScreen({
         <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-500/30 to-emerald-500/10 flex items-center justify-center shadow-2xl ring-1 ring-emerald-500/20">
           <Logo className="h-12 w-12 text-emerald-400" />
         </div>
-        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-[#10b981] border-[3px] border-[#0e1621] flex items-center justify-center">
+        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-[#10b981] border-[3px] border-surface-container-high flex items-center justify-center">
           <Sparkles className="h-3 w-3 text-black" />
         </div>
       </div>
@@ -1994,7 +1995,7 @@ function GetStartedScreen({
         <button
           type="button"
           onClick={onStart}
-          className="w-full h-11 px-4 rounded-xl bg-[#10b981] hover:bg-emerald-400 active:brightness-90 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-[#0e1621]"
+          className="w-full h-11 px-4 rounded-xl bg-[#10b981] hover:bg-emerald-400 active:brightness-90 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-surface-container-high"
         >
           <Sparkles className="h-4 w-4" />
           <span>Get Started</span>
@@ -2541,13 +2542,14 @@ const Composer = memo(function Composer({
 // allocated once at module load instead of being rebuilt on every render
 // (e.g. on every keystroke in the composer).
 // ── Stitch "Jea — Bot Manager Chat Room" design tokens ─────────────────────
-// Pixel-faithful port of the provided stitch html: Telegram dark wallpaper,
-// bubble geometry, 4px scrollbars, markdown + syntax token colors re-hued to
-// the stitch emerald-on-dark palette. The page header is intentionally
-// excluded here — it stays on the shared unified header tokens.
+// Port of the provided stitch html: bubble geometry, 4px scrollbars,
+// markdown + syntax token colors re-hued to the stitch emerald-on-dark
+// palette. Page + message-area backgrounds are NOT part of this block —
+// they use the shared dashboard surface so the chat room reads as part
+// of the unified shell. The header stays on the shared unified header
+// tokens as well.
 const CR_STYLES = `
         :root {
-          --chatroom-bg: #0e1621;
           --bubble-bot: #182533;
           --bubble-bot-text: #ffffff;
           --bubble-user: #2b5278;
@@ -2556,14 +2558,6 @@ const CR_STYLES = `
           --input-border-focus: rgba(16, 185, 129, 0.6);
         }
 
-        /* Subtle Telegram dark pattern wallpaper background — exact stitch rule */
-        .tg-chat-bg {
-          background-color: #0e1621;
-          background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-                            radial-gradient(rgba(255, 255, 255, 0.02) 1px, #0e1621 1px);
-          background-size: 24px 24px;
-          background-position: 0 0, 12px 12px;
-        }
         .bubble-in {
           border-radius: 18px 18px 18px 4px;
         }
@@ -3266,10 +3260,12 @@ export default function ChatRoomPage() {
       </Helmet>
 
       {/* Fills the dashboard's content column — sidebar stays visible alongside it.
-          NOTE: header below is the LOCKED unified header — do not restyle. Only
-          the chat body + composer follow the stitch design. */}
+          Root + message area share the dashboard's bg-surface-container-high
+          fill so the chat reads as part of the unified shell. NOTE: header
+          below is the LOCKED unified header — do not restyle; only the chat
+          bubbles + composer follow the stitch design. */}
       <div
-        className="flex flex-col h-full min-h-0 overflow-hidden bg-[#0A0C0E] text-[#F1F4F8] antialiased selection:bg-emerald-500/30 selection:text-emerald-300"
+        className="flex flex-col h-full min-h-0 overflow-hidden bg-surface-container-high text-[#F1F4F8] antialiased selection:bg-emerald-500/30 selection:text-emerald-300"
         style={{ fontFamily: "Inter, system-ui, -apple-system, sans-serif" }}
       >
 
@@ -3281,7 +3277,8 @@ export default function ChatRoomPage() {
               differs: [hamburger, mobile-only] · [nickname, centred] · [profile icon]. */}
         <header
           className={cn(
-            'relative flex items-center shrink-0 z-[100] bg-surface border-b',
+            'relative flex items-center shrink-0 z-[100] border-b',
+            H_SURFACE,
             H_SEPARATOR,
             H_HEIGHT,
             H_PX,
@@ -3338,8 +3335,8 @@ export default function ChatRoomPage() {
           </div>
         </header>
 
-        {/* ── Message area — stitch Telegram chat stream ─────────────────── */}
-        <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden tg-chat-bg">
+        {/* ── Message area — shared dashboard surface, no wallpaper ──────── */}
+        <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden bg-surface-container-high">
           <div
             ref={scrollAreaRef}
             className="cr-scroll flex-1 overflow-y-auto px-3.5 md:px-6 pt-4 pb-24"

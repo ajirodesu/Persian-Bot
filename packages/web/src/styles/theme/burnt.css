@@ -119,6 +119,11 @@ html[data-theme='burnt'] {
   --glass-saturate: 100%;
   --glass-border: #231d19;
 
+  /* ==================== HEADER SURFACE ====================
+     Page-header fill = the sidebar's own fill (--glass-bg), so every
+     header except the public landing header reads as part of the rail. */
+  --color-header-surface: var(--glass-bg);
+
   /* ==================== INPUT SURFACES ==================== */
   --color-input-bg: #12100d;
   --color-input-border: #2b241f;

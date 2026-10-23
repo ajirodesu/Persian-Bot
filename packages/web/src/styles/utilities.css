@@ -99,11 +99,11 @@
   }
 
   /**
-   * Eyebrow label — uppercase monospace kicker with a glowing dot
+   * Eyebrow label — uppercase monospace kicker with a solid dot
    * marker. Signature device for section labels ("BACKEND & FULL-
-   * STACK ENGINEER" style copy): a small pulse-capable dot in the
-   * primary color, wide letter-spacing, mono type for a distinctly
-   * "developer" register.
+   * STACK ENGINEER" style copy): a small primary-colored tick,
+   * wide letter-spacing, mono type for a distinctly "data" register.
+   * No glow: the marker is a flat printed bullet.
    */
   .eyebrow-mono {
     display: inline-flex;
@@ -153,18 +153,18 @@
   }
 
   /**
-   * Glow ring — theme-driven ring + bloom shadow, radius-agnostic so
-   * it can dress a square brand mark or a circular avatar alike.
+   * Glow ring — reads --shadow-avatar-glow, which every theme sets to
+   * `none` in the printout finish. Class retained for compatibility;
+   * renders nothing.
    */
   .glow-ring {
     box-shadow: var(--shadow-avatar-glow);
   }
 
   /**
-   * Avatar glow — the signature "glowing profile photo" ring from
-   * the reference design. A crisp surface-colored gap, then a
-   * saturated ring, then a soft outer bloom, all theme-driven via
-   * --shadow-avatar-glow so it re-hues automatically per theme.
+   * Avatar ring — circular frame around avatars. --shadow-avatar-glow
+   * is `none` in every theme, so this is a plain circular clip with no
+   * bloom; kept as a class so existing markup keeps its shape.
    */
   .avatar-glow {
     border-radius: 9999px;

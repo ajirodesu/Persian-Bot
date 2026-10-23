@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/utils/cn.util'
-import { H_SEPARATOR } from '@/constants/header.constants'
+import { H_SURFACE, H_SEPARATOR } from '@/constants/header.constants'
 
 interface AppHeaderProps {
   leading?: ReactNode
@@ -17,7 +17,7 @@ interface AppHeaderProps {
  * - 56px content height (h-14, sidebar-header thickness), px-5 horizontal inset
  * - 36px icon-button targets, ~20px icons
  * - 16px / 600 title, subtle 1px separator (H_SEPARATOR, sidebar-header weight)
- * - Surface #0A0C0E, no blur / glass / glow
+ * - Surface: shared sidebar fill (header-surface token), no blur / glass / glow
  */
 export default function AppHeader({
   leading,
@@ -29,7 +29,8 @@ export default function AppHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-[100] bg-surface border-b',
+        'sticky top-0 z-[100] border-b',
+        H_SURFACE,
         H_SEPARATOR,
         className,
       )}

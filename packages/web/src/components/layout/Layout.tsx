@@ -50,7 +50,9 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-surface text-on-surface">
       <RouteProgressBar />
-      {/* ── Bot Manager AppHeader: h-14, px-5, sidebar-weight separator ── */}
+      {/* ── Landing header — the ONLY header keeping the base bg-surface
+          fill; every dashboard/admin/chat header paints the sidebar fill
+          (H_SURFACE) instead ── */}
       <header className={cn('sticky top-0 z-[100] bg-surface border-b', H_SEPARATOR)}>
         <nav
           className={cn(

@@ -44,6 +44,14 @@ export const H_PX = 'px-5' as const
 export const H_SEPARATOR = 'border-separator' as const
 
 /**
+ * Header surface fill — the sidebar's own paint (--glass-bg, mapped to
+ * the `header-surface` Tailwind color). Every page header except the
+ * public landing header (components/layout/Layout.tsx) paints this so
+ * the top bar and the navigation rail read as one continuous shell.
+ */
+export const H_SURFACE = 'bg-header-surface' as const
+
+/**
  * Desktop sidebar width (admin).
  * Driven by the --layout-sidebar-w CSS custom property so the sidebar grows
  * continuously as the viewport widens, matching the content area's scaling.

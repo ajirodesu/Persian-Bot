@@ -13,6 +13,10 @@ export default {
         // Header separator — the sidebar header's 1px line style, shared by
         // every page header so all top bars divide with identical weight.
         separator: 'var(--color-separator)',
+        // Page-header fill — the sidebar's own surface (--glass-bg). Raw var
+        // (like hairline/separator) because the source is a hex value, so no
+        // rgb()/alpha modifiers are available.
+        'header-surface': 'var(--color-header-surface)',
         // Primary
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
         'on-primary': 'rgb(var(--color-on-primary) / <alpha-value>)',

@@ -12,9 +12,8 @@ import {
   Settings as SettingsIcon,
   Plus,
   ShieldCheck,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from 'lucide-react'
+import SidebarFooter from '@/components/layout/SidebarFooter'
 import Logo from '@/components/ui/Logo'
 import ScrollToTop from '@/components/ScrollToTop'
 import { getPlatformIconComponent } from '@/components/icons/platform-icon.util'
@@ -46,6 +45,7 @@ import {
   H_DROPDOWN_ICON,
   H_ICON_BTN_MOBILE,
   H_SEPARATOR,
+  H_SURFACE,
 } from '@/constants/header.constants'
 
 // ============================================================================
@@ -121,6 +121,7 @@ const SidebarNav = memo(function SidebarNav({
   activePath,
   onNavClick,
   openBot,
+  online,
   collapsed,
   onToggleCollapsed,
 }: {
@@ -129,6 +130,8 @@ const SidebarNav = memo(function SidebarNav({
   /** The bot currently open under /dashboard/bot — null/undefined when no
    *  bot is open. Drives the extra "own page" nav entry below. */
   openBot?: { id: string; nickname: string; platform: string } | null
+  /** Live socket connection state; undefined = use browser online state. */
+  online?: boolean | undefined
   /** Desktop only: when true the nav collapses to an icon-only rail. */
   collapsed?: boolean
   onToggleCollapsed?: () => void
@@ -320,42 +323,13 @@ const SidebarNav = memo(function SidebarNav({
         )}
       </nav>
 
-      {/* Footer — DASHBOARD scope label + live dot, collapse toggle */}
-      <div className="border-t border-separator">
-        <div
-          className={cn(
-            'py-4 flex items-center',
-            collapsed ? 'justify-center px-0' : 'justify-between px-6',
-          )}
-        >
-          {!collapsed && (
-            <>
-              <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-surface-variant font-medium">
-                Dashboard
-              </span>
-              <span className="flex items-center space-x-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              </span>
-            </>
-          )}
-          {onToggleCollapsed && (
-            <IconButton
-              variant="text"
-              size="sm"
-              icon={
-                collapsed ? (
-                  <PanelLeftOpen className="h-4 w-4" />
-                ) : (
-                  <PanelLeftClose className="h-4 w-4" />
-                )
-              }
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              onClick={onToggleCollapsed}
-            />
-          )}
-        </div>
-      </div>
+      {/* Footer — live status + Dashboard scope, collapse toggle */}
+      <SidebarFooter
+        scopeLabel="Dashboard"
+        online={online}
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
     </div>
   )
 })
@@ -530,6 +504,9 @@ export default function DashboardLayout() {
   const location = useLocation()
   const isDisconnectedRef = useRef(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Live socket connection state — drives the sidebar footer's status
+  // light (red "Offline" while disconnected, then the snackbar explains).
+  const [connected, setConnected] = useState(true)
   // Desktop only: collapse the sidebar to an icon rail (VSCode/YouTube style)
   // when the user taps the currently-active nav item. Persisted across refreshes.
   const [collapsed, setCollapsed] = useState(() => {
@@ -581,6 +558,7 @@ export default function DashboardLayout() {
     const handleDisconnect = () => {
       if (isDisconnectedRef.current) return
       isDisconnectedRef.current = true
+      setConnected(false)
       setPosition('bottom-right')
       snackbar({
         message: 'You are currently offline.',
@@ -592,6 +570,7 @@ export default function DashboardLayout() {
     const handleConnect = () => {
       if (!isDisconnectedRef.current) return
       isDisconnectedRef.current = false
+      setConnected(true)
       setPosition('bottom-right')
       snackbar({
         message: 'Your internet connection was restored.',
@@ -686,6 +665,7 @@ export default function DashboardLayout() {
           <SidebarNav
             activePath={activePath}
             openBot={openBot}
+            online={connected}
             collapsed={collapsed}
             onToggleCollapsed={toggleCollapsed}
           />
@@ -714,6 +694,7 @@ export default function DashboardLayout() {
             activePath={activePath}
             onNavClick={() => setMobileOpen(false)}
             openBot={openBot}
+            online={connected}
           />
         </aside>
 
@@ -738,7 +719,8 @@ export default function DashboardLayout() {
           {!isChatRoom && (
             <div
               className={cn(
-                'sticky top-0 z-[100] flex items-center bg-surface border-b',
+                'sticky top-0 z-[100] flex items-center border-b',
+                H_SURFACE,
                 H_SEPARATOR,
                 H_HEIGHT,
                 H_PX,

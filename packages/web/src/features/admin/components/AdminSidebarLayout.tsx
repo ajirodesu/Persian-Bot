@@ -13,11 +13,10 @@ import {
   Files,
   GitBranch,
   ArrowLeft,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
 import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
+import SidebarFooter from '@/components/layout/SidebarFooter'
 import { useAdminAuth } from '@/contexts/AdminAuthContext'
 import { AdminHeaderProvider, useAdminHeader } from '@/contexts/AdminHeaderContext'
 import Logo from '@/components/ui/Logo'
@@ -37,6 +36,7 @@ import {
   H_DROPDOWN_ICON,
   H_ICON_BTN_MOBILE,
   H_SEPARATOR,
+  H_SURFACE,
 } from '@/constants/header.constants'
 
 // ============================================================================
@@ -160,42 +160,12 @@ function SidebarNav({
         })}
       </nav>
 
-      {/* Footer — ADMIN scope label + live dot, collapse toggle */}
-      <div className="border-t border-separator">
-        <div
-          className={cn(
-            'py-4 flex items-center',
-            collapsed ? 'justify-center px-0' : 'justify-between px-6',
-          )}
-        >
-          {!collapsed && (
-            <>
-              <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-surface-variant font-medium">
-                Admin Panel
-              </span>
-              <span className="flex items-center space-x-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              </span>
-            </>
-          )}
-          {onToggleCollapsed && (
-            <IconButton
-              variant="text"
-              size="sm"
-              icon={
-                collapsed ? (
-                  <PanelLeftOpen className="h-4 w-4" />
-                ) : (
-                  <PanelLeftClose className="h-4 w-4" />
-                )
-              }
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              onClick={onToggleCollapsed}
-            />
-          )}
-        </div>
-      </div>
+      {/* Footer — live status + Admin Panel scope, collapse toggle */}
+      <SidebarFooter
+        scopeLabel="Admin Panel"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
     </div>
   )
 }
@@ -497,7 +467,8 @@ function AdminContentHeader({
   return (
         <div
           className={cn(
-            'sticky top-0 z-[100] flex items-center bg-surface border-b',
+            'sticky top-0 z-[100] flex items-center border-b',
+            H_SURFACE,
             H_SEPARATOR,
             H_HEIGHT,
             H_PX,
