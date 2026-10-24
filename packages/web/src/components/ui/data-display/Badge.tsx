@@ -52,7 +52,10 @@ export type BadgeOwnProps = {
   dismissible?: boolean
   /** Callback when dismiss button is clicked */
   onDismiss?: () => void
-  /** Make badge pill-shaped (more rounded) */
+  /**
+   * Retained for API compatibility. Pill geometry is no longer part of the
+   * system: this selects the 3px badge token instead of the compact one.
+   */
   pill?: boolean
 }
 
@@ -69,11 +72,13 @@ export type BadgeProps<T extends React.ElementType = 'span'> =
 
 /**
  * Size styles for padding and typography
+ * Every size is set in the mono face, uppercase, so chips read as printed
+ * instrument labels rather than rounded tags.
  */
 const sizeStyles: Record<BadgeSize, string> = {
-  sm: 'px-2 py-0.5 text-label-sm gap-1',
-  md: 'px-2.5 py-1 text-label-md gap-1.5',
-  lg: 'px-3 py-1.5 text-label-lg gap-2',
+  sm: 'px-2 py-0.5 text-label-sm gap-1 font-mono uppercase tracking-[0.08em]',
+  md: 'px-2.5 py-1 text-label-md gap-1.5 font-mono uppercase tracking-[0.08em]',
+  lg: 'px-3 py-1.5 text-label-lg gap-2 font-mono uppercase tracking-[0.08em]',
 }
 
 /**
@@ -95,19 +100,25 @@ const iconSizeClasses: Record<BadgeSize, string> = {
 }
 
 /**
- * Tonal variant - soft container backgrounds
+ * Tonal variant - container fill, matching on-container ink, 30% tone rule.
+ *
+ * Container pairs are used instead of a 15% tone tint because the tinted
+ * fill sits on surface-container-high / surface-container-highest, where a
+ * solid tone ink only measures 3.8-4.4:1. The container pairs are designed
+ * for text on top of them and measure 8.57-13.35:1 in every theme, so tonal
+ * badges pass WCAG AA (4.5:1) regardless of the parent surface.
  */
 const tonalStyles: Record<BadgeColor, string> = {
-  default: 'bg-surface-container-high text-on-surface border-transparent',
-  primary: 'bg-primary-container text-on-primary-container border-transparent',
+  default: 'bg-surface-container-high text-on-surface border-outline-variant',
+  primary: 'bg-primary-container text-on-primary-container border-primary/30',
   secondary:
-    'bg-secondary-container text-on-secondary-container border-transparent',
+    'bg-secondary-container text-on-secondary-container border-secondary/30',
   tertiary:
-    'bg-tertiary-container text-on-tertiary-container border-transparent',
-  success: 'bg-success-container text-on-success-container border-transparent',
-  error: 'bg-error-container text-on-error-container border-transparent',
-  warning: 'bg-warning-container text-on-warning-container border-transparent',
-  info: 'bg-info-container text-on-info-container border-transparent',
+    'bg-tertiary-container text-on-tertiary-container border-tertiary/30',
+  success: 'bg-success-container text-on-success-container border-success/30',
+  error: 'bg-error-container text-on-error-container border-error/30',
+  warning: 'bg-warning-container text-on-warning-container border-warning/30',
+  info: 'bg-info-container text-on-info-container border-info/30',
 }
 
 /**
@@ -228,9 +239,9 @@ const Badge = forwardRefWithAs<'span', BadgeOwnProps>((props, ref) => {
       className={cn(
         // Base styles
         'inline-flex items-center justify-center font-medium border transition-colors duration-fast',
-        // Border radius — pill uses the shared badge token (9999px);
-        // non-pill uses --radius-compact (proportional to a small chip,
-        // same reasoning as Checkbox) rather than an arbitrary rounded-md.
+        // Border radius — pill resolves to the badge token (3px) and
+        // non-pill uses --radius-compact (2px, proportional to a small chip,
+        // same reasoning as Checkbox). No fully-rounded geometry remains.
         pill ? 'rounded-[var(--radius-badge)]' : 'rounded-[var(--radius-compact)]',
         // Size
         sizeStyles[size],
@@ -246,7 +257,7 @@ const Badge = forwardRefWithAs<'span', BadgeOwnProps>((props, ref) => {
       {dot && (
         <span
           className={cn(
-            'rounded-full flex-shrink-0',
+            'rounded-[1px] flex-shrink-0',
             dotSizeClasses[size],
             // Use color for dot, but for filled variant use current text color
             variant === 'filled' ? 'bg-current' : dotColorClasses[color],
@@ -278,7 +289,7 @@ const Badge = forwardRefWithAs<'span', BadgeOwnProps>((props, ref) => {
           type="button"
           onClick={handleDismiss}
           className={cn(
-            'flex-shrink-0 rounded-[var(--radius-compact)] hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-current transition-opacity duration-fast ml-0.5 -mr-0.5',
+            'flex-shrink-0 rounded-[var(--radius-compact)] hover:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current transition-opacity duration-fast ml-0.5 -mr-0.5',
           )}
           aria-label="Dismiss"
         >

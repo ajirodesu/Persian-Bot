@@ -13,7 +13,7 @@ export interface AdminBotItemDto {
   userName?: string
   userEmail?: string
   /** The bot's own platform ID (Discord client ID / Telegram token prefix).
-   *  Absent for Fluxer and when credentials are missing. */
+   *  Absent when credentials are missing. */
   botId?: string
   /** The bot's platform username — not persisted by any adapter yet. */
   botUsername?: string

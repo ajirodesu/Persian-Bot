@@ -11,30 +11,30 @@ const OPTIONS: Array<{
   /** Theme's own primary accent, as an "R G B" triple — used to tint the
    *  option's icon chip so each choice previews its actual hue, regardless
    *  of which theme is currently active. Kept as literal values (rather
-   *  than referencing e.g. `--aqua-color-primary`) because those tokens
+   *  than referencing e.g. `--emerald-color-primary`) because those tokens
    *  only exist while that theme's `data-theme` attribute is applied. */
   accent: string
 }> = [
   {
-    value: 'aqua',
-    label: 'Aqua',
-    description: 'Cool — cyan/mint accent, glass surfaces',
+    value: 'emerald',
+    label: 'Emerald',
+    description: 'Gemstone green on charcoal — the default look.',
     icon: <Droplets className="h-4 w-4" strokeWidth={2.25} />,
-    accent: '52 224 190',
+    accent: '16 185 129',
   },
   {
-    value: 'burnt',
-    label: 'Burnt',
-    description: 'Claude-inspired — warm charcoal, terracotta accent',
+    value: 'jasper',
+    label: 'Jasper',
+    description: 'Warm jasper rust on heated ink.',
     icon: <Flame className="h-4 w-4" strokeWidth={2.25} />,
-    accent: '218 119 86',
+    accent: '211 113 76',
   },
   {
-    value: 'indigo',
-    label: 'Indigo',
-    description: 'Midnight — amethyst purple, nocturnal',
+    value: 'amethyst',
+    label: 'Amethyst',
+    description: 'Soft amethyst violet on cold ink.',
     icon: <Moon className="h-4 w-4" strokeWidth={2.25} />,
-    accent: '156 135 245',
+    accent: '168 140 250',
   },
 ]
 
@@ -51,7 +51,7 @@ const INDICATOR_SIZE = 36
 
 /**
  * ThemeToggle — a three-option segmented pill switch for choosing between
- * the "aqua" (default), "burnt", and "indigo" UI themes.
+ * the "emerald" (default), "jasper", and "amethyst" UI themes.
  *
  * Layout:
  *  - Mobile (< sm): compact pill of three 40px icon-only buttons, all

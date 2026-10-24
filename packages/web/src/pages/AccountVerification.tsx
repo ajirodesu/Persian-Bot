@@ -1,86 +1,57 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import { useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
-import { Field } from '@/components/ui/forms/Field'
 import CodeInput from '@/components/ui/forms/CodeInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import { authUserClient } from '@/lib/better-auth-client.lib'
-import { MailCheck } from 'lucide-react'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import { useCountdownSeconds } from '@/hooks/useCountdown'
+import AuthPanel, {
+  AuthField,
+  AuthResult,
+} from '@/components/layout/AuthPanel'
 
-/**
- * AuthShell — ambient-glow background + centered column shared by every
- * state of this page. Mirrors the treatment on the Login page so the email
- * service never renders as a separate, less-considered surface.
- */
-function AuthShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16 overflow-hidden">
-      <Helmet>
-        <title>Account Verification · Cat-Bot</title>
-      </Helmet>
+// Verified against the OTP store: CODE_LENGTH = 6.
+// (packages/cat-bot/src/server/lib/otp.lib.ts:29)
+const META = [
+  { label: 'DELIVERY', value: 'EMAIL' },
+  { label: 'CODE', value: '6 DIGITS' },
+]
 
-      {/* Ambient glow — same treatment as the marketing pages */}
-      <div className="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/[0.06] blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-tertiary/[0.05] blur-[100px]" />
+const FOOTER_LINK =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
 
-      <div
-        className="relative z-10 w-full max-w-[400px] flex flex-col gap-7"
-        style={{
-          animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both',
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
+const SUBMIT_CLASS =
+  'h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]'
 
-/** Brand mark — glow-ring icon above the page heading. */
-function BrandMark({
-  heading,
-  subheading,
-}: {
-  heading: string
-  subheading: string
-}) {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-        <MailCheck className="h-6 w-6 text-on-primary-container" />
-      </div>
-      <div className="text-center flex flex-col gap-1.5">
-        <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-          {heading}
-        </h1>
-        <p className="text-body-sm text-on-surface-variant max-w-xs mx-auto leading-relaxed">
-          {subheading}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-/** A glass marker card used for loading / status-only states. */
-function GlassCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-4">
-      {children}
-    </div>
-  )
-}
+const SUBMIT_ROW =
+  'flex flex-col sm:flex-row sm:items-center gap-3 py-5 border-b border-hairline'
 
 export default function AccountVerificationPage() {
   const { isEmailEnabled, isLoading: isEmailStatusLoading } =
     useEmailServiceEnabled()
   const [searchParams] = useSearchParams()
-  const email = searchParams.get('email') || ''
+  // Email + "code sent" + resend cooldown survive reloads. The 6-digit code
+  // itself is a secret and stays in memory; if the tab is discarded the user
+  // re-enters it (the cooldown still shows the correct remaining time).
+  const draft = useFormDraft(
+    {
+      email: searchParams.get('email') || '',
+      codeSent: false,
+      resendDeadline: null as number | null,
+    },
+    { key: 'account-verification', storage: 'local', sensitive: [] },
+  )
+  const email = searchParams.get('email') || draft.values.email
+  const codeSent = draft.values.codeSent
+  const resendCooldown = useCountdownSeconds(draft.values.resendDeadline)
+  const sendLock = useRef(false)
 
   const [isSending, setIsSending] = useState(false)
-  const [codeSent, setCodeSent] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
 
   const [code, setCode] = useState('')
@@ -122,10 +93,11 @@ export default function AccountVerificationPage() {
   }, [email])
 
   const handleSendVerification = async () => {
-    if (!email) return
+    if (!email || sendLock.current || resendCooldown > 0) return
+    sendLock.current = true
     setIsSending(true)
     setSendError(null)
-    setCodeSent(false)
+    draft.setValues((prev) => ({ ...prev, codeSent: false }))
     setVerifyError(null)
     setCode('')
 
@@ -141,12 +113,18 @@ export default function AccountVerificationPage() {
         )
       }
 
-      setCodeSent(true)
+      draft.setValues((prev) => ({
+        ...prev,
+        email,
+        codeSent: true,
+        resendDeadline: Date.now() + 60_000,
+      }))
     } catch (err) {
       setSendError(
         err instanceof Error ? err.message : 'An unexpected error occurred.',
       )
     } finally {
+      sendLock.current = false
       setIsSending(false)
     }
   }
@@ -162,6 +140,7 @@ export default function AccountVerificationPage() {
         code: submittedCode,
       })
       setIsVerified(true)
+      draft.clearDraft()
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
       setVerifyError(e.response?.data?.error || 'Invalid or expired code.')
@@ -171,83 +150,56 @@ export default function AccountVerificationPage() {
     }
   }
 
-  if (isEmailStatusLoading) {
-    return (
-      <AuthShell>
-        <GlassCard>
-          <div className="glow-ring flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <MailCheck className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-2">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Checking account status
-            </h1>
-            <p className="text-body-sm text-on-surface-variant animate-pulse">
-              Preparing the email service…
-            </p>
-          </div>
-        </GlassCard>
-      </AuthShell>
-    )
-  }
+  let content: React.ReactNode
 
-  if (!isEmailEnabled) {
-    return (
-      <AuthShell>
-        <BrandMark
-          heading="Feature Unavailable"
-          subheading="Email services are not enabled on this instance."
-        />
-        <GlassCard>
+  if (isEmailStatusLoading) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-2 border-b border-hairline py-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+            CHECKING ACCOUNT STATUS
+          </p>
+          <p className="animate-pulse font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant/80">
+            Preparing the email service…
+          </p>
+        </div>
+      </div>
+    )
+  } else if (!isEmailEnabled) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-4 border-b border-hairline py-5">
           <Alert
+            variant="outlined"
             color="warning"
             title="Email service disabled"
             message="Account verification by email is not available right now."
           />
-          <Button
-            as={Link}
-            to={ROUTES.LOGIN}
-            variant="filled"
-            color="primary"
-            size="md"
-            fullWidth
-          >
+          <Link to={ROUTES.LOGIN} className={FOOTER_LINK}>
             Back to log in
-          </Button>
-        </GlassCard>
-      </AuthShell>
+          </Link>
+        </div>
+      </div>
     )
-  }
-
-  if (emailStatus === 'loading') {
-    return (
-      <AuthShell>
-        <GlassCard>
-          <div className="glow-ring flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <MailCheck className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-2">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Checking account status
-            </h1>
-            <p className="text-body-sm text-on-surface-variant animate-pulse">
-              Looking up your email…
-            </p>
-          </div>
-        </GlassCard>
-      </AuthShell>
+  } else if (emailStatus === 'loading') {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-2 border-b border-hairline py-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+            CHECKING ACCOUNT STATUS
+          </p>
+          <p className="animate-pulse font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant/80">
+            Looking up your email…
+          </p>
+        </div>
+      </div>
     )
-  }
-
-  if (emailStatus === 'not-found') {
-    return (
-      <AuthShell>
-        <BrandMark
-          heading="Email not found"
-          subheading="This email address is not registered with any account."
-        />
-        <GlassCard>
+  } else if (emailStatus === 'not-found') {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-4 border-b border-hairline py-5">
           <Alert
+            variant="outlined"
             color="warning"
             title="No account found"
             message={
@@ -261,175 +213,161 @@ export default function AccountVerificationPage() {
             to={ROUTES.SIGNUP}
             variant="filled"
             color="primary"
-            size="md"
+            size="lg"
             fullWidth
+            className={SUBMIT_CLASS}
           >
             Create an account
           </Button>
-        </GlassCard>
-      </AuthShell>
+        </div>
+      </div>
     )
-  }
-
-  if (emailStatus === 'already-verified') {
-    return (
-      <AuthShell>
-        <BrandMark
-          heading="Already verified"
-          subheading="This email address is verified."
-        />
-        <GlassCard>
-          <Alert
-            variant="tonal"
-            color="success"
-            title="Verified"
-            message="This email address is already verified. You can log in with your credentials."
-          />
+  } else if (emailStatus === 'already-verified') {
+    content = (
+      <AuthResult
+        tone="success"
+        title="Verified"
+        description="This email address is already verified. You can log in with your credentials."
+        action={
           <Button
             as={Link}
             to={ROUTES.LOGIN}
             variant="filled"
             color="primary"
-            size="md"
+            size="lg"
             fullWidth
+            className={SUBMIT_CLASS}
           >
             Go to log in
           </Button>
-        </GlassCard>
-      </AuthShell>
-    )
-  }
-
-  // emailStatus === 'pending'
-  return (
-    <AuthShell>
-      <BrandMark
-        heading={
-          isVerified
-            ? 'Email verified'
-            : codeSent
-              ? 'Enter your code'
-              : 'Verify your email'
-        }
-        subheading={
-          isVerified
-            ? 'Your email address has been verified successfully.'
-            : codeSent
-              ? `Enter the 6-digit code we sent to ${
-                  email || 'your email'
-                }.`
-              : `Enter the verification code for ${
-                  email || 'your email'
-                }, or send a new one.`
         }
       />
-
-      {/* Card */}
-      <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6">
-        {isVerified ? (
-          <div className="flex flex-col gap-4">
-            <Alert
-              variant="tonal"
-              color="success"
-              title="Verified"
-              message="Your email is verified. You can now log in with your credentials."
-            />
-            <Button
-              as={Link}
-              to={ROUTES.LOGIN}
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-            >
-              Go to log in
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {sendError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Failed to send"
-                message={sendError}
-              />
-            )}
-            {verifyError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Verification failed"
-                message={verifyError}
-              />
-            )}
-            {codeSent && (
-              <Alert
-                variant="tonal"
-                color="success"
-                title="Code sent!"
-                message="Check your inbox and enter the code below to verify your account."
-              />
-            )}
-
-            <Field.Root invalid={!!verifyError}>
-              <Field.Label>Verification code</Field.Label>
-              <CodeInput
-                value={code}
-                onChange={(next) => {
-                  setCode(next)
-                  setVerifyError(null)
-                }}
-                onComplete={handleVerifyCode}
-                disabled={isSending}
-                placeholder="000000"
-                autoFocus={codeSent}
-              />
-              {verifyError && (
-                <Field.ErrorText>{verifyError}</Field.ErrorText>
-              )}
-            </Field.Root>
-
-            <Button
-              onClick={() => void handleVerifyCode()}
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isVerifying}
-              disabled={code.length !== 6}
-            >
-              Verify account
-            </Button>
-
-            <Button
-              onClick={() => void handleSendVerification()}
-              variant="text"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isSending}
-              disabled={!email}
-            >
-              {codeSent ? 'Resend code' : 'Send verification code'}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {!isVerified && (
-        <p className="text-center text-body-sm text-on-surface-variant">
+    )
+  } else if (isVerified) {
+    content = (
+      <AuthResult
+        tone="success"
+        title="Verified"
+        description="Your email is verified. You can now log in with your credentials."
+        action={
           <Button
             as={Link}
             to={ROUTES.LOGIN}
-            variant="link"
+            variant="filled"
             color="primary"
-            size="sm"
+            size="lg"
+            fullWidth
+            className={SUBMIT_CLASS}
           >
-            Back to log in
+            Go to log in
           </Button>
-        </p>
-      )}
-    </AuthShell>
+        }
+      />
+    )
+  } else {
+    // emailStatus === 'pending'
+    content = (
+      <div className="border-t border-hairline">
+        {sendError && (
+          <div className="pt-5">
+            <Alert
+              variant="outlined"
+              color="error"
+              title="Failed to send"
+              message={sendError}
+            />
+          </div>
+        )}
+        {verifyError && (
+          <div className="pt-5">
+            <Alert
+              variant="outlined"
+              color="error"
+              title="Verification failed"
+              message={verifyError}
+            />
+          </div>
+        )}
+        {codeSent && (
+          <div className="pt-5">
+            <Alert
+              variant="outlined"
+              color="success"
+              title="Code sent!"
+              message="Check your inbox and enter the code below to verify your account."
+            />
+          </div>
+        )}
+
+        <AuthField label="Verification code" error={verifyError ?? undefined}>
+          <CodeInput
+            value={code}
+            onChange={(next) => {
+              setCode(next)
+              setVerifyError(null)
+            }}
+            onComplete={handleVerifyCode}
+            disabled={isSending}
+            placeholder="000000"
+            autoFocus={codeSent}
+            className="h-11"
+          />
+        </AuthField>
+
+        <div className={SUBMIT_ROW}>
+          <Button
+            onClick={() => void handleVerifyCode()}
+            variant="filled"
+            color="primary"
+            size="lg"
+            fullWidth
+            isLoading={isVerifying}
+            disabled={code.length !== 6}
+            className={SUBMIT_CLASS}
+          >
+            Verify account
+          </Button>
+          <Button
+            onClick={() => void handleSendVerification()}
+            variant="text"
+            color="neutral"
+            size="md"
+            isLoading={isSending}
+            disabled={!email}
+            className="font-mono text-[11px] uppercase tracking-[0.08em]"
+          >
+            {codeSent ? 'Resend code' : 'Send verification code'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <Helmet>
+        <title>Account Verification · Cat-Bot</title>
+      </Helmet>
+
+      <AuthPanel
+        index="03"
+        kicker="VERIFICATION"
+        title="Confirm your address"
+        description="Enter the code we sent to your email."
+        meta={META}
+        footer={
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+              WRONG ADDRESS
+            </span>
+            <Link to={ROUTES.LOGIN} className={FOOTER_LINK}>
+              Back to sign in
+            </Link>
+          </div>
+        }
+      >
+        {content}
+      </AuthPanel>
+    </>
   )
 }

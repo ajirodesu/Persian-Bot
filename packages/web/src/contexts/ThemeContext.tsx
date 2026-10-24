@@ -13,26 +13,32 @@ import { applyFaviconTheme } from '../utils/favicon.util'
 
 /**
  * Available UI themes.
- * - 'aqua'   — the default theme: flat precision-system dark with an
- *              emerald accent (the Bot Manager look).
- * - 'burnt'  — Claude dark mode: warm charcoal surfaces with the
- *              signature terracotta-orange accent.
- * - 'indigo' — midnight-purple: nocturnal amethyst surfaces with a
- *              violet accent.
+ * - 'emerald'  — the default theme: gemstone emerald on charcoal ink
+ *                (the Bot Manager look).
+ * - 'jasper'   — warm jasper rust on warm ink.
+ * - 'amethyst' — amethyst violet on cold ink.
  *
  * Every theme shares identical shape, spacing, and typography tokens
  * (see tokens.css) — only color and finish values differ, so
  * switching themes never changes the size or layout of cards,
  * buttons, or text.
  */
-export type AppTheme = 'aqua' | 'burnt' | 'indigo'
+export type AppTheme = 'emerald' | 'jasper' | 'amethyst'
 
 const STORAGE_KEY = 'cat-bot-ui-theme'
-const DEFAULT_THEME: AppTheme = 'aqua'
-const THEME_ORDER: readonly AppTheme[] = ['aqua', 'burnt', 'indigo']
+const DEFAULT_THEME: AppTheme = 'emerald'
+const THEME_ORDER: readonly AppTheme[] = ['emerald', 'jasper', 'amethyst']
+
+/** Favorites saved under the previous theme names keep working; the next
+ *  effect re-writes storage with the new name. */
+const LEGACY_THEME_MAP: Readonly<Record<string, AppTheme>> = {
+  aqua: 'emerald',
+  burnt: 'jasper',
+  indigo: 'amethyst',
+}
 
 function isAppTheme(value: string | null): value is AppTheme {
-  return value === 'aqua' || value === 'burnt' || value === 'indigo'
+  return value === 'emerald' || value === 'jasper' || value === 'amethyst'
 }
 
 /**
@@ -43,6 +49,14 @@ function isAppTheme(value: string | null): value is AppTheme {
 function getInitialTheme(): AppTheme {
   if (typeof window === 'undefined') return DEFAULT_THEME
   const stored = window.localStorage.getItem(STORAGE_KEY)
+  // Only legacy names stored under our own key are migrated; hasOwn keeps
+  // arbitrary localStorage values (e.g. "toString") from hitting the
+  // prototype chain of the map.
+  const legacyTheme =
+    stored !== null && Object.hasOwn(LEGACY_THEME_MAP, stored)
+      ? LEGACY_THEME_MAP[stored]
+      : undefined
+  if (legacyTheme) return legacyTheme
   return isAppTheme(stored) ? stored : DEFAULT_THEME
 }
 
@@ -69,11 +83,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     void applyFaviconTheme(theme)
   }, [theme])
 
-  // Scrollbars stay invisible at rest and fade in only while the user is
-  // actively scrolling — identical across every theme, all of which set
-  // --scrollbar-idle-opacity: 0. Scroll events don't bubble reliably, so
-  // this listens in the capture phase on window to catch scrolling inside
-  // any nested overflow container.
+  // Scrollbars sit faint at rest and bloom while the user is actively
+  // scrolling — identical across every theme, all of which set
+  // --scrollbar-idle-opacity: 0.35. Scroll events don't bubble reliably,
+  // so this listens in the capture phase on window to catch scrolling
+  // inside any nested overflow container.
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const handleScroll = () => {

@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { getSocket } from '@/lib/socket.lib'
+import { connectSocket, getSocket } from '@/lib/socket.lib'
 import { botService } from '@/features/users/services/bot.service'
 
 const MAX_ENTRIES = 200
@@ -38,19 +38,30 @@ export function useBotLogs(sessionKey?: string): UseBotLogsReturn {
     if (!sessionId) return
     let cancelled = false
 
-    botService
-      .getLogs(sessionId)
-      .then((result) => {
-        if (!cancelled) {
-          setLogs(result.entries.slice(-MAX_ENTRIES))
-        }
-      })
-      .catch(() => {
-        // fail-open — console starts blank; real-time entries still arrive via socket
-      })
+    const loadHistory = () => {
+      botService
+        .getLogs(sessionId)
+        .then((result) => {
+          if (!cancelled) {
+            setLogs(result.entries.slice(-MAX_ENTRIES))
+          }
+        })
+        .catch(() => {
+          // fail-open — keep whatever is already on screen; live entries may
+          // still arrive. The connection banner owns outage messaging.
+        })
+    }
+
+    loadHistory()
+
+    // A reconnect may have missed entries while the transport was down.
+    // Re-sync from the server's history buffer instead of trusting the gap.
+    const socket = getSocket()
+    socket.on('connect', loadHistory)
 
     return () => {
       cancelled = true
+      socket.off('connect', loadHistory)
     }
   }, [sessionId])
 
@@ -62,8 +73,7 @@ export function useBotLogs(sessionKey?: string): UseBotLogsReturn {
 
     let cancelled = false
 
-    const socket = getSocket()
-    if (!socket.connected) socket.connect()
+    const socket = connectSocket()
 
     const onLog = (data: { key: string; entry: string }) => {
       if (cancelled) return

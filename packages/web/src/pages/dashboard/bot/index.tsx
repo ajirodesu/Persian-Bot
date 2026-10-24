@@ -83,11 +83,11 @@ function UptimeDisplay({ startedAt }: { startedAt: number }) {
 function platformTileClasses(platform: string): string {
   switch (platform) {
     case Platforms.Discord:
-      return 'text-[#5865F2]'
+      return 'platform-text-discord'
     case Platforms.Telegram:
-      return 'text-[#24A1DE]'
+      return 'platform-text-telegram'
     default:
-      return 'text-[#8B95A2]'
+      return 'text-on-surface-variant'
   }
 }
 
@@ -98,7 +98,8 @@ function frameworkBadge(platform: string): string {
     case Platforms.Telegram:
       return 'grammY'
     default:
-      return 'Fluxer'
+      // Unrecognized platform (e.g. legacy rows) — show the raw identifier.
+      return platform
   }
 }
 
@@ -137,9 +138,8 @@ export default function BotConsolePage() {
   }
 
   // Technical identifier: "<platform>-<slug>" plus the bot's own
-  // platform-native ID — Discord application ID, Telegram bot ID (the
-  // numeric head of the token), Fluxer falls back to the session UID
-  // since its token carries no extractable ID.
+  // platform-native ID — Discord application ID or Telegram bot ID (the
+  // numeric head of the token); otherwise fall back to the session UID.
   const slug = bot.nickname
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -168,13 +168,13 @@ export default function BotConsolePage() {
                 {bot.nickname}
               </h2>
             </div>
-            <span className="inline-flex items-center space-x-1.5 text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 bg-[rgba(16,185,129,0.12)] border border-[rgba(16,185,129,0.3)] text-[#10B981]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-ping" />
+            <span className="inline-flex items-center space-x-1.5 text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 bg-primary/10 border border-primary/30 text-primary">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
               <span>Active</span>
             </span>
           </div>
           {/* Bot Technical Identifier */}
-          <p className="font-mono text-[11px] text-[#8B95A2] tracking-tight break-all">
+          <p className="font-mono text-[11px] text-on-surface-variant tracking-tight break-all">
             {bot.platform}-{slug} · ID {platformBotId}
           </p>
           {/* Control Action Buttons */}
@@ -184,7 +184,7 @@ export default function BotConsolePage() {
               type="button"
               onClick={() => void botService.startBot(id)}
               disabled={isActive}
-              className="h-11 flex items-center justify-center space-x-1.5 rounded-xl bg-[#10B981] text-[#061811] font-semibold text-xs shadow-sm hover:brightness-110 active:scale-97 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
+              className="h-11 flex items-center justify-center space-x-1.5 rounded-[var(--radius-card)] bg-primary text-on-primary font-semibold text-xs shadow-sm hover:brightness-110 active:scale-97 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <polygon points="5 3 19 12 5 21 5 3" />
@@ -199,7 +199,7 @@ export default function BotConsolePage() {
                 void botService.restartBot(id)
               }}
               disabled={!isActive}
-              className="h-11 flex items-center justify-center space-x-1.5 rounded-xl bg-[#191D22] border border-[#242930] text-[#F1F4F8] font-semibold text-xs hover:bg-[#1E232A] active:scale-97 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
+              className="h-11 flex items-center justify-center space-x-1.5 rounded-[var(--radius-card)] bg-surface-container-low border border-hairline text-on-surface font-semibold text-xs hover:bg-surface-container-high active:scale-97 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <svg
                 className="w-4 h-4 stroke-current"
@@ -221,7 +221,7 @@ export default function BotConsolePage() {
                 void botService.stopBot(id)
               }}
               disabled={!isActive}
-              className="h-11 flex items-center justify-center space-x-1.5 rounded-xl bg-[rgba(239,68,68,0.12)] border border-[rgba(239,68,68,0.4)] text-[#EF4444] font-semibold text-xs hover:bg-[rgba(239,68,68,0.2)] active:scale-97 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444]/40"
+              className="h-11 flex items-center justify-center space-x-1.5 rounded-[var(--radius-card)] bg-error/10 border border-error/40 text-error font-semibold text-xs hover:bg-error/20 active:scale-97 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40"
             >
               <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                 <rect height="16" rx="2" width="16" x="4" y="4" />
@@ -233,31 +233,33 @@ export default function BotConsolePage() {
 
         {/* ── LIVE CONSOLE CARD ── */}
         <section
-          className="bg-[#0D1013] border border-[#242930] rounded-2xl overflow-hidden shadow-lg"
+          className="bg-surface-container-lowest border border-hairline rounded-[var(--radius-card-lg)] overflow-hidden shadow-lg"
           aria-label="Live console"
         >
           {/* Terminal Header Bar */}
-          <div className="h-10 bg-[#12161B] px-3.5 flex items-center justify-between border-b border-[#242930]/80">
+          <div className="h-10 bg-surface-container-low px-3.5 flex items-center justify-between border-b border-hairline/80">
             <div className="flex items-center space-x-2 min-w-0">
-              {/* Mac style traffic lights */}
-              <div className="flex items-center space-x-1.5 flex-shrink-0">
-                <div className="w-2.5 h-2.5 rounded-full bg-[#EC6A5E]/80" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#F5BF4F]/80" />
-                <div className="w-2.5 h-2.5 rounded-full bg-[#62C554]/80" />
-              </div>
-              <div className="h-3.5 w-px bg-[#242930] ml-1 mr-0.5" />
-              <span className="font-mono text-[11px] text-[#8B95A2] tracking-tight truncate">
+              {/* Flat status marker instead of decorative window chrome —
+                  it carries meaning (session active) rather than imitating macOS. */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'h-1.5 w-1.5 flex-shrink-0',
+                  'bg-primary',
+                )}
+              />
+              <span className="font-mono text-[11px] text-on-surface-variant tracking-tight truncate">
                 &gt;_ {bot.nickname} — live feed
               </span>
             </div>
             <div className="flex items-center space-x-2 flex-shrink-0">
-              <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono tracking-wider font-semibold rounded bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/30">
+              <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono tracking-wider font-semibold rounded bg-primary/10 text-primary border border-primary/30">
                 TAIL
               </span>
               <button
                 type="button"
                 onClick={clearLogs}
-                className="text-[10px] font-mono text-[#5D6775] hover:text-[#F1F4F8] px-1.5 py-0.5 rounded hover:bg-[#191D22] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
+                className="text-[10px] font-mono text-on-surface-variant/80 hover:text-on-surface px-1.5 py-0.5 rounded hover:bg-surface-container-low transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 title="Clear console"
               >
                 clear
@@ -269,7 +271,7 @@ export default function BotConsolePage() {
               render container-free on the terminal surface. */}
           <div className="font-mono text-[11.5px] leading-relaxed p-4 space-y-2.5 h-[28rem] overflow-y-auto overflow-x-hidden select-text text-slate-300 [&_span]:!bg-transparent [&_code]:!bg-transparent [&_code]:!border-0 [&_code]:!p-0 [&_code]:!rounded-none">
             {logs.length === 0 ? (
-              <div className="text-[#5D6775] italic break-words">
+              <div className="text-on-surface-variant/80 italic break-words">
                 Console buffer cleared. Waiting for events...
               </div>
             ) : (
@@ -284,9 +286,9 @@ export default function BotConsolePage() {
             <div ref={bottomRef} />
           </div>
           {/* Terminal Footer Bar */}
-          <div className="h-7 bg-[#101317] px-3.5 border-t border-[#242930]/60 flex items-center justify-between text-[10px] font-mono text-[#5D6775]">
+          <div className="h-7 bg-surface-container-lowest px-3.5 border-t border-hairline/60 flex items-center justify-between text-[10px] font-mono text-on-surface-variant/80">
             <span className="flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               <span>Buffer: {logs.length} events synced</span>
             </span>
             <span>Encoding: UTF-8</span>
@@ -296,19 +298,19 @@ export default function BotConsolePage() {
         {/* ── BOT INFORMATION ── */}
         <section className="space-y-2.5" aria-label="Bot information">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#8B95A2]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
               Bot Information
             </h3>
-            <span className="text-[11px] text-[#5D6775]">
+            <span className="text-[11px] text-on-surface-variant/80">
               Configuration specs
             </span>
           </div>
           {/* Grouped List Container */}
-          <div className="bg-[#13161A] border border-[#242930] rounded-2xl divide-y divide-[#1C2026] overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card-lg)] divide-y divide-outline-variant overflow-hidden">
             {/* Row 1: Status */}
-            <div className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/50 transition-colors">
+            <div className="p-3.5 flex items-center justify-between hover:bg-surface-container-high/50 transition-colors">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-lg bg-[#191D22] border border-[#242930]/70 flex items-center justify-center text-[#8B95A2]">
+                <div className="w-8 h-8 rounded-[var(--radius-card)] bg-surface-container-low border border-hairline/70 flex items-center justify-center text-on-surface-variant">
                   <svg
                     className="w-4 h-4 stroke-current"
                     fill="none"
@@ -321,18 +323,18 @@ export default function BotConsolePage() {
                   </svg>
                 </div>
                 <div>
-                  <div className="text-[11px] text-[#8B95A2]">Status</div>
+                  <div className="text-[11px] text-on-surface-variant">Status</div>
                   <div className="flex items-center space-x-1.5 mt-0.5">
                     <span
                       className={cn(
                         'w-2 h-2 rounded-full',
-                        isActive ? 'bg-[#10B981]' : 'bg-[#5D6775]',
+                        isActive ? 'bg-primary' : 'bg-on-surface-variant/50',
                       )}
                     />
                     <span
                       className={cn(
                         'text-sm font-semibold',
-                        isActive ? 'text-[#10B981]' : 'text-[#5D6775]',
+                        isActive ? 'text-primary' : 'text-on-surface-variant/80',
                       )}
                     >
                       {isActive ? 'Online' : 'Offline'}
@@ -340,14 +342,14 @@ export default function BotConsolePage() {
                   </div>
                 </div>
               </div>
-              <span className="text-xs font-mono text-[#5D6775]">
+              <span className="text-xs font-mono text-on-surface-variant/80">
                 99.9% health
               </span>
             </div>
             {/* Row 2: Uptime */}
-            <div className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/50 transition-colors">
+            <div className="p-3.5 flex items-center justify-between hover:bg-surface-container-high/50 transition-colors">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-lg bg-[#191D22] border border-[#242930]/70 flex items-center justify-center text-[#8B95A2]">
+                <div className="w-8 h-8 rounded-[var(--radius-card)] bg-surface-container-low border border-hairline/70 flex items-center justify-center text-on-surface-variant">
                   <svg
                     className="w-4 h-4 stroke-current"
                     fill="none"
@@ -361,8 +363,8 @@ export default function BotConsolePage() {
                   </svg>
                 </div>
                 <div>
-                  <div className="text-[11px] text-[#8B95A2]">Uptime</div>
-                  <div className="text-base font-bold text-[#F1F4F8] tracking-tight">
+                  <div className="text-[11px] text-on-surface-variant">Uptime</div>
+                  <div className="text-base font-bold text-on-surface tracking-tight">
                     {isActive && startedAtMs !== null ? (
                       <UptimeDisplay startedAt={startedAtMs} />
                     ) : (
@@ -371,47 +373,47 @@ export default function BotConsolePage() {
                   </div>
                 </div>
               </div>
-              <span className="text-xs font-mono text-[#5D6775]">
+              <span className="text-xs font-mono text-on-surface-variant/80">
                 continuous
               </span>
             </div>
             {/* Row 3: Platform */}
-            <div className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/50 transition-colors">
+            <div className="p-3.5 flex items-center justify-between hover:bg-surface-container-high/50 transition-colors">
               <div className="flex items-center space-x-3">
                 <div
                   className={cn(
-                    'w-8 h-8 rounded-lg bg-[#191D22] border border-[#242930]/70 flex items-center justify-center',
+                    'w-8 h-8 rounded-[var(--radius-card)] bg-surface-container-low border border-hairline/70 flex items-center justify-center',
                     platformTileClasses(bot.platform),
                   )}
                 >
                   {getPlatformIcon(bot.platform, 'w-4 h-4')}
                 </div>
                 <div>
-                  <div className="text-[11px] text-[#8B95A2]">
+                  <div className="text-[11px] text-on-surface-variant">
                     Platform &amp; Framework
                   </div>
                   <div className="flex items-center space-x-1.5">
-                    <span className="text-sm font-semibold text-[#F1F4F8]">
+                    <span className="text-sm font-semibold text-on-surface">
                       {getPlatformLabel(bot.platform)}
                     </span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center space-x-1.5">
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#191D22] border border-[#242930] text-[#8B95A2]">
+                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-surface-container-low border border-hairline text-on-surface-variant">
                   {frameworkBadge(bot.platform)}
                 </span>
               </div>
             </div>
             {/* Row 4: Prefix */}
-            <div className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/50 transition-colors">
+            <div className="p-3.5 flex items-center justify-between hover:bg-surface-container-high/50 transition-colors">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-lg bg-[#191D22] border border-[#242930]/70 flex items-center justify-center text-[#8B95A2]">
+                <div className="w-8 h-8 rounded-[var(--radius-card)] bg-surface-container-low border border-hairline/70 flex items-center justify-center text-on-surface-variant">
                   <span className="font-mono text-base font-bold">#</span>
                 </div>
                 <div>
-                  <div className="text-[11px] text-[#8B95A2]">Prefix</div>
-                  <div className="text-base font-mono font-bold text-[#F1F4F8]">
+                  <div className="text-[11px] text-on-surface-variant">Prefix</div>
+                  <div className="text-base font-mono font-bold text-on-surface">
                     {bot.prefix}
                   </div>
                 </div>
@@ -419,7 +421,7 @@ export default function BotConsolePage() {
               <button
                 type="button"
                 onClick={() => void handleCopyPrefix()}
-                className="p-2 text-[#8B95A2] hover:text-[#F1F4F8] rounded-lg hover:bg-[#191D22] transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981]/40"
+                className="p-2 text-on-surface-variant hover:text-on-surface rounded-[var(--radius-card)] hover:bg-surface-container-low transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 title="Copy prefix"
               >
                 <svg
@@ -436,9 +438,9 @@ export default function BotConsolePage() {
               </button>
             </div>
             {/* Row 5: Bot Admins */}
-            <div className="p-3.5 flex items-center justify-between hover:bg-[#1E232A]/50 transition-colors">
+            <div className="p-3.5 flex items-center justify-between hover:bg-surface-container-high/50 transition-colors">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-lg bg-[#191D22] border border-[#242930]/70 flex items-center justify-center text-[#8B95A2]">
+                <div className="w-8 h-8 rounded-[var(--radius-card)] bg-surface-container-low border border-hairline/70 flex items-center justify-center text-on-surface-variant">
                   <svg
                     className="w-4 h-4 stroke-current"
                     fill="none"
@@ -454,13 +456,13 @@ export default function BotConsolePage() {
                   </svg>
                 </div>
                 <div>
-                  <div className="text-[11px] text-[#8B95A2]">Bot Admins</div>
-                  <div className="text-sm font-semibold text-[#F1F4F8]">
+                  <div className="text-[11px] text-on-surface-variant">Bot Admins</div>
+                  <div className="text-sm font-semibold text-on-surface">
                     {bot.admins.length} Authorized
                   </div>
                 </div>
               </div>
-              <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#191D22] border border-[#242930] text-[#8B95A2] max-w-[140px] truncate">
+              <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-surface-container-low border border-hairline text-on-surface-variant max-w-[140px] truncate">
                 {bot.admins.length > 0 ? `@${bot.admins[0]}` : 'none'}
               </span>
             </div>

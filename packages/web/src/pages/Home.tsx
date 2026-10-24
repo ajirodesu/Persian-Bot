@@ -1,282 +1,384 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Zap, Bot, LayoutDashboard, Globe, MessageSquare } from 'lucide-react'
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Bot,
+  Globe,
+  Lock,
+  MessageSquare,
+  Power,
+  Terminal,
+} from 'lucide-react'
 import Button from '@/components/ui/buttons/Button'
+import { H_SHELL_SCOPE } from '@/constants/header.constants'
 import { ROUTES } from '@/constants/routes.constants'
 import { useUserAuth } from '@/contexts/UserAuthContext'
-import { DiscordIcon, TelegramIcon, FluxerIcon } from '@/components/icons/PlatformIcons'
-import { getPlatformColors } from '@/components/icons/platform-icon.util'
-import { Platforms } from '@/constants/platform.constants'
+import { cn } from '@/utils/cn.util'
 
-// ── Static data (real platform SVGs from source) ────────────────────────────
+// ── Static sheet data ───────────────────────────────────────────────────────
+// Every product claim below is traceable in this repo: dashboard surfaces
+// (DashboardLayout nav), platform adapters (platform.constants), and the
+// Create New Bot wizard (pages/dashboard/create-new-bot.tsx).
 
-const PLATFORMS = [
-  { name: 'Discord', Icon: DiscordIcon, bg: getPlatformColors(Platforms.Discord) },
-  { name: 'Fluxer', Icon: FluxerIcon, bg: getPlatformColors(Platforms.Fluxer) },
-  { name: 'Telegram', Icon: TelegramIcon, bg: getPlatformColors(Platforms.Telegram) },
-  {
-    name: 'Chat Room',
-    Icon: MessageSquare,
-    bg: 'bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20',
-  },
+const FACTS = [
+  { label: 'RUNTIME', value: 'Node.js' },
+  { label: 'ADAPTERS', value: '02' },
+  { label: 'SOURCE', value: 'Open source' },
 ] as const
 
-const FEATURES = [
+const SURFACES = [
+  { name: 'Bot Manager', detail: 'session list and lifecycle' },
+  { name: 'Chat Room', detail: 'in-dashboard test console' },
+  { name: 'Commands', detail: 'per-session command registry' },
+  { name: 'Events', detail: 'event registry and toggles' },
+  { name: 'Database', detail: 'table browser' },
+] as const
+
+const CAPABILITIES = [
   {
     Icon: Globe,
-    title: 'Multi-Platform',
+    title: 'Multi-platform',
     description:
-      'One codebase that runs natively on Discord, Telegram, and Fluxer — no per-platform rewrites.',
+      'One codebase, two adapters: Discord and Telegram. No per-platform rewrite.',
   },
   {
     Icon: Bot,
-    title: 'Multi-Bot Management',
+    title: 'Multi-bot',
     description:
-      'Run multiple independent bot sessions simultaneously, each with its own commands, prefix, and admin roster.',
+      'Independent sessions, each with its own token, prefix, and admin roster.',
   },
   {
-    Icon: LayoutDashboard,
-    title: 'Unified Dashboard',
+    Icon: Power,
+    title: 'Live control',
     description:
-      'Monitor live logs, enable or disable commands per session, and update credentials — all from one place.',
+      'Start, stop, and hot-restart a session without redeploying the server.',
   },
   {
-    Icon: Zap,
-    title: 'Live Session Control',
+    Icon: Terminal,
+    title: 'Command registry',
     description:
-      'Start, stop, and hot-restart any bot session without touching the server or redeploying code.',
+      'Enable or disable commands per session from the dashboard, without editing bot code.',
   },
   {
     Icon: MessageSquare,
-    title: 'Built-in Chat Room',
+    title: 'Chat Room',
     description:
-      'Chat with your bot directly from the dashboard — a real-time, Telegram-style test console with replies, attachments, and inline keyboards, no external platform required.',
+      'A real-time test console with replies, attachments, and inline keyboards — no external platform required.',
   },
 ] as const
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
+const STEPS = [
+  {
+    title: 'Create an account',
+    body: 'Sign up, then confirm your email address when prompted.',
+  },
+  {
+    title: 'Add a platform token',
+    body: 'Use the Create New Bot wizard to set a nickname, prefix, platform token, and admin IDs.',
+  },
+  {
+    title: 'Start the session',
+    body: 'Launch it from the Bot Manager and watch the live feed in its console.',
+  },
+] as const
+
+// ── Primary action — shared by the hero and the closing section ─────────────
+
+function PrimaryAction({ authenticated }: { authenticated: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-      <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-primary">
-        {children}
-      </span>
-    </div>
+    <Button
+      as={Link}
+      to={authenticated ? ROUTES.DASHBOARD.ROOT : ROUTES.SIGNUP}
+      variant="filled"
+      color="primary"
+      size="lg"
+      rightIcon={
+        <ArrowRight
+          aria-hidden="true"
+          strokeWidth={1.75}
+          className="h-3.5 w-3.5"
+        />
+      }
+      className="rounded-[var(--radius-button)] font-mono text-label-md uppercase tracking-[0.1em]"
+    >
+      {authenticated ? 'Open dashboard' : 'Create an account'}
+    </Button>
   )
 }
 
-// ── Page — cat_bot_home_bot_manager_style.html ──────────────────────────────
+// ── Page — telemetry printout ───────────────────────────────────────────────
 
 export default function HomePage() {
   const { isAuthenticated } = useUserAuth()
 
   return (
-    <div className="flex flex-col bg-surface">
+    <>
       <Helmet>
-        <title>Cat-Bot</title>
+        <title>Cat-Bot — multi-platform bot operations</title>
+        <meta
+          name="description"
+          content="Run Discord and Telegram bot sessions from one dashboard. Open source."
+        />
+        <meta
+          property="og:title"
+          content="Cat-Bot — multi-platform bot operations"
+        />
+        <meta
+          property="og:description"
+          content="Run Discord and Telegram bot sessions from one dashboard. Open source."
+        />
+        <meta name="theme-color" content="#0F1112" />
       </Helmet>
 
-      <main className="flex-1 w-full max-w-md mx-auto px-5 pt-6 pb-12 flex flex-col gap-10 lg:max-w-6xl lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          {/* ── Hero ─────────────────────────────────────────────────── */}
-          <section className="flex flex-col gap-5 pt-2">
-            <Eyebrow>Multi-Platform • Multi-Bot • Open Source</Eyebrow>
-            <h1 className="text-3xl font-bold tracking-tight text-on-surface leading-[1.18] lg:text-[42px]">
-              Write once.
-              <br />
-              Deploy <span className="text-primary">everywhere.</span>
-            </h1>
-            <p className="text-[14px] text-on-surface-variant leading-relaxed tracking-normal max-w-lg">
-              Cat-Bot is a unified chatbot framework that runs across Discord, Telegram, and
-              Fluxer — all from a single codebase. Manage multiple independent bot sessions from
-              one powerful dashboard.
-            </p>
-
-            {/* Platform chips — original source SVGs */}
-            <div className="flex flex-wrap gap-2 pt-1">
-              {PLATFORMS.map((p) => (
-                <div
-                  key={p.name}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-container-high border border-hairline text-[12px] font-medium text-on-surface-variant"
-                >
-                  <p.Icon className="w-3.5 h-3.5" />
-                  <span>{p.name}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Hero CTA — full-width h-12 emerald */}
-            <div className="pt-2 flex flex-col gap-3">
-              {isAuthenticated ? (
-                <Button
-                  as={Link}
-                  to={ROUTES.DASHBOARD.ROOT}
-                  variant="filled"
-                  color="primary"
-                  size="lg"
-                  leftIcon={<LayoutDashboard className="h-4 w-4" />}
-                  fullWidth
-                  className="h-12 rounded-lg text-[14px]"
-                >
-                  Go to Dashboard
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    as={Link}
-                    to={ROUTES.SIGNUP}
-                    variant="filled"
-                    color="primary"
-                    size="lg"
-                    rightIcon={<ArrowRight className="h-4 w-4" />}
-                    fullWidth
-                    className="h-12 rounded-lg text-[14px]"
-                  >
-                    Get Started Free
-                  </Button>
-                  <Button
-                    as={Link}
-                    to={ROUTES.LOGIN}
-                    variant="outline"
-                    color="primary"
-                    size="lg"
-                    fullWidth
-                    className="h-12 rounded-lg text-[14px]"
-                  >
-                    Sign In
-                  </Button>
-                </>
+      <div className="bg-surface">
+        {/* ── Document masthead ──────────────────────────────────────────── */}
+        <div className="border-b border-hairline">
+          <div className="mx-auto flex w-full max-w-[var(--layout-nav-max)] items-center justify-between gap-4 px-[var(--layout-section-px)] py-2.5 md:grid md:grid-cols-3">
+            <span className={H_SHELL_SCOPE}>CAT-BOT / OPERATIONS MANUAL</span>
+            <span
+              className={cn(
+                H_SHELL_SCOPE,
+                'hidden md:inline md:justify-self-center',
               )}
-            </div>
-          </section>
-
-          {/* ── Grouped session card (desktop companion, Bot Manager rows) ── */}
-          <div className="hidden lg:block">
-            <div className="rounded-xl overflow-hidden border border-hairline bg-surface-container-low">
-              <div className="flex items-center gap-3 border-b border-outline-variant px-4 py-3">
-                <span className="font-mono text-xs text-surface-variant select-none">
-                  cat-bot — bot manager
-                </span>
-                <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-primary font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  Online
-                </span>
-              </div>
-              <div className="flex flex-col p-4">
-                <p className="mb-2 px-1 text-[11px] font-semibold text-surface-variant uppercase tracking-wider">
-                  Active Sessions
-                </p>
-                {PLATFORMS.map((p) => (
-                  <div
-                    key={p.name}
-                    className="flex items-center justify-between py-2.5 px-1 border-b border-outline-variant last:border-b-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${p.bg}`}
-                      >
-                        <p.Icon className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-on-surface">
-                          {p.name === 'Chat Room' ? 'Chat Room' : `${p.name} Bot`}
-                        </p>
-                        <p className="text-xs text-surface-variant font-mono">
-                          {p.name === 'Chat Room' ? 'built-in test console' : 'prefix: /'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      Online
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            >
+              DISCORD · TELEGRAM
+            </span>
+            <span className={cn(H_SHELL_SCOPE, 'md:justify-self-end')}>
+              REV 01
+            </span>
           </div>
         </div>
 
-        {/* ── Capabilities ───────────────────────────────────────────── */}
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5 pb-1">
-            <Eyebrow>Capabilities</Eyebrow>
-            <h2 className="text-[22px] font-bold text-on-surface tracking-tight">
-              Everything you need to run bots at scale
-            </h2>
-            <p className="text-[13px] text-on-surface-variant leading-normal max-w-xl">
-              Built for developers and operators who want one framework for every major chat
-              platform — without compromises.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES.map((f) => (
-              <article
-                key={f.title}
-                className="bg-surface-container-low border border-hairline rounded-xl p-4 flex gap-3.5 items-start active:bg-surface-container-highest active:opacity-[0.85] transition-colors duration-100"
-              >
-                <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-hairline flex items-center justify-center shrink-0">
-                  <f.Icon className="w-5 h-5 text-primary" strokeWidth={2} />
+        {/* ── 01 / Control surface ───────────────────────────────────────── */}
+        <section
+          aria-labelledby="hero-title"
+          className="border-b border-hairline"
+        >
+          <div className="mx-auto w-full max-w-[var(--layout-nav-max)] px-[var(--layout-section-px)] py-12 md:py-20">
+            <div className="grid gap-10 lg:grid-cols-12 lg:gap-12">
+              <div className="lg:col-span-7">
+                <div className="rule-label max-w-[16rem]">
+                  01 / CONTROL SURFACE
                 </div>
-                <div className="flex flex-col gap-1">
-                  <h3 className="text-[15px] font-semibold text-on-surface tracking-tight">
-                    {f.title}
-                  </h3>
-                  <p className="text-[13px] text-on-surface-variant leading-snug">{f.description}</p>
+
+                <div className="[animation:fade-in-up_420ms_var(--easing-emphasized-decelerate)_both]">
+                  <h1
+                    id="hero-title"
+                    className="mt-6 max-w-[18ch] break-words font-brand text-display-lg uppercase text-on-surface"
+                  >
+                    Every bot session.
+                    <br />
+                    One sheet.
+                  </h1>
+
+                  <p className="mt-5 max-w-[52ch] text-body-lg text-on-surface-variant">
+                    Cat-Bot runs Discord and Telegram bots from a single
+                    Node.js process. Start, stop, inspect, and message
+                    any session from one dashboard.
+                  </p>
+
+                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+                    <PrimaryAction authenticated={isAuthenticated} />
+                    {!isAuthenticated && (
+                      <Link
+                        to={ROUTES.LOGIN}
+                        className="self-start font-mono text-label-md uppercase tracking-[0.1em] text-on-surface-variant underline decoration-hairline underline-offset-4 hover:text-on-surface hover:decoration-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-surface sm:self-auto"
+                      >
+                        Sign in
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              </article>
-            ))}
+
+                <dl className="mt-8 grid max-w-md grid-cols-3 border-t border-hairline">
+                  {FACTS.map((fact) => (
+                    <div key={fact.label} className="min-w-0 pt-3 pr-4">
+                      <dt className="font-mono text-label-sm uppercase tracking-[0.18em] text-on-surface-variant/80">
+                        {fact.label}
+                      </dt>
+                      <dd className="mt-1 break-words font-brand text-headline-sm uppercase text-on-surface">
+                        {fact.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              {/* Surface index — reference only, all rows require a session */}
+              <div className="lg:col-span-5 lg:border-l lg:border-hairline lg:pl-8">
+                <div className="rule-label">SURFACE INDEX</div>
+
+                <ul className="mt-4 border-t border-hairline">
+                  {SURFACES.map((surface, index) => (
+                    <li
+                      key={surface.name}
+                      className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 border-b border-hairline py-3 last:border-b-0"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="font-mono text-label-sm tabular-nums text-on-surface-variant/80"
+                      >
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-brand text-body-md uppercase tracking-[0.06em] text-on-surface">
+                          {surface.name}
+                        </span>
+                        <span className="block font-mono text-label-sm uppercase tracking-[0.06em] text-on-surface-variant/85">
+                          {surface.detail}
+                        </span>
+                      </span>
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        strokeWidth={1.75}
+                        className="h-3 w-3 text-on-surface-variant/80"
+                      />
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="mt-4 flex items-center gap-2 font-mono text-label-sm uppercase tracking-[0.14em] text-on-surface-variant/80">
+                  <Lock
+                    aria-hidden="true"
+                    strokeWidth={1.75}
+                    className="h-3 w-3"
+                  />
+                  Requires a signed-in session
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* ── CTA card ───────────────────────────────────────────────── */}
-        <section className="bg-surface-container-low border border-hairline rounded-2xl p-5 flex flex-col gap-4 text-center">
-          <div className="flex items-center justify-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            <span className="text-[11px] font-mono font-semibold tracking-wider uppercase text-primary">
-              Get Started
-            </span>
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="text-xl font-bold text-on-surface tracking-tight">
-              Ready to deploy your first bot?
+        {/* ── 02 / Capabilities ──────────────────────────────────────────── */}
+        <section
+          aria-labelledby="capabilities-title"
+          className="border-b border-hairline"
+        >
+          <div className="mx-auto w-full max-w-[var(--layout-nav-max)] px-[var(--layout-section-px)] py-[var(--layout-section-py-lg)]">
+            <div className="rule-label">02 / CAPABILITIES</div>
+
+            <h2
+              id="capabilities-title"
+              className="mt-6 max-w-[24ch] font-brand text-display-sm uppercase text-on-surface"
+            >
+              One runtime. Three adapters.
             </h2>
-            <p className="text-[13px] text-on-surface-variant leading-relaxed">
-              Create your account and go from zero to a live multi-platform bot session in
-              minutes.
+            <p className="mt-4 max-w-[60ch] text-body-md text-on-surface-variant">
+              Each session owns its credentials, command set, and event stream;
+              the dashboard is how you reach them.
             </p>
-          </div>
-          <div className="pt-1">
-            {isAuthenticated ? (
-              <Button
-                as={Link}
-                to={ROUTES.DASHBOARD.ROOT}
-                variant="filled"
-                color="primary"
-                size="lg"
-                leftIcon={<LayoutDashboard className="h-4 w-4" />}
-                fullWidth
-                className="h-12 rounded-lg text-[14px]"
-              >
-                Go to Dashboard
-              </Button>
-            ) : (
-              <Button
-                as={Link}
-                to={ROUTES.SIGNUP}
-                variant="filled"
-                color="primary"
-                size="lg"
-                rightIcon={<ArrowRight className="h-4 w-4" />}
-                fullWidth
-                className="h-12 rounded-lg text-[14px]"
-              >
-                Create Free Account
-              </Button>
-            )}
+
+            <div className="mt-12 border-t border-hairline">
+              {CAPABILITIES.map((capability, index) => (
+                <article
+                  key={capability.title}
+                  className="grid grid-cols-[2.5rem_1fr] items-baseline gap-x-6 gap-y-2 border-b border-hairline py-6 md:grid-cols-[4rem_15rem_1fr]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="font-brand text-headline-lg tabular-nums text-on-surface-variant/80"
+                  >
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+
+                  <h3 className="flex items-center gap-2 font-brand text-headline-sm uppercase tracking-[0.06em] text-on-surface">
+                    <capability.Icon
+                      aria-hidden="true"
+                      strokeWidth={1.75}
+                      className="h-4 w-4 shrink-0 text-primary"
+                    />
+                    {capability.title}
+                  </h3>
+
+                  <p className="col-start-2 max-w-[68ch] text-body-sm text-on-surface-variant md:col-start-3">
+                    {capability.description}
+                  </p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
-      </main>
-    </div>
+
+        {/* ── 03 / Sequence ──────────────────────────────────────────────── */}
+        <section
+          aria-labelledby="sequence-title"
+          className="border-b border-hairline"
+        >
+          <div className="mx-auto w-full max-w-[var(--layout-nav-max)] px-[var(--layout-section-px)] py-[var(--layout-section-py-lg)]">
+            <div className="rule-label">03 / SEQUENCE</div>
+
+            <h2
+              id="sequence-title"
+              className="mt-6 font-brand text-display-sm uppercase text-on-surface"
+            >
+              From account to first session.
+            </h2>
+
+            <ol className="mt-10 grid gap-0 divide-y divide-hairline border-t border-hairline md:grid-cols-3 md:divide-x md:divide-y-0">
+              {STEPS.map((step, index) => (
+                <li
+                  key={step.title}
+                  className="py-8 first:md:pl-0 last:md:pr-0 md:px-8 md:py-10"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="font-brand text-display-md leading-none text-primary/90"
+                  >
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <h3 className="mt-4 font-brand text-headline-sm uppercase text-on-surface">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2 text-body-sm text-on-surface-variant">
+                    {step.body}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* ── 04 / Start ─────────────────────────────────────────────────── */}
+        <section
+          aria-labelledby="start-title"
+          className="border-b border-hairline bg-surface-container-low"
+        >
+          <div className="mx-auto grid w-full max-w-[var(--layout-nav-max)] gap-8 px-[var(--layout-section-px)] py-[var(--layout-section-py-lg)] md:grid-cols-12 md:items-end">
+            <div className="md:col-span-7">
+              <div className="rule-label">04 / START</div>
+
+              <h2
+                id="start-title"
+                className="mt-6 max-w-[20ch] font-brand text-display-sm uppercase text-on-surface"
+              >
+                Run your first session.
+              </h2>
+              <p className="mt-4 max-w-[52ch] text-body-md text-on-surface-variant">
+                Create an account, add a platform token, and start a bot from
+                the dashboard.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row md:col-span-5 md:justify-end">
+              <PrimaryAction authenticated={isAuthenticated} />
+              {!isAuthenticated && (
+                <Button
+                  as={Link}
+                  to={ROUTES.LOGIN}
+                  variant="outline"
+                  color="neutral"
+                  size="lg"
+                  className="rounded-[var(--radius-button)] font-mono text-label-md uppercase tracking-[0.1em]"
+                >
+                  Sign in
+                </Button>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+    </>
   )
 }

@@ -45,7 +45,7 @@
     in every theme) and go solid only during active scroll
     interaction. ThemeProvider toggles html[data-scrolling="true"]
     while the user is scrolling, so this behavior is identical
-    across Aqua, Burnt, and Indigo.
+    across Emerald, Jasper, and Amethyst.
     ----------------------------------------------------------- */
   *:not(html) {
     scrollbar-width: thin;

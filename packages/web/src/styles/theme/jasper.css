@@ -130,7 +130,8 @@ html[data-theme='jasper'] {
 
   /* ==================== INPUT SURFACES ==================== */
   --color-input-bg: #191512;
-  --color-input-border: #332b25;
+  /* 3.36:1 vs --color-input-bg, 3.56:1 vs --color-surface (WCAG 1.4.11) */
+  --color-input-border: #746860;
 
   /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
   --shadow-soft-sm: none;

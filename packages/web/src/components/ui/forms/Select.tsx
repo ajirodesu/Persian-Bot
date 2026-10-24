@@ -39,7 +39,10 @@ export interface SelectProps {
   fullWidth?: boolean
   /** Whether to show checkmark for selected option */
   showCheck?: boolean
-  /** Make button pill-shaped (fully rounded) */
+  /**
+   * Retained for API compatibility only. Pill geometry is no longer part of
+   * the system: this resolves to `--radius-input`.
+   */
   pill?: boolean
   /** Additional CSS classes */
   className?: string
@@ -47,14 +50,14 @@ export interface SelectProps {
 
 /**
  * Base button styles - shared across all variants
- * Note: rounded-lg removed - will be added conditionally with pill prop
+ * Radius is applied via the input token; there is no pill geometry.
  */
 const buttonBase =
-  'inline-flex items-center justify-between font-medium focus:outline-none disabled:opacity-state-disabled disabled:cursor-not-allowed transition-all duration-fast'
+  'inline-flex items-center justify-between font-medium focus:border-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-state-disabled disabled:cursor-not-allowed transition-colors duration-fast'
 
 /**
  * Filled variant overlay structure
- * Uses after:rounded-[inherit] to match parent border-radius (supports pill shape)
+ * Uses after:rounded-[inherit] to match parent border-radius
  */
 const filledStateLayer =
   'relative after:absolute after:inset-0 after:rounded-[inherit] after:pointer-events-none after:opacity-0 after:transition-opacity after:duration-fast hover:after:opacity-state-hover active:after:opacity-state-pressed'
@@ -63,11 +66,14 @@ const filledStateLayer =
  * Variant classes
  */
 const variantClasses: Record<SelectVariant, string> = {
+  // Boundary uses --color-input-border (>= 3:1 vs the fill). Hover keeps the
+  // state-layer fill but drops the border step to `outline`, which is darker
+  // than the new boundary and would weaken it.
   default:
-    'bg-[var(--color-input-bg,transparent)] text-on-surface border-2 border-[var(--color-input-border,rgb(var(--color-outline-variant)))] hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)] focus:border-primary',
+    'bg-[var(--color-input-bg,transparent)] text-on-surface border border-[var(--color-input-border)] hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)]',
   filled: cn(
     filledStateLayer,
-    'bg-primary text-on-primary after:bg-on-primary border-2 border-transparent focus:border-on-primary/50 shadow-elevation-1 hover:shadow-elevation-2',
+    'bg-primary text-on-primary after:bg-on-primary border border-transparent focus:border-on-primary',
   ),
 }
 
@@ -89,7 +95,7 @@ const menuSizeClasses: Record<SelectSize, string> = {
 }
 
 /**
- * Select component - A focused select element with pill shape support
+ * Select component - A focused select element
  *
  * This is a simplified select component designed to work with Field wrapper.
  * When used inside Field.Root, it automatically:
@@ -104,11 +110,11 @@ const menuSizeClasses: Record<SelectSize, string> = {
  * - Portal-based menu for proper stacking
  * - Full accessibility with ARIA attributes
  * - Integrates seamlessly with Field compound component
- * - Pill shape support via `pill` prop
+ * - `pill` prop accepted for compatibility (renders the input radius)
  *
  * @example
  * ```tsx
- * // Standalone usage with pill
+ * // Standalone usage
  * <Select
  *   options={[
  *     { value: 'us', label: 'United States' },
@@ -116,13 +122,12 @@ const menuSizeClasses: Record<SelectSize, string> = {
  *   ]}
  *   value={country}
  *   onChange={setCountry}
- *   pill
  * />
  *
  * // With Field wrapper (recommended)
  * <Field.Root invalid={!!error} required>
  *   <Field.Label>Country</Field.Label>
- *   <Select options={countries} value={country} onChange={setCountry} pill />
+ *   <Select options={countries} value={country} onChange={setCountry} />
  *   <Field.HelperText>Select your country of residence.</Field.HelperText>
  *   <Field.ErrorText>{error}</Field.ErrorText>
  * </Field.Root>
@@ -370,8 +375,11 @@ const Select: React.FC<SelectProps> = ({
     return 'text-on-surface-variant'
   }
 
-  // Border radius class based on pill prop
-  const borderRadiusClass = pill ? 'rounded-full' : 'rounded-[var(--radius-input,0.5rem)]'
+  // Border radius class — pill is accepted for API compatibility but
+  // resolves to the shared input token; no fully-rounded geometry exists.
+  const borderRadiusClass = pill
+    ? 'rounded-[var(--radius-input)]'
+    : 'rounded-[var(--radius-input,0.5rem)]'
 
   // Render select menu via portal
   const selectMenu = isOpen && menuRect && (
@@ -393,10 +401,9 @@ const Select: React.FC<SelectProps> = ({
         zIndex: 'var(--z-dropdown)',
       }}
       className={cn(
-        // Dropdowns are one of the spec's named allowed vibrancy surfaces
-        // (alongside dialogs/sheets/sticky headers) — bg opacity dropped so
-        // the blur is visible, radius switched to the shared input token.
-        'max-h-60 overflow-auto rounded-[var(--radius-input)] border border-outline-variant bg-surface/90 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-2',
+        // Dropdown panels are an allowed shadow surface: opaque low
+        // container, 1px rule, elevation 3. No blur, no translucency.
+        'max-h-60 overflow-auto rounded-[var(--radius-input)] border border-outline-variant bg-surface-container-low shadow-elevation-3',
         menuSizeClasses[size],
       )}
     >

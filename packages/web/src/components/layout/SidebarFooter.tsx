@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import IconButton from '@/components/ui/buttons/IconButton'
 import { cn } from '@/utils/cn.util'
-import { H_HEIGHT, H_SEPARATOR } from '@/constants/header.constants'
+import { H_HEIGHT, H_SEPARATOR, H_SHELL_SCOPE } from '@/constants/header.constants'
 
 // ============================================================================
 // Online status
@@ -52,24 +52,25 @@ export interface SidebarFooterProps {
 
 /**
  * Shared sidebar footer — the single implementation behind every sidebar
- * shell (Bot Manager dashboard + admin panel), so both rails stay visually
- * identical by construction.
+ * shell (Bot Manager dashboard + admin panel), so both rails stay identical
+ * by construction.
  *
- * Expanded row (h-14, mirroring the sidebar's h-14 identity row):
+ * Expanded row (h-14, mirroring the sidebar's h-14 identity row) — a printed
+ * status line with the state sitting at the far right of a filling rule:
  *
- *   [ ● Dashboard ················ ONLINE  (toggle) ]
+ *   [ ■ Dashboard ────────────────────────── ONLINE  (toggle) ]
  *
  * Collapsed icon rail:
  *
- *   [ ● ]
+ *   [ ■ ]
  *   [ (toggle) ]
  *
- * The status light is not decorative: it is success-green "ONLINE" only
- * while the shell reports connectivity — red "OFFLINE" the moment either
- * the socket drops (dashboard) or the browser goes offline (everywhere).
- * Reduced-motion users get a static dot (global reduced-motion rules kill
- * the ping animation); when the rail is collapsed the title attribute
- * still surfaces the state on hover and the dot colour carries the tone.
+ * The status light is not decorative: it is success-green only while the
+ * shell reports connectivity — red the moment either the socket drops
+ * (dashboard) or the browser goes offline (everywhere). The marker is a flat
+ * 6px square with no animation; when the rail is collapsed the title
+ * attribute still surfaces the state on hover and the square's colour
+ * carries the tone.
  */
 export default function SidebarFooter({
   scopeLabel,
@@ -90,50 +91,48 @@ export default function SidebarFooter({
           collapsed ? 'flex-col justify-center gap-1.5' : 'justify-between gap-3 px-6',
         )}
       >
-        {/* Status light + scope label — grouped left, never spread apart.
-            In the collapsed rail only the dot remains, tooltip still works. */}
+        {/* Status marker + scope label — grouped left, never spread apart.
+            In the collapsed rail only the square remains, tooltip still works. */}
         <span
-          className={cn('flex min-w-0 items-center', collapsed && 'justify-center')}
+          className={cn('flex min-w-0 items-center gap-2', collapsed && 'justify-center')}
           title={statusLabel}
           role="img"
           aria-label={`${statusLabel} — ${scopeLabel}`}
         >
-          <span className="relative flex h-2 w-2 shrink-0">
-            <span
-              aria-hidden="true"
-              className={cn(
-                'absolute inset-0 rounded-full animate-ping',
-                isDown ? 'bg-error/60' : 'bg-success/60',
-              )}
-            />
-            <span
-              className={cn(
-                'relative inline-flex h-2 w-2 rounded-full',
-                isDown ? 'bg-error' : 'bg-success',
-              )}
-            />
-          </span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              'h-1.5 w-1.5 shrink-0 rounded-[1px]',
+              isDown ? 'bg-error' : 'bg-success',
+            )}
+          />
           {!collapsed && (
-            <span className="ml-2.5 truncate text-[11px] leading-none font-medium font-mono uppercase tracking-[0.2em] text-on-surface-variant/70 select-none">
-              {scopeLabel}
-            </span>
+            <span className={cn(H_SHELL_SCOPE, 'truncate')}>{scopeLabel}</span>
           )}
         </span>
 
-        {/* Right cluster — status word (expanded rail only) + collapse
-            toggle. Wrapped so justify-between has exactly two children and
-            the status word hugs the right edge instead of floating mid-row. */}
+        {/* Right cluster — hairline rule, status word, collapse toggle. The
+            rule fills the gap so the row reads as one continuous line rather
+            than two floating fragments. */}
         {(!collapsed || onToggleCollapsed) && (
-          <span className="flex shrink-0 items-center gap-1.5">
+          <span
+            className={cn(
+              'flex items-center gap-2',
+              collapsed ? 'shrink-0' : 'flex-1',
+            )}
+          >
             {!collapsed && (
-              <span
-                className={cn(
-                  'text-[11px] leading-none font-medium font-mono uppercase tracking-[0.2em] select-none',
-                  isDown ? 'text-error/90' : 'text-success/90',
-                )}
-              >
-                {statusLabel}
-              </span>
+              <>
+                <span aria-hidden="true" className="h-px flex-1 bg-hairline" />
+                <span
+                  className={cn(
+                    'font-mono text-[10px] uppercase tracking-[0.2em] select-none',
+                    isDown ? 'text-error' : 'text-success',
+                  )}
+                >
+                  {statusLabel}
+                </span>
+              </>
             )}
             {onToggleCollapsed && (
               <IconButton

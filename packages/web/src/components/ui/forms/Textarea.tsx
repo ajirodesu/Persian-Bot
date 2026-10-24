@@ -38,16 +38,18 @@ export interface TextareaProps extends Omit<
  * Base textarea styles - shared across all variants
  */
 const base =
-  'w-full rounded-[var(--radius-input,0.5rem)] text-on-surface focus:outline-none disabled:opacity-state-disabled disabled:cursor-not-allowed placeholder:text-on-surface-variant transition-all duration-fast ease-standard focus:shadow-[var(--shadow-focus-ring,none)]'
+  'w-full rounded-[var(--radius-input,0.5rem)] text-on-surface focus:border-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-state-disabled disabled:cursor-not-allowed placeholder:text-on-surface-variant transition-colors duration-fast ease-standard'
 
 /**
- * Variant classes
+ * Variant classes with a consistent 1px rule
  */
 const variantClasses: Record<TextareaVariant, string> = {
+  // Boundary uses --color-input-border (>= 3:1 vs the fill). Hover no longer
+  // steps to `outline`, which is darker than the new boundary.
   default:
-    'bg-[var(--color-input-bg,transparent)] border-2 border-[var(--color-input-border,rgb(var(--color-outline-variant)))]',
+    'bg-[var(--color-input-bg,transparent)] border border-[var(--color-input-border)]',
   subtle:
-    'border-2 border-transparent bg-surface-container hover:bg-surface-container-high',
+    'border border-transparent bg-surface-container hover:bg-surface-container-high',
 }
 
 /**

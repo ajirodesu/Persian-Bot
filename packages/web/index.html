@@ -5,6 +5,23 @@
     <!-- Fonts are self-hosted (src/assets/fonts, hashed + immutable), so no
          third-party font origin remains — no preconnect needed. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The display + body faces paint above the fold on every route. Preload
+         them so text LCP does not wait for CSS discovery; Vite hashes these
+         URLs at build time. -->
+    <link
+      rel="preload"
+      href="/src/assets/fonts/barlow-condensed-latin-600.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/src/assets/fonts/barlow-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <!-- interactive-widget=resizes-content makes the layout viewport (and
          therefore `dvh` units) actually shrink when the on-screen keyboard
          opens on Android/Chrome. Without it, Chrome's default is
@@ -20,16 +37,21 @@
     />
     <title>Cat-Bot</title>
     <script>
-      // Applies the persisted theme (defaulting to "aqua") before first
-      // paint so there's never a flash of the wrong theme.
+      // Applies the persisted theme (defaulting to "emerald") before first
+      // paint so there's never a flash of the wrong theme. Favorites saved
+      // under the old theme names ("aqua"/"burnt"/"indigo") are mapped to
+      // their renamed themes ("emerald"/"jasper"/"amethyst").
       (function () {
+        var legacy = { aqua: 'emerald', burnt: 'jasper', indigo: 'amethyst' }
         try {
           var stored = window.localStorage.getItem('cat-bot-ui-theme')
-          var theme =
-            stored === 'burnt' || stored === 'indigo' ? stored : 'aqua'
+          var theme = 'emerald'
+          if (stored === 'jasper' || stored === 'amethyst') theme = stored
+          else if (stored === 'aqua' || stored === 'burnt' || stored === 'indigo')
+            theme = legacy[stored]
           document.documentElement.setAttribute('data-theme', theme)
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'aqua')
+          document.documentElement.setAttribute('data-theme', 'emerald')
         }
       })()
     </script>

@@ -196,7 +196,7 @@ export default function AdminGitPage() {
           {[0, 1, 2].map((s) => (
             <section key={s} className="space-y-2">
               <Skeleton textSize="body-sm" width="96px" />
-              <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+              <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
                 <div className="p-3.5 flex items-center gap-3.5">
                   <Skeleton variant="input" width={36} height={36} />
                   <div className="flex flex-col gap-2">
@@ -226,10 +226,10 @@ export default function AdminGitPage() {
         {/* ── REPOSITORY ── */}
         <section aria-label="Repository status" className="space-y-2">
           <SectionTitle>Repository</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
             <div className="p-3.5 flex items-center justify-between gap-3">
               <div className="flex items-center space-x-3.5 min-w-0">
-                <div className="rounded-lg border w-9 h-9 flex items-center justify-center flex-shrink-0 bg-primary/10 border-primary/30 text-primary">
+                <div className="rounded-[var(--radius-card)] border w-9 h-9 flex items-center justify-center flex-shrink-0 bg-primary/10 border-primary/30 text-primary">
                   <GitBranch className="w-4 h-4" strokeWidth={2} />
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -254,7 +254,7 @@ export default function AdminGitPage() {
                 }}
                 disabled={anyBusy}
                 aria-label="Refresh Git status"
-                className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+                className="p-2 rounded-[var(--radius-card)] text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
               >
                 <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} strokeWidth={2} />
               </button>
@@ -287,7 +287,7 @@ export default function AdminGitPage() {
         {/* ── COMMIT ── */}
         <section aria-label="Commit changes" className="space-y-2">
           <SectionTitle>Commit</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
             <div className="p-3.5 space-y-2.5">
               <Input
                 placeholder="Commit message — e.g. Fix login redirect"
@@ -335,7 +335,7 @@ export default function AdminGitPage() {
                   </Button>
                 </div>
               </div>
-              <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+              <p className="text-[11px] text-on-surface-variant leading-normal px-0.5">
                 Committing uses the GitHub identity connected in Settings → Git.
               </p>
             </div>
@@ -348,19 +348,19 @@ export default function AdminGitPage() {
             <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
               Changes
             </h2>
-            <span className="text-[11px] font-mono font-medium text-surface-variant">
+            <span className="text-[11px] font-mono font-medium text-on-surface-variant">
               {(status?.changes.length ?? 0) === 0
                 ? 'Working tree clean'
                 : `${status?.stagedCount ?? 0} staged · ${status?.unstagedCount ?? 0} unstaged`}
             </span>
           </div>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void runAction('stage-all', () => adminFileManagerService.gitStage([]), 'All changes staged')}
                 disabled={anyBusy || (status?.unstagedCount ?? 0) === 0}
-                className="flex-1 h-9 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="flex-1 h-9 px-3 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 <span>{isBusy('stage-all') ? 'Staging…' : 'Stage All'}</span>
@@ -369,7 +369,7 @@ export default function AdminGitPage() {
                 type="button"
                 onClick={() => void runAction('unstage-all', () => adminFileManagerService.gitUnstage([]), 'All changes unstaged')}
                 disabled={anyBusy || (status?.stagedCount ?? 0) === 0}
-                className="flex-1 h-9 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="flex-1 h-9 px-3 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <Undo2 className="h-3.5 w-3.5" strokeWidth={2} />
                 <span>{isBusy('unstage-all') ? 'Working…' : 'Unstage All'}</span>
@@ -408,10 +408,10 @@ export default function AdminGitPage() {
                 setBranchesOpen((v) => !v)
               }
             }}
-            className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden p-3.5 flex items-center justify-between hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+            className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden p-3.5 flex items-center justify-between hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
           >
             <div className="flex items-center space-x-3.5 min-w-0">
-              <div className="rounded-lg border w-9 h-9 flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
+              <div className="rounded-[var(--radius-card)] border w-9 h-9 flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
                 <GitBranch className="w-4 h-4" strokeWidth={2} />
               </div>
               <div className="flex flex-col min-w-0">
@@ -423,7 +423,7 @@ export default function AdminGitPage() {
                 </span>
               </div>
             </div>
-            <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+            <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
               <ChevronRight
                 className={cn('w-4 h-4 transition-transform duration-200', branchesOpen && 'rotate-90')}
                 strokeWidth={2}
@@ -431,7 +431,7 @@ export default function AdminGitPage() {
             </div>
           </article>
           {branchesOpen && (
-            <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
               <div className="p-3.5 flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <Input
@@ -447,7 +447,7 @@ export default function AdminGitPage() {
                   type="button"
                   onClick={handleCreateBranch}
                   disabled={anyBusy || !newBranch.trim()}
-                  className="h-10 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center gap-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+                  className="h-10 px-3 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center gap-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   <span>{isBusy('create-branch') ? 'Creating…' : 'Create & Switch'}</span>
@@ -481,7 +481,7 @@ export default function AdminGitPage() {
         {/* ── HISTORY ── */}
         <section aria-label="Recent commits" className="space-y-2">
           <SectionTitle>Recent Commits</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {log.length === 0 ? (
               <p className="p-6 text-sm text-on-surface-variant italic text-center">
                 No commits found.
@@ -489,14 +489,14 @@ export default function AdminGitPage() {
             ) : (
               log.map((commit) => (
                 <div key={commit.sha} className="p-3.5 flex items-start gap-3">
-                  <div className="rounded-lg border w-8 h-8 flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
+                  <div className="rounded-[var(--radius-card)] border w-8 h-8 flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
                     <Check className="w-3.5 h-3.5" strokeWidth={2} />
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-sm font-medium text-on-surface leading-snug break-words">
                       {commit.subject}
                     </span>
-                    <span className="text-[11px] text-surface-variant font-mono mt-1 truncate">
+                    <span className="text-[11px] text-on-surface-variant font-mono mt-1 truncate">
                       {commit.sha.slice(0, 7)} · {commit.author} · {commit.when}
                     </span>
                   </div>
@@ -532,7 +532,7 @@ function ChangeRow({
         <StatusChip text={changeLabel(change.status)} tone={changeTone(change.status)} />
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-mono text-on-surface truncate">{change.path}</span>
-          <span className="text-[11px] text-surface-variant mt-0.5">
+          <span className="text-[11px] text-on-surface-variant mt-0.5">
             {change.staged ? 'Staged' : 'Unstaged'}
             {change.hasUnstagedMods && change.staged ? ' + unstaged edits' : ''}
           </span>
@@ -546,7 +546,7 @@ function ChangeRow({
             disabled={disabled}
             aria-label={`Unstage ${change.path}`}
             title="Unstage"
-            className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="p-2 rounded-[var(--radius-card)] text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <Undo2 className="h-4 w-4" strokeWidth={2} />
           </button>
@@ -557,7 +557,7 @@ function ChangeRow({
             disabled={disabled}
             aria-label={`Stage ${change.path}`}
             title="Stage"
-            className="p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="p-2 rounded-[var(--radius-card)] text-on-surface-variant hover:text-primary hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             {busyKey === `stage:${change.path}` ? (
               <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2} />
@@ -572,7 +572,7 @@ function ChangeRow({
           disabled={disabled}
           aria-label={`Discard ${change.path}`}
           title="Discard changes"
-          className="p-2 rounded-lg text-on-surface-variant hover:text-error hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40"
+          className="p-2 rounded-[var(--radius-card)] text-on-surface-variant hover:text-error hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40"
         >
           <Trash2 className="h-4 w-4" strokeWidth={2} />
         </button>

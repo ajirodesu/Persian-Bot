@@ -11,6 +11,8 @@ import Button from '@/components/ui/buttons/Button'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import { cn } from '@/utils/cn.util'
 import { ROUTES } from '@/constants/routes.constants'
+import FreshnessNote from '@/components/ui/feedback/FreshnessNote'
+import { queryKeys } from '@/lib/query-client.lib'
 
 import { useBotDetail } from '@/features/users/hooks/useBotDetail'
 import { useBotStatus } from '@/features/users/hooks/useBotStatus'
@@ -122,11 +124,14 @@ export default function BotLayout() {
     )
   }
 
-  // Missing or unknown bot ID — surface a clear recovery path instead of a blank page
-  if (error || !bot) {
+  // Missing or unknown bot ID — surface a clear recovery path instead of a
+  // blank page. A cached bot stays on screen even when the newest fetch fails;
+  // the stale note below explains that instead of replacing real data with an
+  // error page.
+  if (!bot) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-on-surface">
-        <Bot className="h-12 w-12 text-on-surface-variant/40" />
+        <Bot className="h-12 w-12 text-on-surface-variant/80" />
         <p className="text-headline-sm font-medium">
           {error || 'Bot not found'}
         </p>
@@ -152,6 +157,10 @@ export default function BotLayout() {
       <Helmet>
         <title>{bot.nickname} · Cat-Bot</title>
       </Helmet>
+
+      <div className="-mt-3 flex items-center justify-end">
+        <FreshnessNote queryKey={queryKeys.botDetail(id)} staleOnly />
+      </div>
 
       {/* Page switcher — a premium segmented control (Linear/Vercel style):
           a pill container where the active page rises to an elevated surface

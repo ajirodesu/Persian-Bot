@@ -9,7 +9,7 @@
    glass, or gradients anywhere.
 
    Colors and surfaces are owned EXCLUSIVELY by the per-theme files
-   (aqua / burnt / indigo) so the whole site responds to the selected
+   (emerald / jasper / amethyst) so the whole site responds to the selected
    theme. This file only unifies what must never change between
    themes:
 
@@ -19,9 +19,9 @@
    ============================================================ */
 
 :root,
-html[data-theme='aqua'],
-html[data-theme='burnt'],
-html[data-theme='indigo'] {
+html[data-theme='emerald'],
+html[data-theme='jasper'],
+html[data-theme='amethyst'] {
   --font-family-brand: var(--font-family-display);
   --font-family-plain: 'Barlow', sans-serif;
   --font-family-mono: 'JetBrains Mono', ui-monospace, monospace;

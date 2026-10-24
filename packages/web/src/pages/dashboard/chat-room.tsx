@@ -40,11 +40,6 @@ import {
   Plus,
   FileText,
   CheckCheck,
-  Sparkles,
-  Zap,
-  MessageCircle,
-  Shield,
-  DollarSign,
   Tag,
   Image as ImageIcon,
   Play,
@@ -226,11 +221,11 @@ function BotReactionBadges({
         <span
           key={emoji}
           title={`Reacted by ${botNickname}`}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#182533]/80 border border-[#38628b]/60 text-xs shadow-sm select-none"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-on-primary/15 border border-on-primary/25 text-xs shadow-sm select-none"
         >
           <span>{emoji}</span>
           {count > 1 && (
-            <span className="text-[10px] text-[#9ab7d6] font-mono font-medium">{count}</span>
+            <span className="text-[10px] text-on-primary/90 font-mono font-medium">{count}</span>
           )}
         </span>
       ))}
@@ -963,7 +958,7 @@ function AudioPlayer({
           href={url}
           download={fileName}
           aria-label={`Download ${fileName}`}
-          className="p-1.5 rounded-full text-on-surface-variant/60 hover:text-primary hover:bg-on-surface/10 transition-colors"
+          className="p-1.5 rounded-full text-on-surface-variant/80 hover:text-primary hover:bg-on-surface/10 transition-colors"
         >
           <Download className="h-3.5 w-3.5" />
         </a>
@@ -1269,7 +1264,7 @@ function AttachmentView({ att }: { att: ChatAttachment }) {
       target="_blank"
       rel="noopener noreferrer"
       download={att.name}
-      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-low hover:bg-surface-container transition-colors text-xs border border-hairline"
+      className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-input)] bg-surface-container-low hover:bg-surface-container transition-colors text-xs border border-hairline text-on-surface"
     >
       <FileText className="h-4 w-4 shrink-0 opacity-70" />
       <span className="truncate max-w-[160px]">{att.name ?? 'File'}</span>
@@ -1307,9 +1302,9 @@ const BotButtonRow = memo(function BotButtonRow({
               type="button"
               onClick={() => onButtonClick(btn.id, messageId)}
               className={cn(
-                'w-full min-w-0 bg-[#243242] hover:bg-[#2e3e52] active:bg-[#34475e] text-white/95 rounded-xl py-2.5 px-4 text-[13px] font-semibold leading-snug flex items-center justify-center transition-colors shadow-sm active:scale-[0.99] border border-[#2b3c50] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50',
+                'w-full min-w-0 bg-on-surface/5 hover:bg-on-surface/10 active:bg-on-surface/15 text-on-surface rounded-[var(--radius-card)] py-2.5 px-4 text-[13px] font-semibold leading-snug flex items-center justify-center transition-colors shadow-sm active:scale-[0.99] border border-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                 btn.style === 'danger' && 'text-red-300 border-red-500/30 hover:bg-red-500/10',
-                btn.style === 'success' && 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10',
+                btn.style === 'success' && 'text-primary border-primary/30 hover:bg-emerald-500/10',
               )}
             >
               <span className="truncate">{btn.label}</span>
@@ -1368,7 +1363,7 @@ const ReplyQuote = memo(function ReplyQuote({
 
   return (
     <div className={cn('flex flex-col gap-0.5 max-w-[min(80%,420px)]', isBot ? 'items-start' : 'items-end')}>
-      <div className={cn('flex items-center gap-1 px-1 text-[11px] text-[#93a6b9]', isBot ? 'flex-row' : 'flex-row-reverse')}>
+      <div className={cn('flex items-center gap-1 px-1 text-[11px] text-on-surface-variant', isBot ? 'flex-row' : 'flex-row-reverse')}>
         <Reply className="h-3 w-3 shrink-0" />
         <span className="truncate">{label}</span>
       </div>
@@ -1377,7 +1372,7 @@ const ReplyQuote = memo(function ReplyQuote({
         onClick={onClick}
         className={cn(
           'min-w-0 max-w-full overflow-hidden text-left cursor-pointer active:opacity-70 transition-opacity',
-          'rounded-2xl bg-[#182533]/80 border border-[#2b3c50] text-[#9ab7d6] px-3.5 py-2 text-[12.5px] leading-tight',
+          'rounded-[var(--radius-card-lg)] bg-on-surface/5 border border-hairline text-on-surface-variant px-3.5 py-2 text-[12.5px] leading-tight',
         )}
       >
         {/* Up to three lines of the original message, ellipsis-truncated
@@ -1563,8 +1558,8 @@ const MessageBubble = memo(function MessageBubble({
           swipeReplyVisible ? 'opacity-70' : 'opacity-0',
         )}
       >
-        <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center">
-          <Reply className="h-3.5 w-3.5 text-[#9ab7d6]" />
+        <div className="h-7 w-7 rounded-full bg-on-surface/10 flex items-center justify-center">
+          <Reply className="h-3.5 w-3.5 text-on-surface-variant" />
         </div>
       </div>
 
@@ -1580,7 +1575,7 @@ const MessageBubble = memo(function MessageBubble({
         onClick={() => onReply({ id: msg.id, text: msg.text, type: msg.type })}
         className={cn(
           'hidden md:flex items-center justify-center h-7 w-7 rounded-full shrink-0 self-center',
-          'text-[#9ab7d6]/60 hover:text-white hover:bg-white/10',
+          'text-on-surface-variant/85 hover:text-on-surface hover:bg-on-surface/10',
           'opacity-0 group-hover/msg:opacity-100 focus-visible:opacity-100 transition-opacity duration-150',
           isBot ? 'order-last' : 'order-first',
         )}
@@ -1602,7 +1597,7 @@ const MessageBubble = memo(function MessageBubble({
         )}
         style={{ minWidth: 0 }}
       >
-        {/* Bubble body — stitch Telegram geometry + shadow + hairline border */}
+        {/* Bubble body — Telegram geometry + shadow. Fills pull from the unified shell's theme tokens (header surface for incoming, primary accent for outgoing) so capsules always match the header. */}
         <div
           className={cn(
             'flex flex-col overflow-hidden min-w-[52px] bubble-shadow',
@@ -1612,8 +1607,8 @@ const MessageBubble = memo(function MessageBubble({
             // photos keep their exact natural size with no minimum.
             isAutoFitImage && hasText && 'min-w-[min(240px,100%)]',
             isBot
-              ? cn('bg-[#182533] text-white bubble-in border border-[#213244]/40', !isAutoFitImage && 'w-full')
-              : 'bg-[#2b5278] text-white bubble-out border border-[#38628b]/40 max-w-[85%]',
+              ? cn('bg-header-surface text-on-surface bubble-in border border-hairline', !isAutoFitImage && 'w-full')
+              : 'bg-primary text-on-primary bubble-out border border-on-primary/25 max-w-[85%]',
           )}
         >
           {(hasText || hasPills) && (
@@ -1624,8 +1619,8 @@ const MessageBubble = memo(function MessageBubble({
               {isBot && (
                 <div className="mb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-emerald-400">{botNickname}</span>
-                    <span className="px-1 py-0.5 text-[9px] uppercase font-mono font-medium tracking-wide bg-emerald-500/15 text-emerald-300 rounded border border-emerald-500/20">bot</span>
+                    <span className="text-xs font-semibold text-primary">{botNickname}</span>
+                    <span className="px-1 py-0.5 text-[9px] uppercase font-mono font-medium tracking-wide bg-primary/10 text-primary rounded border border-primary/20">bot</span>
                   </div>
                 </div>
               )}
@@ -1638,7 +1633,7 @@ const MessageBubble = memo(function MessageBubble({
               )}
 
               {hasText && (
-                <div className={cn(isBot ? 'text-[12.5px] leading-relaxed text-[#dbe5f0]' : 'text-[14px] font-mono text-[#dbe9ff] font-medium leading-normal')}>
+                <div className={cn(isBot ? 'text-[12.5px] leading-relaxed text-on-surface' : 'text-[14px] font-mono text-on-primary font-medium leading-normal')}>
                   {/* Media-carrying bot messages always render as markdown:
                       bot captions conventionally contain formatting (bold,
                       links, code, lists) but commands don't always set the
@@ -1649,19 +1644,17 @@ const MessageBubble = memo(function MessageBubble({
                 </div>
               )}
 
-              {/* Meta row — stitch: bot timestamp bottom-right #71869a;
-                  user timestamp + double-check #9ab7d6 / #5bb6ff, with
-                  bot-only reaction badges pinned to the opposite side. */}
+              {/* Meta row — bot timestamp bottom-right; user timestamp + double-check on the right, with bot-only reaction badges pinned to the opposite side. */}
               {(!hasMedia || !trailingIsVisual) && (
                 <div className={cn('flex items-center gap-3 mt-1', isBot ? 'justify-end' : hasReactions ? 'justify-between' : 'justify-end')}>
                   {!isBot && hasReactions && (
                     <BotReactionBadges reactions={msg.reactions!} botNickname={botNickname} />
                   )}
                   <span className="flex items-center gap-1">
-                    <span className={cn('text-[10px] leading-none select-none tabular-nums', isBot ? 'text-[#71869a]' : 'text-[#9ab7d6]')}>
+                    <span className={cn('text-[10px] leading-none select-none tabular-nums', isBot ? 'text-on-surface-variant' : 'text-on-primary/80')}>
                       {formatTime(msg.timestamp, timezone)}
                     </span>
-                    {!isBot && <CheckCheck className="h-3.5 w-3.5 text-[#5bb6ff] inline-block shrink-0" />}
+                    {!isBot && <CheckCheck className="h-3.5 w-3.5 text-on-primary inline-block shrink-0" />}
                   </span>
                 </div>
               )}
@@ -1848,7 +1841,7 @@ function ChatSettingsMenu({
                 {isConnected ? (
                   <span className="text-success font-medium">Online</span>
                 ) : (
-                  <span className="text-on-surface-variant/70">Connecting…</span>
+                  <span className="text-on-surface-variant/85">Connecting…</span>
                 )}
               </p>
             </div>
@@ -1927,82 +1920,80 @@ function GetStartedScreen({
   prefix: string
   botNickname: string
 }) {
-  const features = [
-    {
-      icon: <Zap className="h-4 w-4 text-emerald-400" strokeWidth={2} />,
-      title: 'Instant Commands',
-      desc: `Type ${prefix}help to explore everything the bot can do.`,
-    },
-    {
-      icon: <DollarSign className="h-4 w-4 text-[#5bb6ff]" strokeWidth={2} />,
-      title: 'Economy & Games',
-      desc: 'Earn coins, check balance, play slots — economy commands tied to your account.',
-    },
-    {
-      icon: <MessageCircle className="h-4 w-4 text-emerald-400" strokeWidth={2} />,
-      title: 'Rich Responses',
-      desc: 'Markdown, buttons, images, and files — all supported.',
-    },
-    {
-      icon: <Shield className="h-4 w-4 text-[#8b95a2]" strokeWidth={2} />,
-      title: 'Persistent History',
-      desc: 'Your messages are saved — pick up right where you left off.',
-    },
+  // A handshake sheet, not a marketing hero: the empty state is a ruled
+  // document listing what the channel can do, with one primary action.
+  const capabilities = [
+    { title: 'Command registry', detail: `${prefix}help lists everything this bot can run.` },
+    { title: 'Economy & games', detail: 'Balances, slots, and account-tied commands.' },
+    { title: 'Rich replies', detail: 'Markdown, buttons, images, and file attachments.' },
+    { title: 'Persistent history', detail: 'Messages are saved per bot session.' },
   ]
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-8 px-6 py-10 min-h-0">
-      {/* Hero avatar */}
-      <div className="relative">
-        <div className="h-[88px] w-[88px] rounded-[28px] bg-gradient-to-br from-emerald-500/30 to-emerald-500/10 flex items-center justify-center shadow-2xl ring-1 ring-emerald-500/20">
-          <Logo className="h-12 w-12 text-emerald-400" />
+    <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="mx-auto flex w-full max-w-2xl flex-col px-5 py-8 sm:px-6 sm:py-10">
+        <div className="flex items-baseline justify-between gap-3 border-b border-hairline pb-3">
+          <span className="rule-label max-w-[14rem]">Chat room / ready</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+            No messages yet
+          </span>
         </div>
-        <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 rounded-full bg-[#10b981] border-[3px] border-surface-container-high flex items-center justify-center">
-          <Sparkles className="h-3 w-3 text-black" />
-        </div>
-      </div>
 
-      {/* Headline */}
-      <div className="text-center max-w-xs">
-        <h1 className="text-2xl font-extrabold text-white mb-2 leading-tight tracking-tight">
-          Meet {botNickname}
-        </h1>
-        <p className="text-sm text-[#8b95a2] leading-relaxed">
-          Your personal bot — right inside the dashboard. Send commands, get rich responses, and explore everything it can do.
-        </p>
-      </div>
+        <div className="grid gap-8 pt-7 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-10">
+          <div className="min-w-0">
+            <h1 className="font-brand text-display-sm uppercase leading-[0.98] text-on-surface">
+              Talk to {botNickname}
+            </h1>
+            <p className="mt-4 max-w-[42ch] text-body-md leading-relaxed text-on-surface-variant">
+              This is a live channel to the bot, not a demo. Send a command and
+              replies stream back here — with the same permissions and state as
+              the connected platform.
+            </p>
 
-      {/* Feature cards */}
-      <div className="grid grid-cols-2 gap-2.5 w-full max-w-sm">
-        {features.map((f, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-[#242930] bg-[#182533] p-3.5 flex flex-col gap-2.5"
-          >
-            <div className="w-9 h-9 rounded-lg border border-[#2b3c50] bg-[#0a1017]/50 flex items-center justify-center shrink-0">
-              {f.icon}
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-white leading-tight">{f.title}</span>
-              <p className="text-[11px] text-[#8b95a2] leading-relaxed mt-0.5">{f.desc}</p>
+            <div className="mt-7 flex flex-col items-start gap-3">
+              <button
+                type="button"
+                onClick={onStart}
+                className="inline-flex min-h-11 items-center gap-2 bg-primary px-5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-on-primary transition-colors hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:brightness-90"
+              >
+                Send the first message
+                <span aria-hidden="true">→</span>
+              </button>
+              <p className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.1em] text-on-surface-variant/80">
+                <kbd className="border border-hairline px-1 py-0.5">Enter</kbd> to send
+                {' · '}
+                <kbd className="border border-hairline px-1 py-0.5">Shift+Enter</kbd>{' '}
+                for a new line
+              </p>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* CTA */}
-      <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-        <button
-          type="button"
-          onClick={onStart}
-          className="w-full h-11 px-4 rounded-xl bg-[#10b981] hover:bg-emerald-400 active:brightness-90 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-surface-container-high"
-        >
-          <Sparkles className="h-4 w-4" />
-          <span>Get Started</span>
-        </button>
-        <p className="text-[11px] text-[#5d6775] select-none">
-          Press <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px]">Enter</kbd> to send &middot; <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px]">Shift+Enter</kbd> for new line
-        </p>
+          <div className="min-w-0 border-t border-hairline pt-5 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-on-surface-variant/80">
+              Capabilities
+            </p>
+            <ol className="mt-3">
+              {capabilities.map((item, index) => (
+                <li
+                  key={item.title}
+                  className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 border-b border-hairline py-3 last:border-b-0"
+                >
+                  <span className="font-mono text-[10px] leading-5 text-primary">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-brand text-[15px] uppercase leading-tight text-on-surface">
+                      {item.title}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-on-surface-variant">
+                      {item.detail}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -2096,7 +2087,7 @@ function AttachmentPicker({
             htmlFor={opt.id}
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-[var(--radius-input)] text-sm font-medium text-on-surface hover:bg-surface-container-highest/60 active:bg-surface-container-highest tactile-press cursor-pointer transition-colors"
           >
-            <span className="w-9 h-9 rounded-lg border border-hairline bg-surface-container-high flex items-center justify-center shrink-0 text-primary">{opt.icon}</span>
+            <span className="w-9 h-9 rounded-[var(--radius-card)] border border-hairline bg-surface-container-high flex items-center justify-center shrink-0 text-primary">{opt.icon}</span>
             {opt.label}
             <input
               id={opt.id}
@@ -2131,14 +2122,14 @@ function ReplyPreviewBar({
   displayName: string
 }) {
   return (
-    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-[#182533] border border-[#2b3c50]">
+    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-[var(--radius-card-lg)] bg-surface-container-low border border-outline">
       <div className="w-0.5 h-9 rounded-full bg-emerald-500 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
+        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
           {target.type === 'bot' ? botNickname : displayName}
         </p>
         <p
-          className="text-xs text-[#93a6b9] leading-snug line-clamp-3 whitespace-pre-wrap"
+          className="text-xs text-on-surface-variant leading-snug line-clamp-3 whitespace-pre-wrap"
           style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
         >
           {target.text || '📎 Attachment'}
@@ -2148,7 +2139,7 @@ function ReplyPreviewBar({
         type="button"
         onClick={onDismiss}
         aria-label="Cancel reply"
-        className="p-1.5 rounded-full text-[#71869a] hover:text-white hover:bg-white/10 transition-colors shrink-0"
+        className="p-1.5 rounded-full text-on-surface-variant/85 hover:text-white hover:bg-white/10 transition-colors shrink-0"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -2161,13 +2152,13 @@ function ReplyPreviewBar({
 function EmptyChatState({ prefix, botNickname }: { prefix: string; botNickname: string }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16 px-6 text-center">
-      <div className="w-11 h-11 rounded-xl border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-center shrink-0">
-        <Logo className="h-5 w-5 text-emerald-400" />
+      <div className="w-11 h-11 rounded-[var(--radius-card)] border border-primary/30 bg-emerald-500/10 flex items-center justify-center shrink-0">
+        <Logo className="h-5 w-5 text-primary" />
       </div>
       <div>
         <p className="text-sm font-semibold text-white mb-1">Start chatting with {botNickname}</p>
-        <p className="text-xs text-[#8b95a2]">
-          Type <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-[#182533] text-emerald-400 border-emerald-500/30 border">{prefix}help</span> to see all commands, or say its name to trigger the bot.
+        <p className="text-xs text-on-surface-variant">
+          Type <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface-container-low text-primary border-primary/30 border">{prefix}help</span> to see all commands, or say its name to trigger the bot.
         </p>
       </div>
     </div>
@@ -2390,7 +2381,7 @@ const Composer = memo(function Composer({
     <>
       {/* Stitch floating capsule — exact provided-design geometry */}
       <div
-        className="bg-[#182533] border border-[#242930] focus-within:border-emerald-500/60 rounded-3xl p-1.5 sm:p-2 flex items-end gap-1.5 shadow-2xl transition-all relative"
+        className="bg-surface-container-low border border-hairline focus-within:border-primary/60 rounded-[var(--radius-card-lg)] p-1.5 sm:p-2 flex items-end gap-1.5 shadow-2xl transition-all relative"
       >
         {/* Pending attachments row — images shown in the message bar */}
         {pendingAttachments.length > 0 && (
@@ -2398,7 +2389,7 @@ const Composer = memo(function Composer({
             {pendingAttachments.map((att, i) => (
               <div key={i} className="relative group/att">
                 {att.type === 'image' && att.localUrl ? (
-                  <div className="relative h-16 w-16 rounded-xl overflow-hidden border border-[#2b3c50] shadow-sm">
+                  <div className="relative h-16 w-16 rounded-[var(--radius-card)] overflow-hidden border border-outline shadow-sm">
                     <img
                       src={att.localUrl}
                       alt={att.name}
@@ -2411,16 +2402,16 @@ const Composer = memo(function Composer({
                     )}
                   </div>
                 ) : (
-                  <div className="h-16 w-16 rounded-xl bg-white/5 border border-[#2b3c50] flex flex-col items-center justify-center gap-1 p-1">
-                    {<FileText className="h-4 w-4 text-[#8b95a2]" />}
-                    <span className="text-[8px] text-[#8b95a2] truncate w-full text-center px-1">{att.name}</span>
+                  <div className="h-16 w-16 rounded-[var(--radius-card)] bg-white/5 border border-outline flex flex-col items-center justify-center gap-1 p-1">
+                    {<FileText className="h-4 w-4 text-on-surface-variant" />}
+                    <span className="text-[8px] text-on-surface-variant truncate w-full text-center px-1">{att.name}</span>
                   </div>
                 )}
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(i)}
                   aria-label="Remove attachment"
-                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#182533] border border-[#2b3c50] flex items-center justify-center text-[#8b95a2] hover:text-red-300 transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
+                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-surface-container-low border border-outline flex items-center justify-center text-on-surface-variant hover:text-red-300 transition-colors opacity-0 group-hover/att:opacity-100 shadow-sm"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -2483,7 +2474,7 @@ const Composer = memo(function Composer({
               aria-label="Add attachment or action"
               aria-expanded={showAttachPicker}
               onClick={onToggleAttachPicker}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-[#8b95a2] hover:text-white hover:bg-white/10 shrink-0 transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-white hover:bg-white/10 shrink-0 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <Plus className="h-5 w-5" />
             </button>
@@ -2506,8 +2497,8 @@ const Composer = memo(function Composer({
             rows={1}
             disabled={!isConnected}
             className={cn(
-              'cr-input-scroll min-w-0 py-1 bg-transparent text-[16px] md:text-[15px] text-[#F1F4F8] leading-relaxed',
-              'placeholder:text-[#5D6775] focus:outline-none resize-none overflow-y-auto',
+              'cr-input-scroll min-w-0 py-1 bg-transparent text-[16px] md:text-[15px] text-on-surface leading-relaxed',
+              'placeholder:text-on-surface-variant/80 focus:outline-none resize-none overflow-y-auto',
               !isConnected && 'opacity-40 cursor-not-allowed',
               isComposerMultiline ? 'order-1 basis-full w-full px-1' : 'flex-1',
             )}
@@ -2524,8 +2515,8 @@ const Composer = memo(function Composer({
               'w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all shadow-none',
               isComposerMultiline && 'order-3',
               canSend
-                ? 'bg-[#10B981] text-black hover:bg-emerald-400 active:scale-95 cursor-pointer'
-                : 'bg-[#242930] text-[#5D6775] cursor-not-allowed',
+                ? 'bg-primary text-black hover:bg-primary/90 active:scale-95 cursor-pointer'
+                : 'bg-surface-container-highest text-on-surface-variant/80 cursor-not-allowed',
             )}
           >
             <ArrowUp className="h-5 w-5" strokeWidth={2} />
@@ -2547,14 +2538,12 @@ const Composer = memo(function Composer({
 // palette. Page + message-area backgrounds are NOT part of this block —
 // they use the shared dashboard surface so the chat room reads as part
 // of the unified shell. The header stays on the shared unified header
-// tokens as well.
+// tokens as well. Capsule fills and text resolve from the shared theme
+// tokens via Tailwind utilities (bg-header-surface / bg-primary /
+// on-surface / on-primary) — no palette variables are declared here.
 const CR_STYLES = `
         :root {
-          --bubble-bot: #182533;
-          --bubble-bot-text: #ffffff;
-          --bubble-user: #2b5278;
-          --bubble-user-text: #ffffff;
-          --input-border: #242930;
+          --input-border: rgb(var(--color-outline-variant));
           --input-border-focus: rgba(16, 185, 129, 0.6);
         }
 
@@ -2568,15 +2557,15 @@ const CR_STYLES = `
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         }
 
-        /* Stitch chat scrollbars — 4px thumb #242930 on transparent track */
+        /* Stitch chat scrollbars — 4px thumb rgb(var(--color-outline-variant)) on transparent track */
         .cr-scroll {
           scrollbar-width: thin;
-          scrollbar-color: #242930 transparent;
+          scrollbar-color: rgb(var(--color-outline-variant)) transparent;
         }
         .cr-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
         .cr-scroll::-webkit-scrollbar-track { background: transparent; }
         .cr-scroll::-webkit-scrollbar-thumb {
-          background: #242930;
+          background: rgb(var(--color-outline-variant));
           border-radius: 9999px;
         }
 
@@ -2652,13 +2641,13 @@ const CR_STYLES = `
           border-radius: 5px;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.08);
-          color: #34d399;
+          color: rgb(var(--color-primary));
         }
         .chatmd-pre {
           margin: 6px 0;
           border-radius: 10px;
           background: rgba(10,16,23,0.6);
-          border: 1px solid #27394d;
+          border: 1px solid rgb(var(--color-outline));
           padding: 10px 14px;
           overflow-x: auto;
         }
@@ -2678,16 +2667,16 @@ const CR_STYLES = `
         }
         .chatmd-pre-wrap:has(.chatmd-pre-lang) .chatmd-pre { padding-top: 22px; }
         /* Syntax token colors — stitch Dark+ emerald palette */
-        .tok-keyword  { color: #34d399; }
-        .tok-string   { color: #fbbf24; }
-        .tok-comment  { color: #5d6775; font-style: italic; }
-        .tok-number   { color: #34d399; }
-        .tok-function { color: #dbe5f0; }
-        .tok-type     { color: #5bb6ff; }
-        .tok-property { color: #5bb6ff; }
-        .tok-tag      { color: #34d399; }
-        .tok-attr     { color: #5bb6ff; }
-        .tok-punct    { color: #71869a; }
+        .tok-keyword  { color: rgb(var(--color-primary)); }
+        .tok-string   { color: rgb(var(--color-warning)); }
+        .tok-comment  { color: rgb(var(--color-on-surface-variant) / 0.6); font-style: italic; }
+        .tok-number   { color: rgb(var(--color-primary)); }
+        .tok-function { color: rgb(var(--color-on-surface)); }
+        .tok-type     { color: rgb(var(--color-info)); }
+        .tok-property { color: rgb(var(--color-info)); }
+        .tok-tag      { color: rgb(var(--color-primary)); }
+        .tok-attr     { color: rgb(var(--color-info)); }
+        .tok-punct    { color: rgb(var(--color-on-surface-variant) / 0.7); }
         .chatmd-copy-btn {
           position: absolute;
           top: 12px;
@@ -2699,7 +2688,7 @@ const CR_STYLES = `
           border-radius: 6px;
           background: rgba(255,255,255,0.08);
           border: 1px solid rgba(255,255,255,0.12);
-          color: #8b95a2;
+          color: rgb(var(--color-on-surface-variant));
           opacity: 0.7;
           transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
           cursor: pointer;
@@ -2710,9 +2699,9 @@ const CR_STYLES = `
         }
         .chatmd-copy-btn:hover {
           background: rgba(255,255,255,0.16);
-          color: #f1f4f8;
+          color: rgb(var(--color-on-surface));
         }
-        .chatmd-copy-btn:disabled { cursor: default; color: #10b981; }
+        .chatmd-copy-btn:disabled { cursor: default; color: rgb(var(--color-primary)); }
         .chatmd-code-block {
           font-family: 'JetBrains Mono', monospace;
           font-size: 0.78em;
@@ -2734,18 +2723,18 @@ const CR_STYLES = `
           user-select: none;
         }
         .chatmd-link {
-          color: #34d399;
+          color: rgb(var(--color-primary));
           text-decoration: underline;
           text-underline-offset: 2px;
           word-break: break-all;
           overflow-wrap: anywhere;
         }
         .chatmd-link:hover { color: rgba(52,211,153,0.85); }
-        .chatmd-link:visited { color: #5bb6ff; }
+        .chatmd-link:visited { color: rgb(var(--color-info)); }
         .chatmd-h1 { display: block; font-size: 1.12em; font-weight: 800; margin: 5px 0 2px; }
         .chatmd-h2 { display: block; font-size: 1.06em; font-weight: 700; margin: 4px 0 1px; }
         .chatmd-h3 { display: block; font-size: 1em; font-weight: 600; margin: 3px 0 1px; }
-        .chatmd-hr { border: none; border-top: 1px solid #27394d; margin: 7px 0; }
+        .chatmd-hr { border: none; border-top: 1px solid rgb(var(--color-outline)); margin: 7px 0; }
         .chatmd-li { display: block; padding-left: 4px; margin: 1px 0; }
         .chatmd-oli { display: block; padding-left: 4px; margin: 1px 0; }
         .chatmd-quote {
@@ -3256,7 +3245,7 @@ export default function ChatRoomPage() {
           below is the LOCKED unified header — do not restyle; only the chat
           bubbles + composer follow the stitch design. */}
       <div
-        className="flex flex-col h-full min-h-0 overflow-hidden bg-surface-container-high text-[#F1F4F8] antialiased selection:bg-emerald-500/30 selection:text-emerald-300"
+        className="flex flex-col h-full min-h-0 overflow-hidden bg-surface-container-high text-on-surface antialiased selection:bg-primary/30 selection:text-primary"
         style={{ fontFamily: "Inter, system-ui, -apple-system, sans-serif" }}
       >
 
@@ -3353,7 +3342,7 @@ export default function ChatRoomPage() {
                     <div key={msg.id} data-message-id={msg.id} className="transition-colors duration-300">
                       {showDate && (
                         <div className="flex justify-center my-1">
-                          <span className="px-2.5 py-0.5 rounded-full bg-[#0a1017]/70 text-[#7e8f9f] text-[11px] font-medium tracking-wide shadow-sm">
+                          <span className="px-2.5 py-0.5 rounded-full bg-surface-container-lowest/70 text-on-surface-variant/85 text-[11px] font-medium tracking-wide shadow-sm">
                             {formatDateLabel(msg.timestamp, timezone)}
                           </span>
                         </div>
@@ -3376,10 +3365,10 @@ export default function ChatRoomPage() {
                 {/* Typing bubble — stitch incoming geometry, three dots */}
                 {(awaitingReply || botTyping) && (
                   <div className="flex flex-col items-start max-w-[92%] sm:max-w-[85%]" aria-label="Bot is typing">
-                    <div className="flex items-center gap-1.5 bg-[#182533] bubble-in bubble-shadow border border-[#213244]/40 px-4 py-3.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#8b95a2] opacity-70 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#8b95a2] opacity-70 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#8b95a2] opacity-70 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <div className="flex items-center gap-1.5 bg-header-surface bubble-in bubble-shadow border border-hairline px-4 py-3.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-on-surface-variant opacity-70 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-on-surface-variant opacity-70 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-on-surface-variant opacity-70 animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                   </div>
                 )}
@@ -3398,7 +3387,7 @@ export default function ChatRoomPage() {
                 isNearBottomRef.current = true
                 scrollToBottom()
               }}
-              className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-[#182533] border border-[#2b3c50] shadow-2xl text-[#8b95a2] hover:text-white hover:bg-[#1e232a] transition-colors"
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-10 w-10 rounded-full bg-surface-container-low border border-outline shadow-2xl text-on-surface-variant hover:text-white hover:bg-surface-container-high transition-colors"
             >
               <ChevronDown className="h-5 w-5" />
             </button>

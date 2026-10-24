@@ -35,7 +35,7 @@ interface ManagedUser {
 
 function IconWell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
+    <div className="w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
       {children}
     </div>
   )
@@ -370,7 +370,7 @@ export default function AdminUsersPage() {
             Users
           </h2>
           {!isLoading && (
-            <span className="text-[11px] font-mono font-medium text-surface-variant">
+            <span className="text-[11px] font-mono font-medium text-on-surface-variant">
               {searchQuery.trim() ? `${total} matched` : `${total} total`}
             </span>
           )}
@@ -390,13 +390,13 @@ export default function AdminUsersPage() {
         />
 
         {isLoading ? (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {[0, 1, 2, 3, 4].map((i) => (
               <UserRowSkeleton key={`skeleton-${i}`} />
             ))}
           </div>
         ) : users.length === 0 ? (
-          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
             <p className="p-6 text-sm text-on-surface-variant italic text-center">
               {searchQuery.trim()
                 ? `No users match "${searchQuery}"`
@@ -404,7 +404,7 @@ export default function AdminUsersPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {users.map((u) => {
               const counts = botCounts.get(u.id) ?? { total: 0, active: 0 }
               const botTotal = counts.total

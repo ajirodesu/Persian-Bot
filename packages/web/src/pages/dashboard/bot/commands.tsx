@@ -30,7 +30,7 @@ function RowChevron({ className }: { className?: string }) {
     <div
       className={cn(
         'flex items-center pl-3 flex-shrink-0',
-        className ?? 'text-surface-variant',
+        className ?? 'text-on-surface-variant',
       )}
     >
       <ChevronRight className="w-4 h-4" strokeWidth={2} />
@@ -48,7 +48,7 @@ function IconWell({
   return (
     <div
       className={cn(
-        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
         tone === 'accent' &&
           'bg-primary/10 border-primary/30 text-primary',
         tone === 'danger' &&
@@ -215,7 +215,7 @@ function CommandDetailDialog({
                   </p>
 
                   {/* Switch row 1 — Commands */}
-                  <div className="p-3.5 flex items-center justify-between space-x-3 bg-surface-container-low border border-hairline rounded-xl mb-2.5">
+                  <div className="p-3.5 flex items-center justify-between space-x-3 bg-surface-container-low border border-hairline rounded-[var(--radius-card)] mb-2.5">
                     <div className="flex flex-col min-w-0">
                       <span className="text-sm font-semibold text-on-surface leading-snug">
                         Commands
@@ -235,7 +235,7 @@ function CommandDetailDialog({
                   </div>
 
                   {/* Switch row 2 — Bot Admin Only */}
-                  <div className="p-3.5 flex items-center justify-between space-x-3 bg-surface-container-low border border-hairline rounded-xl">
+                  <div className="p-3.5 flex items-center justify-between space-x-3 bg-surface-container-low border border-hairline rounded-[var(--radius-card)]">
                     <div className="flex flex-col min-w-0">
                       <span className="text-sm font-semibold text-on-surface leading-snug">
                         Bot Admin Only
@@ -336,7 +336,7 @@ export default function BotCommandsPage() {
           <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
             Commands
           </h2>
-          <span className="text-[11px] font-mono font-medium text-surface-variant">
+          <span className="text-[11px] font-mono font-medium text-on-surface-variant">
             {isLoading
               ? 'Loading…'
               : query.trim()
@@ -360,13 +360,13 @@ export default function BotCommandsPage() {
 
         {/* Keep the search bar visible; swap only the list for skeletons while fetching */}
         {isLoading ? (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {Array.from({ length: 6 }).map((_, i) => (
               <CommandRowSkeleton key={i} />
             ))}
           </div>
         ) : commands.length === 0 ? (
-          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
             <p className="p-6 text-sm text-on-surface-variant italic text-center">
               {query.trim()
                 ? `No commands match "${query}"`
@@ -374,7 +374,7 @@ export default function BotCommandsPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {commands.map((cmd) => (
               <article
                 key={cmd.commandName}

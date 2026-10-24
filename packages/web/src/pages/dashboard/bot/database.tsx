@@ -73,7 +73,7 @@ function IconWell({
   return (
     <div
       className={cn(
-        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
         tone === 'accent' && 'bg-primary/10 border-primary/30 text-primary',
         tone === 'danger' && 'bg-error/10 border-error/30 text-error',
         tone === 'default' &&
@@ -335,14 +335,14 @@ function DatabaseToolbar({
           onClick={onRefresh}
           disabled={isLoading}
           aria-label="Refresh"
-          className="p-2 rounded-lg border border-hairline bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+          className="p-2 rounded-[var(--radius-card)] border border-hairline bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
         >
           <RefreshCw
             className={cn('h-4 w-4', isLoading && 'animate-spin')}
             strokeWidth={2}
           />
         </button>
-        <span className="text-[11px] font-mono font-medium text-surface-variant flex-shrink-0 ml-auto">
+        <span className="text-[11px] font-mono font-medium text-on-surface-variant flex-shrink-0 ml-auto">
           {isLoading
             ? 'Loading…'
             : search.trim() || status !== 'all' || (type && type !== 'all')
@@ -499,13 +499,13 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
       )}
 
       {isLoading ? (
-        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
           {[0, 1, 2, 3, 4].map((i) => (
             <RowSkeleton key={`user-skeleton-${i}`} />
           ))}
         </div>
       ) : users.length === 0 ? (
-        <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
           <p className="p-6 text-sm text-on-surface-variant italic text-center">
             {search.trim()
               ? `No users match "${search.trim()}"`
@@ -515,7 +515,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
           </p>
         </div>
       ) : (
-        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
           {users.map((user) => (
             <div
               key={user.id}
@@ -544,7 +544,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
                   type="button"
                   aria-label={`View details for ${userDisplayName(user)}`}
                   onClick={() => setDetailUser(user)}
-                  className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="p-2 rounded-[var(--radius-card)] text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   <Eye className="h-3.5 w-3.5" strokeWidth={2} />
                 </button>
@@ -785,7 +785,7 @@ function UsersTab({ sessionId, sessionKey }: { sessionId: string; sessionKey?: s
 // ── Groups tab (Telegram / webchat) ──────────────────────────────────────────
 //
 // Telegram-style platforms have FLAT groups — there is no server → channel
-// hierarchy like Discord/Fluxer, so this tab does NOT use the drill-down
+// hierarchy like Discord, so this tab does NOT use the drill-down
 // pattern. Instead it lists every recorded group as a first-class table row
 // (type badge, member count, last activity, status) with per-row
 // ban/unban/delete actions — the same treatment as the Users tab.
@@ -914,16 +914,16 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
       {/* Flat group list — Telegram-style platforms have no server hierarchy,
           so every group is a first-class row with its type, member count,
           activity, status, and per-row ban/unban/delete actions. This mirrors
-          the Users tab's row treatment instead of the Discord/Fluxer
-          server → channels drill-down. */}
+          the Users tab's row treatment instead of the Discord server → channels
+          drill-down. */}
       {isLoading ? (
-        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
           {[0, 1, 2, 3, 4].map((i) => (
             <RowSkeleton key={`group-skeleton-${i}`} />
           ))}
         </div>
       ) : groups.length === 0 ? (
-        <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
           <div className="p-6 flex flex-col items-center gap-3 text-center">
             <MessageSquare className="h-8 w-8 text-on-surface-variant" />
             <p className="text-sm text-on-surface-variant italic">
@@ -934,7 +934,7 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
           </div>
         </div>
       ) : (
-        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
           {groups.map((group) => (
             <div
               key={group.id}
@@ -1184,27 +1184,23 @@ function PlatformGroupsTab({ sessionId, sessionKey }: { sessionId: string; sessi
   )
 }
 
-// ── Server-hierarchy Groups tab (Discord + Fluxer) ───────────────────────────
+// ── Server-hierarchy Groups tab (Discord) ────────────────────────────────────
 //
-// Discord and Fluxer sessions share a server → channel hierarchy. The tab shows
+// Discord sessions model groups as a server → channel hierarchy. The tab shows
 // a server dropdown fed by GET /database/servers; selecting a server loads ONLY
 // that server's channels (GET /database/channels?serverId=...) below it. Channels
 // can never appear outside their parent server's context because both the
 // dropdown and the channel query are scoped by server id and the owning session.
 // Server-level actions (ban/unban/delete) apply to the selected server.
-// Platform-specific copy (e.g. "Fluxer server" vs "Discord server") is derived
-// from the bot's platform so the panel reads correctly on either one.
+// Copy is Discord-specific so the panel reads correctly for that platform.
 
 function ServerHierarchyGroupsTab({
-  platform,
   sessionId,
   sessionKey,
 }: {
-  platform: string
   sessionId: string
   sessionKey?: string
 }) {
-  const isFluxer = platform === 'fluxer'
   const {
     servers,
     total,
@@ -1338,14 +1334,14 @@ function ServerHierarchyGroupsTab({
               refetchChannels()
             }}
             disabled={isLoading}
-            className="p-2 rounded-lg border border-hairline bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
+            className="p-2 rounded-[var(--radius-card)] border border-hairline bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 flex-shrink-0"
           >
             <RefreshCw
               className={cn('h-4 w-4', isLoading && 'animate-spin')}
               strokeWidth={2}
             />
           </button>
-          <span className="text-[11px] font-mono font-medium text-surface-variant flex-shrink-0 ml-auto">
+          <span className="text-[11px] font-mono font-medium text-on-surface-variant flex-shrink-0 ml-auto">
             {isLoading ? 'Loading…' : `${total} total`}
           </span>
         </div>
@@ -1357,7 +1353,7 @@ function ServerHierarchyGroupsTab({
 
       {/* Selected server header + actions */}
       {selectedServer !== null && (
-        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
           <div className="p-3.5 flex items-center justify-between space-x-3">
             <div className="flex items-center space-x-3 min-w-0">
               <IconWell>
@@ -1437,13 +1433,13 @@ function ServerHierarchyGroupsTab({
       {selectedServer !== null && (
         <>
           {channelsLoading ? (
-            <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
               {[0, 1, 2, 3, 4].map((i) => (
                 <RowSkeleton key={`channel-skeleton-${i}`} />
               ))}
             </div>
           ) : channels.length === 0 ? (
-            <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+            <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
               <div className="p-6 flex flex-col items-center gap-3 text-center">
                 <MessageSquare className="h-8 w-8 text-on-surface-variant" />
                 <p className="text-sm text-on-surface-variant italic">
@@ -1454,7 +1450,7 @@ function ServerHierarchyGroupsTab({
               </div>
             </div>
           ) : (
-            <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+            <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
               {channels.map((channel) => (
                 <div
                   key={channel.id}
@@ -1502,14 +1498,12 @@ function ServerHierarchyGroupsTab({
       )}
 
       {selectedServer === null && !isLoading && servers.length === 0 && (
-        <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
           <div className="p-6 flex flex-col items-center gap-3 text-center">
             <MessageSquare className="h-8 w-8 text-on-surface-variant" />
             <p className="text-sm text-on-surface-variant italic">
-              {isFluxer
-                ? 'No Fluxer servers recorded yet. Send a message in a Fluxer server'
-                : 'No Discord servers recorded yet. Send a message in a Discord server'}{' '}
-              where this bot is present, then reload this page.
+              No Discord servers recorded yet. Send a message in a Discord
+              server where this bot is present, then reload this page.
             </p>
           </div>
         </div>
@@ -1699,9 +1693,9 @@ export default function BotDatabasePage() {
   // Full session key for the real-time Socket.IO room — matches the server's
   // `${userId}:${platform}:${sessionId}` convention (banned.repo.ts / bot-database.socket.ts).
   const sessionKey = bot ? `${bot.userId}:${bot.platform}:${bot.sessionId}` : undefined
-  // Discord and Fluxer both model groups as a server → channel hierarchy, so
-  // they share the exact same group panel (server dropdown + scoped channels).
-  const isServerHierarchy = bot?.platform === 'discord' || bot?.platform === 'fluxer'
+  // Discord models groups as a server → channel hierarchy, so it gets the
+  // server dropdown + scoped channel panel instead of the flat group table.
+  const isServerHierarchy = bot?.platform === 'discord'
 
   return (
     <div className="flex flex-col max-w-2xl lg:max-w-4xl w-full mx-auto">
@@ -1729,7 +1723,6 @@ export default function BotDatabasePage() {
         <UsersTab sessionId={sessionId} sessionKey={sessionKey} />
       ) : isServerHierarchy ? (
         <ServerHierarchyGroupsTab
-          platform={bot.platform}
           sessionId={sessionId}
           sessionKey={sessionKey}
         />

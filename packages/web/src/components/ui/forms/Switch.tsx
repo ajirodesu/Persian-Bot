@@ -16,23 +16,26 @@ export interface SwitchProps {
 }
 
 // Size configurations for the switch
+// Square-track geometry: every size is an instrument toggle with a hairline
+// rail and a rectangular thumb. `md` is the reference 40×22 track with an
+// 18×18 thumb; sm/lg scale it down/up by one step.
 const sizeConfig = {
   sm: {
-    container: 'w-9 h-5',
-    thumb: 'w-3 h-3',
-    translate: 'translate-x-5',
+    container: 'w-8 h-[18px]',
+    thumb: 'w-3.5 h-3.5',
+    translate: 'translate-x-[16px]',
     label: 'text-label-md',
   },
   md: {
-    container: 'w-11 h-6',
-    thumb: 'w-4 h-4',
-    translate: 'translate-x-6',
+    container: 'w-10 h-[22px]',
+    thumb: 'w-[18px] h-[18px]',
+    translate: 'translate-x-[20px]',
     label: 'text-body-md',
   },
   lg: {
-    container: 'w-14 h-7',
-    thumb: 'w-5 h-5',
-    translate: 'translate-x-8',
+    container: 'w-12 h-[26px]',
+    thumb: 'w-[22px] h-[22px]',
+    translate: 'translate-x-[24px]',
     label: 'text-body-lg',
   },
 }
@@ -130,12 +133,15 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
           // <button onClick>, so the hit-slop ::before pattern actually
           // extends the clickable area (clicks on the pseudo-element's
           // painted region still target the button).
-          'relative inline-flex items-center rounded-full transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-surface before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
+          'relative inline-flex items-center rounded-[var(--radius-compact)] transition-colors duration-fast focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary before:absolute before:left-1/2 before:top-1/2 before:h-[var(--touch-target-min)] before:w-[var(--touch-target-min)] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[""]',
           config.container,
-          checked ? 'bg-primary' : 'bg-outline',
+          // The unchecked track uses the input-boundary token: it is the one
+          // neutral that clears 3:1 against the surface thumb, so the state
+          // reads without relying on the label.
+          checked ? 'bg-primary' : 'bg-[var(--color-input-border)]',
           disabled
             ? 'opacity-state-disabled cursor-not-allowed'
-            : 'cursor-pointer hover:opacity-90',
+            : 'cursor-pointer',
           className,
         )}
       >
@@ -146,10 +152,10 @@ const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
         {/* Thumb - uses on-primary when checked for proper contrast in both themes */}
         <span
           className={cn(
-            'inline-block rounded-[var(--radius-button)] transition-all duration-fast ease-standard transform',
+            'inline-block rounded-[1px] transition-transform duration-fast ease-standard',
             config.thumb,
             checked ? 'bg-on-primary' : 'bg-surface',
-            checked ? config.translate : 'translate-x-1',
+            checked ? config.translate : 'translate-x-[2px]',
           )}
           aria-hidden="true"
         />

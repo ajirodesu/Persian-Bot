@@ -29,29 +29,34 @@ export interface InputProps extends Omit<
   rightIcon?: React.ReactNode
   /** Whether the input should take full width of its container */
   fullWidth?: boolean
-  /** Make input pill-shaped (fully rounded) */
+  /**
+   * Retained for API compatibility only. Pill geometry is no longer part of
+   * the system: this resolves to `--radius-input` like every other input.
+   */
   pill?: boolean
 }
 
 /**
  * Base input styles - shared across all variants
- * All variants use border-2 for consistent sizing (no layout shift).
+ * All variants use a 1px border for consistent sizing (no layout shift).
  */
 const base =
-  'w-full text-on-surface focus:outline-none disabled:opacity-state-disabled disabled:cursor-not-allowed placeholder:text-on-surface-variant transition-all duration-fast ease-standard focus:shadow-[var(--shadow-focus-ring,none)]'
+  'w-full text-on-surface focus:border-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-state-disabled disabled:cursor-not-allowed placeholder:text-on-surface-variant transition-colors duration-fast ease-standard'
 
 /**
- * Variant classes with consistent border-2 sizing.
+ * Variant classes with consistent 1px border sizing.
  *
- * `default` pulls its background/border from theme tokens, so every
- * theme (Aqua, Burnt, Indigo) gets a translucent surface fill with an
- * 8% hairline border, each tinted to that theme's own palette.
+ * `default` pulls its background from the theme token and draws its 1px
+ * boundary with `--color-input-border`, which is tuned to at least 3:1
+ * against the fill (WCAG 1.4.11). The old hover step to `outline` is gone
+ * because that token is darker than the new boundary, so hovering would
+ * have weakened the control edge.
  */
 const variantClasses: Record<InputVariant, string> = {
   default:
-    'bg-[var(--color-input-bg,transparent)] border-2 border-[var(--color-input-border,rgb(var(--color-outline-variant)))]',
+    'bg-[var(--color-input-bg,transparent)] border border-[var(--color-input-border)]',
   subtle:
-    'border-2 border-transparent bg-surface-container hover:bg-surface-container-high',
+    'border border-transparent bg-surface-container hover:bg-surface-container-high',
 }
 
 /**
@@ -89,10 +94,12 @@ const iconSizeClasses: Record<InputSize, string> = {
   lg: 'h-6 w-6',
 }
 /**
- * Border radius class based on pill prop
+ * Border radius class based on pill prop.
+ * Pill geometry is not part of the system: the prop is accepted for API
+ * compatibility but resolves to the same `--radius-input` token.
  */
 const getBorderRadiusClass = (pill: boolean): string =>
-  pill ? 'rounded-full' : 'rounded-[var(--radius-input,0.5rem)]'
+  pill ? 'rounded-[var(--radius-input)]' : 'rounded-[var(--radius-input,0.5rem)]'
 
 /**
  * Input component - A focused input element
@@ -159,8 +166,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
     // Use Field context values if available, otherwise use props
     const inputId = fieldContext?.inputId ?? idProp
-    const disabled = fieldContext?.disabled ?? disabledProp
-    const readOnly = fieldContext?.readOnly ?? readOnlyProp
+    // The explicit prop wins over Field context: a read-only field inside a
+    // Field.Root used to lose its readOnly/disabled state (context defaults
+    // are false), which also triggered React's uncontrolled-field warning.
+    const disabled = disabledProp ?? fieldContext?.disabled ?? false
+    const readOnly = readOnlyProp ?? fieldContext?.readOnly ?? false
     const hasError = fieldContext?.invalid ?? false
     const hasSuccess = fieldContext?.success ?? false
     const descriptionId = fieldContext?.descriptionId

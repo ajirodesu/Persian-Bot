@@ -71,7 +71,7 @@ function RowChevron({ className }: { className?: string }) {
     <div
       className={cn(
         'flex items-center pl-3 flex-shrink-0',
-        className ?? 'text-surface-variant',
+        className ?? 'text-on-surface-variant',
       )}
     >
       <ChevronRight className="w-4 h-4" strokeWidth={2} />
@@ -91,7 +91,7 @@ function IconWell({
   return (
     <div
       className={cn(
-        'rounded-lg border flex items-center justify-center flex-shrink-0',
+        'rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
         size === 'lg' ? 'w-11 h-11' : 'w-9 h-9',
         tone === 'accent' &&
           'bg-primary/10 border-primary/30 text-primary',
@@ -130,7 +130,7 @@ function AdminSettingsPageSkeleton() {
         {[0, 1, 2, 3, 4].map((s) => (
           <section key={s} className="space-y-2">
             <Skeleton textSize="body-sm" width="96px" />
-            <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+            <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
               <div className="p-3.5 flex items-center gap-3.5">
                 <Skeleton variant="input" width={36} height={36} />
                 <div className="flex flex-col gap-2">
@@ -147,9 +147,9 @@ function AdminSettingsPageSkeleton() {
 }
 
 const THEME_OPTIONS: { id: AppTheme; label: string; dot: string }[] = [
-  { id: 'aqua', label: 'Aqua', dot: 'bg-primary' },
-  { id: 'burnt', label: 'Burnt', dot: 'bg-amber-500/80' },
-  { id: 'indigo', label: 'Indigo', dot: 'bg-indigo-500/80' },
+  { id: 'emerald', label: 'Emerald', dot: 'bg-primary/80' },
+  { id: 'jasper', label: 'Jasper', dot: 'theme-dot-jasper' },
+  { id: 'amethyst', label: 'Amethyst', dot: 'theme-dot-amethyst' },
 ]
 
 export default function AdminSettingsPage() {
@@ -554,7 +554,7 @@ export default function AdminSettingsPage() {
         {/* ── PROFILE ── */}
         <section aria-label="Account Settings" className="space-y-2">
           <SectionTitle>Profile</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {/* Identity */}
             <article className="p-3.5 flex items-center justify-between">
               <div className="flex items-center space-x-3.5 min-w-0">
@@ -573,7 +573,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <span
-                className="flex items-center justify-center w-7 h-7 rounded-md bg-surface-container-high border border-hairline font-mono text-[11px] font-semibold text-on-surface flex-shrink-0 ml-3"
+                className="flex items-center justify-center w-7 h-7 rounded-[var(--radius-button)] bg-surface-container-high border border-hairline font-mono text-[11px] font-semibold text-on-surface flex-shrink-0 ml-3"
                 aria-hidden="true"
               >
                 {initials}
@@ -610,7 +610,7 @@ export default function AdminSettingsPage() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+              <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                 <ChevronRight
                   className={cn(
                     'w-4 h-4 transition-transform duration-200',
@@ -669,7 +669,7 @@ export default function AdminSettingsPage() {
         {/* ── APPEARANCE ── */}
         <section aria-label="Appearance Settings" className="space-y-2">
           <SectionTitle>Appearance</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3.5 min-w-0">
@@ -681,7 +681,7 @@ export default function AdminSettingsPage() {
                       Interface Theme
                     </span>
                     <span className="text-xs text-on-surface-variant mt-0.5">
-                      Select active colorway: Aqua, Burnt, or Indigo
+                      Select active colorway: Emerald, Jasper, or Amethyst
                     </span>
                   </div>
                 </div>
@@ -703,7 +703,7 @@ export default function AdminSettingsPage() {
                         setTheme(opt.id)
                       }}
                       className={cn(
-                        'flex items-center justify-center space-x-2 py-2 px-2.5 rounded-lg text-xs font-medium transition-colors duration-100 active:opacity-[0.82] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                        'flex items-center justify-center space-x-2 py-2 px-2.5 rounded-[var(--radius-card)] text-xs font-medium transition-colors duration-100 active:opacity-[0.82] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                         active
                           ? 'bg-primary/10 border-2 border-primary text-on-surface'
                           : 'bg-surface-container-high border border-hairline text-on-surface-variant hover:text-on-surface',
@@ -737,7 +737,7 @@ export default function AdminSettingsPage() {
         {/* ── REGIONAL ── */}
         <section aria-label="Regional Settings" className="space-y-2">
           <SectionTitle>Regional</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <article
               role="button"
               tabIndex={0}
@@ -767,7 +767,7 @@ export default function AdminSettingsPage() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+              <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                 <ChevronRight
                   className={cn(
                     'w-4 h-4 transition-transform duration-200',
@@ -784,7 +784,7 @@ export default function AdminSettingsPage() {
                   onChange={(tz) => setTimezoneDraft(tz)}
                 />
                 {!savedTimezone && !timezoneDirty && (
-                  <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+                  <p className="text-[11px] text-on-surface-variant leading-normal px-0.5">
                     Currently showing your browser&apos;s detected timezone (
                     {browserTimezone}).
                   </p>
@@ -797,7 +797,7 @@ export default function AdminSettingsPage() {
         {/* ── SYSTEM ADMINISTRATORS ── */}
         <section aria-label="System Administrators" className="space-y-2">
           <SectionTitle>System Administrators</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 space-y-2.5">
               <div className="flex items-center justify-between space-x-3">
                 <div className="flex items-center space-x-3.5 min-w-0">
@@ -845,7 +845,7 @@ export default function AdminSettingsPage() {
                     return (
                       <div
                         key={index}
-                        className="border border-hairline rounded-lg bg-surface-container-high overflow-hidden"
+                        className="border border-hairline rounded-[var(--radius-card)] bg-surface-container-high overflow-hidden"
                       >
                         <article
                           role="button"
@@ -874,7 +874,7 @@ export default function AdminSettingsPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+                          <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                             <ChevronRight
                               className={cn(
                                 'w-4 h-4 transition-transform duration-200',
@@ -905,7 +905,7 @@ export default function AdminSettingsPage() {
                                     handleRemoveAdminRow(index)
                                   }
                                   aria-label={`Remove system admin ${index + 1}`}
-                                  className="p-2 text-error hover:opacity-75 active:opacity-[0.82] transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40 rounded-lg flex-shrink-0"
+                                  className="p-2 text-error hover:opacity-75 active:opacity-[0.82] transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40 rounded-[var(--radius-card)] flex-shrink-0"
                                 >
                                   <Trash2
                                     className="h-4 w-4"
@@ -939,7 +939,7 @@ export default function AdminSettingsPage() {
         {/* ── MAINTENANCE MODE ── */}
         <section aria-label="Maintenance Mode" className="space-y-2">
           <SectionTitle>Maintenance Mode</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 flex items-center justify-between space-x-3">
               <div className="flex items-center space-x-3 min-w-0">
                 <IconWell tone={maintenanceEnabled ? 'accent' : 'default'}>
@@ -974,7 +974,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div className="p-3.5">
-              <p className="text-[11px] text-surface-variant leading-normal">
+              <p className="text-[11px] text-on-surface-variant leading-normal">
                 System-level switch that takes effect immediately across every
                 bot and platform. Only registered System Administrators bypass
                 this restriction.
@@ -998,7 +998,7 @@ export default function AdminSettingsPage() {
         {/* ── GIT ── */}
         <section aria-label="Git Settings" className="space-y-2">
           <SectionTitle>Git</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <article
               role="button"
               tabIndex={0}
@@ -1030,7 +1030,7 @@ export default function AdminSettingsPage() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+              <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                 <ChevronRight
                   className={cn(
                     'w-4 h-4 transition-transform duration-200',
@@ -1043,7 +1043,7 @@ export default function AdminSettingsPage() {
             {gitEditorOpen && (
               <div className="p-3.5 pt-3 space-y-2.5">
                 {gitIdentity ? (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-surface-container-high p-3">
+                  <div className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hairline bg-surface-container-high p-3">
                     <div className="flex items-center gap-3 min-w-0">
                       {gitIdentity.avatarUrl ? (
                         <img
@@ -1089,7 +1089,7 @@ export default function AdminSettingsPage() {
                       aria-label="GitHub personal access token"
                       className="py-2.5 text-sm leading-6"
                     />
-                    <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+                    <p className="text-[11px] text-on-surface-variant leading-normal px-0.5">
                       Classic personal access token with the{' '}
                       <code className="font-mono text-on-surface bg-surface-container-high rounded px-1 py-px text-[10px]">
                         repo
@@ -1101,7 +1101,7 @@ export default function AdminSettingsPage() {
                       type="button"
                       onClick={() => void handleConnectGit()}
                       disabled={gitSaving || !gitToken.trim()}
-                      className="w-full h-9 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      className="w-full h-9 px-3 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       {gitSaving ? 'Verifying…' : 'Verify & Connect'}
                     </button>
@@ -1123,7 +1123,7 @@ export default function AdminSettingsPage() {
         {/* ── SECURITY ── */}
         <section aria-label="Security Settings" className="space-y-2">
           <SectionTitle>Security</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {/* Reset code */}
             {isEmailEnabled && (
               <article className="p-3.5 flex items-center justify-between">
@@ -1209,7 +1209,7 @@ export default function AdminSettingsPage() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+              <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                 <ChevronRight
                   className={cn(
                     'w-4 h-4 transition-transform duration-200',
@@ -1309,7 +1309,7 @@ export default function AdminSettingsPage() {
                       !newPassword ||
                       !confirmPassword
                     }
-                    className="w-full h-9 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="w-full h-9 px-3 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
                     {passwordSaving ? 'Updating…' : 'Update Password'}
                   </button>
@@ -1331,7 +1331,7 @@ export default function AdminSettingsPage() {
               <span>Danger Zone</span>
             </h2>
           </div>
-          <div className="bg-surface-container-low border border-error/30 rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-error/30 rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <article
               role="button"
               tabIndex={0}
@@ -1464,7 +1464,7 @@ export default function AdminSettingsPage() {
             type="button"
             onClick={handleCancelChanges}
             disabled={!hasUnsavedChanges || isSavingAll || adminLoading}
-            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="flex-1 h-11 px-4 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             Cancel
           </button>
@@ -1472,7 +1472,7 @@ export default function AdminSettingsPage() {
             type="button"
             onClick={() => void handleSaveChanges()}
             disabled={!hasUnsavedChanges || isSavingAll || adminLoading}
-            className="flex-1 h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 active:opacity-[0.82] text-on-primary font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
+            className="flex-1 h-11 px-4 rounded-[var(--radius-card)] bg-primary hover:brightness-110 active:brightness-90 active:opacity-[0.82] text-on-primary font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
           >
             <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
             <span>{isSavingAll ? 'Saving…' : 'Save Changes'}</span>

@@ -44,9 +44,9 @@ function MonoChip({
 function platformTileClasses(platform: string): string {
   switch (platform) {
     case Platforms.Discord:
-      return 'bg-[#5865F2]/15 border-[#5865F2]/30 text-[#5865F2]'
+      return 'platform-tile-discord'
     case Platforms.Telegram:
-      return 'bg-[#24A1DE]/15 border-[#24A1DE]/30 text-[#24A1DE]'
+      return 'platform-tile-telegram'
     default:
       return 'bg-primary/10 border-primary/30 text-primary'
   }
@@ -150,7 +150,7 @@ export default function AdminBotsPage() {
             Bot Sessions
           </h2>
           {!isLoading && (
-            <span className="text-[11px] font-mono font-medium text-surface-variant">
+            <span className="text-[11px] font-mono font-medium text-on-surface-variant">
               {searchQuery.trim()
                 ? `${total} of ${totalBots} matched`
                 : `${activeBots} / ${totalBots} running`}
@@ -164,7 +164,7 @@ export default function AdminBotsPage() {
 
         {/* Per-platform summary — skeleton while loading matches the row
             shape so the list never flashes placeholder zeros */}
-        <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
           {isLoading ? (
             [0, 1, 2].map((i) => (
               <div
@@ -177,7 +177,7 @@ export default function AdminBotsPage() {
               </div>
             ))
           ) : (
-            (['discord', 'fluxer', 'telegram'] as const).map((platform) => {
+            (['discord', 'telegram'] as const).map((platform) => {
               // Stat derived from server's global knowledge
               const platTotal = stats?.platformDist?.[platform] ?? 0
               const platRunning = stats?.platformActiveDist?.[platform] ?? 0
@@ -189,7 +189,7 @@ export default function AdminBotsPage() {
                   <div className="flex items-center space-x-3 min-w-0">
                     <div
                       className={cn(
-                        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+                        'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
                         platformTileClasses(platform),
                       )}
                     >
@@ -231,13 +231,13 @@ export default function AdminBotsPage() {
         ) : (
           <>
             {isLoading ? (
-              <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+              <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <BotRowSkeleton key={`skeleton-${i}`} />
                 ))}
               </div>
             ) : bots.length === 0 ? (
-              <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+              <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
                 <p className="p-6 text-sm text-on-surface-variant italic text-center">
                   {searchQuery.trim()
                     ? `No bot sessions match "${searchQuery}"`
@@ -245,7 +245,7 @@ export default function AdminBotsPage() {
                 </p>
               </div>
             ) : (
-              <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+              <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
                 {bots.map((session) => (
                   <div
                     key={`${session.userId}:${session.sessionId}`}
@@ -254,7 +254,7 @@ export default function AdminBotsPage() {
                     <div className="flex items-center space-x-3 min-w-0">
                       <div
                         className={cn(
-                          'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+                          'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
                           platformTileClasses(session.platform),
                         )}
                       >
@@ -286,7 +286,7 @@ export default function AdminBotsPage() {
                               onClick={() => void copyBotId(session.botId ?? '')}
                               title={`Copy bot id ${session.botId}`}
                               aria-label={`Copy bot id ${session.botId}`}
-                              className="font-mono text-on-surface-variant/70 hover:text-primary truncate transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+                              className="font-mono text-on-surface-variant/85 hover:text-primary truncate transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
                             >
                               {session.botId}
                             </button>

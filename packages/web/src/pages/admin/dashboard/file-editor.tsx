@@ -175,7 +175,7 @@ export default function AdminFileEditorPage() {
               <Check
                 className={cn(
                   'h-5 w-5',
-                  isDirty ? 'text-primary' : 'text-on-surface-variant/40',
+                  isDirty ? 'text-primary' : 'text-on-surface-variant/80',
                 )}
               />
             )
@@ -337,7 +337,7 @@ export default function AdminFileEditorPage() {
                   ? 'Save or discard changes before reloading'
                   : 'Reload file from disk'
               }
-              className="flex items-center justify-center h-7 w-7 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="flex items-center justify-center h-7 w-7 rounded-[var(--radius-card)] text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:opacity-[0.82] transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
             </button>
@@ -347,7 +347,7 @@ export default function AdminFileEditorPage() {
           </span>
           <span className="flex items-center gap-2 flex-shrink-0">
             {isLargeFile && (
-              <span className="hidden sm:inline text-on-surface-variant/70">
+              <span className="hidden sm:inline text-on-surface-variant/85">
                 Large file — highlighting off
               </span>
             )}

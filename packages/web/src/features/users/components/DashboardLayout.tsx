@@ -1,10 +1,16 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import {
+  Fragment,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  memo,
+} from 'react'
+import type { ReactNode } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
   LogOut,
-  WifiOff,
-  Wifi,
   Menu,
   X,
   Bot,
@@ -19,7 +25,6 @@ import ScrollToTop from '@/components/ScrollToTop'
 import { getPlatformIconComponent } from '@/components/icons/platform-icon.util'
 import { botService } from '@/features/users/services/bot.service'
 import { useUserAuth } from '@/contexts/UserAuthContext'
-import { useSnackbar } from '@/contexts/SnackbarContext'
 import { DashboardSidebarProvider } from '@/contexts/DashboardSidebarContext'
 import { cn } from '@/utils/cn.util'
 import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
@@ -30,14 +35,20 @@ import {
 } from '@/lib/route-prefetch.lib'
 import IconButton from '@/components/ui/buttons/IconButton'
 import { ROUTES } from '@/constants/routes.constants'
-import { getSocket } from '@/lib/socket.lib'
+import { connectSocket } from '@/lib/socket.lib'
+import { useConnectivity } from '@/contexts/ConnectivityContext'
+import ConnectionBanner from '@/components/ui/feedback/ConnectionBanner'
+import WidgetErrorBoundary from '@/components/ui/feedback/WidgetErrorBoundary'
 import {
   H_HEIGHT,
   H_PX,
   H_BRAND_TEXT,
   H_SIDEBAR_WIDTH,
   H_SIDEBAR_NAV,
-  H_SIDEBAR_ICON,
+  H_SIDEBAR_INDEX,
+  H_SECTION_LABEL,
+  H_SHELL_SCOPE,
+  H_LOGO_ICON,
   H_AVATAR,
   H_AVATAR_TEXT,
   H_CHEVRON,
@@ -114,6 +125,100 @@ function isNavItemActive(itemPath: string, pathname: string): boolean {
 }
 
 // ============================================================================
+// NavRow — one line of the sidebar ledger
+// ============================================================================
+
+/**
+ * A single navigational line: mono ordinal, icon, label, and a 2px left rule
+ * that turns primary while the row is the current page. Every static and
+ * dynamic entry renders through this one component, so the three routes, the
+ * open bot, and the create wizard cannot drift apart.
+ *
+ * Clicking the row for the page you are already on keeps its historical
+ * behaviour: on desktop it collapses the rail, in the mobile drawer it closes.
+ */
+const NavRow = memo(function NavRow({
+  to,
+  label,
+  ordinal,
+  icon,
+  isActive,
+  collapsed,
+  onNavClick,
+  onToggleCollapsed,
+  prefetch,
+}: {
+  to: string
+  label: string
+  ordinal: string
+  icon: ReactNode
+  isActive: boolean
+  collapsed?: boolean
+  onNavClick?: () => void
+  onToggleCollapsed?: () => void
+  prefetch?: (() => void) | undefined
+}) {
+  return (
+    <Link
+      to={to}
+      onMouseEnter={prefetch}
+      onFocus={prefetch}
+      onClick={(e) => {
+        if (isActive) {
+          // Desktop: tapping the current page collapses the sidebar to an
+          // icon rail. Mobile drawer: close instead.
+          if (onToggleCollapsed) {
+            e.preventDefault()
+            onToggleCollapsed()
+          } else {
+            onNavClick?.()
+          }
+          return
+        }
+        // Desktop: tapping another icon switches pages and keeps the rail
+        // collapsed (VSCode/YouTube behaviour). Mobile: closes the drawer.
+        onNavClick?.()
+      }}
+      aria-current={isActive ? 'page' : undefined}
+      title={collapsed ? label : undefined}
+      className={cn(
+        H_SIDEBAR_NAV,
+        collapsed && 'justify-center !gap-0 !px-0 !border-l-0',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+        isActive
+          ? // `border-l-primary` (not `border-primary`) so the 2px current-page
+            // rule reliably wins over the base row's `border-transparent`:
+            // cn() is a plain join, so equal-property utilities would fall
+            // back to stylesheet order.
+            'border-l-primary bg-primary/[0.06] text-on-surface'
+          : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:bg-surface-container-highest',
+      )}
+    >
+      {!collapsed && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            H_SIDEBAR_INDEX,
+            isActive ? 'text-primary' : 'text-on-surface-variant/85',
+          )}
+        >
+          {ordinal}
+        </span>
+      )}
+      <span
+        className={cn(
+          'flex shrink-0 items-center justify-center',
+          isActive ? 'text-primary' : 'text-on-surface-variant',
+        )}
+      >
+        {icon}
+      </span>
+      {!collapsed && <span className="truncate">{label}</span>}
+    </Link>
+  )
+})
+
+// ============================================================================
 // SidebarNav
 // ============================================================================
 
@@ -141,11 +246,11 @@ const SidebarNav = memo(function SidebarNav({
   const isCreateNewBotRoute = activePath === ROUTES.DASHBOARD.CREATE_NEW_BOT
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Identity row — h-14, Lucide Cat 28px accent + 17px brand */}
+    <div className="flex h-full flex-col">
+      {/* Identity row — h-14, 20px mark + condensed wordmark + mono scope tag */}
       <div
         className={cn(
-          'flex items-center h-14 px-6 border-b shrink-0',
+          'flex h-14 shrink-0 items-center border-b px-6',
           H_SEPARATOR,
           collapsed && 'justify-center px-0',
         )}
@@ -157,131 +262,79 @@ const SidebarNav = memo(function SidebarNav({
             if (collapsed) onToggleCollapsed?.()
           }}
           title={collapsed ? 'Cat-Bot' : undefined}
-          className="flex items-center gap-3.5 text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg font-semibold tracking-tight"
+          className={cn(
+            'flex min-w-0 items-center gap-2.5 text-on-surface',
+            'transition-opacity duration-fast hover:opacity-80',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+            !collapsed && 'w-full',
+          )}
         >
-          <span className="flex items-center justify-center flex-shrink-0 text-primary">
-            <Logo className="h-7 w-7" />
+          <span className="flex shrink-0 items-center justify-center text-primary">
+            <Logo className={H_LOGO_ICON} />
           </span>
-          {!collapsed && <span className="text-[17px] leading-none">Cat-Bot</span>}
+          {!collapsed && (
+            <>
+              <span className={cn(H_BRAND_TEXT, 'truncate')}>CAT-BOT</span>
+              <span className={cn(H_SHELL_SCOPE, 'ml-auto pr-1')}>/ DASH</span>
+            </>
+          )}
         </Link>
       </div>
 
-      {/* Primary nav — px-3 pt-4 space-y-1 drawer spec */}
+      {/* Primary nav — a ledger table with one rule label above the rows */}
       <nav
         className={cn(
-          'flex-1 flex flex-col gap-0 overflow-y-auto',
-          collapsed ? 'items-center px-0 py-3 space-y-1.5' : 'px-3 pt-4 space-y-1',
+          'flex flex-1 flex-col overflow-y-auto',
+          collapsed ? 'items-center gap-1 py-3' : 'pb-3',
         )}
         aria-label="Dashboard navigation"
       >
-        {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
+        {!collapsed && <div className={H_SECTION_LABEL}>PAGES</div>}
+
+        {NAV_ITEMS.map(({ path, label, icon: Icon }, index) => {
           // Bot Manager defers its own highlight to the dedicated "open
           // bot" entry below while a specific bot is open — otherwise
           // both would light up together for the same set of routes.
           const isActive =
             isNavItemActive(path, activePath) && !(path === ROUTES.DASHBOARD.ROOT && openBot)
-          const navLink = (
-            <Link
-              key={path}
-              to={path}
-              onMouseEnter={NAV_PREFETCH[path]}
-              onFocus={NAV_PREFETCH[path]}
-              onClick={(e) => {
-                if (isActive) {
-                  // Desktop: tapping the current page collapses the sidebar
-                  // to an icon rail. Mobile drawer: close instead.
-                  if (onToggleCollapsed) {
-                    e.preventDefault()
-                    onToggleCollapsed()
-                  } else {
-                    onNavClick?.()
-                  }
-                  return
-                }
-                // Desktop: tapping another icon switches pages and keeps the
-                // rail collapsed (VSCode/YouTube behaviour). Mobile: closes
-                // the drawer.
-                onNavClick?.()
-              }}
-              aria-current={isActive ? 'page' : undefined}
-              title={collapsed ? label : undefined}
-              className={cn(
-                H_SIDEBAR_NAV,
-                collapsed && 'justify-center !gap-0 !px-0',
-                isActive
-                  ? // Collapsed (desktop icon rail): highlight only the
-                    // icon itself — no row box. Expanded: normal full-row
-                    // highlight.
-                    collapsed
-                    ? 'bg-transparent border border-transparent font-semibold text-primary'
-                    : 'bg-primary/10 border border-primary/20 font-semibold text-primary'
-                  : 'border border-transparent font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:bg-surface-container-highest active:opacity-[0.85]',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex items-center justify-center flex-shrink-0 transition-colors duration-100',
-                  isActive ? 'text-primary' : 'text-on-surface-variant',
-                )}
-              >
-                <Icon className={H_SIDEBAR_ICON} />
-              </span>
-              {!collapsed && <span className="truncate">{label}</span>}
-            </Link>
-          )
 
           // The open bot's own page sits directly under Bot Manager — it
           // only exists in the sidebar for as long as that bot stays
           // open, and disappears the instant it's closed (navigated away
-          // from). Styled identically to every other nav item, no nested/
-          // indented treatment, so it reads as just another page, not a
-          // sub-item.
-          if (path !== ROUTES.DASHBOARD.ROOT || !openBot) return navLink
+          // from). It keeps the same row geometry as every other entry,
+          // with `↳` in the ordinal column so it reads as a sub-entry of
+          // the ledger rather than a new section.
+          const PlatformIcon = openBot
+            ? getPlatformIconComponent(openBot.platform)
+            : null
 
-          const PlatformIcon = getPlatformIconComponent(openBot.platform)
           return (
-            <div key={path} className="flex flex-col gap-0.5">
-              {navLink}
-              <Link
-                to={`${ROUTES.DASHBOARD.BOT}?id=${openBot.id}`}
-                onClick={(e) => {
-                  if (isBotRoute) {
-                    if (onToggleCollapsed) {
-                      e.preventDefault()
-                      onToggleCollapsed()
-                    } else {
-                      onNavClick?.()
-                    }
-                    return
-                  }
-                  onNavClick?.()
-                }}
-                aria-current={isBotRoute ? 'page' : undefined}
-                title={collapsed ? openBot.nickname : undefined}
-                className={cn(
-                  H_SIDEBAR_NAV,
-                  collapsed && 'justify-center !gap-0 !px-0',
-                  isBotRoute
-                    ? // Collapsed (desktop icon rail): highlight only the
-                      // icon itself — no row box. Expanded: normal full-row
-                      // highlight.
-                      collapsed
-                      ? 'bg-transparent border border-transparent font-semibold text-primary'
-                      : 'bg-primary/10 border border-primary/20 font-semibold text-primary'
-                    : 'border border-transparent font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface active:bg-surface-container-highest active:opacity-[0.85]',
-                )}
-              >
-                <span
-                  className={cn(
-                    'flex items-center justify-center flex-shrink-0 transition-colors duration-100',
-                    isBotRoute ? 'text-primary' : 'text-on-surface-variant',
-                  )}
-                >
-                  <PlatformIcon className={H_SIDEBAR_ICON} />
-                </span>
-                {!collapsed && <span className="truncate">{openBot.nickname}</span>}
-              </Link>
-            </div>
+            <Fragment key={path}>
+              <NavRow
+                to={path}
+                label={label}
+                ordinal={String(index + 1).padStart(2, '0')}
+                icon={<Icon className="h-4 w-4 shrink-0" />}
+                isActive={isActive}
+                collapsed={collapsed}
+                onNavClick={onNavClick}
+                onToggleCollapsed={onToggleCollapsed}
+                prefetch={NAV_PREFETCH[path]}
+              />
+
+              {path === ROUTES.DASHBOARD.ROOT && openBot && PlatformIcon && (
+                <NavRow
+                  to={`${ROUTES.DASHBOARD.BOT}?id=${openBot.id}`}
+                  label={openBot.nickname}
+                  ordinal="↳"
+                  icon={<PlatformIcon className="h-4 w-4 shrink-0" />}
+                  isActive={isBotRoute}
+                  collapsed={collapsed}
+                  onNavClick={onNavClick}
+                  onToggleCollapsed={onToggleCollapsed}
+                />
+              )}
+            </Fragment>
           )
         })}
 
@@ -289,37 +342,16 @@ const SidebarNav = memo(function SidebarNav({
             it appears in the sidebar only while the wizard route is open,
             and vanishes the moment you navigate away. */}
         {isCreateNewBotRoute && (
-          <Link
+          <NavRow
             to={ROUTES.DASHBOARD.CREATE_NEW_BOT}
-            onClick={(e) => {
-              if (isCreateNewBotRoute) {
-                if (onToggleCollapsed) {
-                  e.preventDefault()
-                  onToggleCollapsed()
-                } else {
-                  onNavClick?.()
-                }
-                return
-              }
-              onNavClick?.()
-            }}
-            aria-current="page"
-            title={collapsed ? 'Create New Bot' : undefined}
-            className={cn(
-              H_SIDEBAR_NAV,
-              collapsed && 'justify-center !gap-0 !px-0',
-              // Collapsed (desktop icon rail): highlight only the icon
-              // itself — no row box. Expanded: normal full-row highlight.
-              collapsed
-                ? 'bg-transparent border border-transparent font-semibold text-primary'
-                : 'bg-primary/10 border border-primary/20 font-semibold text-primary',
-            )}
-          >
-            <span className="flex items-center justify-center flex-shrink-0 text-primary">
-              <Plus className={H_SIDEBAR_ICON} />
-            </span>
-            {!collapsed && <span className="truncate">Create New Bot</span>}
-          </Link>
+            label="Create New Bot"
+            ordinal="+"
+            icon={<Plus className="h-4 w-4 shrink-0" />}
+            isActive={isCreateNewBotRoute}
+            collapsed={collapsed}
+            onNavClick={onNavClick}
+            onToggleCollapsed={onToggleCollapsed}
+          />
         )}
       </nav>
 
@@ -400,16 +432,17 @@ const UserMenu = memo(function UserMenu() {
           'flex items-center gap-1.5 rounded-[var(--radius-input)] transition-colors duration-fast',
           // Mobile: 36px centered box — same footprint as the hamburger
           // (H_ICON_BTN_MOBILE), so both header edges align. Desktop keeps
-          // the avatar-plus-chevron pill.
+          // the avatar-plus-chevron trigger.
           'h-9 w-9 justify-center md:h-auto md:w-auto md:justify-start md:px-2 md:py-1.5',
           'hover:bg-on-surface/[var(--state-hover-opacity)]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           open && 'bg-on-surface/[var(--state-hover-opacity)]',
         )}
       >
         <span
           className={cn(
-            'flex items-center justify-center rounded-full shrink-0 bg-primary text-on-primary select-none font-bold',
+            'flex shrink-0 select-none items-center justify-center rounded-[var(--radius-compact)]',
+            'border border-primary/50 bg-primary text-on-primary',
             H_AVATAR,
             H_AVATAR_TEXT,
           )}
@@ -419,7 +452,7 @@ const UserMenu = memo(function UserMenu() {
         <ChevronDown
           className={cn(
             H_CHEVRON,
-            'text-on-surface-variant transition-transform duration-fast hidden md:block',
+            'hidden text-on-surface-variant transition-transform duration-fast md:block',
             open && 'rotate-180',
           )}
         />
@@ -430,17 +463,18 @@ const UserMenu = memo(function UserMenu() {
           role="menu"
           aria-label="User menu"
           className={cn(
-            'absolute right-0 top-full mt-1.5 z-dropdown min-w-[210px]',
-            'rounded-[var(--radius-input)] border border-outline-variant bg-surface-container-low',
-            'shadow-elevation-3 py-1 overflow-hidden',
+            'absolute right-0 top-full z-dropdown mt-1.5 min-w-[210px]',
+            'overflow-hidden rounded-[var(--radius-input)] border border-outline-variant bg-surface-container-low',
+            'py-1 shadow-none',
             '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
           )}
         >
-          {/* User info header */}
-          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-hairline">
+          {/* Identity block — square stamp, name, mono address */}
+          <div className="flex items-center gap-2.5 border-b border-hairline px-3.5 py-3">
             <span
               className={cn(
-                'flex items-center justify-center rounded-full shrink-0 bg-primary text-on-primary select-none font-bold',
+                'flex shrink-0 select-none items-center justify-center rounded-[var(--radius-compact)]',
+                'border border-primary/50 bg-primary text-on-primary',
                 H_AVATAR,
                 H_AVATAR_TEXT,
               )}
@@ -448,10 +482,10 @@ const UserMenu = memo(function UserMenu() {
               {initials}
             </span>
             <div className="min-w-0">
-              <p className="text-label-md font-semibold text-on-surface truncate">
+              <p className="truncate text-title-sm text-on-surface">
                 {displayName}
               </p>
-              <p className="text-label-xs text-on-surface-variant/70 truncate">
+              <p className="truncate font-mono text-[10px] uppercase tracking-[0.04em] text-on-surface-variant/85">
                 {user?.email ?? ''}
               </p>
             </div>
@@ -466,10 +500,10 @@ const UserMenu = memo(function UserMenu() {
               onClick={() => setOpen(false)}
               className={cn(
                 H_DROPDOWN_ITEM,
-                'font-medium text-primary hover:bg-primary/[var(--state-hover-opacity)] transition-colors duration-fast',
+                'text-primary hover:bg-primary/[var(--state-hover-opacity)]',
               )}
             >
-              <ShieldCheck className={cn(H_DROPDOWN_ICON, 'shrink-0')} />
+              <ShieldCheck className={H_DROPDOWN_ICON} />
               Admin Dashboard
             </Link>
           )}
@@ -483,10 +517,10 @@ const UserMenu = memo(function UserMenu() {
             }}
             className={cn(
               H_DROPDOWN_ITEM,
-              'font-medium text-error hover:bg-error/[var(--state-hover-opacity)] transition-colors duration-fast',
+              'text-error hover:bg-error/[var(--state-hover-opacity)]',
             )}
           >
-            <LogOut className={cn(H_DROPDOWN_ICON, 'shrink-0')} />
+            <LogOut className={H_DROPDOWN_ICON} />
             Log out
           </button>
         </div>
@@ -500,13 +534,16 @@ const UserMenu = memo(function UserMenu() {
 // ============================================================================
 
 export default function DashboardLayout() {
-  const { snackbar, setPosition } = useSnackbar()
   const location = useLocation()
-  const isDisconnectedRef = useRef(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  // Live socket connection state — drives the sidebar footer's status
-  // light (red "Offline" while disconnected, then the snackbar explains).
-  const [connected, setConnected] = useState(true)
+  // Live connectivity — drives the sidebar status light and the connection
+  // banner. A dropped socket or an unreachable API no longer raises a toast
+  // or unmounts the page; the banner explains it and retries in place.
+  const { browserOnline, serverReachable } = useConnectivity()
+  // A lost realtime socket alone is not "offline": REST still works and the
+  // socket reconnects on its own. The footer reflects the connection that
+  // actually gates the page (browser + API); the banner owns outage detail.
+  const connected = browserOnline && serverReachable !== false
   // Desktop only: collapse the sidebar to an icon rail (VSCode/YouTube style)
   // when the user taps the currently-active nav item. Persisted across refreshes.
   const [collapsed, setCollapsed] = useState(() => {
@@ -552,43 +589,11 @@ export default function DashboardLayout() {
   }, [mobileOpen])
 
   useEffect(() => {
-    const socket = getSocket()
-    if (!socket.connected) socket.connect()
-
-    const handleDisconnect = () => {
-      if (isDisconnectedRef.current) return
-      isDisconnectedRef.current = true
-      setConnected(false)
-      setPosition('bottom-right')
-      snackbar({
-        message: 'You are currently offline.',
-        duration: 0,
-        icon: <WifiOff className="w-4 h-4" />,
-      })
-    }
-
-    const handleConnect = () => {
-      if (!isDisconnectedRef.current) return
-      isDisconnectedRef.current = false
-      setConnected(true)
-      setPosition('bottom-right')
-      snackbar({
-        message: 'Your internet connection was restored.',
-        duration: 4000,
-        icon: <Wifi className="w-4 h-4" />,
-      })
-    }
-
-    socket.on('disconnect', handleDisconnect)
-    socket.on('connect_error', handleDisconnect)
-    socket.on('connect', handleConnect)
-
-    return () => {
-      socket.off('disconnect', handleDisconnect)
-      socket.off('connect_error', handleDisconnect)
-      socket.off('connect', handleConnect)
-    }
-  }, [snackbar, setPosition])
+    // Lazy connect on entering the authenticated shell. Reconnection after
+    // that is owned by socket.io + ConnectivityProvider; calling connect()
+    // again while a handshake is in flight is a no-op.
+    connectSocket()
+  }, [])
 
   // The chat room manages its own internal scroll (message list) and needs
   // the content column pinned to the viewport instead of growing the page —
@@ -653,12 +658,13 @@ export default function DashboardLayout() {
   return (
     <DashboardSidebarProvider open={mobileOpen} onOpenChange={setMobileOpen}>
       <RouteProgressBar />
-      <div className="min-h-screen flex bg-surface-container-high">
-        {/* Desktop sidebar — permanent, collapses to icon rail on desktop,
+      <div className="flex min-h-screen bg-surface-container-high">
+        {/* Desktop sidebar — permanent, collapses to an icon rail on desktop,
             hidden entirely below md (mobile uses the off-canvas drawer) */}
         <aside
           className={cn(
-            'glass-surface hidden md:flex shrink-0 flex-col border-r border-hairline sticky top-0 h-screen overflow-y-hidden transition-[width] duration-normal',
+            'hidden shrink-0 flex-col border-r border-hairline bg-surface-container-low md:flex',
+            'sticky top-0 h-screen overflow-y-hidden transition-[width] duration-normal',
             collapsed ? COLLAPSED_SIDEBAR_W : H_SIDEBAR_WIDTH,
           )}
         >
@@ -671,10 +677,10 @@ export default function DashboardLayout() {
           />
         </aside>
 
-        {/* Mobile scrim */}
+        {/* Mobile scrim — flat ink, no blur */}
         {mobileOpen && (
           <div
-            className="fixed inset-0 z-drawer bg-scrim/50 md:hidden [backdrop-filter:var(--surface-blur-sm)]"
+            className="fixed inset-0 z-drawer bg-scrim/60 md:hidden"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
@@ -683,12 +689,14 @@ export default function DashboardLayout() {
         {/* Mobile off-canvas drawer */}
         <aside
           className={cn(
-            'glass-surface fixed inset-y-0 left-0 z-modal flex flex-col border-r border-hairline md:hidden transition-transform duration-normal',
+            'fixed inset-y-0 left-0 z-modal flex flex-col border-r border-hairline bg-surface-container-low md:hidden',
+            'transition-transform duration-normal',
             H_SIDEBAR_WIDTH,
-            mobileOpen ? 'translate-x-0 shadow-elevation-4' : '-translate-x-full',
+            mobileOpen ? 'translate-x-0' : '-translate-x-full',
           )}
           aria-label="Mobile dashboard navigation"
           aria-modal={mobileOpen}
+          inert={!mobileOpen}
         >
           <SidebarNav
             activePath={activePath}
@@ -701,7 +709,7 @@ export default function DashboardLayout() {
         {/* Main content column */}
         <div
           className={cn(
-            'flex-1 flex flex-col min-w-0',
+            'flex min-w-0 flex-1 flex-col',
             // h-dvh (dynamic viewport height) instead of h-screen (100vh) —
             // 100vh is measured against the *largest* possible mobile
             // browser viewport and doesn't shrink when the address bar is
@@ -709,7 +717,7 @@ export default function DashboardLayout() {
             // a dead gap as the bar shows/hides while scrolling. dvh tracks
             // the real, current viewport on every mobile browser that
             // supports it, keeping the header and input bar stable.
-            isChatRoom && 'h-dvh sticky top-0 overflow-hidden',
+            isChatRoom && 'sticky top-0 h-dvh overflow-hidden',
           )}
         >
           {/* Content header — the Chat Room renders its own single header
@@ -719,7 +727,7 @@ export default function DashboardLayout() {
           {!isChatRoom && (
             <div
               className={cn(
-                'sticky top-0 z-[100] flex items-center border-b',
+                'sticky top-0 z-[100] flex items-center gap-2 border-b',
                 H_SURFACE,
                 H_SEPARATOR,
                 H_HEIGHT,
@@ -736,26 +744,15 @@ export default function DashboardLayout() {
                 onClick={() => setMobileOpen((p) => !p)}
               />
 
-              {/* Desktop: page title */}
-              <span
-                className={cn(
-                  H_BRAND_TEXT,
-                  'hidden md:inline-flex text-on-surface select-none font-semibold tracking-tight',
-                )}
-              >
-                {currentLabel}
-              </span>
-
-              {/* Mobile: page title — centred Bot Manager title */}
-              <div
-                className={cn(
-                  'absolute inset-0 flex items-center justify-center pointer-events-none md:hidden',
-                )}
-              >
+              {/* One left-aligned cluster: scope prefix + current page label */}
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={cn(H_SHELL_SCOPE, 'hidden sm:inline')}>
+                  DASHBOARD /
+                </span>
                 <span
                   className={cn(
                     H_BRAND_TEXT,
-                    'text-on-surface select-none font-semibold tracking-tight',
+                    'min-w-0 truncate text-on-surface',
                   )}
                 >
                   {currentLabel}
@@ -763,20 +760,26 @@ export default function DashboardLayout() {
               </div>
 
               {/* Avatar menu */}
-              <div className="ml-auto">
+              <div className="ml-auto pl-2">
                 <UserMenu />
               </div>
             </div>
           )}
 
+          {!isChatRoom && <ConnectionBanner />}
+
           <main
             className={cn(
               'flex-1',
-              isChatRoom ? 'min-h-0 overflow-hidden' : 'p-4 md:p-6 max-w-7xl w-full mx-auto',
+              isChatRoom
+                ? 'min-h-0 overflow-hidden'
+                : 'mx-auto w-full max-w-[var(--layout-content-max)] px-[var(--layout-main-p)] py-6 md:py-8',
             )}
           >
             <ScrollToTop />
-            <Outlet />
+            <WidgetErrorBoundary label="Dashboard content" resetKey={activePath}>
+              <Outlet />
+            </WidgetErrorBoundary>
           </main>
         </div>
       </div>

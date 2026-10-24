@@ -13,8 +13,7 @@ export async function reportWebVitalsDev(): Promise<void> {
   try {
     const { onLCP, onINP, onCLS, onFCP, onTTFB } = await import('web-vitals')
     const log = (name: string, value: number, rating: string): void => {
-      // eslint-disable-next-line no-console
-      console.log(`[web-vitals] ${name}: ${Math.round(value)}ms (${rating})`)
+            console.log(`[web-vitals] ${name}: ${Math.round(value)}ms (${rating})`)
     }
     onLCP((m) => log('LCP', m.value, m.rating))
     onINP((m) => log('INP', m.value, m.rating))

@@ -79,7 +79,7 @@ export default function ErrorShell({
               <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
               <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
             </span>
-            <span className="text-label-xs font-mono tracking-widest text-on-surface-variant/70 truncate">
+            <span className="text-label-xs font-mono tracking-widest text-on-surface-variant/85 truncate">
               CAT-BOT · ERROR {code}
             </span>
             <span
@@ -108,7 +108,7 @@ export default function ErrorShell({
               <div className="absolute inset-0 flex items-center justify-center">
                 <div
                   className={cn(
-                    'flex h-16 w-16 items-center justify-center rounded-2xl border shadow-elevation-2',
+                    'flex h-16 w-16 items-center justify-center rounded-[var(--radius-card-lg)] border shadow-elevation-2',
                     isError
                       ? 'border-error/30 bg-error-container/40'
                       : 'border-outline-variant/80 bg-surface-container-high',
@@ -155,7 +155,7 @@ export default function ErrorShell({
         </div>
 
         {/* Footnote */}
-        <p className="text-label-xs text-on-surface-variant/40 font-mono tracking-widest">
+        <p className="text-label-xs text-on-surface-variant/80 font-mono tracking-widest">
           ERROR {code} · {code === '404' ? 'NOT FOUND' : 'INTERNAL SERVER ERROR'}
         </p>
       </div>

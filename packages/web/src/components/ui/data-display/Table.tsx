@@ -52,18 +52,21 @@ const useTableContext = () => {
 // Style Configurations
 // ============================================================================
 
+// Body cells are one step tighter than the old density (vertical padding
+// reduced ~25%) and always sit in the body type size; header cells are
+// padding-only because their type is fixed at the mono label register.
 const sizeClasses: Record<TableSize, { cell: string; head: string }> = {
   sm: {
-    cell: 'px-3 py-2 text-sm',
-    head: 'px-3 py-2 text-xs',
+    cell: 'px-3 py-1.5 text-body-sm',
+    head: 'px-3 py-2',
   },
   md: {
-    cell: 'px-4 py-3 text-sm',
-    head: 'px-4 py-3 text-xs',
+    cell: 'px-4 py-2 text-body-sm',
+    head: 'px-4 py-3',
   },
   lg: {
-    cell: 'px-6 py-4 text-base',
-    head: 'px-6 py-4 text-sm',
+    cell: 'px-6 py-3 text-body-sm',
+    head: 'px-6 py-3',
   },
 }
 
@@ -76,7 +79,7 @@ const alignClasses: Record<TableAlign, string> = {
 // Ghost: transparent surfaces — clean, content-first for dense dashboards
 // Soft: colorScheme-tinted surfaces — subtle hierarchy without visual aggression
 // Filled: solid colorScheme header — maximum contrast anchor for data-heavy interfaces
-// Glass: frosted translucent surfaces — 2026 glassmorphism aesthetic (needs a layered bg behind it)
+// Glass: legacy key — now the same flat low surface as the default variant
 const variantRootClasses: Record<TableVariant, string> = {
   default: '',
   bordered: '',
@@ -84,9 +87,9 @@ const variantRootClasses: Record<TableVariant, string> = {
   ghost: 'bg-transparent',
   soft: 'bg-surface-container-low/50',
   filled: '',
-  // Frosted-glass token (--surface-blur-md), not a hardcoded backdrop-blur-md —
-  // keeps this in step with the same material used by Dialog's scrim.
-  glass: 'bg-surface/20 [backdrop-filter:var(--surface-blur-md)] border border-outline-variant/30',
+  // Glass key retained for compatibility: the printout finish has no
+  // frosted layers, so it renders as one more flat low surface.
+  glass: 'bg-surface-container-low border border-hairline',
 }
 
 // Soft variant header tint — low opacity keeps header text readable on the surface token
@@ -137,7 +140,6 @@ function getHeaderBgClass(
   if (variant === 'soft') return softHeaderClasses[colorScheme]
   if (variant === 'filled') return filledHeaderClasses[colorScheme]
   if (variant === 'ghost') return 'bg-transparent'
-  if (variant === 'glass') return 'bg-surface/30 [backdrop-filter:var(--surface-blur-sm)]'
   return 'bg-surface-container-low'
 }
 
@@ -147,10 +149,8 @@ function getRowHoverClass(
   colorScheme: TableColorScheme,
 ): string {
   if (variant === 'soft') return softRowHoverClasses[colorScheme]
-  if (variant === 'ghost') return 'hover:bg-surface-container/40'
-  if (variant === 'glass') return 'hover:bg-surface/30'
   if (variant === 'filled') return 'hover:bg-surface-container-high'
-  return 'hover:bg-surface-container-low'
+  return 'hover:bg-surface-container-high/60'
 }
 
 // ============================================================================
@@ -194,7 +194,7 @@ const TableScrollArea = React.forwardRef<HTMLDivElement, TableScrollAreaProps>(
       <div
         ref={ref}
         className={cn(
-          'w-full rounded-[var(--radius-card)] border border-outline-variant',
+          'w-full rounded-[var(--radius-card)] border border-hairline',
           className,
         )}
         style={scrollStyles}
@@ -257,7 +257,7 @@ const TableRoot = React.forwardRef<HTMLTableElement, TableRootProps>(
             variantRootClasses[variant],
             fullWidth && 'w-full',
             // bordered adds outer border on top of variantRootClasses; glass already has it
-            variant === 'bordered' && 'border border-outline-variant',
+            variant === 'bordered' && 'border border-hairline',
             stickyHeader && '[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10',
             className,
           )}
@@ -306,7 +306,7 @@ const TableBody = React.forwardRef<HTMLTableSectionElement, TableBodyProps>(
       <tbody
         ref={ref}
         className={cn(
-          '[&_tr:last-child]:border-0',
+          '[&_tr:last-child>*]:border-b-0',
           variant === 'striped' &&
             '[&_tr:nth-child(even)]:bg-surface-container-low',
           // Soft: colorScheme-tinted stripes provide visual rhythm without heavy borders
@@ -337,7 +337,7 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, TableFooterProps>(
       <tfoot
         ref={ref}
         className={cn(
-          'bg-surface-1 border-t border-border font-medium',
+          'bg-surface-container-low border-t border-hairline font-medium',
           className,
         )}
         {...props}
@@ -370,14 +370,9 @@ const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
       <tr
         ref={ref}
         className={cn(
-          'border-b transition-colors',
-          // Glass and ghost use faint separators to preserve visual lightness
-          variant === 'glass' || variant === 'ghost'
-            ? 'border-outline-variant/30'
-            : 'border-outline-variant',
+          'transition-colors',
           hoverable && !disableHover && getRowHoverClass(variant, colorScheme),
-          selected && 'bg-primary/10 hover:bg-primary/15',
-          variant === 'bordered' && 'border-outline-variant',
+          selected && 'bg-primary/[0.06] hover:bg-primary/[0.09]',
           className,
         )}
         data-selected={selected || undefined}
@@ -427,18 +422,15 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
         className={cn(
           config.head,
           alignClasses[align],
-          'font-semibold text-headline uppercase tracking-wider whitespace-nowrap',
-          // Glass uses a hairline transparent border; all other variants use a bold 2px bottom border
-          variant === 'glass'
-            ? 'border-b border-outline-variant/30 bg-transparent'
-            : 'border-b-2 border-outline-variant bg-surface-container-low',
+          'font-mono text-[10px] font-medium uppercase tracking-[0.14em] whitespace-nowrap',
+          'border-b border-hairline bg-surface-container-low',
+          // Filled headers paint their own surface-container-low cell fill,
+          // so their ink must be the matching on-surface token (the thead's
+          // on-* tint never reaches these cells).
+          variant === 'filled' ? 'text-on-surface' : 'text-on-surface-variant',
           sortable &&
             'cursor-pointer select-none hover:bg-surface-container transition-colors',
-          // Glass sticky: bg-transparent lets the root table's backdrop-blur show through
-          sticky &&
-            (variant === 'glass'
-              ? 'sticky left-0 z-20 bg-transparent'
-              : 'sticky left-0 z-20 bg-surface-container-low'),
+          sticky && 'sticky left-0 z-20 bg-surface-container-low',
           className,
         )}
         onClick={sortable ? onClick : undefined}
@@ -464,7 +456,9 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
               <svg
                 className={cn(
                   'h-2 w-2 -mb-0.5',
-                  sortDirection === 'asc' ? 'text-primary' : 'text-muted/40',
+                  sortDirection === 'asc'
+                    ? 'text-primary'
+                    : 'text-on-surface-variant/80',
                 )}
                 viewBox="0 0 8 4"
                 fill="currentColor"
@@ -474,7 +468,9 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
               <svg
                 className={cn(
                   'h-2 w-2',
-                  sortDirection === 'desc' ? 'text-primary' : 'text-muted/40',
+                  sortDirection === 'desc'
+                    ? 'text-primary'
+                    : 'text-on-surface-variant/80',
                 )}
                 viewBox="0 0 8 4"
                 fill="currentColor"
@@ -527,13 +523,9 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
         className={cn(
           config.cell,
           alignClasses[align],
-          'text-on-surface',
-          variant === 'bordered' && 'border border-outline-variant',
-          // Glass needs bg-transparent (not bg-inherit) so backdrop-blur stays visible behind sticky columns
-          sticky &&
-            (variant === 'glass'
-              ? 'sticky left-0 z-10 bg-transparent'
-              : 'sticky left-0 z-10 bg-inherit'),
+          'text-on-surface border-b border-hairline',
+          variant === 'bordered' && 'border border-hairline',
+          sticky && 'sticky left-0 z-10 bg-inherit',
           truncate && 'truncate',
           className,
         )}
@@ -564,7 +556,7 @@ const TableCaption = React.forwardRef<
     <caption
       ref={ref}
       className={cn(
-        'px-4 py-3 text-sm text-muted',
+        'px-4 py-3 text-body-sm text-on-surface-variant',
         position === 'top' ? 'caption-top' : 'caption-bottom',
         className,
       )}
@@ -608,11 +600,15 @@ const TableEmpty = React.forwardRef<HTMLTableRowElement, TableEmptyProps>(
       <tr ref={ref} className={className} {...props}>
         <td colSpan={colSpan} className="py-12 text-center">
           <div className="flex flex-col items-center gap-3">
-            {icon && <div className="text-muted/50">{icon}</div>}
+            {icon && <div className="text-on-surface-variant/80">{icon}</div>}
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted">{message}</p>
+              <p className="text-label-lg font-medium text-on-surface-variant">
+                {message}
+              </p>
               {description && (
-                <p className="text-xs text-muted/70">{description}</p>
+                <p className="text-label-md text-on-surface-variant/85">
+                  {description}
+                </p>
               )}
             </div>
             {children}
@@ -650,7 +646,7 @@ const TableLoading = React.forwardRef<HTMLTableRowElement, TableLoadingProps>(
           >
             {Array.from({ length: colSpan }).map((_, cellIndex) => (
               <td key={cellIndex} className={cn(config.cell, 'py-1.5')}>
-                <div className="h-4 bg-surface-variant rounded w-full" />
+                <div className="h-4 w-full rounded-[var(--radius-compact)] bg-surface-variant" />
               </td>
             ))}
           </tr>

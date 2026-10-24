@@ -1,86 +1,105 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
-import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import { ROUTES } from '@/constants/routes.constants'
+import { Platforms } from '@/constants/platform.constants'
 import Alert from '@/components/ui/feedback/Alert'
 import { authUserClient } from '@/lib/better-auth-client.lib'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import apiClient from '@/lib/api-client.lib'
-import Logo from '@/components/ui/Logo'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import AuthPanel, {
+  AuthField,
+  AuthForm,
+} from '@/components/layout/AuthPanel'
 
-interface SignupForm {
+interface SignupDraft {
   name: string
   email: string
-  password: string
-  confirmPassword: string
+  errors: {
+    name?: string
+    email?: string
+    password?: string
+    confirmPassword?: string
+  }
 }
 
-interface SignupErrors {
-  name?: string
-  email?: string
-  password?: string
-  confirmPassword?: string
-}
+const INITIAL: SignupDraft = { name: '', email: '', errors: {} }
+
+/** Derived from the client platform registry — see Login.tsx. */
+const PLATFORM_COUNT = String(Object.keys(Platforms).length).padStart(2, '0')
+
+const META = [
+  { label: 'ROLE', value: 'OPERATOR' },
+  { label: 'SESSION', value: 'PERSISTENT' },
+  { label: 'PLATFORMS', value: PLATFORM_COUNT },
+]
+
+const FOOTER_LINK =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
 
 export default function SignupPage() {
   const navigate = useNavigate()
   const { login } = useUserAuth()
   const { isEmailEnabled } = useEmailServiceEnabled()
-  const [form, setForm] = useState<SignupForm>({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+
+  // Name + email + field errors persist; both password fields are memory-only.
+  const draft = useFormDraft<SignupDraft>(INITIAL, {
+    key: 'signup',
+    storage: 'local',
+    sensitive: [],
   })
-  const [errors, setErrors] = useState<SignupErrors>({})
+  const { name, email, errors } = draft.values
+
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [apiError, setApiError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const submitLock = useRef(false)
 
-  const validate = (): SignupErrors => {
-    const e: SignupErrors = {}
-    if (!form.name.trim()) e.name = 'Name is required.'
-    if (!form.email) e.email = 'Email is required.'
-    else if (!/\S+@\S+\.\S+/.test(form.email))
+  const validate = (): SignupDraft['errors'] => {
+    const e: SignupDraft['errors'] = {}
+    if (!name.trim()) e.name = 'Name is required.'
+    if (!email) e.email = 'Email is required.'
+    else if (!/\S+@\S+\.\S+/.test(email))
       e.email = 'Enter a valid email address.'
-    if (!form.password) e.password = 'Password is required.'
-    else if (form.password.length < 8)
+    if (!password) e.password = 'Password is required.'
+    else if (password.length < 8)
       e.password = 'Password must be at least 8 characters.'
-    if (!form.confirmPassword)
-      e.confirmPassword = 'Please confirm your password.'
-    else if (form.password !== form.confirmPassword)
+    if (!confirmPassword) e.confirmPassword = 'Please confirm your password.'
+    else if (password !== confirmPassword)
       e.confirmPassword = 'Passwords do not match.'
     return e
   }
 
-  const handleChange =
-    (field: keyof SignupForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      setForm((prev) => ({ ...prev, [field]: e.target.value }))
-      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }))
-    }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitLock.current) return
+
     const fieldErrors = validate()
     if (Object.keys(fieldErrors).length > 0) {
-      setErrors(fieldErrors)
+      draft.setValues((prev) => ({ ...prev, errors: fieldErrors }))
       return
     }
+
+    submitLock.current = true
+    draft.setValues((prev) => ({ ...prev, errors: {} }))
     setApiError(null)
     setIsLoading(true)
     try {
       const { data: status } = await apiClient.post<{
         exists: boolean
         verified: boolean
-      }>('/api/v1/validate/email-status', { email: form.email })
+      }>('/api/v1/validate/email-status', { email })
 
       if (status.exists) {
         try {
-          await login(form.email, form.password)
+          await login(email, password)
+          draft.clearDraft()
           navigate(ROUTES.DASHBOARD.ROOT)
           return
         } catch (signInErr) {
@@ -89,8 +108,9 @@ export default function SignupPage() {
 
           if (signInMsg.includes('verif')) {
             if (isEmailEnabled) {
+              draft.clearDraft()
               navigate(
-                `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`,
+                `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(email)}`,
               )
             } else {
               setApiError(
@@ -119,18 +139,19 @@ export default function SignupPage() {
       }
 
       const result = await authUserClient.signUp.email({
-        name: form.name,
-        email: form.email,
-        password: form.password,
+        name,
+        email,
+        password,
       })
 
       if (result.error) {
         throw new Error(result.error.message ?? 'Registration failed')
       }
 
+      draft.clearDraft()
       if (isEmailEnabled) {
         navigate(
-          `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`,
+          `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(email)}`,
         )
       } else {
         navigate(ROUTES.LOGIN)
@@ -140,135 +161,149 @@ export default function SignupPage() {
         err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
       setApiError(msg)
     } finally {
+      submitLock.current = false
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="bg-surface text-on-surface min-h-[calc(100vh-56px)] flex flex-col">
+    <>
       <Helmet>
         <title>Sign Up · Cat-Bot</title>
       </Helmet>
 
-      <main className="flex-1 flex flex-col w-full max-w-sm mx-auto px-5 pb-8">
-        <div className="flex flex-col w-full my-auto py-10">
-          {/* Hero — 72px double-well mark per create_account.html */}
-          <section className="flex flex-col items-center text-center mb-8">
-            <div className="w-[72px] h-[72px] rounded-xl bg-surface-container-low border border-hairline flex items-center justify-center mb-5">
-              <div className="w-12 h-12 rounded-lg bg-surface-container-high border border-hairline flex items-center justify-center text-primary">
-                <Logo className="w-[30px] h-[30px]" />
-              </div>
-            </div>
-            <h1 className="text-[32px] font-bold text-on-surface tracking-tight mb-1">
-              Create your account
-            </h1>
-            <p className="text-sm text-on-surface-variant max-w-[280px] leading-relaxed">
-              Deploy bots across Discord, Telegram, and Fluxer in minutes.
-            </p>
-          </section>
-
-          {/* Form card */}
-          <div className="w-full bg-surface-container-low border border-hairline rounded-xl p-6 mb-8">
-            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-              <Field.Root invalid={!!errors.name} required>
-                <Field.Label>
-                  Full name
-                </Field.Label>
-                <Input
-                  type="text"
-                  placeholder="Jane Smith"
-                  value={form.name}
-                  onChange={handleChange('name')}
-                  autoComplete="name"
-                  className="h-[52px]"
-                />
-                <Field.ErrorText>{errors.name}</Field.ErrorText>
-              </Field.Root>
-
-              <Field.Root invalid={!!errors.email} required>
-                <Field.Label>
-                  Email
-                </Field.Label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={handleChange('email')}
-                  autoComplete="email"
-                  className="h-[52px]"
-                />
-                <Field.ErrorText>{errors.email}</Field.ErrorText>
-              </Field.Root>
-
-              <Field.Root invalid={!!errors.password} required>
-                <Field.Label>
-                  Password
-                </Field.Label>
-                <PasswordInput
-                  placeholder="At least 8 characters"
-                  value={form.password}
-                  onChange={handleChange('password')}
-                  autoComplete="new-password"
-                  className="h-[52px]"
-                />
-                <Field.ErrorText>{errors.password}</Field.ErrorText>
-              </Field.Root>
-
-              <Field.Root invalid={!!errors.confirmPassword} required>
-                <Field.Label>
-                  Confirm password
-                </Field.Label>
-                <PasswordInput
-                  placeholder="Repeat your password"
-                  value={form.confirmPassword}
-                  onChange={handleChange('confirmPassword')}
-                  autoComplete="new-password"
-                  className="h-[52px]"
-                />
-                <Field.ErrorText>{errors.confirmPassword}</Field.ErrorText>
-              </Field.Root>
-
-              {apiError && (
-                <Alert
-                  variant="tonal"
-                  color="error"
-                  title="Sign-up Failed"
-                  message={apiError}
-                />
-              )}
-
-              <div className="pt-1">
-                <Button
-                  type="submit"
-                  variant="filled"
-                  color="primary"
-                  size="lg"
-                  fullWidth
-                  isLoading={isLoading}
-                  className="h-12 rounded-lg text-[15px] font-semibold"
-                >
-                  Create account
-                </Button>
-              </div>
-            </form>
+      <AuthPanel
+        index="01"
+        kicker="REGISTRATION"
+        title="Create account"
+        description="One account runs every bot session you own."
+        meta={META}
+        footer={
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+              ALREADY REGISTERED
+            </span>
+            <Link to={ROUTES.LOGIN} className={FOOTER_LINK}>
+              Sign in
+            </Link>
           </div>
+        }
+      >
+        {draft.restored && (name || email) && (
+          <p className="border-b border-hairline py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-on-surface-variant/85">
+            Draft restored · passwords never stored
+          </p>
+        )}
 
-          {/* Redirect */}
-          <div className="flex items-center justify-center gap-1.5 mb-8">
-            <span className="text-sm text-on-surface-variant">Already have an account?</span>
+        <AuthForm onSubmit={handleSubmit}>
+          <AuthField label="Full name" error={errors.name} required>
+            <Input
+              type="text"
+              placeholder="Jane Smith"
+              value={name}
+              onChange={(e) => {
+                const value = e.target.value
+                draft.setValues((prev) => ({
+                  ...prev,
+                  name: value,
+                  errors: { ...prev.errors, name: undefined },
+                }))
+              }}
+              autoComplete="name"
+              className="h-11"
+            />
+          </AuthField>
+
+          <AuthField label="Email" error={errors.email} required>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => {
+                const value = e.target.value
+                draft.setValues((prev) => ({
+                  ...prev,
+                  email: value,
+                  errors: { ...prev.errors, email: undefined },
+                }))
+                setApiError(null)
+              }}
+              autoComplete="email"
+              className="h-11"
+            />
+          </AuthField>
+
+          <AuthField
+            label="Password"
+            error={errors.password}
+            required
+            hint="At least 8 characters"
+          >
+            <PasswordInput
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (errors.password) {
+                  draft.setValues((prev) => ({
+                    ...prev,
+                    errors: { ...prev.errors, password: undefined },
+                  }))
+                }
+              }}
+              autoComplete="new-password"
+              className="h-11"
+            />
+          </AuthField>
+
+          <AuthField
+            label="Confirm password"
+            error={errors.confirmPassword}
+            required
+          >
+            <PasswordInput
+              placeholder="Repeat your password"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value)
+                if (errors.confirmPassword) {
+                  draft.setValues((prev) => ({
+                    ...prev,
+                    errors: { ...prev.errors, confirmPassword: undefined },
+                  }))
+                }
+              }}
+              autoComplete="new-password"
+              className="h-11"
+            />
+          </AuthField>
+
+          {apiError && (
+            <div className="mt-5" role="alert">
+              <Alert
+                variant="outlined"
+                color="error"
+                title="Sign-up Failed"
+                message={apiError}
+              />
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-5 border-b border-hairline">
             <Button
-              as={Link}
-              to={ROUTES.LOGIN}
-              variant="link"
+              type="submit"
+              variant="filled"
               color="primary"
-              size="sm"
-              className="font-semibold min-h-[44px] inline-flex items-center"
+              size="lg"
+              isLoading={isLoading}
+              fullWidth
+              className="h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]"
             >
-              Log in
+              Create account
             </Button>
           </div>
-        </div>
-      </main>
-    </div>
+        </AuthForm>
+      </AuthPanel>
+    </>
   )
 }

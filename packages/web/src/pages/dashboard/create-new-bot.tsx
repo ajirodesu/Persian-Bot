@@ -30,7 +30,6 @@ const INITIAL_PLATFORM_FIELDS: PlatformFields = {
   discordToken: '',
   discordClientId: '',
   telegramToken: '',
-  fluxerToken: '',
 }
 
 interface FormState {
@@ -43,7 +42,6 @@ interface FormState {
 
 const PLATFORM_OPTIONS: SelectOption[] = [
   { value: Platforms.Discord, label: 'Discord' },
-  { value: Platforms.Fluxer, label: 'Fluxer' },
   { value: Platforms.Telegram, label: 'Telegram' },
 ]
 
@@ -142,8 +140,6 @@ export default function NewBotPage() {
         return !!f.discordToken
       case Platforms.Telegram:
         return !!f.telegramToken
-      case Platforms.Fluxer:
-        return !!f.fluxerToken
       default:
         return false
     }
@@ -165,12 +161,6 @@ export default function NewBotPage() {
         creds = {
           platform: Platforms.Telegram,
           telegramToken: form.platformFields.telegramToken,
-        }
-        break
-      case Platforms.Fluxer:
-        creds = {
-          platform: Platforms.Fluxer,
-          fluxerToken: form.platformFields.fluxerToken,
         }
         break
     }
@@ -196,12 +186,6 @@ export default function NewBotPage() {
           telegramToken: form.platformFields.telegramToken,
         }
         break
-      case Platforms.Fluxer:
-        creds = {
-          platform: Platforms.Fluxer,
-          fluxerToken: form.platformFields.fluxerToken,
-        }
-        break
     }
 
     void createBot({
@@ -222,8 +206,6 @@ export default function NewBotPage() {
         return [
           { label: 'Telegram Token', value: form.platformFields.telegramToken },
         ]
-      case Platforms.Fluxer:
-        return [{ label: 'Fluxer Token', value: form.platformFields.fluxerToken }]
       default:
         return []
     }
@@ -527,7 +509,7 @@ function WizardStepper({
       </div>
 
       <div className="sm:hidden mt-3.5 flex items-center justify-center gap-2">
-        <span className="text-[11px] text-on-surface-variant/60 leading-none">
+        <span className="text-[11px] text-on-surface-variant/80 leading-none">
           Step {current + 1} of {steps.length}
         </span>
         <span className="h-3 w-px rounded-full bg-on-surface-variant/20" />
@@ -702,7 +684,7 @@ function ReviewRow({
           )}
         >
           {value || (
-            <span className="text-on-surface-variant/50 italic text-xs font-normal">
+            <span className="text-on-surface-variant/80 italic text-xs font-normal">
               —
             </span>
           )}

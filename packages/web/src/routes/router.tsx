@@ -22,9 +22,12 @@ import ScrollToTop from '@/components/ScrollToTop'
 import NotFound from '@/pages/errors/NotFound'
 import InternalServerError from '@/pages/errors/InternalServerError'
 
+// Login is eager: it is the most common entry point, and a lazy chunk swap
+// behind the document footer caused a large layout shift (CLS 0.58).
+import LoginPage from '@/pages/Login'
+
 // Page bundles — split per-route so the initial JS payload stays small.
 const HomePage = lazy(() => import('@/pages/Home'))
-const LoginPage = lazy(() => import('@/pages/Login'))
 const SignupPage = lazy(() => import('@/pages/Signup'))
 const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPassword'))
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPassword'))
@@ -75,34 +78,146 @@ const withSuspense = (
 )
 
 /**
- * Landing-shaped placeholder: badge, headline, copy, CTAs, and a visual
- * block in the same max-width/column structure as the home page, so the
- * footer below doesn't jump when the chunk lands.
+ * Landing-shaped placeholder: the masthead strip, then the same 7/5 document
+ * split the home page renders (rule + headline + copy + actions on the left,
+ * surface index on the right), so the footer below doesn't jump when the
+ * chunk lands.
  */
 function LandingFallback() {
   return (
-    <div
-      className="w-full max-w-md mx-auto px-5 pt-6 pb-12 flex flex-col gap-10 lg:max-w-6xl lg:px-8"
-      aria-hidden="true"
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-        <div className="flex flex-col gap-5 pt-2">
-          <Skeleton variant="pill" width={120} height={24} />
-          <Skeleton variant="rounded" width="100%" height={44} />
-          <Skeleton variant="rounded" width="70%" height={44} />
-          <Skeleton variant="text" width="100%" />
-          <Skeleton variant="text" width="85%" />
-          <div className="flex gap-3 pt-2">
-            <Skeleton variant="rounded" width={150} height={48} />
-            <Skeleton variant="rounded" width={150} height={48} />
+    <div className="bg-surface" aria-hidden="true">
+      {/* Masthead strip */}
+      <div className="border-b border-hairline">
+        <div className="mx-auto flex w-full max-w-[var(--layout-nav-max)] items-center justify-between gap-4 px-[var(--layout-section-px)] py-2.5">
+          <Skeleton
+            variant="text"
+            width={180}
+            height={11}
+            className="bg-surface-container-low!"
+          />
+          <Skeleton
+            variant="text"
+            width={160}
+            height={11}
+            className="hidden bg-surface-container-low! md:block"
+          />
+          <Skeleton
+            variant="text"
+            width={48}
+            height={11}
+            className="bg-surface-container-low!"
+          />
+        </div>
+      </div>
+
+      {/* Control surface — 7-column copy block, 5-column index panel */}
+      <div className="mx-auto w-full max-w-[var(--layout-nav-max)] px-[var(--layout-section-px)] py-12 md:py-20">
+        <div className="grid gap-10 lg:grid-cols-12 lg:gap-12">
+          <div className="lg:col-span-7">
+            <Skeleton
+              variant="text"
+              width={190}
+              height={11}
+              className="bg-surface-container-low!"
+            />
+
+            <div className="mt-6 flex flex-col gap-3">
+              <Skeleton
+                variant="rounded"
+                width="92%"
+                height={64}
+                className="bg-surface-container-low!"
+              />
+              <Skeleton
+                variant="rounded"
+                width="74%"
+                height={64}
+                className="bg-surface-container-low!"
+              />
+              <Skeleton
+                variant="rounded"
+                width="46%"
+                height={64}
+                className="bg-surface-container-low!"
+              />
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2">
+              <Skeleton
+                variant="text"
+                textSize="body-lg"
+                width="100%"
+                className="bg-surface-container-low!"
+              />
+              <Skeleton
+                variant="text"
+                textSize="body-lg"
+                width="82%"
+                className="bg-surface-container-low!"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
+              <Skeleton
+                variant="rounded"
+                width={210}
+                height={48}
+                className="bg-surface-container-low!"
+              />
+              <Skeleton
+                variant="rounded"
+                width={120}
+                height={48}
+                className="bg-surface-container-low!"
+              />
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 lg:border-l lg:border-hairline lg:pl-8">
+            <Skeleton
+              variant="text"
+              width={140}
+              height={11}
+              className="bg-surface-container-low!"
+            />
+
+            <div className="mt-4 border-t border-hairline">
+              {[0, 1, 2, 3, 4].map((row) => (
+                <div
+                  key={row}
+                  className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 border-b border-hairline py-3"
+                >
+                  <Skeleton
+                    variant="text"
+                    width={18}
+                    height={10}
+                    className="bg-surface-container-low!"
+                  />
+                  <div className="flex flex-col gap-1.5">
+                    <Skeleton
+                      variant="text"
+                      width={160}
+                      height={16}
+                      className="bg-surface-container-low!"
+                    />
+                    <Skeleton
+                      variant="text"
+                      width={200}
+                      height={10}
+                      className="bg-surface-container-low!"
+                    />
+                  </div>
+                  <Skeleton
+                    variant="text"
+                    width={12}
+                    height={12}
+                    className="bg-surface-container-low!"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <Skeleton variant="rounded" width="100%" height={280} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Skeleton variant="rounded" width="100%" height={140} />
-        <Skeleton variant="rounded" width="100%" height={140} />
-        <Skeleton variant="rounded" width="100%" height={140} />
       </div>
     </div>
   )
@@ -122,7 +237,7 @@ function SuspenseWithBoundary({
         fallback={
           fallback ?? (
             <div
-              className="p-4 md:p-6 max-w-7xl w-full mx-auto flex flex-col gap-3"
+              className="p-4 md:p-6 max-w-[var(--layout-content-max)] w-full mx-auto flex flex-col gap-3"
               aria-hidden="true"
             >
               <Skeleton variant="rounded" width="100%" height={56} />

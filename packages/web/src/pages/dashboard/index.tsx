@@ -14,6 +14,8 @@ import { getPlatformIcon } from '@/components/icons/platform-icon.util'
 import { Platforms } from '@/constants/platform.constants'
 import { cn } from '@/utils/cn.util'
 import apiClient from '@/lib/api-client.lib'
+import FreshnessNote from '@/components/ui/feedback/FreshnessNote'
+import { queryKeys } from '@/lib/query-client.lib'
 
 // ============================================================================
 // bot_manager_with_header_title.html — React port (1:1 appearance)
@@ -54,11 +56,11 @@ import apiClient from '@/lib/api-client.lib'
 function platformTileClasses(platform: string): string {
   switch (platform) {
     case Platforms.Discord:
-      return 'bg-[#5865F2]/15 border-[#5865F2]/30 text-[#5865F2]'
+      return 'platform-tile-discord'
     case Platforms.Telegram:
-      return 'bg-[#24A1DE]/15 border-[#24A1DE]/30 text-[#24A1DE]'
+      return 'platform-tile-telegram'
     default:
-      return 'bg-primary/15 border-primary/30 text-primary'
+      return 'platform-tile-neutral'
   }
 }
 
@@ -106,7 +108,7 @@ function BotRow({
         {/* Platform icon container — standard 36px optical square, 8px radius */}
         <div
           className={cn(
-            'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+            'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
             platformTileClasses(bot.platform),
           )}
         >
@@ -151,7 +153,7 @@ function BotRow({
             <span
               className={cn(
                 'font-medium text-[11px]',
-                isActive ? 'text-primary' : 'text-surface-variant',
+                isActive ? 'text-primary' : 'text-on-surface-variant',
               )}
             >
               {isActive ? 'Online' : 'Offline'}
@@ -160,7 +162,7 @@ function BotRow({
         </div>
       </div>
       {/* Right accessory: chevron, consistent 16px size & optical alignment */}
-      <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+      <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
         <ChevronRight className="w-4 h-4" strokeWidth={2} />
       </div>
     </article>
@@ -238,7 +240,7 @@ function UptimeCard({ online, total }: { online: number; total: number }) {
 
   return (
     <section aria-label="System Uptime Status">
-      <div className="bg-surface-container-low border border-hairline rounded-xl p-3.5 space-y-3">
+      <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] p-3.5 space-y-3">
         {/* Top row: operational status & pulsing heartbeat badge */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -270,7 +272,7 @@ function UptimeCard({ online, total }: { online: number; total: number }) {
             <div
               key={c.id}
               className={cn(
-                'border rounded-lg py-1.5 px-1 text-center',
+                'border rounded-[var(--radius-card)] py-1.5 px-1 text-center',
                 c.live && operational
                   ? 'bg-surface-container-high/80 border-primary/30'
                   : 'bg-surface-container-high/80 border-outline-variant',
@@ -290,7 +292,7 @@ function UptimeCard({ online, total }: { online: number; total: number }) {
                   'text-[9px] uppercase tracking-wider font-medium mt-0.5',
                   c.live && operational
                     ? 'text-primary/70'
-                    : 'text-surface-variant',
+                    : 'text-on-surface-variant',
                 )}
               >
                 {c.label}
@@ -299,7 +301,7 @@ function UptimeCard({ online, total }: { online: number; total: number }) {
           ))}
         </div>
         {/* Subtle continuous duration label */}
-        <div className="flex items-center justify-between flex-wrap gap-x-2 gap-y-1 text-[11px] text-surface-variant pt-0.5 px-0.5">
+        <div className="flex items-center justify-between flex-wrap gap-x-2 gap-y-1 text-[11px] text-on-surface-variant pt-0.5 px-0.5">
           <span className="flex items-center space-x-1">
             <span>Continuous uptime:</span>
             <span
@@ -313,7 +315,7 @@ function UptimeCard({ online, total }: { online: number; total: number }) {
           <span
             className={cn(
               'font-mono text-[10px] flex items-center space-x-1',
-              operational ? 'text-primary' : 'text-surface-variant',
+              operational ? 'text-primary' : 'text-on-surface-variant',
             )}
           >
             <span
@@ -387,7 +389,7 @@ export default function BotManagerPage() {
           onClick={() => navigate(ROUTES.DASHBOARD.CREATE_NEW_BOT)}
           onMouseEnter={prefetchNewBot}
           onFocus={prefetchNewBot}
-          className="w-full h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-sm flex items-center justify-center space-x-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface shadow-[0_1px_2px_0_rgba(0,0,0,0.35)]"
+          className="w-full h-11 px-4 rounded-[var(--radius-card)] bg-primary hover:brightness-110 active:brightness-90 text-on-primary font-semibold text-sm flex items-center justify-center space-x-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface shadow-[0_1px_2px_0_rgba(0,0,0,0.35)]"
         >
           <Plus className="w-4 h-4" strokeWidth={2.2} />
           <span className="tracking-tight">Create New Bot</span>
@@ -400,26 +402,29 @@ export default function BotManagerPage() {
           <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
             Active Instances
           </h2>
-          {!isLoading && error === null && (
-            <span className="text-[11px] font-mono font-medium text-surface-variant">
-              {onlineCount} of {bots.length} active
+          {!isLoading && bots.length > 0 && (
+            <span className="flex items-center gap-3">
+              <FreshnessNote queryKey={queryKeys.bots} staleOnly />
+              <span className="text-[11px] font-mono font-medium text-on-surface-variant">
+                {onlineCount} of {bots.length} active
+              </span>
             </span>
           )}
         </div>
 
         {isLoading && (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <BotRowSkeleton />
             <BotRowSkeleton />
           </div>
         )}
 
-        {!isLoading && error !== null && (
+        {!isLoading && error !== null && bots.length === 0 && (
           <Alert
             variant="tonal"
             color="error"
-            title="Error loading bots"
-            message={error}
+            title="Bots unavailable"
+            message={`${error} Saved data will appear here as soon as the server is reachable.`}
           />
         )}
 
@@ -436,8 +441,8 @@ export default function BotManagerPage() {
           />
         )}
 
-        {!isLoading && error === null && bots.length > 0 && (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+        {!isLoading && bots.length > 0 && (
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {bots.map((bot) => (
               <BotRow
                 key={bot.sessionId}
@@ -455,7 +460,7 @@ export default function BotManagerPage() {
       </section>
 
       {/* ── Dynamic real-time uptime counter card ────────────────────────── */}
-      {!isLoading && error === null && bots.length > 0 && (
+      {!isLoading && bots.length > 0 && (
         <div className="mt-4">
           <UptimeCard online={onlineCount} total={bots.length} />
         </div>

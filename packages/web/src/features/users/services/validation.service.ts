@@ -1,5 +1,5 @@
 /**
- * Validation Service — REST credential checks for Discord, Telegram, and Fluxer.
+ * Validation Service — REST credential checks for Discord and Telegram.
  *
  * Responses follow { valid: boolean, error?: string, botName?: string } contract.
  */
@@ -26,14 +26,6 @@ export const validationService = {
     const response = await apiClient.post<ValidateResult>(
       '/api/v1/validate/telegram',
       { telegramToken },
-    )
-    return response.data
-  },
-
-  async validateFluxer(fluxerToken: string): Promise<ValidateResult> {
-    const response = await apiClient.post<ValidateResult>(
-      '/api/v1/validate/fluxer',
-      { fluxerToken },
     )
     return response.data
   },

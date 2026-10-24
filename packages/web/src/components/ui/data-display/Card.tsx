@@ -10,10 +10,10 @@ import {
 
 /**
  * Card visual style variants
- * - elevated: Default card with optional shadow elevation
+ * - elevated: Default card — flat surface with a hairline frame
  * - filled: Solid colored background
  * - outlined: Border-only style
- * - gradient: Gradient background
+ * - gradient: Flat low surface with an accent hairline (legacy key)
  */
 export type CardVariant = 'elevated' | 'filled' | 'outlined' | 'gradient'
 
@@ -68,10 +68,10 @@ export type CardRootOwnProps = {
    * Visual variant style
    * @default 'elevated'
    *
-   * - 'elevated': Default card with surface backgrounds and optional shadows
+   * - 'elevated': Default card — flat surface with a hairline frame
    * - 'filled': Solid colored background (uses color prop)
    * - 'outlined': Border-only with transparent background
-   * - 'gradient': Gradient background (uses color prop)
+   * - 'gradient': Flat low surface with an accent hairline (legacy key)
    */
   variant?: CardVariant
   /**
@@ -85,7 +85,8 @@ export type CardRootOwnProps = {
    */
   surfaceLevel?: SurfaceLevel
   /**
-   * Shadow elevation level (0-5)
+   * Frame level (0-5). Retained for API compatibility: every level renders
+   * the same flat `border border-hairline` and no shadow.
    * @default 0
    */
   shadowElevation?: ShadowElevation
@@ -142,15 +143,16 @@ const surfaceLevelClasses: Record<SurfaceLevel, string> = {
 }
 
 /**
- * Shadow elevation to Tailwind class mapping
+ * Elevation is flat in this system: every level paints the same hairline
+ * frame and no shadow. Real shadows are reserved for overlays only.
  */
-const shadowElevationClasses: Record<ShadowElevation, string> = {
-  0: 'shadow-elevation-0',
-  1: 'shadow-elevation-1 hover:shadow-elevation-2 transition-shadow',
-  2: 'shadow-elevation-2 hover:shadow-elevation-3 transition-shadow',
-  3: 'shadow-elevation-3 hover:shadow-elevation-4 transition-shadow',
-  4: 'shadow-elevation-4 hover:shadow-elevation-5 transition-shadow',
-  5: 'shadow-elevation-5',
+const elevationFrameClasses: Record<ShadowElevation, string> = {
+  0: 'border border-hairline',
+  1: 'border border-hairline',
+  2: 'border border-hairline',
+  3: 'border border-hairline',
+  4: 'border border-hairline',
+  5: 'border border-hairline',
 }
 
 /**
@@ -179,16 +181,21 @@ const filledColorClasses: Record<CardColor, string> = {
 
 /**
  * Gradient variant color classes
+ *
+ * The variant key survives for API compatibility, but the system has no
+ * ramps: it paints a flat low surface with a single accent hairline frame.
+ * `color` no longer tints this variant.
  */
 const gradientColorClasses: Record<CardColor, string> = {
-  neutral: '[background:var(--color-gradient-primary)] text-white',
-  primary: '[background:var(--color-gradient-primary)] text-white',
-  secondary: '[background:var(--color-gradient-secondary)] text-white',
-  tertiary: '[background:var(--color-gradient-tertiary)] text-white',
-  success: '[background:var(--color-gradient-success)] text-white',
-  error: '[background:var(--color-gradient-error)] text-white',
-  warning: '[background:var(--color-gradient-warning)] text-white',
-  info: '[background:var(--color-gradient-info)] text-white',
+  neutral: 'bg-surface-container-low text-on-surface border border-primary/40',
+  primary: 'bg-surface-container-low text-on-surface border border-primary/40',
+  secondary:
+    'bg-surface-container-low text-on-surface border border-primary/40',
+  tertiary: 'bg-surface-container-low text-on-surface border border-primary/40',
+  success: 'bg-surface-container-low text-on-surface border border-primary/40',
+  error: 'bg-surface-container-low text-on-surface border border-primary/40',
+  warning: 'bg-surface-container-low text-on-surface border border-primary/40',
+  info: 'bg-surface-container-low text-on-surface border border-primary/40',
 }
 
 /**
@@ -219,7 +226,7 @@ const outlinedColorClasses: Record<CardColor, string> = {
  *   <Card.Body>Content</Card.Body>
  * </Card.Root>
  *
- * // Elevated with shadow
+ * // Elevated with a hairline frame
  * <Card.Root variant="elevated" surfaceLevel="low" shadowElevation={2}>
  *   <Card.Body>Elevated content</Card.Body>
  * </Card.Root>
@@ -229,10 +236,10 @@ const outlinedColorClasses: Record<CardColor, string> = {
  *   <Card.Body>Filled content</Card.Body>
  * </Card.Root>
  *
- * // Gradient card
+ * // Flat accent-framed card (legacy gradient key)
  * <Card.Root variant="gradient" color="secondary">
- *   <Card.Title>Gradient Card</Card.Title>
- *   <Card.Body>Content with gradient background</Card.Body>
+ *   <Card.Title>Accent Card</Card.Title>
+ *   <Card.Body>Content on a flat low surface</Card.Body>
  * </Card.Root>
  *
  * // Outlined card
@@ -285,36 +292,27 @@ const CardRoot = forwardRefWithAs<'div', CardRootOwnProps>((props, ref) => {
     }
   }
 
-  // Determine if we should show shadow
-  const showShadow =
+  // Determine if we should show the flat hairline frame
+  const showFrame =
     effectiveVariant === 'elevated' || effectiveVariant === 'filled'
-
-  const showHairline = effectiveVariant === 'elevated' || effectiveVariant === 'filled'
 
   return (
     <Component
       ref={ref}
       className={cn(
-        // Base styles — large rounded corners driven by theme token
+        // Base styles — small print-document radius driven by theme token
         'rounded-[var(--radius-card,0.75rem)]',
-        // Hairline definition on elevated/filled cards only — outlined
-        // cards already carry their own semantic border color. Uses
-        // `outline` rather than `border` so it never collides with a
-        // card's own border-color override (e.g. a destructive-action
-        // card). Theme-controlled hairline color — a soft ~8% tint of
-        // each theme's "on-surface" color, so it reads consistently
-        // across Aqua, Burnt, and Indigo.
-        showHairline &&
-          'outline outline-1 outline-offset-[-1px] outline-[var(--color-hairline-border,transparent)]',
+        // Flat frame on elevated/filled cards only — outlined cards already
+        // carry their own semantic border color. Placed before the variant
+        // classes so an explicit `bordered` color still wins.
+        showFrame && elevationFrameClasses[shadowElevation],
         // Variant-specific styles
         getVariantClasses(),
-        // Shadow elevation (only for elevated and filled variants)
-        showShadow && shadowElevationClasses[shadowElevation],
         // Padding
         padding !== 'none' && paddingClasses[padding],
-        // Interactive state
+        // Interactive state — a border step, never a transform
         interactive &&
-          'cursor-pointer hover:scale-[1.02] active:scale-[0.99] transition-transform duration-fast ease-standard',
+          'cursor-pointer hover:border-outline-variant transition-colors duration-fast ease-standard focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         className,
       )}
       {...rest}
@@ -583,10 +581,10 @@ CardFooter.displayName = 'Card.Footer'
  *   <Card.Body>Content with solid background</Card.Body>
  * </Card.Root>
  *
- * // Gradient card
+ * // Flat accent-framed card (legacy gradient key)
  * <Card.Root variant="gradient" color="secondary" shadowElevation={2}>
- *   <Card.Title>Gradient Card</Card.Title>
- *   <Card.Body>Content with gradient background</Card.Body>
+ *   <Card.Title>Accent Card</Card.Title>
+ *   <Card.Body>Content on a flat low surface</Card.Body>
  * </Card.Root>
  *
  * // Outlined card

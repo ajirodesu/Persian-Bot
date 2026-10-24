@@ -3,7 +3,7 @@
 
    All CSS custom properties for the design system scale.
    These are global (not theme-specific) — color roles live in
-   theme/aqua.css, theme/burnt.css, and theme/indigo.css.
+   theme/emerald.css, theme/jasper.css, and theme/amethyst.css.
 
    "Telemetry printout": flat ink-black technical document. Type
    is condensed display + neutral grotesque + monospace data,
@@ -28,9 +28,19 @@
   /* ==================== TYPOGRAPHY ==================== */
   /* Display family is global: Barlow Condensed is the signage face
      for headings and brand marks. Brand/plain/mono families are
-     theme-specific — see theme/aqua.css, theme/burnt.css, and
-     theme/indigo.css. */
+     theme-specific — see theme/emerald.css, theme/jasper.css, and
+     theme/amethyst.css. */
   --font-family-display: 'Barlow Condensed', 'Barlow', sans-serif;
+
+  /* Platform identity colours. Data-driven, not theme accents: Discord and
+     Telegram keep their brand hue on every theme so a platform is identifiable
+     at a glance. Declared as RGB triplets to match the theme colour system. */
+  --platform-discord: 88 101 242;
+  --platform-telegram: 36 161 222;
+
+  /* Theme identity dots (settings switcher) — one swatch per selectable theme. */
+  --accent-jasper: 211 113 76;
+  --accent-amethyst: 168 140 250;
 
   --font-size-base: 1rem;
 
@@ -117,7 +127,7 @@
   /* ==================== SHAPE ====================
      Print-document corners: the smallest radius that still softens a
      hairline frame (4px on cards/buttons, 2px on compact controls).
-     Defined once, globally, so every theme (Aqua / Burnt / Indigo)
+     Defined once, globally, so every theme (Emerald / Jasper / Amethyst)
      renders cards, buttons, and inputs at identical sizes — only
      color values vary per theme. */
   --radius-card: 0.25rem; /* 4px */

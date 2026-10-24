@@ -144,7 +144,7 @@ function FieldLabel({ children, className }: FieldLabelProps) {
     <label
       htmlFor={inputId}
       className={cn(
-        'block text-label-md font-medium text-on-surface mb-2',
+        'block font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-on-surface-variant mb-2',
         disabled && 'opacity-state-disabled',
         className,
       )}
@@ -230,7 +230,7 @@ function FieldHelperText({ children, className }: FieldHelperTextProps) {
     <p
       id={descriptionId}
       className={cn(
-        'mt-1.5 text-body-sm text-on-surface-variant',
+        'mt-1.5 text-label-lg text-on-surface-variant',
         disabled && 'opacity-state-disabled',
         className,
       )}
@@ -269,7 +269,7 @@ function FieldErrorText({ children, className }: FieldErrorTextProps) {
     <p
       id={descriptionId}
       role="alert"
-      className={cn('mt-1.5 text-body-sm text-error', className)}
+      className={cn('mt-1.5 text-label-lg text-error', className)}
     >
       {children}
     </p>

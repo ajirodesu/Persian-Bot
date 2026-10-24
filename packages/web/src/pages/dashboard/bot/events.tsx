@@ -22,7 +22,7 @@ function IconWell({
   return (
     <div
       className={cn(
-        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
         tone === 'accent' && 'bg-primary/10 border-primary/30 text-primary',
         tone === 'default' && 'bg-surface-container-high border-hairline text-on-surface-variant',
       )}
@@ -93,7 +93,7 @@ export default function BotEventsPage() {
           <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
             Events
           </h2>
-          <span className="text-[11px] font-mono font-medium text-surface-variant">
+          <span className="text-[11px] font-mono font-medium text-on-surface-variant">
             {isLoading
               ? 'Loading…'
               : query.trim()
@@ -117,13 +117,13 @@ export default function BotEventsPage() {
 
         {/* Keep the search bar visible; swap only the list for skeletons while fetching */}
         {isLoading ? (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {Array.from({ length: 6 }).map((_, i) => (
               <EventRowSkeleton key={i} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-surface-container-low border border-hairline rounded-xl overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] overflow-hidden">
             <p className="p-6 text-sm text-on-surface-variant italic text-center">
               {query.trim()
                 ? `No events match "${query}"`
@@ -131,7 +131,7 @@ export default function BotEventsPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {filtered.map((evt) => (
               <div
                 key={evt.eventName}
@@ -159,7 +159,7 @@ export default function BotEventsPage() {
                       )}
                     </span>
                     {evt.author && (
-                      <span className="text-[11px] text-surface-variant font-mono mt-1 truncate">
+                      <span className="text-[11px] text-on-surface-variant font-mono mt-1 truncate">
                         by {evt.author}
                       </span>
                     )}

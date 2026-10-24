@@ -37,6 +37,10 @@ export type EmptyStateProps<T extends React.ElementType = 'div'> =
  * Size configuration for EmptyState variants
  * - sm: Compact size for use in dropdowns, comboboxes, small containers
  * - md: Default size for page-level or card-level empty states
+ *
+ * Titles always use the display face: uppercase condensed lettering is the
+ * printout's section register, so hierarchy comes from scale and rules
+ * rather than weight alone.
  */
 const sizeConfig: Record<
   EmptyStateSize,
@@ -53,16 +57,18 @@ const sizeConfig: Record<
     wrapper: 'p-6',
     iconWrapper: 'h-10 w-10 mb-3',
     icon: 'h-5 w-5',
-    title: 'text-label-lg font-medium mb-1',
-    description: 'text-body-sm mb-3',
+    title:
+      'font-brand uppercase tracking-[0.12em] text-title-lg font-medium mb-1',
+    description: 'text-body-sm mb-3 max-w-sm mx-auto',
     buttonSize: 'sm',
   },
   md: {
     wrapper: 'p-12',
     iconWrapper: 'h-16 w-16 mb-4',
     icon: 'h-8 w-8',
-    title: 'text-title-lg font-semibold mb-2',
-    description: 'text-body-md mb-4',
+    title:
+      'font-brand uppercase tracking-[0.12em] text-title-lg font-medium mb-2',
+    description: 'text-body-md mb-4 max-w-sm mx-auto',
     buttonSize: 'md',
   },
 }
@@ -122,7 +128,7 @@ const EmptyState = forwardRefWithAs<'div', EmptyStateOwnProps>((props, ref) => {
     <Component
       ref={ref}
       className={cn(
-        'bg-surface-container rounded-[var(--radius-card)] text-center',
+        'bg-surface-container-low border border-hairline rounded-[var(--radius-card)] text-center',
         config.wrapper,
         className,
       )}
@@ -132,7 +138,7 @@ const EmptyState = forwardRefWithAs<'div', EmptyStateOwnProps>((props, ref) => {
         {Icon && (
           <div
             className={cn(
-              'rounded-full bg-on-surface/10 flex items-center justify-center mx-auto',
+              'rounded-[var(--radius-compact)] border border-hairline bg-surface-container-low flex items-center justify-center mx-auto',
               config.iconWrapper,
             )}
           >

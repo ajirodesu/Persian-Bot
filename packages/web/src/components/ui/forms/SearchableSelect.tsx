@@ -306,7 +306,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
       ref={menuRef}
       id={menuId}
       style={menuStyle}
-      className="flex flex-col overflow-hidden rounded-[var(--radius-input)] border border-outline-variant bg-surface/95 [backdrop-filter:var(--surface-blur-sm)] shadow-elevation-2"
+      className="flex flex-col overflow-hidden rounded-[var(--radius-input)] border border-outline-variant bg-surface-container-low shadow-elevation-3"
     >
       <div className="flex items-center gap-2 border-b border-outline-variant px-3 py-2">
         <Search className="h-4 w-4 shrink-0 text-on-surface-variant" />
@@ -397,9 +397,10 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         aria-controls={isOpen ? menuId : undefined}
         aria-invalid={hasError || undefined}
         className={cn(
-          'inline-flex w-full items-center justify-between gap-2 rounded-[var(--radius-input,0.5rem)] border-2 px-4 py-2.5 text-body-md font-medium transition-all duration-fast',
-          'bg-[var(--color-input-bg,transparent)] text-on-surface border-[var(--color-input-border,rgb(var(--color-outline-variant)))]',
-          'hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)] focus:outline-none focus:border-primary',
+          'inline-flex w-full items-center justify-between gap-2 rounded-[var(--radius-input,0.5rem)] border border-[var(--color-input-border)] px-4 py-2.5 text-body-md font-medium transition-colors duration-fast',
+          'bg-[var(--color-input-bg,transparent)] text-on-surface',
+          'hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)]',
+          'focus:border-primary focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           disabled && 'opacity-state-disabled cursor-not-allowed',
           hasError && 'border-error focus:border-error',
         )}

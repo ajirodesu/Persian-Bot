@@ -10,16 +10,16 @@ import type { AppTheme } from '../contexts/ThemeContext'
  * this fetches the base SVG once, swaps every fill/stroke color for the current
  * theme's primary hex, and points the <link rel="icon"> at a Blob URL.
  *
- * Hex values mirror --aqua-color-primary / --burnt-color-primary /
- * --indigo-color-primary in src/styles/theme/*.css (kept in sync
+ * Hex values mirror --emerald-color-primary / --jasper-color-primary /
+ * --amethyst-color-primary in src/styles/theme/*.css (kept in sync
  * manually — there are only three themes and the mapping rarely
  * changes).
  */
 
 const FAVICON_PRIMARY_HEX: Record<AppTheme, string> = {
-  aqua: '#34E0BE',
-  burnt: '#DA7756',
-  indigo: '#9C87F5',
+  emerald: '#10B981',
+  jasper: '#D3714C',
+  amethyst: '#A88CFA',
 }
 
 let svgTemplatePromise: Promise<string> | null = null

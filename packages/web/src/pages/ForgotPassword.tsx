@@ -1,91 +1,70 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import React, { useState } from 'react'
+import React, { useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
-import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import apiClient from '@/lib/api-client.lib'
-import Logo from '@/components/ui/Logo'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import AuthPanel, {
+  AuthField,
+  AuthForm,
+  AuthResult,
+} from '@/components/layout/AuthPanel'
 
-/**
- * AuthShell — ambient-glow background + centered column shared by every
- * state of this page. Mirrors the treatment on the Login page so the email
- * service never renders as a separate, less-considered surface.
- */
-function AuthShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16 overflow-hidden">
-      <Helmet>
-        <title>Forgot Password · Cat-Bot</title>
-      </Helmet>
+// Verified against the server OTP store: 6-digit code, 10-minute TTL.
+// (packages/cat-bot/src/server/lib/otp.lib.ts:29-30)
+const META = [
+  { label: 'CHANNEL', value: 'EMAIL' },
+  { label: 'CODE', value: '6 DIGITS' },
+  { label: 'EXPIRY', value: '10 MINUTES' },
+]
 
-      {/* Ambient glow — same treatment as the marketing pages */}
-      <div className="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/[0.06] blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-tertiary/[0.05] blur-[100px]" />
+const FOOTER_LINK =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
 
-      <div
-        className="relative z-10 w-full max-w-[400px] flex flex-col gap-7"
-        style={{
-          animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both',
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
-
-/** Brand mark — glow-ring icon above the page heading. */
-function BrandMark({
-  heading,
-  subheading,
-}: {
-  heading: string
-  subheading: string
-}) {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-        <Logo className="h-6 w-6 text-on-primary-container" />
-      </div>
-      <div className="text-center flex flex-col gap-1.5">
-        <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-          {heading}
-        </h1>
-        <p className="text-body-sm text-on-surface-variant max-w-xs mx-auto leading-relaxed">
-          {subheading}
-        </p>
-      </div>
-    </div>
-  )
-}
+const ACTION_LINK =
+  'inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
 
 export default function ForgotPasswordPage() {
   const { isEmailEnabled, isLoading: isEmailStatusLoading } =
     useEmailServiceEnabled()
 
   const [searchParams] = useSearchParams()
-  const [email, setEmail] = useState(searchParams.get('email') || '')
-  const [error, setError] = useState<string | null>(null)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  // Step + email + validation error survive reloads; this is a recovery flow,
+  // not a one-shot. No secret is stored by this form.
+  const draft = useFormDraft(
+    {
+      email: searchParams.get('email') || '',
+      error: null as string | null,
+      isSubmitted: false,
+    },
+    { key: 'forgot-password', storage: 'local', sensitive: [] },
+  )
+  const { email, error, isSubmitted } = draft.values
+  const isLoadingRef = useRef(false)
+  const [isLoading, setIsLoading] = React.useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (isLoadingRef.current) return
     if (!email) {
-      setError('Email is required.')
+      draft.setValues((prev) => ({ ...prev, error: 'Email is required.' }))
       return
     }
     if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Enter a valid email address.')
+      draft.setValues((prev) => ({
+        ...prev,
+        error: 'Enter a valid email address.',
+      }))
       return
     }
 
-    setError(null)
+    isLoadingRef.current = true
+    draft.setValues((prev) => ({ ...prev, error: null }))
     setIsLoading(true)
 
     try {
@@ -94,9 +73,11 @@ export default function ForgotPasswordPage() {
         { email, adminOnly: false },
       )
       if (!check.data.valid) {
-        setError(
-          check.data.error ?? 'No account found with this email address.',
-        )
+        draft.setValues((prev) => ({
+          ...prev,
+          error: check.data.error ?? 'No account found with this email address.',
+        }))
+        isLoadingRef.current = false
         setIsLoading(false)
         return
       }
@@ -109,175 +90,140 @@ export default function ForgotPasswordPage() {
         email,
         adminOnly: false,
       })
-      setIsSubmitted(true)
+      draft.setValues((prev) => ({ ...prev, isSubmitted: true, error: null }))
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
-      setError(e.response?.data?.error || 'Failed to send reset code.')
+      draft.setValues((prev) => ({
+        ...prev,
+        error: e.response?.data?.error || 'Failed to send reset code.',
+      }))
     } finally {
+      isLoadingRef.current = false
       setIsLoading(false)
     }
   }
 
-  if (isEmailStatusLoading) {
-    return (
-      <AuthShell>
-        <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col items-center gap-5">
-          <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <Logo className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-2">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Checking account status…
-            </h1>
-            <p className="text-body-sm text-on-surface-variant animate-pulse">
-              Preparing the email service…
-            </p>
-          </div>
-        </div>
-      </AuthShell>
-    )
-  }
+  let content: React.ReactNode
 
-  if (!isEmailEnabled) {
-    return (
-      <AuthShell>
-        <BrandMark
-          heading="Feature Unavailable"
-          subheading="Email services are not enabled for this installation."
-        />
-        <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-4">
+  if (isEmailStatusLoading) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-2 border-b border-hairline py-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+            CHECKING ACCOUNT STATUS
+          </p>
+          <p className="animate-pulse font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant/80">
+            Preparing the email service…
+          </p>
+        </div>
+      </div>
+    )
+  } else if (!isEmailEnabled) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-4 border-b border-hairline py-5">
           <Alert
+            variant="outlined"
             color="warning"
             title="Email service disabled"
             message="Please contact your administrator to reset your password."
           />
-          <Button
-            as={Link}
-            to={ROUTES.LOGIN}
-            variant="filled"
-            color="primary"
-            size="md"
-            fullWidth
-          >
+          <Link to={ROUTES.LOGIN} className={ACTION_LINK}>
             Back to log in
-          </Button>
+          </Link>
         </div>
-      </AuthShell>
+      </div>
     )
-  }
-
-  return (
-    <AuthShell>
-      <BrandMark
-        heading={isSubmitted ? 'Check your email' : 'Forgot your password?'}
-        subheading={
-          isSubmitted
-            ? `We sent a 6-digit code to ${email}. Enter it on the next screen to reset your password.`
-            : 'Enter your account email and we\'ll send you a code to reset your password.'
-        }
-      />
-
-      {/* Card */}
-      <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6">
-        {isSubmitted ? (
-          <div className="flex flex-col gap-4">
-            {/* Mail icon */}
-            <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-2xl bg-success-container/30 border border-success/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-success"
-                aria-hidden="true"
-              >
-                <path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                <path d="m16 19 2 2 4-4" />
-              </svg>
-            </div>
-            <Alert
-              variant="tonal"
-              color="success"
-              title="Reset code sent"
-              message="Check your inbox for the 6-digit code, then continue below."
-            />
+  } else if (isSubmitted) {
+    content = (
+      <AuthResult
+        tone="success"
+        title="Check your inbox"
+        description={`We sent a 6-digit code to ${email}. Enter it on the next screen to reset your password.`}
+        action={
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Button
               as={Link}
               to={`${ROUTES.RESET_PASSWORD}?email=${encodeURIComponent(email)}`}
               variant="filled"
               color="primary"
-              size="md"
-              fullWidth
+              size="lg"
+              className="h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]"
             >
               Enter the code
             </Button>
-            <Button
-              as={Link}
-              to={ROUTES.LOGIN}
-              variant="text"
-              color="neutral"
-              size="md"
-              fullWidth
-            >
+            <Link to={ROUTES.LOGIN} className={ACTION_LINK}>
               Back to log in
-            </Button>
+            </Link>
           </div>
-        ) : (
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-col gap-4"
-          >
-            <Field.Root invalid={!!error} required>
-              <Field.Label>Email address</Field.Label>
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value)
-                  setError(null)
-                }}
-                autoComplete="email"
-              />
-              <Field.ErrorText>{error}</Field.ErrorText>
-            </Field.Root>
+        }
+      />
+    )
+  } else {
+    content = (
+      <AuthForm onSubmit={handleSubmit}>
+        <AuthField
+          label="Email address"
+          error={error ?? undefined}
+          required
+        >
+          <Input
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => {
+              const value = e.target.value
+              draft.setValues((prev) => ({ ...prev, email: value, error: null }))
+            }}
+            autoComplete="email"
+            className="h-11"
+          />
+        </AuthField>
 
-            <Button
-              type="submit"
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isLoading}
-              className="mt-1"
-            >
-              Send reset code
-            </Button>
-          </form>
-        )}
-      </div>
-
-      {!isSubmitted && (
-        <p className="text-center text-body-sm text-on-surface-variant">
-          Remember your password?{' '}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-5 border-b border-hairline">
           <Button
-            as={Link}
-            to={ROUTES.LOGIN}
-            variant="link"
+            type="submit"
+            variant="filled"
             color="primary"
-            size="sm"
+            size="lg"
+            isLoading={isLoading}
+            fullWidth
+            className="h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]"
           >
-            Log in
+            Send reset code
           </Button>
-        </p>
-      )}
-    </AuthShell>
+        </div>
+      </AuthForm>
+    )
+  }
+
+  return (
+    <>
+      <Helmet>
+        <title>Forgot Password · Cat-Bot</title>
+      </Helmet>
+
+      <AuthPanel
+        index="02"
+        kicker="RECOVERY"
+        title="Reset access"
+        description="Enter the address on your account and we will send a reset code."
+        meta={META}
+        footer={
+          !isSubmitted ? (
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+                REMEMBERED IT
+              </span>
+              <Link to={ROUTES.LOGIN} className={FOOTER_LINK}>
+                Back to sign in
+              </Link>
+            </div>
+          ) : undefined
+        }
+      >
+        {content}
+      </AuthPanel>
+    </>
   )
 }

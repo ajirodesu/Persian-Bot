@@ -379,7 +379,7 @@ const DialogContent: React.FC<DialogContentProps> = ({
       tabIndex={-1}
       className={cn(
         // Shape comes from the shared card-radius token, never a hardcoded
-        // rounded-xl — keeps dialogs visually consistent with Card.tsx.
+        // rounded-[var(--radius-card)] — keeps dialogs visually consistent with Card.tsx.
         // Elevation-3 is reserved for true overlays (per the M3 restraint
         // rule: resting surfaces stay flat, floating surfaces carry depth).
         // Entrance uses the iOS spring/deceleration curve rather than the

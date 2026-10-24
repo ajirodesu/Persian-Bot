@@ -31,7 +31,7 @@ function IconWell({
   return (
     <div
       className={cn(
-        'w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0',
+        'w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
         tone === 'accent' && 'bg-primary/10 border-primary/30 text-primary',
         tone === 'danger' && 'bg-error/10 border-error/30 text-error',
         tone === 'default' && 'bg-surface-container-high border-hairline text-on-surface-variant',
@@ -76,7 +76,7 @@ function StatCard({
   tone?: 'default' | 'accent' | 'danger'
 }) {
   return (
-    <div className="bg-surface-container-low border border-hairline rounded-xl p-3.5 flex items-center space-x-3">
+    <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] p-3.5 flex items-center space-x-3">
       <IconWell tone={tone}>
         <Icon className="w-4 h-4" />
       </IconWell>
@@ -93,7 +93,7 @@ function StatCard({
 function StatCardSkeleton() {
   return (
     <div
-      className="bg-surface-container-low border border-hairline rounded-xl p-3.5 flex items-center space-x-3"
+      className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] p-3.5 flex items-center space-x-3"
       aria-hidden="true"
     >
       <Skeleton variant="input" width={36} height={36} />
@@ -184,7 +184,7 @@ export default function AdminDashboardPage() {
         {/* Platform distribution — real data from useAdminBots */}
         <section aria-label="Bot platform distribution" className="space-y-2">
           <SectionTitle>Bot Platform Distribution</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {isBotsLoading ? (
               [1, 2, 3].map((i) => (
                 <div
@@ -228,7 +228,7 @@ export default function AdminDashboardPage() {
         {/* Recent registrations */}
         <section aria-label="Recent registrations" className="space-y-2">
           <SectionTitle>Recent Registrations</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             {isUsersLoading ? (
               [1, 2, 3].map((i) => (
                 <div

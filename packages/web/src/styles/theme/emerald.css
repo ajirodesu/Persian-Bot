@@ -140,7 +140,8 @@ html[data-theme='emerald'] {
 
   /* ==================== INPUT SURFACES ==================== */
   --color-input-bg: #171a1b;
-  --color-input-border: #2c3132;
+  /* 3.29:1 vs --color-input-bg, 3.56:1 vs --color-surface (WCAG 1.4.11) */
+  --color-input-border: #666d67;
 
   /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
   --shadow-soft-sm: none;

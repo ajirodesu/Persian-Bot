@@ -1,27 +1,70 @@
-interface RequestConfig<TBody = unknown> {
-  method?: string
-  headers?: Record<string, string>
-  body?: TBody
-  params?: Record<string, unknown>
-  timeout?: number
-  signal?: AbortSignal // Add abort signal support
-}
+/**
+ * Author: AjiroDesu
+ *
+ * HTTP client shared by every dashboard surface.
+ *
+ * Failure contract (why this exists):
+ * - Every failure is classified. "Server down", "you are offline", "timed
+ *   out", "401", "429" and "malformed JSON" are different problems, and the
+ *   UI must not collapse them into one generic error.
+ * - Timeouts abort the underlying fetch. A caller-supplied AbortSignal
+ *   cancels only the caller's interest (and aborts the fetch when nobody
+ *   else shares it).
+ * - Identical concurrent GETs (same URL) share one in-flight fetch. TanStack
+ *   Query also dedupes by key; this covers imperative callers.
+ * - `Retry-After` is parsed into `retryAfterMs` so the query retry policy can
+ *   honour the server instead of guessing.
+ * - Responses emit connectivity events. The dashboard listens to these to
+ *   render a live status banner instead of console noise.
+ * - A 401 on a non-auth endpoint emits `catbot:auth-required`; the session
+ *   layer answers with an in-place re-authentication modal. Nothing here
+ *   redirects, so in-progress work is never destroyed by a token check.
+ */
+import { notifySlowFirstRequest } from './cold-start.lib'
 
-interface ApiResponse<T = unknown> {
+export {
+  ApiError,
+  isRetryableApiError,
+  apiErrorMessage,
+} from './api-error.lib'
+export type { ApiErrorKind, ApiErrorResponse } from './api-error.lib'
+import { ApiError } from './api-error.lib'
+
+export interface ApiResponse<T = unknown> {
   data: T
   status: number
   statusText: string
   headers: Headers
 }
 
-import { notifySlowFirstRequest } from './cold-start.lib'
+interface RequestConfig<TBody = unknown> {
+  method?: string
+  headers?: Record<string, string>
+  body?: TBody
+  params?: Record<string, unknown>
+  timeout?: number
+  signal?: AbortSignal
+}
 
-interface ApiError extends Error {
-  response?: {
-    status: number
-    data: unknown
-  }
-  isAborted?: boolean // Flag for aborted requests
+export const API_EVENTS = {
+  authRequired: 'catbot:auth-required',
+  unreachable: 'catbot:api-unreachable',
+  reachable: 'catbot:api-reachable',
+} as const
+
+function emit(name: string, detail?: unknown): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(name, { detail }))
+}
+
+/** `Retry-After` is either delta-seconds or an HTTP date. Returns ms or undefined. */
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) return undefined
+  const seconds = Number(value)
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000
+  const date = Date.parse(value)
+  if (Number.isNaN(date)) return undefined
+  return Math.max(0, date - Date.now())
 }
 
 // Cold-start detection (Render free-tier sleep): the page's first request
@@ -47,6 +90,13 @@ function disarmColdStartTimer(): void {
   coldStartDone = true
 }
 
+function isAuthEndpoint(endpoint: string): boolean {
+  return endpoint.startsWith('/api/auth/')
+}
+
+/** In-flight GET registry for imperative callers that pass no signal. */
+const inflightGets = new Map<string, Promise<ApiResponse<unknown>>>()
+
 class ApiClient {
   private baseURL: string
   private timeout: number
@@ -59,16 +109,12 @@ class ApiClient {
     headers?: Record<string, string>
   }) {
     this.baseURL = config.baseURL
-    this.timeout = config.timeout || 30000
+    this.timeout = config.timeout || 20000
     this.defaultHeaders = config.headers || {}
   }
 
-  /**
-   * Build complete URL with query parameters
-   */
   private buildURL(endpoint: string, params?: Record<string, unknown>): string {
     const url = new URL(endpoint, this.baseURL)
-
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
@@ -76,28 +122,18 @@ class ApiClient {
         }
       })
     }
-
     return url.toString()
   }
 
-  /**
-   * Prepare request body and headers
-   * Handles FormData, JSON, and other body types
-   */
   private prepareRequest(body?: unknown, headers?: Record<string, string>) {
     let processedBody: BodyInit | undefined
     const processedHeaders = { ...this.defaultHeaders, ...headers }
 
-    // Handle FormData (don't stringify, don't set Content-Type)
     if (body instanceof FormData) {
       processedBody = body
-      // Remove Content-Type to let browser set it with boundary
       delete processedHeaders['Content-Type']
-    }
-    // Handle JSON (default)
-    else if (body !== undefined) {
+    } else if (body !== undefined) {
       processedBody = JSON.stringify(body)
-      // Keep JSON Content-Type if not explicitly overridden
       if (!processedHeaders['Content-Type']) {
         processedHeaders['Content-Type'] = 'application/json'
       }
@@ -106,9 +142,6 @@ class ApiClient {
     return { body: processedBody, headers: processedHeaders }
   }
 
-  /**
-   * Main request handler
-   */
   private async request<T = unknown>(
     endpoint: string,
     config: RequestConfig = {},
@@ -119,225 +152,207 @@ class ApiClient {
       body,
       params,
       timeout = this.timeout,
-      signal, // External abort signal
+      signal,
     } = config
 
     const url = this.buildURL(endpoint, params)
-
-    // Setup timeout with AbortController
-    const timeoutController = new AbortController()
-    const timeoutId = setTimeout(() => timeoutController.abort(), timeout)
-
-    // Combine external signal with timeout signal
-    let combinedSignal: AbortSignal
-
-    if (signal) {
-      // If external signal provided, we need to handle both signals
-      const combinedController = new AbortController()
-
-      // Abort if external signal aborts
-      signal.addEventListener('abort', () => combinedController.abort(), {
-        once: true,
-      })
-
-      // Abort if timeout occurs
-      timeoutController.signal.addEventListener(
-        'abort',
-        () => combinedController.abort(),
-        { once: true },
-      )
-
-      combinedSignal = combinedController.signal
-    } else {
-      // Only use timeout signal
-      combinedSignal = timeoutController.signal
-    }
-
-    // Prepare body and headers (handles FormData vs JSON)
     const { body: processedBody, headers: processedHeaders } =
       this.prepareRequest(body, headers)
 
+    // Dedupe imperative GETs nobody can cancel individually.
+    const dedupeKey = method === 'GET' && !signal ? `GET:${url}` : null
+    if (dedupeKey) {
+      const existing = inflightGets.get(dedupeKey) as
+        | Promise<ApiResponse<T>>
+        | undefined
+      if (existing) return existing
+    }
+
+    const promise = this.performRequest<T>({
+      url,
+      endpoint,
+      method,
+      headers: processedHeaders,
+      body: processedBody,
+      timeout,
+      signal,
+    })
+
+    if (dedupeKey) {
+      inflightGets.set(dedupeKey, promise as Promise<ApiResponse<unknown>>)
+      void promise
+        .finally(() => inflightGets.delete(dedupeKey))
+        .catch(() => {
+          // rejection is delivered to the caller; this only clears the registry
+        })
+    }
+
+    return promise
+  }
+
+  private async performRequest<T>({
+    url,
+    endpoint,
+    method,
+    headers,
+    body,
+    timeout,
+    signal,
+  }: {
+    url: string
+    endpoint: string
+    method: string
+    headers: Record<string, string>
+    body: BodyInit | undefined
+    timeout: number
+    signal: AbortSignal | undefined
+  }): Promise<ApiResponse<T>> {
+    const timeoutController = new AbortController()
+    const timeoutId = setTimeout(() => timeoutController.abort(), timeout)
+
+    const combinedController = new AbortController()
+    const onExternalAbort = () => combinedController.abort()
+    if (signal) {
+      if (signal.aborted) combinedController.abort()
+      else signal.addEventListener('abort', onExternalAbort, { once: true })
+    }
+    const onTimeout = () => combinedController.abort()
+    timeoutController.signal.addEventListener('abort', onTimeout, {
+      once: true,
+    })
+
+    const cleanup = () => {
+      clearTimeout(timeoutId)
+      timeoutController.signal.removeEventListener('abort', onTimeout)
+      signal?.removeEventListener('abort', onExternalAbort)
+      disarmColdStartTimer()
+    }
+
     armColdStartTimer()
 
+    let response: Response
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method,
-        headers: processedHeaders,
-        body: processedBody,
-        credentials: 'include', // Equivalent to axios withCredentials
-        signal: combinedSignal,
+        headers,
+        body,
+        credentials: 'include',
+        signal: combinedController.signal,
+        cache: 'no-store',
       })
-
-      clearTimeout(timeoutId)
-      disarmColdStartTimer()
-
-      // Parse response based on content type
-      let data: T
-      const contentType = response.headers.get('content-type')
-
-      if (contentType && contentType.includes('application/json')) {
-        data = (await response.json()) as T
-      } else {
-        data = (await response.text()) as T
-      }
-
-      // Handle error status codes
-      if (!response.ok) {
-        this.handleErrorResponse(response.status, data)
-      }
-
-      return {
-        data,
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      }
     } catch (error) {
-      clearTimeout(timeoutId)
-      disarmColdStartTimer()
+      cleanup()
 
-      // Handle abort (from external signal or timeout)
       if (error instanceof Error && error.name === 'AbortError') {
-        // Check if it was user-initiated abort (external signal)
         if (signal?.aborted) {
-          const abortError: ApiError = new Error('Request cancelled')
-          abortError.isAborted = true
-          throw abortError
+          throw new ApiError('Request cancelled', 'aborted', { cause: error })
         }
-
-        // Otherwise it was a timeout
-        console.error('Request timeout. Please try again.')
-        const timeoutError: ApiError = new Error('Request timeout')
-        throw timeoutError
+        throw new ApiError('The server took too long to respond.', 'timeout', {
+          cause: error,
+        })
       }
 
-      // Re-throw API errors (from handleErrorResponse)
-      if ((error as ApiError).response) {
-        throw error
-      }
+      const offline =
+        typeof navigator !== 'undefined' && navigator.onLine === false
+      emit(API_EVENTS.unreachable, { offline })
+      throw new ApiError(
+        offline ? 'You are offline.' : 'The server is unreachable.',
+        offline ? 'offline' : 'network',
+        { cause: error },
+      )
+    }
 
-      // Handle network errors
-      if (error instanceof TypeError) {
-        console.error('Network error. Please check your connection.')
+    cleanup()
+    // Any HTTP response — even a 500 — proves the server is reachable.
+    emit(API_EVENTS.reachable)
+
+    const contentType = response.headers.get('content-type') ?? ''
+    const raw = await response.text()
+    let data: unknown = null
+    if (raw) {
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(raw) as unknown
+        } catch (error) {
+          throw new ApiError(
+            'The server returned an unreadable response.',
+            'parse',
+            { status: response.status, cause: error },
+          )
+        }
       } else {
-        console.error('An unexpected error occurred.')
+        data = raw
       }
+    }
 
-      throw error
+    if (!response.ok) {
+      const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'))
+      if (response.status === 401 && !isAuthEndpoint(endpoint)) {
+        emit(API_EVENTS.authRequired, { endpoint })
+      }
+      const payload = data as { message?: string; error?: string } | null
+      const serverMessage = payload?.message ?? payload?.error
+      throw new ApiError(serverMessage ?? `HTTP ${response.status}`, 'http', {
+        status: response.status,
+        data,
+        ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+      })
+    }
+
+    return {
+      data: data as T,
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
     }
   }
 
-  /**
-   * Handle HTTP error responses with logging
-   */
-  private handleErrorResponse(status: number, data: unknown): never {
-    // Log specific error types
-    if (status === 401) {
-      console.error('Session expired. Please login again.')
-    } else if (status === 403) {
-      console.error('Access denied. Insufficient permissions.')
-    } else if (status === 404) {
-      console.error('Resource not found.')
-    } else if (status >= 500) {
-      console.error('Server error. Please try again later.')
-    }
-
-    // Create error with response data
-    const errorData = data as { message?: string; error?: string }
-    const error: ApiError = new Error(
-      errorData?.message ||
-        errorData?.error ||
-        `HTTP Error ${status}`,
-    )
-    error.response = {
-      status,
-      data,
-    }
-
-    throw error
-  }
-
-  /**
-   * GET request
-   */
   async get<T = unknown>(
     endpoint: string,
     config?: { params?: Record<string, unknown>; signal?: AbortSignal },
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'GET',
-      ...config,
-    })
+    return this.request<T>(endpoint, { method: 'GET', ...config })
   }
 
-  /**
-   * POST request
-   */
   async post<T = unknown, TBody = unknown>(
     endpoint: string,
     body?: TBody,
     config?: RequestConfig<TBody>,
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'POST',
-      body,
-      ...config,
-    })
+    return this.request<T>(endpoint, { method: 'POST', body, ...config })
   }
 
-  /**
-   * PUT request
-   */
   async put<T = unknown, TBody = unknown>(
     endpoint: string,
     body?: TBody,
     config?: RequestConfig<TBody>,
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'PUT',
-      body,
-      ...config,
-    })
+    return this.request<T>(endpoint, { method: 'PUT', body, ...config })
   }
 
-  /**
-   * DELETE request
-   */
   async delete<T = unknown>(
     endpoint: string,
     config?: RequestConfig,
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'DELETE',
-      ...config,
-    })
+    return this.request<T>(endpoint, { method: 'DELETE', ...config })
   }
 
-  /**
-   * PATCH request
-   */
   async patch<T = unknown, TBody = unknown>(
     endpoint: string,
     body?: TBody,
     config?: RequestConfig<TBody>,
   ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'PATCH',
-      body,
-      ...config,
-    })
+    return this.request<T>(endpoint, { method: 'PATCH', body, ...config })
   }
 }
 
-// Create and export singleton instance
 const apiClient = new ApiClient({
   baseURL: window.location.origin,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 seconds
+  timeout: 20000,
 })
 
 export default apiClient
-export type { ApiResponse, ApiError }

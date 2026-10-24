@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { getSocket } from '@/lib/socket.lib'
+import { connectSocket } from '@/lib/socket.lib'
 
 export interface BotStatusState {
   active: boolean
@@ -31,8 +31,7 @@ export function useBotStatus(
   useEffect(() => {
     if (sessionIds.length === 0) return
 
-    const socket = getSocket()
-    if (!socket.connected) socket.connect()
+    const socket = connectSocket()
 
     const requestStatuses = () => {
       socket.emit('bot:status:request', { sessionIds })

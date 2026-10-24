@@ -114,13 +114,13 @@ export interface TabsListProps {
 }
 
 const variantClasses: Record<TabsVariant, string> = {
-  line: 'border-b border-outline-variant',
+  line: 'border-b border-hairline',
   enclosed:
-    'bg-surface-container p-1 rounded-[var(--radius-input)] border border-outline-variant',
+    'bg-surface-container p-1 rounded-[var(--radius-input)] border border-hairline',
   'enclosed-colored':
-    'bg-surface-container p-1 rounded-[var(--radius-input)] border border-outline-variant',
-  'soft-rounded': 'bg-surface-container/50 p-1 rounded-full',
-  'solid-rounded': 'bg-surface-container p-1 rounded-full',
+    'bg-surface-container p-1 rounded-[var(--radius-input)] border border-hairline',
+  'soft-rounded': 'rounded-[var(--radius-input)] border border-hairline p-0',
+  'solid-rounded': 'rounded-[var(--radius-input)] border border-hairline p-0',
   unstyled: '',
 }
 
@@ -200,7 +200,14 @@ const TabsList: React.FC<TabsListProps> = ({
         variant === 'line' && orientation === 'vertical' && 'gap-2',
         variant === 'enclosed' && 'gap-1',
         variant === 'enclosed-colored' && 'gap-1',
-        (variant === 'soft-rounded' || variant === 'solid-rounded') && 'gap-1',
+        // Segmented variants read as one ruled strip: no gap between tabs,
+        // each subsequent tab carries a 1px leading rule.
+        (variant === 'soft-rounded' || variant === 'solid-rounded') &&
+          orientation === 'horizontal' &&
+          'divide-x divide-hairline',
+        (variant === 'soft-rounded' || variant === 'solid-rounded') &&
+          orientation === 'vertical' &&
+          'divide-y divide-hairline',
         variant === 'unstyled' && 'gap-2',
         variantClasses[variant],
         className,
@@ -290,23 +297,21 @@ const Tab: React.FC<TabProps> = ({
 
   // Base styles that apply to all variants
   const baseStyles = cn(
-    'relative inline-flex items-center gap-2 px-4 py-2 text-label-lg font-medium transition-all duration-fast',
+    'relative inline-flex items-center gap-2 px-4 py-2 text-label-lg font-medium transition-colors duration-fast',
     'whitespace-nowrap shrink-0',
     disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
   )
 
-  // Focus styles based on variant
+  // Focus styles based on variant — one offset-free outline for every shape
   const focusStyles = cn(
-    'focus-visible:outline-none',
-    // Line and unstyled variants: simple focus ring
-    (variant === 'line' || variant === 'unstyled') &&
-      'focus-visible:ring-2 focus-visible:ring-primary/20',
-    // Enclosed variants: minimal focus, active state is already clear
-    (variant === 'enclosed' || variant === 'enclosed-colored') &&
-      'focus-visible:ring-1 focus-visible:ring-primary/20',
-    // Rounded variants: focus ring that follows the shape
-    (variant === 'soft-rounded' || variant === 'solid-rounded') &&
-      'focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-1',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+    // Enclosed variants: the container already frames the tab, so the
+    // outline is pulled inward to stay inside the rounded track.
+    (variant === 'enclosed' ||
+      variant === 'enclosed-colored' ||
+      variant === 'soft-rounded' ||
+      variant === 'solid-rounded') &&
+      'focus-visible:-outline-offset-2',
   )
 
   // Variant-specific styles
@@ -326,25 +331,25 @@ const Tab: React.FC<TabProps> = ({
     enclosed: cn(
       'rounded-[var(--radius-input)]',
       isActive
-        ? 'bg-surface text-on-surface shadow-elevation-1'
+        ? 'bg-surface-container-highest text-on-surface'
         : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
     ),
     'enclosed-colored': cn(
       'rounded-[var(--radius-input)]',
       isActive
-        ? 'bg-primary text-on-primary shadow-elevation-1'
+        ? 'bg-primary text-on-primary'
         : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
     ),
     'soft-rounded': cn(
-      'rounded-full',
       isActive
-        ? 'bg-surface text-on-surface shadow-elevation-1'
+        ? 'bg-surface-container-highest text-on-surface'
         : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
     ),
+    // Solid active tab is the primary fill, so the two segmented variants
+    // read as distinct systems: soft = raised neutral, solid = accent.
     'solid-rounded': cn(
-      'rounded-full',
       isActive
-        ? 'bg-primary text-on-primary shadow-elevation-1'
+        ? 'bg-primary text-on-primary'
         : 'text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)]',
     ),
     unstyled: cn(
@@ -417,7 +422,7 @@ const TabPanel: React.FC<TabPanelProps> = ({
       aria-labelledby={`tab-${panelValue}`}
       tabIndex={0}
       className={cn(
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-[var(--radius-input)]',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary rounded-[var(--radius-input)]',
         // M3 shared-axis (X) transition: content enters with a small
         // horizontal offset + fade rather than a flat cross-fade, so
         // switching tabs reads as moving along an axis, not just

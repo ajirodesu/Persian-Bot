@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import apiClient, { type ApiError } from '@/lib/api-client.lib'
 import { getBrowserTimezone, isValidTimezone } from '@/utils/datetime.util'
+import { useUserAuth } from '@/contexts/UserAuthContext'
 
 interface TimezoneResponse {
   timezone: string | null
@@ -22,6 +23,9 @@ interface TimezoneContextType {
   /** Validates, persists, and applies a new timezone. Throws on failure so
    * callers can show inline form errors. */
   setTimezone: (timezone: string) => Promise<void>
+  /** Re-reads the saved timezone. Admin shells call this after their own
+   * (separate) session is confirmed. */
+  refreshTimezone: () => void
 }
 
 const TimezoneContext = createContext<TimezoneContextType | undefined>(
@@ -51,12 +55,17 @@ export const TimezoneProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const browserTimezone = getBrowserTimezone()
+  const { isAuthenticated } = useUserAuth()
   const [savedTimezone, setSavedTimezone] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // Public pages never fetch: an unauthenticated GET only produces a 401 in
+  // the console and no useful data.
+  const [isLoading, setIsLoading] = useState(() => isAuthenticated)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
+    if (!isAuthenticated) return
     let cancelled = false
 
     const load = async () => {
@@ -84,7 +93,7 @@ export const TimezoneProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isAuthenticated, reloadToken])
 
   const setTimezone = async (timezone: string) => {
     if (!isValidTimezone(timezone)) {
@@ -118,6 +127,7 @@ export const TimezoneProvider: React.FC<{ children: React.ReactNode }> = ({
     isSaving,
     error,
     setTimezone,
+    refreshTimezone: () => setReloadToken((token) => token + 1),
   }
 
   return (

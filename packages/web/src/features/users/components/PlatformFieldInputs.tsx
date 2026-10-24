@@ -8,7 +8,6 @@ export interface PlatformFields {
   discordToken: string
   discordClientId: string
   telegramToken: string
-  fluxerToken: string
 }
 
 export interface PlatformFieldInputsProps {
@@ -50,19 +49,6 @@ export function PlatformFieldInputs({
             placeholder="Token from @BotFather"
             value={fields.telegramToken}
             onChange={(e) => onChange('telegramToken', e.target.value)}
-            autoComplete="off"
-          />
-        </Field.Root>
-      )
-
-    case Platforms.Fluxer:
-      return (
-        <Field.Root>
-          <Field.Label>Fluxer Token</Field.Label>
-          <PasswordInput
-            placeholder="Bot token from Fluxer"
-            value={fields.fluxerToken}
-            onChange={(e) => onChange('fluxerToken', e.target.value)}
             autoComplete="off"
           />
         </Field.Root>

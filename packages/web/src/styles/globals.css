@@ -35,11 +35,13 @@
 /* -----------------------------------------------------------
   Self-hosted fonts (same-origin, immutable-hashed by Vite).
   Google Fonts publishes Barlow and Barlow Condensed as static
-  weights (no wght axis), so each latin woff2 is declared at its
-  own weight — the browser picks the exact cut, never a
-  synthesized one. font-display: swap paints text immediately
-  with system fallbacks; no third-party connection, no css2
-  round-trip, no invisible-text flash. Family names match the
+  weights only — neither family ships a wght axis, and no variable
+  woff2 exists upstream (fontsource reports variable: false and
+  jsDelivr has no :vf build). Each latin cut is therefore declared
+  at its own weight, so the browser picks the real drawing rather
+  than a synthesized one. font-display: swap paints text
+  immediately with system fallbacks; no third-party connection, no
+  css2 round-trip, no invisible-text flash. Family names match the
   --font-family-* tokens exactly, so no other CSS changes.
   ----------------------------------------------------------- */
 @font-face {
@@ -47,7 +49,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('../assets/fonts/barlow-latin-400.woff2') format('woff2');
+  src: url('../assets/fonts/barlow-latin.woff2') format('woff2');
 }
 @font-face {
   font-family: 'Barlow';
@@ -75,7 +77,7 @@
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('../assets/fonts/barlow-condensed-latin-500.woff2') format('woff2');
+  src: url('../assets/fonts/barlow-condensed-latin.woff2') format('woff2');
 }
 @font-face {
   font-family: 'Barlow Condensed';
@@ -112,14 +114,15 @@
 /* -----------------------------------------------------------
   1. Theme Color Variables
 
-  Three selectable themes, all ink-black paper with a single
-  instrument accent — no gradient, glow, blur, or shadow finish:
-   • aqua   — signal lime on ink. The default, lives on :root
-              so it applies even before the switcher JS runs.
-   • burnt  — ember orange on warm ink, opt-in via
-              html[data-theme="burnt"].
-   • indigo — cobalt on cold ink, opt-in via
-              html[data-theme="indigo"].
+  Three selectable themes — a gemstone accent on ink paper that
+  sits one step lighter than pure ink; no gradient, glow, blur, or
+  shadow finish:
+   • emerald  — gemstone green on charcoal. The default, lives on
+                :root so it applies even before the switcher runs.
+   • jasper   — jasper rust on warm ink, opt-in via
+                html[data-theme="jasper"].
+   • amethyst — amethyst violet on cold ink, opt-in via
+                html[data-theme="amethyst"].
 
   Every theme shares the exact same shape (--radius-*), spacing,
   typography SIZE (--typography-*-font-size/-line-height/
@@ -129,9 +132,9 @@
   line-height, or font-family value is a regression: diff it
   against the other two themes before merging.
   ----------------------------------------------------------- */
-@import './theme/aqua.css';
-@import './theme/burnt.css';
-@import './theme/indigo.css';
+@import './theme/emerald.css';
+@import './theme/jasper.css';
+@import './theme/amethyst.css';
 
 /* -----------------------------------------------------------
   2. Design Token Variables

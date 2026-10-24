@@ -1,183 +1,247 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import React, { useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
-import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
+import { Platforms } from '@/constants/platform.constants'
 import { useUserAuth } from '@/contexts/UserAuthContext'
 import Checkbox from '@/components/ui/forms/Checkbox'
-import Logo from '@/components/ui/Logo'
 import useEmailServiceEnabled from '@/hooks/useEmailServiceEnabled'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import AuthPanel, {
+  AuthField,
+  AuthForm,
+} from '@/components/layout/AuthPanel'
 
 interface LoginForm {
   email: string
-  password: string
+  rememberMe: boolean
+  errors: {
+    email?: string
+    password?: string
+  }
 }
 
-interface LoginErrors {
-  email?: string
-  password?: string
+/**
+ * Derived from the client platform registry so the ledger can never claim a
+ * platform count the dashboard does not actually offer.
+ */
+const PLATFORM_COUNT = String(Object.keys(Platforms).length).padStart(2, '0')
+
+const META = [
+  { label: 'ROLE', value: 'OPERATOR' },
+  { label: 'ACCESS', value: 'EMAIL + PASSWORD' },
+  { label: 'PLATFORMS', value: PLATFORM_COUNT },
+]
+
+const FIELD_LINK =
+  'font-mono text-[10px] uppercase tracking-[0.1em] text-primary hover:underline underline-offset-4'
+
+const FOOTER_LINK =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
+
+const INITIAL: LoginForm = {
+  email: '',
+  rememberMe: false,
+  errors: {},
+}
+
+interface LocationState {
+  from?: { pathname: string; search?: string; hash?: string }
 }
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useUserAuth()
 
-  const [form, setForm] = useState<LoginForm>({ email: '', password: '' })
-  const [errors, setErrors] = useState<LoginErrors>({})
+  // Email + "remember me" + field errors survive tab switches, app switches
+  // and reloads. The password deliberately lives only in component state:
+  // `sensitive` is empty here because the draft object already excludes it.
+  const draft = useFormDraft<LoginForm>(INITIAL, {
+    key: 'login',
+    storage: 'local',
+    sensitive: [],
+  })
+  const { email, rememberMe } = draft.values
+
+  const [password, setPassword] = useState('')
   const [apiError, setApiError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
+  // Synchronous lock: a double click or an Enter key repeat can fire two
+  // submits before React re-renders with the loading state.
+  const submitLock = useRef(false)
 
   const { isEmailEnabled } = useEmailServiceEnabled()
 
-  const validate = (): LoginErrors => {
-    const e: LoginErrors = {}
-    if (!form.email) e.email = 'Email is required.'
-    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Enter a valid email address.'
-    if (!form.password) e.password = 'Password is required.'
-    return e
+  const validate = (): LoginForm['errors'] => {
+    const next: LoginForm['errors'] = {}
+    if (!email) next.email = 'Email is required.'
+    else if (!/\S+@\S+\.\S+/.test(email))
+      next.email = 'Enter a valid email address.'
+    if (!password) next.password = 'Password is required.'
+    return next
   }
-
-  const handleChange =
-    (field: keyof LoginForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      setForm((prev) => ({ ...prev, [field]: e.target.value }))
-      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }))
-    }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitLock.current) return
+
     const fieldErrors = validate()
     if (Object.keys(fieldErrors).length > 0) {
-      setErrors(fieldErrors)
+      draft.setValues((prev) => ({ ...prev, errors: fieldErrors }))
       return
     }
+
+    submitLock.current = true
+    draft.setValues((prev) => ({ ...prev, errors: {} }))
     setApiError(null)
     setIsLoading(true)
     try {
-      await login(form.email, form.password, rememberMe)
-      navigate(ROUTES.DASHBOARD.ROOT)
+      await login(email, password, rememberMe)
+      draft.clearDraft()
+      const from = (location.state as LocationState | null)?.from
+      const returnTo = from
+        ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
+        : ROUTES.DASHBOARD.ROOT
+      navigate(returnTo, { replace: true })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Login failed. Please try again.'
+      const msg =
+        err instanceof Error ? err.message : 'Login failed. Please try again.'
       if (msg.toLowerCase().includes('verif')) {
-        navigate(`${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(form.email)}`)
+        navigate(
+          `${ROUTES.ACCOUNT_VERIFICATION}?email=${encodeURIComponent(email)}`,
+        )
         return
       }
       setApiError(msg)
     } finally {
+      submitLock.current = false
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="bg-surface text-on-surface min-h-[calc(100vh-56px)] flex flex-col">
+    <>
       <Helmet>
         <title>Log In · Cat-Bot</title>
       </Helmet>
 
-      <main className="flex-1 flex flex-col w-full max-w-sm mx-auto px-5 pb-8">
-        <div className="flex flex-col w-full my-auto py-10">
-          {/* Hero */}
-          <div className="flex flex-col items-center text-center mb-8">
-            <div className="relative w-16 h-16 rounded-xl bg-surface-container-low border border-hairline flex items-center justify-center mb-4">
-              <div className="absolute inset-0 rounded-xl bg-primary/10" />
-              <Logo className="w-8 h-8 text-primary relative z-10" />
+      <AuthPanel
+        index="01"
+        kicker="ACCESS"
+        title="Sign in"
+        description="Run every bot session you own from one console."
+        meta={META}
+        footer={
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+              NO ACCOUNT
+            </span>
+            <Link to={ROUTES.SIGNUP} className={FOOTER_LINK}>
+              Create one
+            </Link>
+          </div>
+        }
+      >
+        {draft.restored && email && (
+          <p className="border-b border-hairline py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-on-surface-variant/85">
+            Draft restored · password never stored
+          </p>
+        )}
+
+        <AuthForm onSubmit={handleSubmit}>
+          <AuthField
+            label="Email"
+            error={draft.values.errors.email}
+            required
+          >
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => {
+                const value = e.target.value
+                draft.setValues((prev) => ({
+                  ...prev,
+                  email: value,
+                  errors: { ...prev.errors, email: undefined },
+                }))
+                setApiError(null)
+              }}
+              autoComplete="email"
+              className="h-11"
+            />
+          </AuthField>
+
+          <AuthField
+            label="Password"
+            error={draft.values.errors.password}
+            required
+            action={
+              isEmailEnabled ? (
+                <Link to={ROUTES.FORGOT_PASSWORD} className={FIELD_LINK}>
+                  Forgot password?
+                </Link>
+              ) : undefined
+            }
+          >
+            <PasswordInput
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (draft.values.errors.password) {
+                  draft.setValues((prev) => ({
+                    ...prev,
+                    errors: { ...prev.errors, password: undefined },
+                  }))
+                }
+              }}
+              autoComplete="current-password"
+              className="h-11"
+            />
+          </AuthField>
+
+          <div className="flex items-center justify-between py-5 border-b border-hairline">
+            <Checkbox
+              label="Remember me"
+              checked={rememberMe}
+              onChange={(checked) =>
+                draft.setValues((prev) => ({ ...prev, rememberMe: checked }))
+              }
+            />
+          </div>
+
+          {apiError && (
+            <div className="mt-5" role="alert">
+              <Alert
+                variant="outlined"
+                color="error"
+                title="Login Failed"
+                message={apiError}
+              />
             </div>
-            <h1 className="text-[32px] font-bold text-on-surface tracking-tight mb-1">
-              Welcome back
-            </h1>
-            <p className="text-sm text-on-surface-variant max-w-xs leading-relaxed">
-              Sign in to manage your bots across Discord, Telegram, and Fluxer.
-            </p>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-5 border-b border-hairline">
+            <Button
+              type="submit"
+              variant="filled"
+              color="primary"
+              size="lg"
+              isLoading={isLoading}
+              fullWidth
+              className="h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]"
+            >
+              Log in
+            </Button>
           </div>
-
-          {/* Form card */}
-          <div className="w-full bg-surface-container-low border border-hairline rounded-xl p-6 flex flex-col gap-5">
-            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-              <Field.Root invalid={!!errors.email} required>
-                <Field.Label>
-                  Email
-                </Field.Label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={handleChange('email')}
-                  autoComplete="email"
-                  className="h-14"
-                />
-                <Field.ErrorText>{errors.email}</Field.ErrorText>
-              </Field.Root>
-
-              <Field.Root invalid={!!errors.password} required>
-                <div className="flex items-center justify-between mb-1.5">
-                  <Field.Label className="mb-0">
-                    Password
-                  </Field.Label>
-                  {isEmailEnabled && (
-                    <Link
-                      to={ROUTES.FORGOT_PASSWORD}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </Link>
-                  )}
-                </div>
-                <PasswordInput
-                  placeholder="Your password"
-                  value={form.password}
-                  onChange={handleChange('password')}
-                  autoComplete="current-password"
-                  className="h-14"
-                />
-                <Field.ErrorText>{errors.password}</Field.ErrorText>
-              </Field.Root>
-
-              <div className="flex items-center justify-between py-1">
-                <Checkbox label="Remember me" checked={rememberMe} onChange={setRememberMe} />
-              </div>
-
-              {apiError && (
-                <Alert variant="tonal" color="error" title="Login Failed" message={apiError} />
-              )}
-
-              <Button
-                type="submit"
-                variant="filled"
-                color="primary"
-                size="lg"
-                fullWidth
-                isLoading={isLoading}
-                rightIcon={<ArrowRight className="h-[18px] w-[18px]" />}
-                className="h-12 rounded-lg text-[15px] font-semibold"
-              >
-                Log in
-              </Button>
-            </form>
-          </div>
-
-          {/* Redirect */}
-          <div className="flex items-center justify-center py-6 text-center">
-            <p className="text-sm text-on-surface-variant">
-              Don&apos;t have an account?
-              <Button
-                as={Link}
-                to={ROUTES.SIGNUP}
-                variant="link"
-                color="primary"
-                size="sm"
-                className="ml-1 font-semibold"
-              >
-                Sign up free
-              </Button>
-            </p>
-          </div>
-        </div>
-      </main>
-    </div>
+        </AuthForm>
+      </AuthPanel>
+    </>
   )
 }

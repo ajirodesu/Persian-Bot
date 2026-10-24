@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { ChevronRight, Menu, X } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import Button from '@/components/ui/buttons/Button'
 import IconButton from '@/components/ui/buttons/IconButton'
-import UILink from '@/components/ui/typography/Link'
 import { cn } from '@/utils/cn.util'
 import RouteProgressBar from '@/components/ui/feedback/RouteProgressBar'
 import { useUserAuth } from '@/contexts/UserAuthContext'
@@ -15,14 +14,61 @@ import {
   H_PX,
   H_BRAND_TEXT,
   H_ICON_BTN_MOBILE,
-  H_SEPARATOR,
+  H_SHELL_SCOPE,
+  H_SIDEBAR_INDEX,
 } from '@/constants/header.constants'
+
+/** One line of the mobile ledger: mono ordinal, label, trailing chevron. */
+function DrawerRow({
+  index,
+  to,
+  label,
+  active = false,
+}: {
+  index: string
+  to: string
+  label: string
+  active?: boolean
+}) {
+  return (
+    <Link
+      to={to}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'flex h-12 items-center gap-3 border-b border-hairline px-4',
+        'transition-colors duration-fast hover:bg-surface-container-high',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+        // Current page: a 2px rule on the container edge, never a fill. The
+        // left colour is set on its own so the row's bottom hairline survives.
+        active && '-ml-px border-l-2 border-l-primary',
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          H_SIDEBAR_INDEX,
+          active ? 'text-primary' : 'text-on-surface-variant',
+        )}
+      >
+        {index}
+      </span>
+      <span className="font-brand text-[15px] uppercase tracking-[0.14em] text-on-surface">
+        {label}
+      </span>
+      <ChevronRight
+        aria-hidden="true"
+        className="ml-auto h-3.5 w-3.5 text-on-surface-variant"
+      />
+    </Link>
+  )
+}
 
 /**
  * Public shell — marketing and auth routes (/, /login, /signup, etc.)
  *
- * Bot Manager AppHeader: 48px height, 20px inset, 36px controls,
- * 1px #242930 separator. Centred brand on mobile, left logo on desktop.
+ * Reads as the masthead of a technical document: flat ink fill, one hairline
+ * rule under the bar, brand left-aligned at every width, mono scope tags, and
+ * square primary actions. Nothing floats and nothing blurs.
  */
 export default function Layout() {
   const location = useLocation()
@@ -48,86 +94,79 @@ export default function Layout() {
   }, [mobileOpen])
 
   return (
-    <div className="min-h-screen flex flex-col bg-surface text-on-surface">
+    <div className="flex min-h-screen flex-col bg-surface text-on-surface">
       <RouteProgressBar />
-      {/* ── Landing header — the ONLY header keeping the base bg-surface
-          fill; every dashboard/admin/chat header paints the sidebar fill
-          (H_SURFACE) instead ── */}
-      <header className={cn('sticky top-0 z-[100] bg-surface border-b', H_SEPARATOR)}>
+      {/* ── Document masthead — solid ink, one hairline rule, brand always
+          left-aligned. No centred mobile block, no translucency. ── */}
+      <header className="sticky top-0 z-[100] border-b border-hairline bg-surface">
         <nav
           className={cn(
-            'relative max-w-6xl mx-auto flex items-center',
+            'mx-auto flex max-w-[var(--layout-nav-max)] items-center gap-2.5',
             H_HEIGHT,
             H_PX,
           )}
           aria-label="Main navigation"
         >
-          {/* Left: logo */}
-          <UILink
-            as={Link}
+          {/* Left: mark + wordmark + scope */}
+          <Link
             to="/"
-            variant="unstyled"
             aria-label="Cat-Bot home"
-            className="flex items-center gap-2 text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg"
+            className="flex shrink-0 items-center text-primary transition-opacity duration-fast hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
-            <Logo className="h-8 w-8 text-primary" />
-          </UILink>
+            <Logo className="h-5 w-5 text-primary" />
+          </Link>
 
-          {/* Desktop: brand text */}
           <Link
             to="/"
             className={cn(
-              'hidden md:inline-flex ml-2 text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg tracking-tight',
               H_BRAND_TEXT,
+              'text-on-surface transition-colors duration-fast hover:text-on-surface-variant',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
             )}
           >
-            Cat-Bot
+            CAT-BOT
           </Link>
 
-          {/* Mobile: brand — absolutely centred */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none md:hidden">
-            <Link
-              to="/"
-              className={cn(
-                'pointer-events-auto text-on-surface hover:opacity-75 transition-opacity duration-100 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg tracking-tight',
-                H_BRAND_TEXT,
-              )}
-            >
-              Cat-Bot
-            </Link>
-          </div>
+          <span
+            aria-hidden="true"
+            className="hidden h-3 w-px shrink-0 bg-hairline sm:block"
+          />
+          <span className={cn(H_SHELL_SCOPE, 'hidden sm:inline')}>
+            OPERATIONS CONSOLE
+          </span>
 
-          {/* Right: desktop */}
-          <div className="hidden md:flex items-center gap-2.5 ml-auto">
+          {/* Right: desktop — mono index prefix, then the one action set */}
+          <div className="ml-auto hidden items-center gap-3 md:flex">
+            <span className={H_SHELL_SCOPE}>ACCESS</span>
             {isAuthenticated ? (
               <Button
                 as={Link}
                 to={ROUTES.DASHBOARD.ROOT}
                 variant="filled"
                 color="primary"
-                size="md"
+                size="sm"
+                className="rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.08em]"
               >
-                Go to Dashboard
+                Go to dashboard
               </Button>
             ) : (
               <>
                 <Button
                   as={Link}
                   to="/login"
-                  variant={isLogin ? 'tonal' : 'text'}
-                  color="primary"
+                  variant="text"
                   size="sm"
-                  className="font-medium"
+                  className="rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.08em]"
                 >
                   Log in
                 </Button>
                 <Button
                   as={Link}
                   to="/signup"
-                  variant={isSignup ? 'tonal' : 'filled'}
+                  variant="filled"
                   color="primary"
                   size="sm"
-                  className="font-medium"
+                  className="rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.08em]"
                 >
                   Sign up
                 </Button>
@@ -135,8 +174,8 @@ export default function Layout() {
             )}
           </div>
 
-          {/* Right: mobile hamburger */}
-          <div className="flex md:hidden items-center ml-auto">
+          {/* Right: mobile — disclosure trigger only */}
+          <div className="ml-auto flex items-center md:hidden">
             <IconButton
               icon={mobileOpen ? <X /> : <Menu />}
               aria-label={
@@ -151,50 +190,38 @@ export default function Layout() {
           </div>
         </nav>
 
-        {/* Mobile drawer */}
+        {/* Mobile drawer — numbered ledger, not a stack of pills */}
         {mobileOpen && (
           <div
-            role="navigation"
+            role="dialog"
             aria-label="Mobile navigation"
+            inert={!mobileOpen}
             className={cn(
-              'md:hidden border-t border-outline-variant bg-surface-container-low',
-              '[animation:fade-in-down_150ms_var(--easing-standard-decelerate)_both]',
+              'border-t border-hairline bg-surface-container-low md:hidden',
+              '[animation:fade-in-down_120ms_var(--easing-standard)_both]',
             )}
           >
-            <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2">
+            <div className="mx-auto max-w-[var(--layout-nav-max)]">
               {isAuthenticated ? (
-                <Button
-                  as={Link}
+                <DrawerRow
+                  index="01"
                   to={ROUTES.DASHBOARD.ROOT}
-                  variant="filled"
-                  color="primary"
-                  size="md"
-                  className="w-full justify-center"
-                >
-                  Go to Dashboard
-                </Button>
+                  label="Dashboard"
+                />
               ) : (
                 <>
-                  <Button
-                    as={Link}
+                  <DrawerRow
+                    index="01"
                     to="/login"
-                    variant={isLogin ? 'tonal' : 'outline'}
-                    color="primary"
-                    size="md"
-                    className="w-full justify-center"
-                  >
-                    Log in
-                  </Button>
-                  <Button
-                    as={Link}
+                    label="Log in"
+                    active={isLogin}
+                  />
+                  <DrawerRow
+                    index="02"
                     to="/signup"
-                    variant={isSignup ? 'tonal' : 'filled'}
-                    color="primary"
-                    size="md"
-                    className="w-full justify-center"
-                  >
-                    Sign up
-                  </Button>
+                    label="Create account"
+                    active={isSignup}
+                  />
                 </>
               )}
             </div>
@@ -207,18 +234,49 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* ── Footer ── */}
+      {/* ── Colophon ── */}
       <footer className="border-t border-hairline bg-surface">
-        <div className="max-w-6xl mx-auto px-5 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Logo className="h-4 w-4 text-on-surface-variant" />
-            <span className="text-label-sm text-on-surface-variant font-medium tracking-tight">
-              Cat-Bot
-            </span>
+        <div className="mx-auto max-w-[var(--layout-nav-max)] px-4 py-10 md:px-6">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr]">
+            {/* Col 1 — imprint */}
+            <div>
+              <div className="flex items-center gap-2">
+                <Logo className="h-4 w-4 text-on-surface-variant" />
+                <span className={cn(H_BRAND_TEXT, 'text-on-surface')}>
+                  CAT-BOT
+                </span>
+              </div>
+              <p className="mt-3 max-w-xs text-body-sm text-on-surface-variant">
+                Open-source control surface for Discord and Telegram
+                bot sessions.
+              </p>
+            </div>
+
+            {/* Col 2 — supported platforms */}
+            <div>
+              <h2 className="rule-label">PLATFORMS</h2>
+              <ul className="mt-3 space-y-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-on-surface-variant">
+                <li>Discord</li>
+                <li>Telegram</li>
+              </ul>
+            </div>
+
+            {/* Col 3 — build stack */}
+            <div>
+              <h2 className="rule-label">STACK</h2>
+              <ul className="mt-3 space-y-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-on-surface-variant">
+                <li>React 19</li>
+                <li>Vite</li>
+                <li>Node.js</li>
+                <li>TypeScript</li>
+              </ul>
+            </div>
           </div>
-          <p className="text-label-sm text-surface-variant">
-            Multi-platform bot management — open source
-          </p>
+
+          <div className="mt-10 flex items-center justify-between gap-3 border-t border-hairline pt-4">
+            <span className={H_SHELL_SCOPE}>CAT-BOT</span>
+            <span className={H_SHELL_SCOPE}>MULTI-PLATFORM / OPEN SOURCE</span>
+          </div>
         </div>
       </footer>
     </div>

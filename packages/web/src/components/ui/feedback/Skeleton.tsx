@@ -6,12 +6,12 @@ import {
 
 /**
  * Skeleton shape variants
- * - text: Single line text placeholder with rounded ends
+ * - text: Single line text placeholder with compact corners
  * - rectangular: Rectangle with sharp corners
  * - circular: Perfect circle
  * - rounded: Rectangle with card corners (--radius-card)
- * - input: Rectangle with input corners (--radius-input) — for form control placeholders
- * - pill: Fully rounded pill (--radius-button / 9999px) — for badges, switches, buttons
+ * - input: Rectangle with input corners (--radius-input)
+ * - pill: Chip placeholder with the badge radius (--radius-badge)
  */
 export type SkeletonVariant =
   | 'text'
@@ -131,12 +131,12 @@ const textSizeHeights: Record<SkeletonTextSize, string> = {
  * Variant-specific base styles
  */
 const variantClasses: Record<SkeletonVariant, string> = {
-  text: 'rounded-full',
+  text: 'rounded-[var(--radius-compact)]',
   rectangular: 'rounded-none',
   circular: 'rounded-full aspect-square',
   rounded: 'rounded-[var(--radius-card)]',
   input: 'rounded-[var(--radius-input)]',
-  pill: 'rounded-[var(--radius-button)]',
+  pill: 'rounded-[var(--radius-badge)]',
 }
 
 /**

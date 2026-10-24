@@ -2,12 +2,30 @@ import { Helmet } from '@dr.pogodin/react-helmet'
 import React, { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
-import { Field } from '@/components/ui/forms/Field'
 import Input from '@/components/ui/forms/Input'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import apiClient from '@/lib/api-client.lib'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import AuthPanel, {
+  AuthField,
+  AuthForm,
+  AuthResult,
+} from '@/components/layout/AuthPanel'
+
+// Verified against the server OTP store: 6-digit code, 10-minute TTL.
+// (packages/cat-bot/src/server/lib/otp.lib.ts:29-30)
+const META = [
+  { label: 'SCOPE', value: 'ADMIN' },
+  { label: 'CODE', value: '6 DIGITS' },
+  { label: 'EXPIRY', value: '10 MINUTES' },
+]
+
+const FOOTER_LINK =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
+
+const SUBMIT_CLASS =
+  'h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]'
 
 export default function AdminForgotPasswordPage() {
   const { isEmailEnabled, isLoading: isEmailStatusLoading } =
@@ -64,30 +82,27 @@ export default function AdminForgotPasswordPage() {
     }
   }
 
-  const wrapperClass =
-    'min-h-screen flex items-center justify-center bg-surface-container-highest px-4 py-12 relative overflow-hidden'
+  let content: React.ReactNode
 
   if (isEmailStatusLoading) {
-    return (
-      <div className={wrapperClass}>
-        <Helmet>
-          <title>Admin Recovery · Cat-Bot</title>
-        </Helmet>
-        <p className="text-body-sm text-on-surface-variant animate-pulse">
-          Checking account status…
-        </p>
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-2 border-b border-hairline py-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+            CHECKING ACCOUNT STATUS
+          </p>
+          <p className="animate-pulse font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant/80">
+            Checking account status…
+          </p>
+        </div>
       </div>
     )
-  }
-
-  if (!isEmailEnabled) {
-    return (
-      <div className={wrapperClass}>
-        <Helmet>
-          <title>Admin Recovery · Cat-Bot</title>
-        </Helmet>
-        <div className="w-full max-w-[380px]">
+  } else if (!isEmailEnabled) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-4 border-b border-hairline py-5">
           <Alert
+            variant="outlined"
             color="warning"
             title="Feature Unavailable"
             message="Email services are not enabled on this instance."
@@ -95,138 +110,97 @@ export default function AdminForgotPasswordPage() {
         </div>
       </div>
     )
+  } else if (isSubmitted) {
+    content = (
+      <AuthResult
+        tone="success"
+        title="Code sent"
+        description={`A 6-digit reset code has been sent to ${email} if an admin account exists.`}
+        action={
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              as={Link}
+              to={`${ROUTES.ADMIN.RESET_PASSWORD}?email=${encodeURIComponent(email)}`}
+              variant="filled"
+              color="primary"
+              size="lg"
+              className={SUBMIT_CLASS}
+            >
+              Enter the code
+            </Button>
+            <Link to={ROUTES.ADMIN.ROOT} className={FOOTER_LINK}>
+              Return to admin login
+            </Link>
+          </div>
+        }
+      />
+    )
+  } else {
+    content = (
+      <AuthForm onSubmit={handleSubmit}>
+        <AuthField
+          label="Admin email"
+          error={error ?? undefined}
+          required
+        >
+          <Input
+            type="email"
+            placeholder="admin@example.com"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setError(null)
+            }}
+            autoComplete="email"
+            className="h-11 font-mono"
+          />
+        </AuthField>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-5 border-b border-hairline">
+          <Button
+            type="submit"
+            variant="filled"
+            color="primary"
+            size="lg"
+            isLoading={isLoading}
+            fullWidth
+            className={SUBMIT_CLASS}
+          >
+            Send secure code
+          </Button>
+        </div>
+      </AuthForm>
+    )
   }
 
   return (
-    <div className={wrapperClass}>
+    <>
       <Helmet>
         <title>Admin Recovery · Cat-Bot</title>
       </Helmet>
 
-      {/* Subtle background */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle, rgb(var(--color-outline-variant) / 0.25) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
-
-      <div
-        className="relative w-full max-w-[380px] flex flex-col gap-7"
-        style={{ animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both' }}
-      >
-        {/* Heading */}
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-6 h-6 text-on-primary-container"
-              aria-hidden="true"
-            >
-              <path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8" />
-              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              <path d="m16 19 2 2 4-4" />
-            </svg>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Account Recovery
-            </h1>
-            <p className="text-body-sm text-on-surface-variant">
-              Request a secure 6-digit code for your admin account.
-            </p>
-          </div>
-        </div>
-
-        {/* Card */}
-        <div className="rounded-2xl border border-outline-variant/70 bg-surface-container-low shadow-elevation-2 p-6 flex flex-col gap-5">
-          {isSubmitted ? (
-            <div className="flex flex-col gap-4">
-              <Alert
-                variant="tonal"
-                color="success"
-                title="Code sent"
-                message={`A 6-digit reset code has been sent to ${email} if an admin account exists.`}
-              />
-              <Button
-                as={Link}
-                to={`${ROUTES.ADMIN.RESET_PASSWORD}?email=${encodeURIComponent(email)}`}
-                variant="filled"
-                color="primary"
-                size="md"
-                fullWidth
-              >
-                Enter the code
-              </Button>
-              <Button
-                as={Link}
-                to={ROUTES.ADMIN.ROOT}
-                variant="text"
-                color="neutral"
-                size="md"
-                fullWidth
-              >
-                Return to admin login
-              </Button>
+      <AuthPanel
+        variant="admin"
+        index="02"
+        kicker="ADMIN RECOVERY"
+        title="Reset admin access"
+        description="Request a secure 6-digit code for your admin account."
+        meta={META}
+        footer={
+          !isSubmitted ? (
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+                ADMIN ACCESS
+              </span>
+              <Link to={ROUTES.ADMIN.ROOT} className={FOOTER_LINK}>
+                Cancel and return to login
+              </Link>
             </div>
-          ) : (
-            <form
-              onSubmit={handleSubmit}
-              noValidate
-              className="flex flex-col gap-4"
-            >
-              <Field.Root invalid={!!error} required>
-                <Field.Label>Admin email</Field.Label>
-                <Input
-                  type="email"
-                  placeholder="admin@example.com"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value)
-                    setError(null)
-                  }}
-                  autoComplete="email"
-                />
-                <Field.ErrorText>{error}</Field.ErrorText>
-              </Field.Root>
-
-              <Button
-                type="submit"
-                variant="filled"
-                color="primary"
-                size="md"
-                fullWidth
-                isLoading={isLoading}
-              >
-                Send secure code
-              </Button>
-            </form>
-          )}
-        </div>
-
-        {!isSubmitted && (
-          <p className="text-center text-body-sm text-on-surface-variant">
-            <Link
-              to={ROUTES.ADMIN.ROOT}
-              className="text-primary hover:opacity-80 transition-opacity duration-fast"
-            >
-              Cancel and return to login
-            </Link>
-          </p>
-        )}
-
-        <p className="text-center text-label-xs text-on-surface-variant/40 font-mono tracking-widest uppercase">
-          Cat-Bot Admin Portal
-        </p>
-      </div>
-    </div>
+          ) : undefined
+        }
+      >
+        {content}
+      </AuthPanel>
+    </>
   )
 }

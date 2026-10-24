@@ -1,7 +1,7 @@
 /**
  * useBotValidation — Platform credential validation state machine.
  *
- * Abstracts REST validation transports for Discord, Telegram, and Fluxer.
+ * Abstracts REST validation transports for Discord and Telegram.
  *
  * Responses follow { valid: boolean, error?: string, botName?: string } contract.
  */
@@ -74,31 +74,6 @@ export function useBotValidation(): {
                 : {
                     phase: 'error',
                     message: result.error ?? 'Invalid Telegram bot token',
-                  },
-            )
-          })
-          .catch((err: unknown) => {
-            setStatus({
-              phase: 'error',
-              message: err instanceof Error ? err.message : 'Validation failed',
-            })
-          })
-        break
-      }
-
-      case Platforms.Fluxer: {
-        void validationService
-          .validateFluxer(credentials.fluxerToken)
-          .then((result) => {
-            setStatus(
-              result.valid
-                ? {
-                    phase: 'success',
-                    info: result.botName ? `Bot: ${result.botName}` : undefined,
-                  }
-                : {
-                    phase: 'error',
-                    message: result.error ?? 'Invalid Fluxer bot token',
                   },
             )
           })

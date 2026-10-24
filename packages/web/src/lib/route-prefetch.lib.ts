@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { useEffect, type RefObject } from 'react'
 import { queryClient, queryKeys } from '@/lib/query-client.lib'
 import { botService } from '@/features/users/services/bot.service'

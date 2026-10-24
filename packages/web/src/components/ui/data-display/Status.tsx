@@ -116,7 +116,7 @@ const StatusIndicator = forwardRefWithAs<'span', StatusIndicatorOwnProps>(
       <Component
         ref={ref}
         className={cn(
-          'inline-block rounded-full flex-shrink-0',
+          'inline-block rounded-[1px] flex-shrink-0',
           indicatorSizeClasses[size],
           indicatorColorClasses[colorPalette],
           pulse && 'animate-pulse',

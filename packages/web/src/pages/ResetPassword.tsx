@@ -1,84 +1,57 @@
 import { Helmet } from '@dr.pogodin/react-helmet'
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Button from '@/components/ui/buttons/Button'
-import { Field } from '@/components/ui/forms/Field'
 import CodeInput from '@/components/ui/forms/CodeInput'
 import PasswordInput from '@/components/ui/forms/PasswordInput'
 import Alert from '@/components/ui/feedback/Alert'
 import { ROUTES } from '@/constants/routes.constants'
 import apiClient from '@/lib/api-client.lib'
-import { ShieldCheck } from 'lucide-react'
 import { useEmailServiceEnabled } from '@/hooks/useEmailServiceEnabled'
+import { useFormDraft } from '@/hooks/useFormDraft'
+import { useCountdownSeconds } from '@/hooks/useCountdown'
+import AuthPanel, {
+  AuthField,
+  AuthForm,
+  AuthResult,
+} from '@/components/layout/AuthPanel'
 
-/**
- * AuthShell — ambient-glow background + centered column shared by every
- * state of this page. Mirrors the treatment on the Login page so the email
- * service never renders as a separate, less-considered surface.
- */
-function AuthShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-6 py-16 overflow-hidden">
-      <Helmet>
-        <title>Set New Password · Cat-Bot</title>
-      </Helmet>
+// Verified against the server OTP store: 6-digit code, 10-minute TTL.
+// (packages/cat-bot/src/server/lib/otp.lib.ts:29-30)
+const META = [
+  { label: 'CHANNEL', value: 'EMAIL' },
+  { label: 'CODE', value: '6 DIGITS' },
+  { label: 'EXPIRY', value: '10 MINUTES' },
+]
 
-      {/* Ambient glow — same treatment as the marketing pages */}
-      <div className="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-primary/[0.06] blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-tertiary/[0.05] blur-[100px]" />
+const FOOTER_LINK =
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4'
 
-      <div
-        className="relative z-10 w-full max-w-[400px] flex flex-col gap-7"
-        style={{
-          animation: 'fade-in-up 400ms var(--easing-emphasized-decelerate) both',
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
+const SUBMIT_CLASS =
+  'h-11 rounded-[var(--radius-button)] font-mono text-[11px] uppercase tracking-[0.1em] sm:w-auto sm:min-w-[13rem]'
 
-/** Brand mark — glow-ring icon above the page heading. */
-function BrandMark({
-  heading,
-  subheading,
-}: {
-  heading: string
-  subheading: string
-}) {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="glow-ring flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-        <ShieldCheck className="h-6 w-6 text-on-primary-container" />
-      </div>
-      <div className="text-center flex flex-col gap-1.5">
-        <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-          {heading}
-        </h1>
-        <p className="text-body-sm text-on-surface-variant max-w-xs mx-auto leading-relaxed">
-          {subheading}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-/** A glass marker card used for loading / status-only states. */
-function GlassCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6 flex flex-col gap-4">
-      {children}
-    </div>
-  )
-}
+const SUBMIT_ROW =
+  'flex flex-col sm:flex-row sm:items-center gap-3 py-5 border-b border-hairline'
 
 export default function ResetPasswordPage() {
   const { isEmailEnabled, isLoading: isEmailStatusLoading } =
     useEmailServiceEnabled()
 
   const [searchParams] = useSearchParams()
-  const email = searchParams.get('email')?.trim() ?? ''
+  // Recovery progress that is safe to keep: the address, the resend cooldown
+  // deadline, and nothing else. The OTP and both password fields stay in
+  // memory only — a discarded tab means re-entering the code, never a secret
+  // left behind in storage.
+  const draft = useFormDraft(
+    {
+      email: searchParams.get('email')?.trim() ?? '',
+      resendDeadline: null as number | null,
+    },
+    { key: 'reset-password', storage: 'local', sensitive: [] },
+  )
+  const email = searchParams.get('email')?.trim() || draft.values.email
+  const resendCooldown = useCountdownSeconds(draft.values.resendDeadline)
+  const submitLock = useRef(false)
 
   const [code, setCode] = useState('')
   const [codeVerified, setCodeVerified] = useState(false)
@@ -138,12 +111,14 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitLock.current) return
     const fieldErrors = validate()
     if (Object.keys(fieldErrors).length > 0) {
       setErrors(fieldErrors)
       return
     }
 
+    submitLock.current = true
     setErrors({})
     setIsLoading(true)
 
@@ -155,18 +130,21 @@ export default function ResetPasswordPage() {
         adminOnly: false,
       })
       setIsSubmitted(true)
+      // The flow is complete: the draft has served its purpose.
+      draft.clearDraft()
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
       setErrors({
         password: e.response?.data?.error || 'Failed to reset password.',
       })
     } finally {
+      submitLock.current = false
       setIsLoading(false)
     }
   }
 
   const handleResend = async () => {
-    if (!email) return
+    if (!email || resendCooldown > 0) return
     setIsResending(true)
     setResendError(null)
 
@@ -176,6 +154,12 @@ export default function ResetPasswordPage() {
         adminOnly: false,
       })
       setResendSuccess(true)
+      // Timestamp, not a counter: correct after the tab sleeps.
+      draft.setValues((prev) => ({
+        ...prev,
+        email,
+        resendDeadline: Date.now() + 60_000,
+      }))
     } catch (err) {
       const e = err as { response?: { data?: { error?: string } } }
       setResendError(e.response?.data?.error || 'Failed to resend reset code.')
@@ -184,67 +168,46 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (isEmailStatusLoading) {
-    return (
-      <AuthShell>
-        <GlassCard>
-          <div className="glow-ring flex h-12 w-12 mx-auto items-center justify-center rounded-2xl bg-primary-container/80 border border-primary/20">
-            <ShieldCheck className="h-6 w-6 text-on-primary-container" />
-          </div>
-          <div className="text-center flex flex-col gap-2">
-            <h1 className="text-headline-sm font-bold text-on-surface tracking-tight">
-              Checking account status
-            </h1>
-            <p className="text-body-sm text-on-surface-variant animate-pulse">
-              Preparing the email service…
-            </p>
-          </div>
-        </GlassCard>
-      </AuthShell>
-    )
-  }
+  let content: React.ReactNode
 
-  if (!isEmailEnabled) {
-    return (
-      <AuthShell>
-        <BrandMark
-          heading="Feature Unavailable"
-          subheading="Email services are not enabled on this instance."
-        />
-        <GlassCard>
+  if (isEmailStatusLoading) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-2 border-b border-hairline py-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+            CHECKING ACCOUNT STATUS
+          </p>
+          <p className="animate-pulse font-mono text-[11px] uppercase tracking-[0.08em] text-on-surface-variant/80">
+            Preparing the email service…
+          </p>
+        </div>
+      </div>
+    )
+  } else if (!isEmailEnabled) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-4 border-b border-hairline py-5">
           <Alert
+            variant="outlined"
             color="warning"
             title="Email service disabled"
             message="Password reset by email is not available right now."
           />
-          <Button
-            as={Link}
+          <Link
             to={ROUTES.LOGIN}
-            variant="filled"
-            color="primary"
-            size="md"
-            fullWidth
+            className="inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] text-primary hover:underline underline-offset-4"
           >
             Back to log in
-          </Button>
-        </GlassCard>
-      </AuthShell>
+          </Link>
+        </div>
+      </div>
     )
-  }
-
-  if (!email) {
-    return (
-      <AuthShell>
-        <BrandMark
-          heading={resendSuccess ? 'Reset code sent' : 'Start a password reset'}
-          subheading={
-            resendSuccess
-              ? 'A new reset code has been sent to your email.'
-              : 'Enter your account email to receive a reset code.'
-          }
-        />
-        <GlassCard>
+  } else if (!email) {
+    content = (
+      <div className="border-t border-hairline">
+        <div className="flex flex-col gap-4 border-b border-hairline py-5">
           <Alert
+            variant="outlined"
             color={resendSuccess ? 'success' : 'info'}
             title={resendSuccess ? 'Code sent' : 'Email required'}
             message={
@@ -255,7 +218,7 @@ export default function ResetPasswordPage() {
           />
           {resendError && (
             <Alert
-              variant="tonal"
+              variant="outlined"
               color="error"
               title="Resend failed"
               message={resendError}
@@ -267,187 +230,199 @@ export default function ResetPasswordPage() {
             to={ROUTES.FORGOT_PASSWORD}
             variant="filled"
             color="primary"
-            size="md"
-            fullWidth
+            size="lg"
+            className={SUBMIT_CLASS}
           >
             Request reset code
           </Button>
-        </GlassCard>
-      </AuthShell>
+        </div>
+      </div>
+    )
+  } else if (isSubmitted) {
+    content = (
+      <AuthResult
+        tone="success"
+        title="Password updated"
+        description="You can now log in with your new password."
+        action={
+          <Button
+            onClick={() => {
+              window.location.href = ROUTES.LOGIN
+            }}
+            variant="filled"
+            color="primary"
+            size="lg"
+            className={SUBMIT_CLASS}
+          >
+            Go to log in
+          </Button>
+        }
+      />
+    )
+  } else if (!codeVerified) {
+    content = (
+      <div className="border-t border-hairline">
+        {resendSuccess && (
+          <div className="pt-5">
+            <Alert
+              variant="outlined"
+              color="success"
+              title="New code sent"
+              message="Check your inbox for the latest code."
+              size="sm"
+            />
+          </div>
+        )}
+        {resendError && (
+          <div className="pt-5">
+            <Alert
+              variant="outlined"
+              color="error"
+              title="Resend failed"
+              message={resendError}
+              size="sm"
+            />
+          </div>
+        )}
+        {codeError && (
+          <div className="pt-5">
+            <Alert
+              variant="outlined"
+              color="error"
+              title="Verification failed"
+              message={codeError}
+            />
+          </div>
+        )}
+
+        <AuthField label="Verification code" error={codeError ?? undefined}>
+          <CodeInput
+            value={code}
+            onChange={(next) => {
+              setCode(next)
+              setCodeError(null)
+              setResendError(null)
+            }}
+            onComplete={handleVerifyCode}
+            placeholder="000000"
+            autoFocus
+            className="h-11"
+          />
+        </AuthField>
+
+        <div className={SUBMIT_ROW}>
+          <Button
+            onClick={() => void handleVerifyCode()}
+            variant="filled"
+            color="primary"
+            size="lg"
+            isLoading={isVerifyingCode}
+            disabled={code.length !== 6}
+            className={SUBMIT_CLASS}
+          >
+            Continue
+          </Button>
+          <Button
+            onClick={() => void handleResend()}
+            variant="text"
+            color="neutral"
+            size="md"
+            isLoading={isResending}
+            disabled={resendCooldown > 0}
+            className="font-mono text-[11px] uppercase tracking-[0.08em]"
+          >
+            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+          </Button>
+        </div>
+      </div>
+    )
+  } else {
+    content = (
+      <AuthForm onSubmit={handleSubmit}>
+        <AuthField
+          label="New password"
+          error={errors.password}
+          required
+          hint="At least 8 characters"
+        >
+          <PasswordInput
+            placeholder="At least 8 characters"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              setErrors((prev) => ({ ...prev, password: undefined }))
+            }}
+            className="h-11"
+          />
+        </AuthField>
+
+        <AuthField
+          label="Confirm new password"
+          error={errors.confirmPassword}
+          required
+        >
+          <PasswordInput
+            placeholder="Repeat your new password"
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value)
+              setErrors((prev) => ({
+                ...prev,
+                confirmPassword: undefined,
+              }))
+            }}
+            className="h-11"
+          />
+        </AuthField>
+
+        <div className={SUBMIT_ROW}>
+          <Button
+            type="submit"
+            variant="filled"
+            color="primary"
+            size="lg"
+            isLoading={isLoading}
+            className={SUBMIT_CLASS}
+          >
+            Reset password
+          </Button>
+        </div>
+      </AuthForm>
     )
   }
 
   return (
-    <AuthShell>
-      <BrandMark
-        heading={
-          isSubmitted
-            ? 'Password reset'
-            : codeVerified
-              ? 'Set new password'
-              : 'Enter reset code'
+    <>
+      <Helmet>
+        <title>Set New Password · Cat-Bot</title>
+      </Helmet>
+
+      <AuthPanel
+        index="02"
+        kicker="RECOVERY"
+        title="Set a new password"
+        description="Choose a new password for your account."
+        meta={META}
+        footer={
+          !isSubmitted ? (
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-on-surface-variant/80">
+                NEED HELP
+              </span>
+              <span className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                <Link to={ROUTES.FORGOT_PASSWORD} className={FOOTER_LINK}>
+                  Request a new code
+                </Link>
+                <Link to={ROUTES.LOGIN} className={FOOTER_LINK}>
+                  Back to sign in
+                </Link>
+              </span>
+            </div>
+          ) : undefined
         }
-        subheading={
-          isSubmitted
-            ? 'Your password has been reset successfully.'
-            : codeVerified
-              ? `Create a strong password for ${email}.`
-              : `Enter the 6-digit code we sent to ${email}.`
-        }
-      />
-
-      {/* Card */}
-      <div className="surface-specular glass-surface rounded-2xl border border-[color:var(--glass-border)] shadow-[var(--shadow-card-rest)] p-6">
-        {isSubmitted ? (
-          <div className="flex flex-col gap-4">
-            <Alert
-              variant="tonal"
-              color="success"
-              title="Password updated"
-              message="You can now log in with your new password."
-            />
-            <Button
-              onClick={() => {
-                window.location.href = ROUTES.LOGIN
-              }}
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-            >
-              Go to log in
-            </Button>
-          </div>
-        ) : !codeVerified ? (
-          <div className="flex flex-col gap-4">
-            {resendSuccess && (
-              <Alert
-                variant="tonal"
-                color="success"
-                title="New code sent"
-                message="Check your inbox for the latest code."
-                size="sm"
-              />
-            )}
-            {resendError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Resend failed"
-                message={resendError}
-                size="sm"
-              />
-            )}
-            {codeError && (
-              <Alert
-                variant="tonal"
-                color="error"
-                title="Verification failed"
-                message={codeError}
-              />
-            )}
-            <Field.Root invalid={!!codeError}>
-              <Field.Label>Verification code</Field.Label>
-              <CodeInput
-                value={code}
-                onChange={(next) => {
-                  setCode(next)
-                  setCodeError(null)
-                  setResendError(null)
-                }}
-                onComplete={handleVerifyCode}
-                placeholder="000000"
-                autoFocus
-              />
-              {codeError && <Field.ErrorText>{codeError}</Field.ErrorText>}
-            </Field.Root>
-
-            <Button
-              onClick={() => void handleVerifyCode()}
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isVerifyingCode}
-              disabled={code.length !== 6}
-            >
-              Continue
-            </Button>
-
-            <Button
-              onClick={() => void handleResend()}
-              variant="text"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isResending}
-            >
-              Resend code
-            </Button>
-          </div>
-        ) : (
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-col gap-4"
-          >
-            <Field.Root invalid={!!errors.password} required>
-              <Field.Label>New password</Field.Label>
-              <PasswordInput
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  setErrors((prev) => ({ ...prev, password: undefined }))
-                }}
-              />
-              <Field.ErrorText>{errors.password}</Field.ErrorText>
-            </Field.Root>
-
-            <Field.Root invalid={!!errors.confirmPassword} required>
-              <Field.Label>Confirm new password</Field.Label>
-              <PasswordInput
-                placeholder="Repeat your new password"
-                value={confirmPassword}
-                onChange={(e) => {
-                  setConfirmPassword(e.target.value)
-                  setErrors((prev) => ({
-                    ...prev,
-                    confirmPassword: undefined,
-                  }))
-                }}
-              />
-              <Field.ErrorText>{errors.confirmPassword}</Field.ErrorText>
-            </Field.Root>
-
-            <Button
-              type="submit"
-              variant="filled"
-              color="primary"
-              size="md"
-              fullWidth
-              isLoading={isLoading}
-              className="mt-1"
-            >
-              Reset password
-            </Button>
-          </form>
-        )}
-      </div>
-
-      {!isSubmitted && (
-        <p className="text-center text-body-sm text-on-surface-variant">
-          <Button
-            as={Link}
-            to={ROUTES.FORGOT_PASSWORD}
-            variant="link"
-            color="primary"
-            size="sm"
-          >
-            Didn't get a code? Request a new one
-          </Button>
-        </p>
-      )}
-    </AuthShell>
+      >
+        {content}
+      </AuthPanel>
+    </>
   )
 }

@@ -19,10 +19,10 @@ export const authUserClient = createAuthClient({
     // Include cookies on every request so the session token travels with auth calls
     credentials: 'include',
     onError(context: { error: Error; response?: Response }) {
-      console.error('Auth request failed:', context.error)
-      if (context.response?.status === 401) {
-        console.log('Unauthorized — session may have expired')
-      }
+      // 401 on the session probe means "signed out", which is a normal state
+      // on public pages. Anything else is genuinely unexpected.
+      if (context.response?.status === 401) return
+      console.warn('Auth request failed:', context.error)
     },
   },
 })

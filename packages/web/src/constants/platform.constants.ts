@@ -8,7 +8,6 @@
 export const Platforms = {
   Discord: 'discord',
   Telegram: 'telegram',
-  Fluxer: 'fluxer',
 } as const
 
 /** Union of all recognised platform name strings. */
@@ -22,5 +21,4 @@ export type Platform = (typeof Platforms)[keyof typeof Platforms]
 export const PLATFORM_LABELS: Record<string, string> = {
   [Platforms.Discord]: 'Discord',
   [Platforms.Telegram]: 'Telegram',
-  [Platforms.Fluxer]: 'Fluxer',
 }

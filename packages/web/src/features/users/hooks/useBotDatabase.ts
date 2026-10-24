@@ -522,7 +522,7 @@ export function useBotDatabaseGroups(
   }
 }
 
-// ── Server-hierarchy servers hook (Discord + Fluxer) ─────────────────────────
+// ── Server-hierarchy servers hook (Discord) ──────────────────────────────────
 
 export interface UseBotDatabaseServersReturn {
   servers: BotDatabaseGroup[]
@@ -667,7 +667,7 @@ export function useBotDatabaseGroupSelector(
   return { groups, total, isLoading, error, refetch: fetch }
 }
 
-// ── Server-hierarchy channels hook (Discord + Fluxer) ────────────────────────
+// ── Server-hierarchy channels hook (Discord) ─────────────────────────────────
 
 export interface UseBotDatabaseChannelsReturn {
   channels: BotDatabaseChannel[]

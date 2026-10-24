@@ -34,7 +34,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function IconWell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
+    <div className="w-9 h-9 rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0 bg-surface-container-high border-hairline text-on-surface-variant">
       {children}
     </div>
   )
@@ -43,9 +43,8 @@ function IconWell({ children }: { children: React.ReactNode }) {
 /**
  * Reaction Emoji Settings — lets the bot owner pick the emoji the bot reacts
  * with on the user's message after a successful command. Platform-aware:
- * Telegram restricts to its documented supported set, Discord accepts unicode
- * or custom-emoji references, Fluxer accepts unicode or `name:id` custom
- * emoji references.
+ * Telegram restricts to its documented supported set, while Discord accepts
+ * unicode or custom-emoji references.
  *
  * Controlled component: selection lives in the parent's form state and is
  * persisted together with the rest of the page via the single page-level
@@ -61,7 +60,6 @@ export default function ReactionEmojiSettings({
 }: ReactionEmojiSettingsProps) {
   const isDiscord = platform === 'discord'
   const isTelegram = platform === 'telegram'
-  const isFluxer = platform === 'fluxer'
   const effective = pending ?? emoji
   const draftInvalid =
     isDiscord && effective !== '' && !isDiscordReactionEmoji(effective)
@@ -71,7 +69,7 @@ export default function ReactionEmojiSettings({
     <section aria-label="Command Reaction Emoji" className="space-y-2">
       <SectionTitle>Command Reaction Emoji</SectionTitle>
 
-      <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+      <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
         {/* ── Live preview ── */}
         <div className="p-3.5 flex items-center space-x-3.5 min-w-0">
           <div className="w-11 h-11 rounded-full bg-surface-container-high border border-hairline flex items-center justify-center text-2xl flex-shrink-0">
@@ -119,7 +117,7 @@ export default function ReactionEmojiSettings({
                     onClick={() => onPick(e)}
                     aria-label={`Select ${e}`}
                     className={cn(
-                      'flex h-11 items-center justify-center rounded-lg text-2xl transition-colors duration-100',
+                      'flex h-11 items-center justify-center rounded-[var(--radius-card)] text-2xl transition-colors duration-100',
                       'hover:bg-surface-container-highest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                       effective === e
                         ? 'bg-primary/10 ring-1 ring-primary'
@@ -156,14 +154,12 @@ export default function ReactionEmojiSettings({
                   placeholder={
                     isDiscord
                       ? 'e.g. <:cat:123456789012345678> or <a:party:123456789012345678>'
-                      : isFluxer
-                        ? 'e.g. cat:123456789012345678 or a unicode emoji'
-                        : 'Type a unicode emoji…'
+                      : 'Type a unicode emoji…'
                   }
                   leftIcon={<Smile className="h-4 w-4" />}
                   className="h-11 text-sm"
                 />
-                <p className="text-[11px] text-surface-variant leading-normal mt-1.5 px-0.5">
+                <p className="text-[11px] text-on-surface-variant leading-normal mt-1.5 px-0.5">
                   {isDiscord ? (
                     <>
                       Paste a custom Discord emoji reference (e.g.{' '}
@@ -171,14 +167,6 @@ export default function ReactionEmojiSettings({
                         &lt;:cat:123456789012345678&gt;
                       </code>
                       ) or type any unicode emoji.
-                    </>
-                  ) : isFluxer ? (
-                    <>
-                      Type any unicode emoji or a custom emoji reference (e.g.{' '}
-                      <code className="font-mono text-[10px] text-on-surface-variant bg-surface-container-high border border-hairline px-1 py-0.5 rounded">
-                        cat:123456789012345678
-                      </code>
-                      ).
                     </>
                   ) : (
                     <>Type any unicode emoji.</>
@@ -208,7 +196,7 @@ export default function ReactionEmojiSettings({
                       onClick={() => onPick(e)}
                       aria-label={`Select ${e}`}
                       className={cn(
-                        'flex h-11 items-center justify-center rounded-lg text-2xl transition-colors duration-100',
+                        'flex h-11 items-center justify-center rounded-[var(--radius-card)] text-2xl transition-colors duration-100',
                         'hover:bg-surface-container-highest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                         effective === e
                           ? 'bg-primary/10 ring-1 ring-primary'

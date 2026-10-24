@@ -65,7 +65,7 @@ function RowChevron({ className }: { className?: string }) {
     <div
       className={cn(
         'flex items-center pl-3 flex-shrink-0',
-        className ?? 'text-surface-variant',
+        className ?? 'text-on-surface-variant',
       )}
     >
       <ChevronRight className="w-4 h-4" strokeWidth={2} />
@@ -85,7 +85,7 @@ function IconWell({
   return (
     <div
       className={cn(
-        'rounded-lg border flex items-center justify-center flex-shrink-0',
+        'rounded-[var(--radius-card)] border flex items-center justify-center flex-shrink-0',
         size === 'lg' ? 'w-11 h-11' : 'w-9 h-9',
         tone === 'accent' &&
           'bg-primary/10 border-primary/30 text-primary',
@@ -145,7 +145,7 @@ function RemoveButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="p-2 text-error hover:opacity-75 active:opacity-[0.82] transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40 rounded-lg flex-shrink-0"
+      className="p-2 text-error hover:opacity-75 active:opacity-[0.82] transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-error/40 rounded-[var(--radius-card)] flex-shrink-0"
     >
       <Trash2 className="h-4 w-4" strokeWidth={2} />
     </button>
@@ -223,10 +223,6 @@ export default function BotSettingsPage() {
       telegramToken:
         bot.credentials.platform === Platforms.Telegram
           ? bot.credentials.telegramToken
-          : '',
-      fluxerToken:
-        bot.credentials.platform === Platforms.Fluxer
-          ? bot.credentials.fluxerToken
           : '',
     },
   })
@@ -307,8 +303,6 @@ export default function BotSettingsPage() {
         return !!form.platformFields.discordToken
       case Platforms.Telegram:
         return !!form.platformFields.telegramToken
-      case Platforms.Fluxer:
-        return !!form.platformFields.fluxerToken
       default:
         return false
     }
@@ -328,12 +322,6 @@ export default function BotSettingsPage() {
         credentials = {
           platform: Platforms.Telegram,
           telegramToken: form.platformFields.telegramToken,
-        }
-        break
-      case Platforms.Fluxer:
-        credentials = {
-          platform: Platforms.Fluxer,
-          fluxerToken: form.platformFields.fluxerToken,
         }
         break
       default:
@@ -357,13 +345,6 @@ export default function BotSettingsPage() {
         form.platformFields.telegramToken !==
         (bot.credentials.platform === Platforms.Telegram
           ? bot.credentials.telegramToken
-          : '')
-      )
-    if (form.platform === Platforms.Fluxer)
-      return (
-        form.platformFields.fluxerToken !==
-        (bot.credentials.platform === Platforms.Fluxer
-          ? bot.credentials.fluxerToken
           : '')
       )
     return false
@@ -394,12 +375,6 @@ export default function BotSettingsPage() {
         credentials = {
           platform: Platforms.Telegram,
           telegramToken: form.platformFields.telegramToken,
-        }
-        break
-      case Platforms.Fluxer:
-        credentials = {
-          platform: Platforms.Fluxer,
-          fluxerToken: form.platformFields.fluxerToken,
         }
         break
       default:
@@ -490,7 +465,7 @@ export default function BotSettingsPage() {
         {/* ── BOT IDENTITY ── */}
         <section aria-label="Bot Identity" className="space-y-2">
           <SectionTitle>Bot Identity</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 space-y-3">
               <div className="flex items-center space-x-3.5 min-w-0">
                 <IconWell tone="accent">
@@ -564,7 +539,7 @@ export default function BotSettingsPage() {
                 return (
                   <div
                     key={index}
-                    className="border border-hairline rounded-lg bg-surface-container-high overflow-hidden"
+                    className="border border-hairline rounded-[var(--radius-card)] bg-surface-container-high overflow-hidden"
                   >
                     <article
                       role="button"
@@ -591,7 +566,7 @@ export default function BotSettingsPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+                      <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                         <ChevronRight
                           className={cn(
                             'w-4 h-4 transition-transform duration-200',
@@ -651,7 +626,7 @@ export default function BotSettingsPage() {
                 return (
                   <div
                     key={index}
-                    className="border border-hairline rounded-lg bg-surface-container-high overflow-hidden"
+                    className="border border-hairline rounded-[var(--radius-card)] bg-surface-container-high overflow-hidden"
                   >
                     <article
                       role="button"
@@ -678,7 +653,7 @@ export default function BotSettingsPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center pl-3 flex-shrink-0 text-surface-variant">
+                      <div className="flex items-center pl-3 flex-shrink-0 text-on-surface-variant">
                         <ChevronRight
                           className={cn(
                             'w-4 h-4 transition-transform duration-200',
@@ -721,7 +696,7 @@ export default function BotSettingsPage() {
         {/* ── PLATFORM CREDENTIALS ── */}
         <section aria-label="Platform Credentials" className="space-y-2">
           <SectionTitle>Platform Credentials</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 space-y-3">
               <div className="flex items-center space-x-3.5 min-w-0">
                 <IconWell>
@@ -751,7 +726,7 @@ export default function BotSettingsPage() {
                   fields={form.platformFields}
                   onChange={handlePlatformField}
                 />
-                <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+                <p className="text-[11px] text-on-surface-variant leading-normal px-0.5">
                   Tokens used to connect this bot to its messaging platform.
                 </p>
               </div>
@@ -768,7 +743,7 @@ export default function BotSettingsPage() {
                 <button
                   type="button"
                   disabled
-                  className="w-full h-9 px-3 rounded-lg bg-surface-container-high border border-primary/30 text-primary font-semibold text-xs flex items-center justify-center space-x-1.5 disabled:opacity-80"
+                  className="w-full h-9 px-3 rounded-[var(--radius-card)] bg-surface-container-high border border-primary/30 text-primary font-semibold text-xs flex items-center justify-center space-x-1.5 disabled:opacity-80"
                 >
                   <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
                   <span>Verified</span>
@@ -780,7 +755,7 @@ export default function BotSettingsPage() {
                   disabled={
                     !canVerify || verificationStatus.phase === 'validating'
                   }
-                  className="w-full h-9 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  className="w-full h-9 px-3 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline active:border-primary text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                   {verificationStatus.phase === 'validating'
                     ? 'Verifying…'
@@ -794,7 +769,7 @@ export default function BotSettingsPage() {
         {/* ── BOT ADMIN ONLY ── */}
         <section aria-label="Bot Admin Only" className="space-y-2">
           <SectionTitle>Bot Admin Only</SectionTitle>
-          <div className="bg-surface-container-low border border-hairline rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-hairline rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <div className="p-3.5 flex items-center justify-between space-x-3">
               <div className="flex items-center space-x-3 min-w-0">
                 <IconWell tone={adminOnlyEnabled ? 'accent' : 'default'}>
@@ -833,7 +808,7 @@ export default function BotSettingsPage() {
             </div>
 
             <div className="p-3.5">
-              <p className="text-[11px] text-surface-variant leading-normal">
+              <p className="text-[11px] text-on-surface-variant leading-normal">
                 Equivalent to{' '}
                 <code className="font-mono text-[10px] text-on-surface-variant bg-surface-container-high border border-hairline px-1 py-0.5 rounded">
                   {bot.prefix}adminonly on
@@ -881,7 +856,7 @@ export default function BotSettingsPage() {
               <span>Danger Zone</span>
             </h2>
           </div>
-          <div className="bg-surface-container-low border border-error/30 rounded-xl divide-y divide-outline-variant overflow-hidden">
+          <div className="bg-surface-container-low border border-error/30 rounded-[var(--radius-card)] divide-y divide-outline-variant overflow-hidden">
             <article
               role="button"
               tabIndex={0}
@@ -986,7 +961,7 @@ export default function BotSettingsPage() {
             type="button"
             onClick={handleCancel}
             disabled={savePhase !== 'idle' || isLoading || reactionSaving}
-            className="flex-1 h-11 px-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="flex-1 h-11 px-4 rounded-[var(--radius-card)] bg-surface-container-high hover:bg-surface-container-highest active:opacity-[0.82] border border-hairline text-on-surface-variant hover:text-on-surface font-semibold text-xs flex items-center justify-center transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             Cancel
           </button>
@@ -994,7 +969,7 @@ export default function BotSettingsPage() {
             type="button"
             onClick={() => void handleSubmit()}
             disabled={disableSave}
-            className="flex-1 h-11 px-4 rounded-lg bg-primary hover:brightness-110 active:brightness-90 active:opacity-[0.82] text-on-primary font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
+            className="flex-1 h-11 px-4 rounded-[var(--radius-card)] bg-primary hover:brightness-110 active:brightness-90 active:opacity-[0.82] text-on-primary font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors duration-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:ring-offset-surface"
           >
             <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
             <span>

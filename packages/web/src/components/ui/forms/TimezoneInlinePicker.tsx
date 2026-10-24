@@ -95,7 +95,7 @@ export default function TimezoneInlinePicker({
       />
       <div
         className={cn(
-          'border border-hairline rounded-lg bg-surface-container-high overflow-hidden',
+          'border border-hairline rounded-[var(--radius-card)] bg-surface-container-high overflow-hidden',
         )}
       >
         {q === '' ? (
@@ -138,7 +138,7 @@ export default function TimezoneInlinePicker({
           </p>
         )}
       </div>
-      <p className="text-[11px] text-surface-variant leading-normal px-0.5">
+      <p className="text-[11px] text-on-surface-variant leading-normal px-0.5">
         {options.length} timezones · offsets recomputed live for daylight
         saving.
       </p>

@@ -37,11 +37,11 @@ export type IconButtonProps<T extends React.ElementType = 'button'> =
 
 /**
  * Base icon button styles
- * Square aspect ratio with centered icon
+ * Square aspect ratio with centered icon, 4px button radius.
  * Uses `relative` for proper state layer positioning
  */
 const base =
-  'relative inline-flex items-center justify-center rounded-full transition-all duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-state-disabled disabled:pointer-events-none active:scale-[0.95]'
+  'relative inline-flex items-center justify-center rounded-[var(--radius-button)] transition-colors duration-fast ease-standard focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-surface disabled:opacity-state-disabled disabled:pointer-events-none'
 
 /**
  * iOS HIG touch-target compliance: `sm` (32px) and `md` (40px) are both
@@ -66,7 +66,7 @@ const hitSlopClasses: Record<Size, string> = {
  * - disabled:after:opacity-0 prevents state layer when disabled
  */
 const filledStateLayer =
-  'after:absolute after:inset-0 after:z-[1] after:rounded-full after:pointer-events-none after:opacity-0 after:transition-opacity after:duration-fast after:will-change-[opacity] hover:after:opacity-state-hover active:after:opacity-state-pressed disabled:after:opacity-0'
+  'after:absolute after:inset-0 after:z-[1] after:rounded-[var(--radius-button)] after:pointer-events-none after:opacity-0 after:transition-opacity after:duration-fast after:will-change-[opacity] hover:after:opacity-state-hover active:after:opacity-state-pressed disabled:after:opacity-0'
 
 /**
  * Variant classes using design system state opacity tokens
@@ -83,28 +83,25 @@ const filledStateLayer =
  * - Transparent background, no border
  * - Neutral on-surface text color
  * - Subtle background on hover/active for M3 compliance
- * - Focus ring uses on-surface for neutral appearance
+ * - Focus outline uses on-surface, drawn outside the control
  */
 const variantClasses: Record<Variant, string> = {
   primary: cn(
     filledStateLayer,
-    'bg-primary text-on-primary after:bg-on-primary focus-visible:ring-primary',
+    'bg-primary text-on-primary after:bg-on-primary',
   ),
   secondary: cn(
     filledStateLayer,
-    'bg-secondary text-on-secondary after:bg-on-secondary focus-visible:ring-secondary',
+    'bg-secondary text-on-secondary after:bg-on-secondary',
   ),
   tertiary: cn(
     filledStateLayer,
-    'bg-tertiary text-on-tertiary after:bg-on-tertiary focus-visible:ring-tertiary',
+    'bg-tertiary text-on-tertiary after:bg-on-tertiary',
   ),
   outline:
-    'bg-transparent text-on-surface border-2 border-outline hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)] focus-visible:ring-on-surface',
-  text: 'bg-transparent text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)] focus-visible:ring-on-surface',
-  danger: cn(
-    filledStateLayer,
-    'bg-error text-on-error after:bg-on-error focus-visible:ring-error',
-  ),
+    'bg-transparent text-on-surface border border-outline hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)]',
+  text: 'bg-transparent text-on-surface hover:bg-on-surface/[var(--state-hover-opacity)] active:bg-on-surface/[var(--state-pressed-opacity)]',
+  danger: cn(filledStateLayer, 'bg-error text-on-error after:bg-on-error'),
 }
 
 /**
@@ -167,7 +164,8 @@ const Spinner: React.FC<{ size: Size }> = ({ size }) => {
  * - Proper hover, focus, and active states matching Button.tsx
  * - State layer uses ::after pseudo-element for filled variants
  * - Direct background opacity for text/outline variants
- * - Accessible focus ring with proper offset
+ * - Accessible 2px on-surface focus outline with a 2px offset, so it never
+ *   blends into a filled variant's own fill
  * - Square aspect ratio optimized for icons
  *
  * Requires aria-label for accessibility

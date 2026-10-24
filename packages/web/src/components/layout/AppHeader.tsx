@@ -74,7 +74,7 @@ export function AppHeaderIconButton({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
+        'w-9 h-9 rounded-[var(--radius-card)] flex items-center justify-center shrink-0',
         'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest',
         'transition-colors duration-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
         '[&>svg]:w-5 [&>svg]:h-5',

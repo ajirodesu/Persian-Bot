@@ -12,6 +12,35 @@
    ============================================================ */
 
 @layer utilities {
+  /* Platform identity — the only sanctioned place brand hues live. */
+  .platform-text-discord {
+    color: rgb(var(--platform-discord));
+  }
+  .platform-text-telegram {
+    color: rgb(var(--platform-telegram));
+  }
+  .platform-tile-discord {
+    color: rgb(var(--platform-discord));
+    border-color: rgb(var(--platform-discord) / 0.32);
+    background-color: rgb(var(--platform-discord) / 0.12);
+  }
+  .platform-tile-telegram {
+    color: rgb(var(--platform-telegram));
+    border-color: rgb(var(--platform-telegram) / 0.32);
+    background-color: rgb(var(--platform-telegram) / 0.12);
+  }
+  .theme-dot-jasper {
+    background-color: rgb(var(--accent-jasper) / 0.8);
+  }
+  .theme-dot-amethyst {
+    background-color: rgb(var(--accent-amethyst) / 0.8);
+  }
+  .platform-tile-neutral {
+    color: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary) / 0.32);
+    background-color: rgb(var(--color-primary) / 0.12);
+  }
+
   /**
    * Chrome surface utility (kept for compatibility).
    *

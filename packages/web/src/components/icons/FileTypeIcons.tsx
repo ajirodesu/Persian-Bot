@@ -163,7 +163,7 @@ const FILE_TYPE_MAP: Record<string, FileMark> = {
   cs: { icon: FileCode2, className: 'text-success' },
   swift: { icon: FileCode2, className: 'text-tertiary' },
   kt: { icon: FileCode2, className: 'text-tertiary' },
-  txt: { icon: FileText, className: 'text-on-surface-variant/70' },
+  txt: { icon: FileText, className: 'text-on-surface-variant/85' },
   svg: { icon: FileImage, className: 'text-warning' },
   png: { icon: FileImage, className: 'text-warning' },
   jpg: { icon: FileImage, className: 'text-warning' },
@@ -196,7 +196,7 @@ const NPM_FILES = new Set([
 
 const fallback: FileMark = {
   icon: FileText,
-  className: 'text-on-surface-variant/70',
+  className: 'text-on-surface-variant/85',
 }
 
 /** Returns the typed mark + tint for a file path (defaults to neutral). */

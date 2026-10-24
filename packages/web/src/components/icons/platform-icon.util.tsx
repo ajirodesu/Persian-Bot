@@ -2,7 +2,7 @@
 import type { ComponentType } from 'react'
 import { Bot } from 'lucide-react'
 import { Platforms } from '@/constants/platform.constants'
-import { DiscordIcon, TelegramIcon, FluxerIcon } from '@/components/icons/PlatformIcons'
+import { DiscordIcon, TelegramIcon } from '@/components/icons/PlatformIcons'
 
 /** Icon component-by-platform lookup — for call sites that need the raw
  *  component reference (e.g. rendered as `<Icon className={...} />` in a
@@ -10,7 +10,6 @@ import { DiscordIcon, TelegramIcon, FluxerIcon } from '@/components/icons/Platfo
 const PLATFORM_ICON_COMPONENTS: Record<string, ComponentType<{ className?: string }>> = {
   [Platforms.Discord]: DiscordIcon,
   [Platforms.Telegram]: TelegramIcon,
-  [Platforms.Fluxer]: FluxerIcon,
 }
 
 export function getPlatformIconComponent(
@@ -28,11 +27,9 @@ export function getPlatformIcon(platform: string, className = 'h-5 w-5') {
 export function getPlatformColors(platform: string): string {
   switch (platform) {
     case Platforms.Discord:
-      return 'bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20'
+      return 'platform-tile-discord border'
     case Platforms.Telegram:
-      return 'bg-[#26A5E4]/10 text-[#26A5E4] border border-[#26A5E4]/20'
-    case Platforms.Fluxer:
-      return 'bg-[#4641D9]/10 text-[#4641D9] border border-[#4641D9]/20'
+      return 'platform-tile-telegram border'
     default:
       return 'bg-primary-container text-on-primary-container border border-primary/20'
   }

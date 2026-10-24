@@ -133,7 +133,8 @@ html[data-theme='amethyst'] {
 
   /* ==================== INPUT SURFACES ==================== */
   --color-input-bg: #151a24;
-  --color-input-border: #2d3441;
+  /* 3.43:1 vs --color-input-bg, 3.72:1 vs --color-surface (WCAG 1.4.11) */
+  --color-input-border: #666e85;
 
   /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
   --shadow-soft-sm: none;

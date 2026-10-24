@@ -290,7 +290,7 @@ const CodeEditor = memo(function CodeEditor({
                 codeClasses,
                 'pointer-events-auto h-full w-full resize-none overflow-hidden bg-transparent ' +
                   'text-transparent caret-[rgb(var(--color-primary))] selection:bg-primary/30 ' +
-                  'placeholder:text-on-surface-variant/60',
+                  'placeholder:text-on-surface-variant/80',
               )}
               style={{
                 paddingLeft: CODE_PAD_X,
@@ -306,7 +306,7 @@ const CodeEditor = memo(function CodeEditor({
               aria-hidden="true"
               className={cn(
                 codeClasses,
-                'pointer-events-none absolute text-on-surface-variant/60 whitespace-pre-wrap',
+                'pointer-events-none absolute text-on-surface-variant/80 whitespace-pre-wrap',
               )}
               style={{
                 left: gutterWidth,

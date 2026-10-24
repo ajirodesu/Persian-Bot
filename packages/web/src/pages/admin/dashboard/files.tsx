@@ -132,7 +132,7 @@ const RowMenu = memo(function RowMenu({
         aria-label={label}
         title={label}
         onClick={toggle}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/70 hover:bg-on-surface/10 hover:text-on-surface"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-on-surface-variant/85 hover:bg-on-surface/10 hover:text-on-surface"
       >
         <MoreVertical className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
       </button>
@@ -345,7 +345,7 @@ const TreeFolderRow = memo(function TreeFolderRow(props: FileTreeProps) {
         )}
         <ChevronRight
           className={cn(
-            'h-4 w-4 shrink-0 transition-transform duration-200 text-on-surface-variant/70',
+            'h-4 w-4 shrink-0 transition-transform duration-200 text-on-surface-variant/85',
             isOpen && 'rotate-90',
           )}
           aria-hidden="true"
@@ -602,7 +602,7 @@ const SearchResultRow = memo(function SearchResultRow({
       >
         {node.name}
       </span>
-      <span className="hidden shrink-0 max-w-[40%] truncate pl-1 pr-1 font-mono text-[10px] text-on-surface-variant/60 sm:block">
+      <span className="hidden shrink-0 max-w-[40%] truncate pl-1 pr-1 font-mono text-[10px] text-on-surface-variant/80 sm:block">
         {parentDir}
       </span>
     </div>
@@ -854,7 +854,7 @@ export default function AdminFilesPage() {
             </h2>
             <div className="flex items-center gap-2">
               {rootEntries && (
-                <span className="text-[11px] font-mono font-medium text-surface-variant">
+                <span className="text-[11px] font-mono font-medium text-on-surface-variant">
                   {rootEntries.length} items
                 </span>
               )}
