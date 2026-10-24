@@ -11,3 +11,6 @@ packages/cat-bot/data
 .compile-cache
 .env
 .opencode/memory.json
+packages/cat-bot/.email-preview
+docs/design-review
+docs/email-review
