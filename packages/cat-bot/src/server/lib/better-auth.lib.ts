@@ -26,9 +26,8 @@ import { createAuthMiddleware, APIError } from 'better-auth/api';
 import { sendMail } from './mailer.lib.js';
 import { generateOtp } from './otp.lib.js';
 import {
-  buildEmailLayout,
-  buildCodeBlock,
-  COLORS,
+  buildPasswordResetEmail,
+  buildVerificationEmail,
 } from '@/server/email-template/index.js';
 
 const isMongo = env.DATABASE_TYPE === 'mongodb';
@@ -47,6 +46,12 @@ const trustedOrigins = [
     'http://127.0.0.1:5000',
   ]),
 ];
+
+// Public origin used by transactional-email buttons. VITE_URL is the deployed
+// frontend; BETTER_AUTH_URL is the API origin and a safe fallback for
+// single-origin deployments.
+const emailWebBase =
+  (env.VITE_URL ?? env.BETTER_AUTH_URL ?? 'http://localhost:5000').replace(/\/$/, '');
 
 // Email services are only enabled when BOTH the feature toggle is 'true' AND the
 // Brevo credentials are configured. Without credentials, verification is
@@ -122,19 +127,17 @@ export const auth = betterAuth({
     ...(isEmailServicesEnabled && {
       sendResetPassword: async ({ user }) => {
         const resetCode = generateOtp(user.email, 'reset-password');
+        const template = buildPasswordResetEmail({
+          name: String(user.name ?? ''),
+          code: resetCode,
+          scope: 'user',
+          actionUrl: `${emailWebBase}/reset-password?email=${encodeURIComponent(user.email)}`,
+        });
         void sendMail({
           to: user.email,
-          subject: 'Reset your Cat-Bot password',
-          html: buildEmailLayout(
-            `
-            <p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${String(user.name ?? user.email)},</p>
-            <p style="margin: 0 0 24px 0;">Use the code below to reset your Cat-Bot password:</p>
-            ${buildCodeBlock(resetCode)}
-            <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>
-          `,
-            'Securely reset your password',
-          ),
-          text: `Your Cat-Bot password reset code is ${resetCode}. It expires in 10 minutes.`,
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
         });
       },
     }),
@@ -151,19 +154,17 @@ export const auth = betterAuth({
       // that reveals whether a given email address is registered vs unknown, enabling
       // automated user enumeration attacks
       const verifyCode = generateOtp(user.email, 'email-verification');
+      const template = buildVerificationEmail({
+        name: String(user.name ?? ''),
+        code: verifyCode,
+        scope: 'user',
+        actionUrl: `${emailWebBase}/account-verification?email=${encodeURIComponent(user.email)}`,
+      });
       void sendMail({
         to: user.email,
-        subject: 'Verify your Cat-Bot email address',
-        html: buildEmailLayout(
-          `
-          <p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${String(user.name ?? user.email)},</p>
-          <p style="margin: 0 0 24px 0;">Use the code below to verify your email and activate your Cat-Bot account:</p>
-          ${buildCodeBlock(verifyCode)}
-          <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This code expires in 10 minutes. If you did not sign up for Cat-Bot, you can safely ignore this email.</p>
-        `,
-          'Verify your email address',
-        ),
-        text: `Your Cat-Bot verification code is ${verifyCode}. It expires in 10 minutes.`,
+        subject: template.subject,
+        html: template.html,
+        text: template.text,
       });
     },
   },
@@ -252,19 +253,17 @@ emailVerification: {
     ...(isEmailServicesEnabled && {
       sendVerificationEmail: async ({ user }) => {
         const adminVerifyCode = generateOtp(user.email, 'email-verification');
+        const template = buildVerificationEmail({
+          name: String(user.name ?? ''),
+          code: adminVerifyCode,
+          scope: 'admin',
+          actionUrl: `${emailWebBase}/admin`,
+        });
         void sendMail({
           to: user.email,
-          subject: 'Verify your Cat-Bot Admin email address',
-          html: buildEmailLayout(
-            `
-            <p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${String(user.name ?? user.email)},</p>
-            <p style="margin: 0 0 24px 0;">Use the code below to verify your new email address and activate the change:</p>
-            ${buildCodeBlock(adminVerifyCode)}
-            <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>
-          `,
-            'Verify your admin email address',
-          ),
-          text: `Your Cat-Bot Admin verification code is ${adminVerifyCode}. It expires in 10 minutes.`,
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
         });
       },
     }),
@@ -277,19 +276,17 @@ emailVerification: {
     ...(isEmailServicesEnabled && {
       sendResetPassword: async ({ user }) => {
         const adminResetCode = generateOtp(user.email, 'reset-password');
+        const template = buildPasswordResetEmail({
+          name: String(user.name ?? ''),
+          code: adminResetCode,
+          scope: 'admin',
+          actionUrl: `${emailWebBase}/admin/reset-password?email=${encodeURIComponent(user.email)}`,
+        });
         void sendMail({
           to: user.email,
-          subject: 'Reset your Cat-Bot Admin password',
-          html: buildEmailLayout(
-            `
-            <p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${String(user.name ?? user.email)},</p>
-            <p style="margin: 0 0 24px 0;">Use the code below to securely reset your admin password:</p>
-            ${buildCodeBlock(adminResetCode)}
-            <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>
-          `,
-            'Securely reset your admin password',
-          ),
-          text: `Your Cat-Bot Admin password reset code is ${adminResetCode}. It expires in 10 minutes.`,
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
         });
       },
     }),

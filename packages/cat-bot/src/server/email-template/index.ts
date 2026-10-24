@@ -1,194 +1,468 @@
 /**
- * Vanilla HTML Email Templates
+ * Transactional email system.
  *
- * Mapped directly from packages/web/src/styles/theme/aqua.css — the current
- * default Cat-Bot dashboard theme (dark teal, "Aqua"). The design mirrors the
- * auth pages' glass treatment: a dark ambient surface and a frosted rounded
- * card with a subtle top-edge specular catch.
+ * Design intent: the same "telemetry printout" as the product — a ruled
+ * document, not a marketing card. One accent, one button, a large legible
+ * code, and copy that states exactly what happened and what to do next.
  *
- * Responsive strategy:
- *   - The container is fluid (width:100%) and never exceeds 760px, so it
- *     stretches gracefully on desktop/large mail panes instead of floating as
- *     a small column, while staying full-width and comfortable on phones.
- *   - A <style> block in the <head> holds shared classes + media queries
- *     (@media ≤600px tightens spacing/typography, @media ≥1024px adds air on
- *     large displays). Every class has a matching inline style fallback so
- *     clients that strip <style> still render correctly.
+ * Engineering constraints:
+ * - Table-based layout with inline styles; `<style>` only enhances dark mode
+ *   and small screens. Gmail, Outlook desktop/web, Apple Mail, Yahoo and
+ *   mobile clients all render the inline baseline.
+ * - 600px max width, fluid below it.
+ * - Light by default (most clients), with a real `prefers-color-scheme: dark`
+ *   palette plus `[data-ogsc]` overrides for Outlook.com dark mode.
+ * - No images: the mark is a CSS square and text, so the email is fully
+ *   readable with images blocked and no alt-text can be missed.
+ * - Every colour, size, radius and spacing value comes from `EMAIL_TOKENS`.
  *
- * Email clients are fickle about advanced CSS, so the layout leans on tables
- * + inline styles and only uses media queries for the padding/type tweaks.
+ * Contrast (light): ink #15181A on #FFFFFF = 17.8:1, muted #5C6760 on #FFFFFF
+ * = 6.1:1, white on accent #0B7A55 = 5.1:1. Dark: #E6EAE3 on #141817 = 14.9:1,
+ * #A6B0A8 on #141817 = 7.4:1, #062017 on #3DDC97 = 11.2:1.
  */
 
-export const COLORS = {
-  primary: '#34e0be', // var(--aqua-color-primary)    rgb(52 224 190)
-  onPrimary: '#051617', // var(--aqua-color-on-primary)  rgb(5 22 23)
-  surface: '#070e11', // var(--aqua-color-surface)     rgb(7 14 17)
-  onSurface: '#f0f7f5', // var(--aqua-color-on-surface)  rgb(240 247 245)
-  onSurfaceVariant: '#98a8a4', // var(--aqua-color-on-surface-variant) rgb(152 168 164)
-  surfaceContainerLow: '#0a1114', // var(--aqua-color-surface-container-low) rgb(10 17 20)
-  outlineVariant: '#2a3634', // var(--aqua-color-outline-variant)       rgb(42 54 52)
-};
+export interface EmailTemplate {
+  subject: string
+  preheader: string
+  html: string
+  text: string
+}
 
-// The Aqua theme is dark by default, so the forced dark-mode overrides simply
-// restate the same swatches to keep transactional mail consistent with the app
-// regardless of the reader's preferred color scheme.
-const DARK_COLORS = {
-  primary: '#34e0be',
-  onPrimary: '#051617',
-  surface: '#0a1114',
-  onSurface: '#f0f7f5',
-  onSurfaceVariant: '#98a8a4',
-  surfaceContainerLow: '#070e11',
-  outlineVariant: '#2a3634',
-};
+type EmailScope = 'user' | 'admin'
 
-// Shared <style> block — CSS class hooks let media queries reshape padding and
-// type at every breakpoint while the inline styles below act as the baseline.
-const STYLE_BLOCK = `
-  :root { color-scheme: light dark; supported-color-schemes: light dark; }
-  * { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+interface BaseEmailOptions {
+  /** Recipient display name. Falls back to a neutral greeting. */
+  name?: string | undefined
+  /** Where the primary button points. Repeated as a plain-URL fallback. */
+  actionUrl: string
+  /** Support destination shown in the footer. */
+  supportUrl?: string
+}
 
-  .body-bg {
-    background-color: ${COLORS.surfaceContainerLow};
-    background-image:
-      radial-gradient(46% 30% at 12% 0%, rgba(52, 224, 190, 0.10), transparent 100%),
-      radial-gradient(42% 34% at 100% 100%, rgba(129, 140, 248, 0.08), transparent 100%);
-  }
+interface CodeEmailOptions extends BaseEmailOptions {
+  code: string
+  expiresInMinutes?: number
+}
 
-  .email-container { width: 100%; max-width: 760px; margin: 0 auto; }
+// ── Tokens ───────────────────────────────────────────────────────────────────
 
-  .card {
-    background-color: ${COLORS.surface};
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 64px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 24px;
-    box-shadow: 0 24px 64px -20px rgba(0, 0, 0, 0.65);
-    overflow: hidden;
-  }
-  .card > .card-specular { height: 2px; background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12) 30%, rgba(52, 224, 190, 0.5) 50%, rgba(255, 255, 255, 0.12) 70%, transparent); }
+const LIGHT = {
+  page: '#F3F5F2',
+  card: '#FFFFFF',
+  ink: '#15181A',
+  muted: '#5C6760',
+  hairline: '#DCE2DB',
+  accent: '#0B7A55',
+  accentInk: '#FFFFFF',
+  codeBg: '#F1F5F0',
+  codeBorder: '#CBD8CD',
+  footer: '#7A847D',
+} as const
 
-  .header { padding: 28px 44px 0; }
-  .content { padding: 32px 44px 8px; font-size: 17px; line-height: 1.65; color: ${COLORS.onSurfaceVariant}; }
-  .footer { padding: 28px 44px 40px; text-align: center; }
+const DARK = {
+  page: '#0B0D0C',
+  card: '#141817',
+  ink: '#E6EAE3',
+  muted: '#A6B0A8',
+  hairline: '#2A312C',
+  accent: '#3DDC97',
+  accentInk: '#062017',
+  codeBg: '#0F1312',
+  codeBorder: '#2E3A31',
+  footer: '#8A948C',
+} as const
 
-  .otp-box {
-    display: inline-block;
-    margin: 28px 0 8px;
-    padding: 24px 46px;
-    border-radius: 16px;
-    background-color: ${COLORS.surfaceContainerLow};
-    border: 1px solid ${COLORS.outlineVariant};
-    box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.6);
-  }
-  .otp-code {
-    display: block;
-    font-size: 32px;
-    font-weight: 800;
-    letter-spacing: 0.24em;
-    color: ${COLORS.primary};
-    font-family: 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
-    text-align: center;
-  }
+export const EMAIL_TOKENS = {
+  width: 600,
+  radius: 4,
+  color: { light: LIGHT, dark: DARK },
+  font: {
+    // Email-safe stacks only. No webfont: most clients strip @font-face, so a
+    // second webfont would silently fail and change the layout mid-inbox.
+    body: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+    mono: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+  },
+  type: {
+    h1: 26,
+    h1Mobile: 22,
+    eyebrow: 11,
+    body: 16,
+    bodyMobile: 15,
+    small: 13,
+    code: 34,
+    codeMobile: 28,
+    wordmark: 16,
+  },
+  space: {
+    pageY: 32,
+    card: 40,
+    cardMobile: 22,
+    block: 20,
+    tight: 10,
+    footerY: 28,
+  },
+  line: {
+    body: 1.6,
+    heading: 1.15,
+  },
+} as const
 
-  @media only screen and (min-width: 1024px) {
-    .card { border-radius: 28px; }
-    .header { padding: 36px 56px 0 !important; }
-    .content { padding: 40px 56px 12px !important; }
-    .otp-box { padding: 28px 54px !important; margin: 32px 0 10px !important; }
-    .otp-code { font-size: 36px !important; }
-    .footer { padding: 32px 56px 44px !important; }
-  }
+export const SUPPORT_URL = 'https://github.com/ajirodesu/Persian-Bot/issues'
 
-  @media only screen and (max-width: 600px) {
-    .email-container { max-width: 100% !important; }
-    .card { border-radius: 18px !important; }
-    .header { padding: 22px 20px 0 !important; }
-    .content { padding: 24px 20px 6px !important; font-size: 15px !important; line-height: 1.55 !important; }
-    .otp-box { padding: 16px 18px !important; margin: 24px 0 6px !important; }
-    .otp-code { font-size: 24px !important; letter-spacing: 0.18em !important; }
-    .footer { padding: 22px 20px 30px !important; }
-  }
+// ── Escaping ─────────────────────────────────────────────────────────────────
 
-  @media (prefers-color-scheme: dark) {
-    .body-bg { background-color: ${DARK_COLORS.surfaceContainerLow} !important; }
-    .card { background-color: ${DARK_COLORS.surface} !important; border-color: rgba(255, 255, 255, 0.08) !important; }
-    .text-on-surface-variant { color: ${DARK_COLORS.onSurfaceVariant} !important; }
-    .text-outline-variant { color: ${DARK_COLORS.outlineVariant} !important; }
-  }
-`;
+/** Escapes user-controlled strings (names/emails) before interpolation. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
-// ── Layout shell ───────────────────────────────────────────────────────────────
+function escapeUrl(value: string): string {
+  return escapeHtml(value).replace(/ /g, '%20')
+}
 
-// Wraps dynamic content within our branded email layout shell. Fluid container
-// (max 760px) + table scaffolding keeps the card centered and readable on any
-// window size, from a 320px phone to a 4K desktop mail client.
-export function buildEmailLayout(
-  content: string,
-  previewText?: string,
-): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <title>Cat-Bot</title>
-  <style>${STYLE_BLOCK}</style>
-</head>
-<body class="body-bg" style="margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: ${COLORS.surfaceContainerLow}; color: ${COLORS.onSurface}; -webkit-font-smoothing: antialiased;">
-  ${previewText ? `<div style="display: none; max-height: 0; overflow: hidden;">${previewText}</div>` : ''}
+// ── Shared building blocks ───────────────────────────────────────────────────
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="body-bg">
+function button(url: string, label: string): string {
+  const { radius, font, type, space, color } = EMAIL_TOKENS
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td align="center" style="padding: 24px 16px 40px;">
-        <table role="presentation" class="email-container" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 760px; margin: 0 auto;">
+      <td align="center" bgcolor="${color.light.accent}" class="email-button-cell" style="border-radius:${radius}px; background-color:${color.light.accent};">
+        <a href="${escapeUrl(url)}" target="_blank" rel="noopener" class="email-button" style="display:inline-block; padding:14px 24px; font-family:${font.body}; font-size:${type.body}px; font-weight:700; line-height:1; color:${color.light.accentInk}; text-decoration:none; border-radius:${radius}px;">${escapeHtml(label)}</a>
+      </td>
+    </tr>
+  </table>
+  <p class="email-muted" style="margin:${space.tight}px 0 0; font-family:${font.mono}; font-size:${type.eyebrow}px; line-height:1.5; color:${color.light.muted}; word-break:break-all;">
+    Button not working? <a href="${escapeUrl(url)}" target="_blank" rel="noopener" style="color:${color.light.accent}; text-decoration:underline;">Open the link instead</a>
+  </p>`
+}
+
+function codeBlock(code: string): string {
+  const { font, type, space, color, radius } = EMAIL_TOKENS
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-code-wrap">
+    <tr>
+      <td align="center" style="padding:${space.block}px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
-            <td class="card" style="background-color: ${COLORS.surface}; background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 64px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px; box-shadow: 0 24px 64px -20px rgba(0, 0, 0, 0.65); overflow: hidden;">
-              <div class="card-specular" style="height: 2px; background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12) 30%, rgba(52, 224, 190, 0.5) 50%, rgba(255, 255, 255, 0.12) 70%, transparent);"></div>
-
-              <!-- Card header — brand row that scales with the container -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="header" style="padding: 28px 44px 0;">
-                <tr>
-                  <td align="left" style="font-size: 17px; font-weight: 700; letter-spacing: 0.04em; color: ${COLORS.onSurface};">
-                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${COLORS.primary}; margin-right: 8px; vertical-align: middle;"></span>Cat-Bot
-                  </td>
-                  <td align="right" style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: ${COLORS.outlineVariant};">
-                    Automated email
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Content -->
-              <div class="content" style="padding: 32px 44px 8px; font-size: 17px; line-height: 1.65; color: ${COLORS.onSurfaceVariant};">
-                ${content}
-              </div>
-
-              <!-- Footer -->
-              <div class="footer" style="padding: 28px 44px 40px; text-align: center;">
-                <p class="text-outline-variant" style="margin: 0 0 6px 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: ${COLORS.outlineVariant};">Cat-Bot</p>
-                <p class="text-outline-variant" style="margin: 0; font-size: 13px; line-height: 1.6; color: ${COLORS.outlineVariant};">
-                  This is an automated message. Please do not reply to this email.
-                </p>
-              </div>
+            <td align="center" bgcolor="${color.light.codeBg}" class="email-code-cell" style="padding:22px 20px; border:1px solid ${color.light.codeBorder}; border-radius:${radius}px; background-color:${color.light.codeBg};">
+              <span class="email-code" style="font-family:${font.mono}; font-size:${type.code}px; line-height:1; font-weight:700; letter-spacing:0.24em; color:${color.light.accent}; mso-line-height-rule:exactly;">${escapeHtml(code)}</span>
             </td>
           </tr>
         </table>
       </td>
     </tr>
-  </table>
-</body>
-</html>`;
+  </table>`
 }
 
-// Renders a large, phone-style one-time code that recipients copy into the
-// verification/reset form. Glyph-spaced so it scans easily in every client,
-// and scales up on large windows / down on narrow phones via .otp-box/.otp-code.
-export function buildCodeBlock(code: string): string {
-  const digits = code.split('').join(' ');
-  return `<div style="text-align: center; width: 100%;">
-    <div class="otp-box" style="display: inline-block; margin: 28px 0 8px; padding: 24px 46px; border-radius: 16px; background-color: ${COLORS.surfaceContainerLow}; border: 1px solid ${COLORS.outlineVariant}; box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.6);">
-      <span class="otp-code" style="display: block; font-size: 32px; font-weight: 800; letter-spacing: 0.24em; color: ${COLORS.primary}; font-family: 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace; text-align: center;">${digits}</span>
-    </div>
-  </div>`;
+/** Paragraph with the shared body rhythm. */
+function p(html: string, options: { muted?: boolean } = {}): string {
+  const { font, type, space, color, line } = EMAIL_TOKENS
+  return `<p class="email-text${options.muted ? ' email-muted' : ''}" style="margin:0 0 ${space.tight}px; font-family:${font.body}; font-size:${type.body}px; line-height:${line.body}; color:${options.muted ? color.light.muted : color.light.ink};">${html}</p>`
+}
+
+// ── Shell ────────────────────────────────────────────────────────────────────
+
+function shell({
+  preheader,
+  scopeLabel,
+  eyebrow,
+  headingText,
+  content,
+  supportUrl,
+}: {
+  preheader: string
+  scopeLabel: string
+  eyebrow: string
+  headingText: string
+  content: string
+  supportUrl: string
+}): string {
+  const t = EMAIL_TOKENS
+  const c = t.color.light
+  const cardPad = t.space.card
+
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${escapeHtml(headingText)}</title>
+  <!--[if mso]>
+  <style>
+    body, table, td, p, a { font-family: Arial, Helvetica, sans-serif !important; }
+    .email-code { font-family: Consolas, 'Courier New', monospace !important; }
+  </style>
+  <![endif]-->
+  <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    body { margin:0 !important; padding:0 !important; width:100% !important; }
+    table { border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; }
+    img { border:0; outline:none; text-decoration:none; }
+    a { text-decoration:none; }
+    .email-page { background-color:${c.page}; }
+    .email-card { background-color:${c.card}; border:1px solid ${c.hairline}; }
+    .email-text { color:${c.ink}; }
+    .email-heading { color:${c.ink}; }
+    .email-muted { color:${c.muted}; }
+    .email-code-cell { background-color:${c.codeBg}; border-color:${c.codeBorder}; }
+    .email-code { color:${c.accent}; }
+    .email-button-cell { background-color:${c.accent}; }
+    .email-button { color:${c.accentInk}; }
+    .email-footer { color:${c.footer}; }
+
+    @media only screen and (max-width:600px) {
+      .email-card { border-radius:0 !important; border-left:0 !important; border-right:0 !important; }
+      .email-pad { padding-left:${t.space.cardMobile}px !important; padding-right:${t.space.cardMobile}px !important; }
+      .email-h1 { font-size:${t.type.h1Mobile}px !important; }
+      .email-text { font-size:${t.type.bodyMobile}px !important; }
+      .email-code { font-size:${t.type.codeMobile}px !important; letter-spacing:0.18em !important; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .email-page { background-color:${DARK.page} !important; }
+      .email-card { background-color:${DARK.card} !important; border-color:${DARK.hairline} !important; }
+      .email-text, .email-heading { color:${DARK.ink} !important; }
+      .email-muted { color:${DARK.muted} !important; }
+      .email-code-cell { background-color:${DARK.codeBg} !important; border-color:${DARK.codeBorder} !important; }
+      .email-code { color:${DARK.accent} !important; }
+      .email-button-cell { background-color:${DARK.accent} !important; }
+      .email-button { color:${DARK.accentInk} !important; }
+      .email-footer { color:${DARK.footer} !important; }
+    }
+
+    /* Outlook.com dark mode (non-standard), still the most reliable hook. */
+    [data-ogsc] .email-page { background-color:${DARK.page} !important; }
+    [data-ogsc] .email-card { background-color:${DARK.card} !important; border-color:${DARK.hairline} !important; }
+    [data-ogsc] .email-text, [data-ogsc] .email-heading { color:${DARK.ink} !important; }
+    [data-ogsc] .email-muted, [data-ogsc] .email-footer { color:${DARK.muted} !important; }
+    [data-ogsc] .email-code { color:${DARK.accent} !important; }
+  </style>
+</head>
+<body class="email-page" bgcolor="${c.page}" style="margin:0; padding:0; background-color:${c.page}; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+  <div style="display:none; font-size:1px; color:${c.page}; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
+    ${escapeHtml(preheader)}
+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${c.page}" class="email-page" style="background-color:${c.page};">
+    <tr>
+      <td align="center" class="email-page" style="padding:${t.space.pageY}px 12px; background-color:${c.page};">
+
+        <!-- Masthead -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:${t.width}px;">
+          <tr>
+            <td class="email-pad" style="padding:0 0 18px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="left" valign="middle">
+                    <span style="display:inline-block; width:10px; height:10px; background-color:${c.accent}; vertical-align:middle; margin-right:9px;"></span>
+                    <span class="email-heading" style="font-family:${t.font.body}; font-size:${t.type.wordmark}px; font-weight:700; letter-spacing:0.14em; color:${c.ink}; vertical-align:middle;">CAT-BOT</span>
+                  </td>
+                  <td align="right" valign="middle" class="email-footer" style="font-family:${t.font.mono}; font-size:${t.type.eyebrow}px; letter-spacing:0.16em; color:${c.footer};">
+                    ${escapeHtml(scopeLabel)}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Card -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:${t.width}px;">
+          <tr>
+            <td class="email-card" bgcolor="${c.card}" style="background-color:${c.card}; border:1px solid ${c.hairline}; border-radius:${t.radius}px; overflow:hidden;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td class="email-pad" style="padding:${cardPad}px ${cardPad}px 0;">
+                    <p style="margin:0 0 14px; font-family:${t.font.mono}; font-size:${t.type.eyebrow}px; letter-spacing:0.18em; text-transform:uppercase; color:${c.accent};">${escapeHtml(eyebrow)}</p>
+                    <h1 class="email-h1 email-heading" style="margin:0 0 16px; font-family:${t.font.body}; font-size:${t.type.h1}px; line-height:${t.line.heading}; font-weight:700; color:${c.ink};">${escapeHtml(headingText)}</h1>
+                    ${content}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-pad" style="padding:${t.space.block}px ${cardPad}px 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td height="1" style="height:1px; background-color:${c.hairline}; line-height:1px; font-size:0;">&nbsp;</td></tr></table>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-pad" style="padding:${t.space.footerY}px ${cardPad}px;">
+                    <p class="email-footer" style="margin:0 0 6px; font-family:${t.font.body}; font-size:${t.type.small}px; line-height:1.6; color:${c.footer};">
+                      Cat-Bot · Operations console. This is a transactional message about your account, not marketing.
+                    </p>
+                    <p class="email-footer" style="margin:0; font-family:${t.font.body}; font-size:${t.type.small}px; line-height:1.6; color:${c.footer};">
+                      Need help? <a href="${escapeUrl(supportUrl)}" target="_blank" rel="noopener" style="color:${c.accent}; text-decoration:underline;">Open a support issue</a>.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
+// ── Copy helpers ─────────────────────────────────────────────────────────────
+
+function greeting(name: string | undefined): string {
+  return name && name.trim().length > 0
+    ? `Hello ${escapeHtml(name)},`
+    : 'Hello,'
+}
+
+function securityNote(what: string): string {
+  return `<div style="margin-top:${EMAIL_TOKENS.space.block}px;">${p(
+    `Didn't request this? ${what}`,
+    { muted: true },
+  )}</div>`
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
+/** Email verification (user or admin scope). */
+export function buildVerificationEmail(
+  options: CodeEmailOptions & { scope?: EmailScope },
+): EmailTemplate {
+  const { name, code, actionUrl, supportUrl = SUPPORT_URL } = options
+  const expires = options.expiresInMinutes ?? 10
+  const admin = options.scope === 'admin'
+  const subject = admin
+    ? 'Your Cat-Bot admin verification code'
+    : 'Your Cat-Bot verification code'
+  const heading = admin ? 'Verify admin access' : 'Verify your email'
+  const scopeLabel = admin ? 'ADMIN SECURITY' : 'ACCOUNT SECURITY'
+  const purpose = admin
+    ? 'verify the new email address on your Cat-Bot admin account'
+    : 'verify your email address and activate your Cat-Bot account'
+  const didNotRequest = admin
+    ? 'If you did not change the admin email address, contact the repository owner immediately.'
+    : 'If you did not create a Cat-Bot account, no action is needed.'
+
+  const intro =
+    p(greeting(name)) +
+    p(
+      admin
+        ? 'Use the code below to verify the new email address on your Cat-Bot admin account.'
+        : 'Use the code below to verify your email address and activate your Cat-Bot account.',
+    )
+
+  const content = `${intro}
+  ${codeBlock(code)}
+  ${p(`This code expires in ${expires} minutes. It can be used once.`, { muted: true })}
+  ${button(actionUrl, admin ? 'Open admin console' : 'Enter your code')}
+  ${securityNote(didNotRequest)}`
+
+  const preheader = `${admin ? 'Admin' : 'Your'} verification code expires in ${expires} minutes.`
+
+  return {
+    subject,
+    preheader,
+    html: shell({
+      preheader,
+      scopeLabel,
+      eyebrow: 'Verification',
+      headingText: heading,
+      content,
+      supportUrl,
+    }),
+    text: `${admin ? 'CAT-BOT / ADMIN SECURITY' : 'CAT-BOT / ACCOUNT SECURITY'}
+
+${heading}
+
+${name ? `Hello ${name},` : 'Hello,'}
+
+Use the code below to ${purpose}:
+
+    ${code}
+
+This code expires in ${expires} minutes. It can be used once.
+
+${admin ? 'Open the admin console' : 'Enter your code'}: ${actionUrl}
+
+Didn't request this? ${didNotRequest}
+
+--
+Cat-Bot · Operations console
+This is a transactional message about your account, not marketing.
+Support: ${supportUrl}
+`,
+  }
+}
+
+/** Password reset (user or admin scope). */
+export function buildPasswordResetEmail(
+  options: CodeEmailOptions & { scope?: EmailScope },
+): EmailTemplate {
+  const { name, code, actionUrl, supportUrl = SUPPORT_URL } = options
+  const expires = options.expiresInMinutes ?? 10
+  const admin = options.scope === 'admin'
+  const subject = admin
+    ? 'Reset your Cat-Bot admin password'
+    : 'Reset your Cat-Bot password'
+  const heading = admin ? 'Reset your admin password' : 'Reset your password'
+  const scopeLabel = admin ? 'ADMIN SECURITY' : 'ACCOUNT SECURITY'
+  const didNotRequest = admin
+    ? 'If you did not request an admin password reset, someone may be targeting this account — contact the repository owner and do not share this code.'
+    : 'If you did not request a password reset, your password has not changed and no action is needed.'
+
+  const intro =
+    p(greeting(name)) +
+    p(
+      admin
+        ? 'Use the code below to set a new password for your Cat-Bot admin account.'
+        : 'Use the code below to set a new password for your Cat-Bot account.',
+    )
+
+  const content = `${intro}
+  ${codeBlock(code)}
+  ${p(`This code expires in ${expires} minutes. It can be used once.`, { muted: true })}
+  ${button(actionUrl, 'Reset password')}
+  ${securityNote(didNotRequest)}`
+
+  const preheader = `Your password reset code expires in ${expires} minutes.`
+
+  return {
+    subject,
+    preheader,
+    html: shell({
+      preheader,
+      scopeLabel,
+      eyebrow: 'Password reset',
+      headingText: heading,
+      content,
+      supportUrl,
+    }),
+    text: `${admin ? 'CAT-BOT / ADMIN SECURITY' : 'CAT-BOT / ACCOUNT SECURITY'}
+
+${heading}
+
+${name ? `Hello ${name},` : 'Hello,'}
+
+Use the code below to set a new password for your Cat-Bot${admin ? ' admin' : ''} account:
+
+    ${code}
+
+This code expires in ${expires} minutes. It can be used once.
+
+Reset password: ${actionUrl}
+
+Didn't request this? ${didNotRequest}
+
+--
+Cat-Bot · Operations console
+This is a transactional message about your account, not marketing.
+Support: ${supportUrl}
+`,
+  }
 }

@@ -129,6 +129,9 @@ export async function sendMail(options: MailOptions): Promise<void> {
       },
     ],
     subject: options.subject,
+    // Deliverability hygiene: a monitored Reply-To (defaults to the verified
+    // sender) keeps replies out of a no-reply void and reduces spam signals.
+    replyTo: { email: env.BREVO_REPLY_TO ?? senderEmail, name: 'Cat-Bot Support' },
     htmlContent: options.html,
     ...(options.text !== undefined ? { textContent: options.text } : {}),
     ...(attachments ? { attachment: attachments } : {}),

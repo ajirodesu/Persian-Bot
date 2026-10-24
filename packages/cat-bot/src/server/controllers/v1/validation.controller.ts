@@ -3,7 +3,6 @@
  *
  * POST /api/v1/validate/discord          — verify Discord bot token via /users/@me
  * POST /api/v1/validate/telegram         — verify Telegram token via getMe
- * POST /api/v1/validate/fluxer           — verify Fluxer bot token via /users/@me
  * POST /api/v1/validate/email-reset      — check email existence (+ adminOnly role)
  * GET  /api/v1/validate/email-service-status — is transactional email configured?
  * POST /api/v1/validate/email-status     — email existence + verification flag
@@ -27,7 +26,7 @@ import { auth } from '@/server/lib/better-auth.lib.js';
 import axios from 'axios';
 import { isAuthError, withRetry, isNetworkError } from '@/engine/lib/retry.lib.js';
 import { generateOtp, checkOtp, consumeOtp } from '@/server/lib/otp.lib.js';
-import { buildEmailLayout, buildCodeBlock, COLORS } from '@/server/email-template/index.js';
+import { buildPasswordResetEmail } from '@/server/email-template/index.js';
 
 // ── Discord ───────────────────────────────────────────────────────────────────
 
@@ -84,33 +83,6 @@ export async function validateTelegram(req: Request, res: Response): Promise<voi
     if (e.response?.status === 401) { res.status(200).json({ valid: false, error: 'Invalid Telegram bot token' }); return; }
     logger.error('[validate] Telegram validation request failed', { error: err });
     res.status(500).json({ error: 'Failed to validate Telegram token' });
-  }
-}
-
-// ── Fluxer ────────────────────────────────────────────────────────────────────
-
-/** POST /api/v1/validate/fluxer — body: { fluxerToken } */
-export async function validateFluxer(req: Request, res: Response): Promise<void> {
-  const userId = await requireSession(req, res);
-  if (!userId) return;
-
-  const { fluxerToken } = req.body as { fluxerToken?: string };
-  if (!fluxerToken) { res.status(400).json({ error: 'Missing fluxerToken' }); return; }
-
-  try {
-    const response = await withRetry(
-      () => axios.get<{ username: string; id: string }>(
-        'https://api.fluxer.app/v1/users/@me',
-        { headers: { Authorization: `Bot ${fluxerToken}` } },
-      ),
-      { maxAttempts: 3, initialDelayMs: 1000, shouldRetry: (err) => !isAuthError(err) && isNetworkError(err) },
-    );
-    res.status(200).json({ valid: true, botName: response.data.username, botId: response.data.id });
-  } catch (err) {
-    const e = err as { response?: { status: number } };
-    if (e.response?.status === 401) { res.status(200).json({ valid: false, error: 'Invalid Fluxer bot token' }); return; }
-    logger.error('[validate] Fluxer validation request failed', { error: err });
-    res.status(500).json({ error: 'Failed to validate Fluxer token' });
   }
 }
 
@@ -206,17 +178,20 @@ export async function requestPasswordResetCustom(req: Request, res: Response): P
     const targetEmail = String(user['email'] ?? email);
     const targetName = String(user['name'] ?? email);
 
+    const webBase = (env.VITE_URL ?? env.BETTER_AUTH_URL ?? 'http://localhost:5000').replace(/\/$/, '');
+    const template = buildPasswordResetEmail({
+      name: targetName,
+      code: resetCode,
+      scope: adminOnly ? 'admin' : 'user',
+      actionUrl: adminOnly
+        ? `${webBase}/admin/reset-password?email=${encodeURIComponent(targetEmail)}`
+        : `${webBase}/reset-password?email=${encodeURIComponent(targetEmail)}`,
+    });
     await sendMail({
       to: targetEmail,
-      subject: adminOnly ? 'Reset your Cat-Bot Admin password' : 'Reset your Cat-Bot password',
-      html: buildEmailLayout(
-        `<p style="margin: 0 0 16px 0; color: ${COLORS.onSurface}; font-weight: 500;">Hello ${targetName},</p>
-        <p style="margin: 0 0 24px 0;">Use the code below to securely reset your ${adminOnly ? 'admin ' : ''}password:</p>
-        ${buildCodeBlock(resetCode)}
-        <p style="margin: 24px 0 0 0; color: ${COLORS.outlineVariant}; font-size: 14px;">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>`,
-        'Securely reset your password',
-      ),
-      text: `Your Cat-Bot password reset code is ${resetCode}. It expires in 10 minutes.`,
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
     });
 
     res.status(200).json({ success: true });
