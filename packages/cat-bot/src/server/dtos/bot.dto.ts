@@ -2,8 +2,7 @@
 // (repo, controller) to handle all platforms at compile time rather than runtime.
 export type PlatformCredentials =
   | { platform: 'discord'; discordToken: string; discordClientId: string }
-  | { platform: 'telegram'; telegramToken: string }
-  | { platform: 'fluxer'; fluxerToken: string };
+  | { platform: 'telegram'; telegramToken: string };
 
 export interface CreateBotRequestDto {
   botNickname: string;

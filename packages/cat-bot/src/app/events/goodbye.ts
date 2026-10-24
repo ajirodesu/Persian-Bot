@@ -34,11 +34,11 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 export const meta: EventMeta = {
   name: 'goodbye',
   type: ['log:unsubscribe'],
-  platform: ['discord', 'telegram', 'fluxer'],
+  platform: ['discord', 'telegram'],
   version: '2.0.0',
   author: 'AjiroDesu',
   description:
-    'Sends a farewell message when a member leaves the group (Discord, Telegram & Fluxer).',
+    'Sends a farewell message when a member leaves the group (Discord & Telegram).',
 };
 
 export const onEvent = async ({

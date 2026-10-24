@@ -36,11 +36,11 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
 export const meta: EventMeta = {
   name: 'welcome',
   type: ['log:subscribe'],
-  platform: ['discord', 'telegram', 'fluxer'],
+  platform: ['discord', 'telegram'],
   version: '2.0.0',
   author: 'AjiroDesu',
   description:
-    'Welcomes new members to the group with a rich greeting (Discord, Telegram & Fluxer).',
+    'Welcomes new members to the group with a rich greeting (Discord & Telegram).',
 };
 
 export const onEvent = async ({

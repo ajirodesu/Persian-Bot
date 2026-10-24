@@ -42,11 +42,11 @@ interface WarnedUser {
 export const meta: EventMeta = {
   name: 'checkwarn',
   type: ['log:subscribe'],
-  platform: ['discord', 'telegram', 'fluxer'],
+  platform: ['discord', 'telegram'],
   version: '1.3.0',
   author: 'NTKhang (Cat-Bot port)',
   description:
-    'Auto-kicks rejoining members who have 3 or more active warnings (Discord, Telegram & Fluxer)',
+    'Auto-kicks rejoining members who have 3 or more active warnings (Discord & Telegram)',
 };
 
 // ─── Event handler ────────────────────────────────────────────────────────────

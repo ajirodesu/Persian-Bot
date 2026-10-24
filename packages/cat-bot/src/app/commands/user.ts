@@ -69,7 +69,6 @@ export const meta: CommandMeta = {
   platform: [
     Platforms.Discord,
     Platforms.Telegram,
-    Platforms.Fluxer,
   ],
   options: [
     {
@@ -90,7 +89,6 @@ export const meta: CommandMeta = {
 /** Platforms where @mention resolution is supported */
 const MENTION_SUPPORTED_PLATFORMS = new Set<string>([
   Platforms.Discord,
-  Platforms.Fluxer,
 ]);
 
 /** Users shown per page in list view — matches help.ts density. */

@@ -33,7 +33,6 @@ export {
   findTelegramCredentialState,
   updateTelegramCredentialCommandHash,
   findAllTelegramCredentials,
-  findAllFluxerCredentials,
   findAllBotSessions,
   isBotAdmin,
   addBotAdmin,

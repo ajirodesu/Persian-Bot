@@ -4,7 +4,7 @@
  * Port of project-canis's `connect` command (mrepol742/project-canis). In
  * canis, `/connect` spawned a new WhatsApp client for the caller; here it
  * creates a NEW bot session on the platform the user is currently chatting
- * from (Telegram / Discord / Fluxer) — the same path the Admin Dashboard's
+ * from (Telegram / Discord) — the same path the Admin Dashboard's
  * "create bot" wizard uses (botService.createBot).
  *
  * The command refuses to run in groups/channels — it is ONLY available in
@@ -68,7 +68,6 @@ const STATE = {
 const CONNECTABLE_PLATFORMS = new Set<string>([
   Platforms.Discord,
   Platforms.Telegram,
-  Platforms.Fluxer,
 ]);
 
 /** True when a new bot can be created on this platform. */
@@ -78,7 +77,7 @@ export function isConnectablePlatform(platform: string): boolean {
 
 /**
  * Human display name derived from the platform identifier itself
- * ('discord' → 'Discord', 'fluxer' → 'Fluxer', ...). No label table to keep
+ * ('discord' → 'Discord', 'telegram' → 'Telegram', ...). No label table to keep
  * in sync — any future platform renders automatically.
  */
 export function platformDisplayName(platform: string): string {
@@ -147,8 +146,6 @@ export function buildConnectCredentials(
       return { platform: 'telegram', telegramToken: token };
     case Platforms.Discord:
       return { platform: 'discord', discordToken: token, discordClientId: '' };
-    case Platforms.Fluxer:
-      return { platform: 'fluxer', fluxerToken: token };
     default:
       return null;
   }
@@ -199,10 +196,6 @@ const BOT_TOKEN_GUIDES: Record<string, BotTokenGuide> = {
   [Platforms.Discord]: {
     source: 'the Discord Developer Portal',
     example: 'three dot-separated parts (e.g. `ABC... .DEF... .GHI...`)',
-  },
-  [Platforms.Fluxer]: {
-    source: 'your Fluxer provider',
-    example: 'any non-empty token string',
   },
 };
 

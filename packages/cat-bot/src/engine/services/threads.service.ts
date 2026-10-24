@@ -66,9 +66,9 @@ export async function syncThreadAndParticipants(
       await syncUsers(ctx, allUsersToSync, sessionUserId, sessionId);
     }
 
-    // Intercept Discord + Fluxer channels to store them hierarchically by server
+    // Intercept Discord channels to store them hierarchically by server
     // (bot_discord_server / bot_discord_channel) to avoid duplicating server state
-    // per-channel — both platforms expose a guild → channel containment model.
+    // per-channel — Discord exposes a guild → channel containment model.
     if (isServerHierarchyPlatform(ctx.native.platform) && info.serverID) {
       await upsertDiscordServer({
         id: info.serverID,
@@ -85,7 +85,7 @@ export async function syncThreadAndParticipants(
         info.channelType,
       );
       // Call the existing method, threads.repo.ts intercepts server-hierarchy
-      // platforms (Discord/Fluxer) internally to write bot_discord_server_session
+      // platforms (Discord) internally to write bot_discord_server_session
       await upsertThreadSession(
         sessionUserId,
         ctx.native.platform,

@@ -4,7 +4,7 @@
  * Internal-latency benchmark for Cat-Bot's dispatch pipeline.
  *
  * Replays synthetic events through the REAL handleMessage pipeline for every
- * platform adapter (discord / telegram / fluxer / webchat) with the network
+ * platform adapter (discord / telegram / webchat) with the network
  * layer mocked: the platform API is a recording no-op, so measured time is
  * purely Cat-Bot's own processing (receive → parse → middleware → command
  * lookup → handler → dispatch). Platform network/API time is OUT of scope
@@ -225,7 +225,6 @@ async function measureExternal(): Promise<void> {
   const hosts = [
     ['telegram', 'https://api.telegram.org/'],
     ['discord ', 'https://discord.com/api/v10/'],
-    ['fluxer  ', 'https://api.fluxer.app/'],
   ] as Array<[string, string]>;
   for (const [name, url] of hosts) {
     const samples: number[] = [];
@@ -258,7 +257,7 @@ async function main(): Promise<void> {
   }
 
   const commands = buildCommands();
-  const platforms = [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer, Platforms.Webchat];
+  const platforms = [Platforms.Discord, Platforms.Telegram, Platforms.Webchat];
   const cases = [
     { name: 'ping command (success path)', text: '/ping' },
     { name: 'unknown cmd (suggest path)', text: '/pnigxqzv' },

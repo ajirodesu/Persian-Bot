@@ -24,7 +24,7 @@ export interface GetAdminBotListItemDto {
   // Discord exposes its client (application) ID, Telegram embeds the numeric
   // bot ID in the token prefix. Usernames are not persisted anywhere, so
   // botUsername stays absent until identity is stored at connect time.
-  // Absent for Fluxer (opaque token) and when credentials are missing.
+  // Absent when credentials are missing.
   botId?: string | undefined;
   botUsername?: string | undefined;
 }

@@ -11,7 +11,6 @@ export const collectionsMap: Record<string, string> = {
   botSessionEvent: 'botSessionEvents',
   botCredentialDiscord: 'botCredentialDiscord',
   botCredentialTelegram: 'botCredentialTelegram',
-  botCredentialFluxer: 'botCredentialFluxer',
   botSession: 'botSessions',
   botAdmin: 'botAdmins',
   botPremium: 'botPremiums',
@@ -223,16 +222,6 @@ export const tablesDef = [
       telegramToken: 'telegram_token',
       isCommandRegister: 'is_command_register',
       commandHash: 'command_hash',
-    },
-  },
-  {
-    jsonKey: 'botCredentialFluxer',
-    table: 'bot_credential_fluxer',
-    cols: {
-      userId: 'user_id',
-      platformId: 'platform_id',
-      sessionId: 'session_id',
-      fluxerToken: 'fluxer_token',
     },
   },
   {

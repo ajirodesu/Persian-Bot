@@ -18,7 +18,6 @@ import {
   findTelegramCredentialState as _findTelegramCredentialState,
   updateTelegramCredentialCommandHash as _updateTelegramCredentialCommandHash,
   findAllTelegramCredentials as _findAllTelegramCredentials,
-  findAllFluxerCredentials as _findAllFluxerCredentials,
   findAllBotSessions as _findAllBotSessions,
   addBotAdmin as _addBotAdmin,
   removeBotAdmin as _removeBotAdmin,
@@ -47,7 +46,6 @@ const adminListKey = (
 // Singleton keys for aggregate credential/session lists that contain all rows.
 const DISCORD_ALL_KEY = 'cred:discord:all';
 const TELEGRAM_ALL_KEY = 'cred:telegram:all';
-const FLUXER_ALL_KEY = 'cred:fluxer:all';
 // Shared with server/repos/bot.repo.ts — both repos invalidate this key on session mutations
 // so session-loader always receives an up-to-date list on the next findAllBotSessions call.
 export const SESSIONS_ALL_KEY = 'cred:sessions:all';
@@ -127,21 +125,6 @@ export async function findAllTelegramCredentials(): Promise<
   if (cached !== undefined) return cached;
   const result = await _findAllTelegramCredentials();
   lruCache.set(TELEGRAM_ALL_KEY, result);
-  return result;
-}
-
-// ── Fluxer ────────────────────────────────────────────────────────────────────
-
-export async function findAllFluxerCredentials(): Promise<
-  Awaited<ReturnType<typeof _findAllFluxerCredentials>>
-> {
-  const cached =
-    lruCache.get<Awaited<ReturnType<typeof _findAllFluxerCredentials>>>(
-      FLUXER_ALL_KEY,
-    );
-  if (cached !== undefined) return cached;
-  const result = await _findAllFluxerCredentials();
-  lruCache.set(FLUXER_ALL_KEY, result);
   return result;
 }
 

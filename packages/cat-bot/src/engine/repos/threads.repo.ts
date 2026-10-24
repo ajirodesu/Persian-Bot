@@ -204,7 +204,7 @@ export async function upsertThreadSession(
   sessionId: string,
   threadId: string,
 ): Promise<void> {
-  // Intercept Discord/Fluxer channels to update the underlying Server Session timestamp instead
+  // Intercept Discord channels to update the underlying Server Session timestamp instead
   if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(threadId);
     if (serverId) {
@@ -370,7 +370,7 @@ export async function getAllGroupThreadIds(
   if (cached !== undefined) return cached;
 
   let result = await _getAllGroupThreadIds(userId, platform, sessionId);
-  // Map Discord/Fluxer servers as broadcastable "groups" as well
+  // Map Discord servers as broadcastable "groups" as well
   if (isServerHierarchyPlatform(platform)) {
     const discordServers = await _getAllDiscordServerIds(userId, sessionId);
     result = [...result, ...discordServers];
@@ -450,7 +450,7 @@ export function invalidateThreadSessionCache(
  * bot has left. Evicts every server-scoped cache entry so subsequent reads see
  * the record as gone instead of serving stale in-memory data.
  *
- * `platform` is the requesting platform (Discord or Fluxer) so the eviction
+ * `platform` is the requesting platform (Discord) so the eviction
  * keys and the real-time change event are scoped to the correct session key.
  */
 export async function deleteDiscordServer(

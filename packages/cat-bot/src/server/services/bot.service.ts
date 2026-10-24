@@ -86,8 +86,6 @@ class BotService {
       sessionConfig = { token: credentials.discordToken, clientId: credentials.discordClientId, prefix: dto.botPrefix, userId, sessionId };
     } else if (platformStr === Platforms.Telegram && 'telegramToken' in credentials) {
       sessionConfig = { botToken: credentials.telegramToken, prefix: dto.botPrefix, userId, sessionId };
-    } else if (platformStr === Platforms.Fluxer && 'fluxerToken' in credentials) {
-      sessionConfig = { token: credentials.fluxerToken, prefix: dto.botPrefix, userId, sessionId };
     }
 
     prefixManager.setPrefix(userId, platformStr, sessionId, dto.botPrefix);
@@ -117,9 +115,6 @@ class BotService {
       }
       if (botDetail.credentials.platform === Platforms.Telegram && credentials.platform === Platforms.Telegram) {
         return botDetail.credentials.telegramToken !== credentials.telegramToken;
-      }
-      if (botDetail.credentials.platform === Platforms.Fluxer && credentials.platform === Platforms.Fluxer) {
-        return botDetail.credentials.fluxerToken !== credentials.fluxerToken;
       }
       return true;
     })();
@@ -198,8 +193,6 @@ class BotService {
       sessionConfig = { token: credentials.discordToken, clientId: credentials.discordClientId ?? '', prefix, userId, sessionId };
     } else if (credentials.platform === Platforms.Telegram) {
       sessionConfig = { botToken: credentials.telegramToken, prefix, userId, sessionId };
-    } else if (credentials.platform === Platforms.Fluxer) {
-      sessionConfig = { token: credentials.fluxerToken, prefix, userId, sessionId };
     }
 
     if (!sessionConfig) {

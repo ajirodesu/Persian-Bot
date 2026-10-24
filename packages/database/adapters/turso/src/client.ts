@@ -147,7 +147,7 @@ export async function initDb(): Promise<void> {
   }
 
   // bot_threads — same idempotent-outside-the-fast-path pattern as
-  // bot_credential_fluxer above. This table lived only inside the guarded DDL
+  // bot_discord_channel above. This table lived only inside the guarded DDL
   // block, so databases initialised before it was added would early-return and
   // never receive it — and the PRAGMA introspection below would then throw
   // "no such table: bot_threads" on the remote Turso API, aborting the entire
@@ -182,22 +182,8 @@ export async function initDb(): Promise<void> {
     });
   }
 
-  // bot_credential_fluxer — same idempotent-outside-the-fast-path pattern as
-  // the tables above, so already-initialised databases pick up the Fluxer
-  // credential table without a manual migration. Created unconditionally so every
-  // database converges on the full schema regardless of when it was bootstrapped.
-  await tursoClient.execute(`
-    CREATE TABLE IF NOT EXISTS bot_credential_fluxer (
-      user_id      TEXT    NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-      platform_id  INTEGER NOT NULL,
-      session_id   TEXT    NOT NULL,
-      fluxer_token TEXT    NOT NULL,
-      PRIMARY KEY (user_id, platform_id, session_id)
-    );
-  `);
-
   // bot_credential_discord / bot_credential_telegram — same
-  // idempotent-outside-the-fast-path pattern as bot_credential_fluxer above.
+  // idempotent-outside-the-fast-path pattern as bot_threads above.
   // These existed only inside the guarded DDL block, so databases initialised
   // before they were added would early-return and never receive the tables —
   // causing "no such table: bot_credential_discord" on boot. Create them

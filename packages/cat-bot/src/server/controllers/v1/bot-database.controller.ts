@@ -198,7 +198,7 @@ export class BotDatabaseController {
    * GET /api/v1/bots/:id/database/groups
    * Returns paginated list of groups/threads seen by this bot session.
    *
-   * Server-hierarchy platforms (Discord, Fluxer) record guilds in
+   * Server-hierarchy platforms (Discord) record guilds in
    * bot_discord_server_session (keyed by server id), not bot_threads_session — so
    * the query branches per platform. All other platforms (Telegram, webchat) keep
    * using the thread-session tables.
@@ -354,7 +354,7 @@ export class BotDatabaseController {
    * GET /api/v1/bots/:id/database/servers
    * Returns every server (guild) this bot session has recorded — the source for
    * the Groups tab's server dropdown. Server-hierarchy platforms only (Discord
-   * and Fluxer both expose a guild → channel model).
+   * exposes a guild → channel model).
    */
   async listServers(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -404,7 +404,7 @@ export class BotDatabaseController {
    * recorded against this bot session (bot_discord_server_session join), and
    * channels are filtered by their parent server_id — so a channel can never
    * appear outside its associated server context. Server-hierarchy platforms
-   * only (Discord and Fluxer).
+   * only (Discord).
    */
   async listChannels(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -571,7 +571,7 @@ export class BotDatabaseController {
    * DELETE /api/v1/bots/:id/database/groups/:groupId
    * Removes a group's session association with this bot.
    *
-   * For server-hierarchy platforms (Discord, Fluxer) the group id is a server
+   * For server-hierarchy platforms (Discord) the group id is a server
    * (guild) id, so the session link is removed from bot_discord_server_session
    * instead of bot_threads_session.
    */
@@ -624,8 +624,8 @@ export class BotDatabaseController {
 
   /**
    * POST /api/v1/bots/:id/database/groups/:groupId/ban
-   * Bans a group from this bot session. Server-hierarchy platforms (Discord,
-   * Fluxer) are keyed by server id.
+   * Bans a group from this bot session. Server-hierarchy platforms (Discord)
+   * are keyed by server id.
    */
   async banGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);
@@ -661,8 +661,8 @@ export class BotDatabaseController {
 
   /**
    * DELETE /api/v1/bots/:id/database/groups/:groupId/ban
-   * Lifts a group ban for this bot session. Server-hierarchy platforms (Discord,
-   * Fluxer) are keyed by server id.
+   * Lifts a group ban for this bot session. Server-hierarchy platforms
+   * (Discord) are keyed by server id.
    */
   async unbanGroup(req: Request, res: Response): Promise<void> {
     const ctx = await resolveSession(req, res);

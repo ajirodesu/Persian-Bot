@@ -1,0 +1,249 @@
+/* ============================================================
+   "AMETHYST" THEME — soft violet gemstone on cold ink.
+
+   Mood: amethyst on cold ink. Cold ink paper (#0E1116) with
+   visible hairline rules (#22262F) and a single amethyst accent
+   (#A88CFA) for primary actions, active states, links, and focus
+   rings. Supporting neutrals are cool slate, so the page reads as
+   a printed schematic rather than a warm document.
+
+   Palette strategy:
+   • Surfaces: cold ink, each elevation step a shade lighter
+   • Primary: amethyst violet, the only saturated accent
+   • Secondary/tertiary: cool slate for supporting actions
+   • Status colors stay legible against cold ink (green/amber/blue)
+
+   Values live under the explicit attribute selector; the switcher
+   sets html[data-theme="amethyst"] the same way it does for the
+   other two themes.
+
+   Finish is flat: no gradients, frosted glass, ambient glow,
+   specular highlight, elevation shadows, or avatar glow. Gradient
+   tokens are kept by name but carry FLAT colors.
+
+   Gentle eye-friendly pass: inks sit one step lighter than pure ink
+   so standard dark-mode contrast stops glaring; accents keep the
+   gemstone hue at reduced neon.
+
+   Shape tokens (--radius-card, --radius-button, etc.) live once
+   in tokens.css, not here — so sizing never drifts between themes.
+   ============================================================ */
+
+html[data-theme='amethyst'] {
+  /* ==================== PRIMARY (amethyst violet) ==================== */
+  --amethyst-color-primary: 168 140 250;
+  --amethyst-color-on-primary: 20 15 32;
+  --amethyst-color-primary-container: 54 42 84;
+  --amethyst-color-on-primary-container: 217 202 255;
+
+  /* ==================== SECONDARY (cool slate — supporting actions) ==================== */
+  --amethyst-color-secondary: 148 157 173;
+  --amethyst-color-on-secondary: 10 12 16;
+  --amethyst-color-secondary-container: 26 30 38;
+  --amethyst-color-on-secondary-container: 226 230 238;
+
+  /* ==================== TERTIARY (cool slate — data/code accent) ==================== */
+  --amethyst-color-tertiary: 148 157 173;
+  --amethyst-color-on-tertiary: 10 12 16;
+  --amethyst-color-tertiary-container: 26 30 38;
+  --amethyst-color-on-tertiary-container: 226 230 238;
+
+  /* ==================== SURFACE SYSTEM (cold ink) ==================== */
+  /* Base paper: #0E1116 */
+  --amethyst-color-surface: 14 17 22;
+  --amethyst-color-on-surface: 226 230 238;
+  --amethyst-color-surface-variant: 112 121 137;
+  --amethyst-color-on-surface-variant: 158 167 183;
+  --amethyst-color-surface-container-lowest: 10 12 17;
+  --amethyst-color-surface-container-low: 17 20 26;
+  /* Card/surface background */
+  --amethyst-color-surface-container: 17 20 26;
+  --amethyst-color-surface-container-high: 25 29 37;
+  --amethyst-color-surface-container-highest: 32 38 48;
+  --amethyst-color-surface-bright: 226 230 238;
+  --amethyst-color-surface-dim: 14 17 22;
+
+  /* ==================== INVERSE ==================== */
+  --amethyst-color-inverse-surface: 226 230 238;
+  --amethyst-color-inverse-on-surface: 14 17 22;
+  --amethyst-color-inverse-primary: 168 140 250;
+
+  /* ==================== OUTLINE ==================== */
+  --amethyst-color-outline: 58 65 79;
+  --amethyst-color-outline-variant: 37 42 52;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --amethyst-color-scrim: 0 0 0;
+  --amethyst-color-shadow: 0 0 0;
+
+  /* ==================== ERROR (red ink) ==================== */
+  --amethyst-color-error: 235 120 130;
+  --amethyst-color-on-error: 24 8 10;
+  --amethyst-color-error-container: 48 20 26;
+  --amethyst-color-on-error-container: 246 178 190;
+
+  /* ==================== SUCCESS (green signal) ==================== */
+  --amethyst-color-success: 92 200 150;
+  --amethyst-color-on-success: 6 22 14;
+  --amethyst-color-success-container: 14 40 30;
+  --amethyst-color-on-success-container: 134 228 188;
+
+  /* ==================== WARNING (amber signal) ==================== */
+  --amethyst-color-warning: 226 178 90;
+  --amethyst-color-on-warning: 26 16 4;
+  --amethyst-color-warning-container: 46 36 14;
+  --amethyst-color-on-warning-container: 238 200 138;
+
+  /* ==================== INFO (sky signal) ==================== */
+  --amethyst-color-info: 128 178 236;
+  --amethyst-color-on-info: 6 17 26;
+  --amethyst-color-info-container: 14 36 54;
+  --amethyst-color-on-info-container: 178 214 246;
+
+  /* ==================== GRADIENTS ====================
+     Token names retained for existing consumers, but every value is
+     a FLAT color: there is no gradient anywhere in this design. */
+  --amethyst-color-gradient-primary: rgb(168 140 250);
+  --amethyst-color-gradient-secondary: rgb(148 157 173);
+  --amethyst-color-gradient-tertiary: rgb(168 140 250);
+  --amethyst-color-gradient-error: rgb(235 120 130);
+  --amethyst-color-gradient-success: rgb(92 200 150);
+  --amethyst-color-gradient-warning: rgb(226 178 90);
+  --amethyst-color-gradient-info: rgb(168 140 250);
+
+  /* ==================== HAIRLINE BORDERS ====================
+     Solid 1px structural rule shared by shells, cards, and tables */
+  --color-hairline-border: #22262f;
+
+  /* ==================== HEADER SEPARATOR ====================
+     The sidebar header's 1px line style — every page header uses
+     this same token so all top bars divide with identical weight */
+  --color-separator: rgba(35, 39, 49, 0.55);
+
+  /* ==================== FLAT SURFACES (no frosted glass) ==================== */
+  --glass-bg: #11141a;
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-border: #22262f;
+
+  /* ==================== HEADER SURFACE ====================
+     Page-header fill = the sidebar's own fill (--glass-bg), so every
+     header except the public landing header reads as part of the rail. */
+  --color-header-surface: var(--glass-bg);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: #151a24;
+  --color-input-border: #2d3441;
+
+  /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
+  --shadow-soft-sm: none;
+  --shadow-soft-md: none;
+  --shadow-soft-lg: none;
+
+  --shadow-card-rest: none;
+  --shadow-card-hover: none;
+
+  /* Tight accent focus ring for inputs — outline, not bloom */
+  --shadow-focus-ring: 0 0 0 2px rgba(168, 140, 250, 0.45);
+
+  /* No avatar glow in the printout finish */
+  --shadow-avatar-glow: none;
+
+  /* ==================== TYPOGRAPHY ====================
+     Barlow Condensed is the signage/display face and is aliased
+     through --font-family-brand, so brand marks and h1–h3 resolve
+     to the same stack as --font-family-display in tokens.css.
+     Barlow drives body/UI, JetBrains Mono drives data. Identical
+     faces to Emerald and Jasper; only font-family lives here — every
+     size/line-height/spacing token stays in tokens.css, shared and
+     untouched by any theme. */
+  --font-family-brand: var(--font-family-display);
+  --font-family-plain: 'Barlow', sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ==================== AMBIENT BACKGROUND GLOW ====================
+     Disabled in the flat finish — transparent everywhere. */
+  --ambient-glow-opacity: 0;
+  --ambient-glow-primary: transparent;
+  --ambient-glow-secondary: transparent;
+
+  /* ==================== SCROLLBAR ====================
+     Faint at rest, solid while actively scrolling */
+  --scrollbar-idle-opacity: 0.35;
+
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     Disabled in the flat finish. */
+  --specular-highlight: transparent;
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--amethyst-color-primary);
+  --color-on-primary: var(--amethyst-color-on-primary);
+  --color-primary-container: var(--amethyst-color-primary-container);
+  --color-on-primary-container: var(--amethyst-color-on-primary-container);
+
+  --color-secondary: var(--amethyst-color-secondary);
+  --color-on-secondary: var(--amethyst-color-on-secondary);
+  --color-secondary-container: var(--amethyst-color-secondary-container);
+  --color-on-secondary-container: var(--amethyst-color-on-secondary-container);
+
+  --color-tertiary: var(--amethyst-color-tertiary);
+  --color-on-tertiary: var(--amethyst-color-on-tertiary);
+  --color-tertiary-container: var(--amethyst-color-tertiary-container);
+  --color-on-tertiary-container: var(--amethyst-color-on-tertiary-container);
+
+  --color-surface: var(--amethyst-color-surface);
+  --color-on-surface: var(--amethyst-color-on-surface);
+  --color-surface-variant: var(--amethyst-color-surface-variant);
+  --color-on-surface-variant: var(--amethyst-color-on-surface-variant);
+  --color-surface-container-lowest: var(
+    --amethyst-color-surface-container-lowest
+  );
+  --color-surface-container-low: var(--amethyst-color-surface-container-low);
+  --color-surface-container: var(--amethyst-color-surface-container);
+  --color-surface-container-high: var(--amethyst-color-surface-container-high);
+  --color-surface-container-highest: var(
+    --amethyst-color-surface-container-highest
+  );
+  --color-surface-bright: var(--amethyst-color-surface-bright);
+  --color-surface-dim: var(--amethyst-color-surface-dim);
+
+  --color-inverse-surface: var(--amethyst-color-inverse-surface);
+  --color-inverse-on-surface: var(--amethyst-color-inverse-on-surface);
+  --color-inverse-primary: var(--amethyst-color-inverse-primary);
+
+  --color-outline: var(--amethyst-color-outline);
+  --color-outline-variant: var(--amethyst-color-outline-variant);
+
+  --color-scrim: var(--amethyst-color-scrim);
+  --color-shadow: var(--amethyst-color-shadow);
+
+  --color-error: var(--amethyst-color-error);
+  --color-on-error: var(--amethyst-color-on-error);
+  --color-error-container: var(--amethyst-color-error-container);
+  --color-on-error-container: var(--amethyst-color-on-error-container);
+
+  --color-success: var(--amethyst-color-success);
+  --color-on-success: var(--amethyst-color-on-success);
+  --color-success-container: var(--amethyst-color-success-container);
+  --color-on-success-container: var(--amethyst-color-on-success-container);
+
+  --color-warning: var(--amethyst-color-warning);
+  --color-on-warning: var(--amethyst-color-on-warning);
+  --color-warning-container: var(--amethyst-color-warning-container);
+  --color-on-warning-container: var(--amethyst-color-on-warning-container);
+
+  --color-info: var(--amethyst-color-info);
+  --color-on-info: var(--amethyst-color-on-info);
+  --color-info-container: var(--amethyst-color-info-container);
+  --color-on-info-container: var(--amethyst-color-on-info-container);
+
+  --color-gradient-primary: var(--amethyst-color-gradient-primary);
+  --color-gradient-secondary: var(--amethyst-color-gradient-secondary);
+  --color-gradient-tertiary: var(--amethyst-color-gradient-tertiary);
+  --color-gradient-error: var(--amethyst-color-gradient-error);
+  --color-gradient-success: var(--amethyst-color-gradient-success);
+  --color-gradient-warning: var(--amethyst-color-gradient-warning);
+  --color-gradient-info: var(--amethyst-color-gradient-info);
+
+  color-scheme: dark;
+}

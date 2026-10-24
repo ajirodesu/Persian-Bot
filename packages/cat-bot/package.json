@@ -14,7 +14,10 @@
     "test:watch": "vitest",
     "seed:admin": "tsx scripts/seed-admin.ts",
     "bench": "tsx --conditions source scripts/bench/latency-bench.ts",
-    "reset:password": "tsx scripts/reset-password.ts"
+    "reset:password": "tsx scripts/reset-password.ts",
+    "preview:emails": "tsx scripts/preview-emails.ts",
+    "preview:emails:shots": "node scripts/email-screenshots.mjs"
+
   },
   "keywords": [],
   "author": "",
@@ -34,7 +37,6 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@fluxerjs/core": "^2.2.0",
     "@getbrevo/brevo": "^6.0.3",
     "@grammyjs/runner": "^2.0.3",
     "@types/compression": "^1.8.1",

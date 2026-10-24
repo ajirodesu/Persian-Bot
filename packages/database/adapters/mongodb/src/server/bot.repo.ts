@@ -87,13 +87,6 @@ export class BotRepo {
         isCommandRegister: false,
         commandHash: null,
       });
-    } else if (creds.platform === Platforms.Fluxer) {
-      await db.collection('botCredentialFluxer').insertOne({
-        userId,
-        platformId,
-        sessionId,
-        fluxerToken: encrypt(creds.fluxerToken),
-      });
     } else {
       throw new Error(`Unknown platform: ${JSON.stringify(creds)}`);
     }
@@ -159,16 +152,6 @@ export class BotRepo {
       credentials = {
         platform: Platforms.Telegram,
         telegramToken: decrypt(c.telegramToken as string),
-      };
-    } else if (platform === Platforms.Fluxer) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const c = await db
-        .collection<any>('botCredentialFluxer')
-        .findOne({ userId, sessionId });
-      if (!c) throw new Error('Missing credentials');
-      credentials = {
-        platform: Platforms.Fluxer,
-        fluxerToken: decrypt(c.fluxerToken as string),
       };
     } else {
       throw new Error(`Unknown platform ${platform}`);
@@ -269,11 +252,6 @@ export class BotRepo {
               : {}),
           },
         },
-      );
-    } else if (creds.platform === Platforms.Fluxer) {
-      await db.collection('botCredentialFluxer').updateOne(
-        { userId, sessionId },
-        { $set: { fluxerToken: encrypt(creds.fluxerToken) } },
       );
     } else {
       throw new Error(`Unknown platform: ${JSON.stringify(creds)}`);
@@ -576,9 +554,6 @@ export class BotRepo {
       .deleteMany({ userId, sessionId });
     await db
       .collection('botCredentialTelegram')
-      .deleteMany({ userId, sessionId });
-    await db
-      .collection('botCredentialFluxer')
       .deleteMany({ userId, sessionId });
     await db.collection('botSessions').deleteMany({ userId, sessionId });
   }

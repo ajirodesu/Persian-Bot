@@ -170,7 +170,7 @@ export async function banThread(
   botThreadId: string,
   reason?: string,
 ): Promise<void> {
-  // Discord/Fluxer: /thread ban <tid> may pass a channel id — resolve it to the
+  // Discord: /thread ban <tid> may pass a channel id — resolve it to the
   // server so the ban blocks the whole guild (matches dashboard semantics).
   if (isServerHierarchyPlatform(platform)) {
     const serverId = await getDiscordServerIdByChannel(botThreadId);
@@ -228,7 +228,7 @@ export async function isThreadBanned(
   sessionId: string,
   botThreadId: string,
 ): Promise<boolean> {
-  // Discord/Fluxer: the dashboard bans groups by server id, and enforcement keys
+  // Discord: the dashboard bans groups by server id, and enforcement keys
   // the incoming message's threadID (a channel id). Resolve the channel to its
   // server so a server-level ban blocks every channel in the guild.
   if (isServerHierarchyPlatform(platform)) {
@@ -252,7 +252,7 @@ export async function isThreadBanned(
 
 /**
  * Returns the stored ban reason for a thread (null when unbanned or no reason given).
- * For server-hierarchy platforms (Discord/Fluxer) the thread is resolved to its
+ * For server-hierarchy platforms (Discord) the thread is resolved to its
  * server so the server-scoped reason shows.
  * Cache is populated on ban/unban; falls back to the DB on a cold cache (e.g. after
  * a process restart) so the ban notice always reflects the true reason.
@@ -282,7 +282,7 @@ export async function getThreadBanReason(
   return result;
 }
 
-// ── Server Bans (Discord + Fluxer guilds) ─────────────────────────────────────
+// ── Server Bans (Discord guilds) ──────────────────────────────────────────────
 // `platform` is threaded through so the LRU keys and the real-time change event
 // are scoped to the requesting platform's `${userId}:${platform}:${sessionId}`
 // session key — the dashboard subscribes with the exact bot platform.

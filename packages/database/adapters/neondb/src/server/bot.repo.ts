@@ -71,12 +71,6 @@ export class BotRepo {
            VALUES ($1, $2, $3, $4)`,
           [userId, platformId, sessionId, encrypt(credentials.telegramToken)],
         );
-      } else if (credentials.platform === Platforms.Fluxer) {
-        await client.query(
-          `INSERT INTO bot_credential_fluxer (user_id, platform_id, session_id, fluxer_token)
-           VALUES ($1, $2, $3, $4)`,
-          [userId, platformId, sessionId, encrypt(credentials.fluxerToken)],
-        );
       } else {
         throw new Error(`Unknown platform: ${JSON.stringify(credentials)}`);
       }
@@ -155,17 +149,6 @@ export class BotRepo {
       credentials = {
         platform: Platforms.Telegram,
         telegramToken: decrypt(credRes.rows[0].telegram_token),
-      };
-    } else if (platform === Platforms.Fluxer) {
-      const credRes = await pool.query<{ fluxer_token: string }>(
-        `SELECT fluxer_token FROM bot_credential_fluxer
-         WHERE user_id = $1 AND session_id = $2 LIMIT 1`,
-        [userId, sessionId],
-      );
-      if (!credRes.rows[0]) throw new Error('Missing credentials');
-      credentials = {
-        platform: Platforms.Fluxer,
-        fluxerToken: decrypt(credRes.rows[0].fluxer_token),
       };
     } else {
       throw new Error(`Unknown platform ${platform}`);
@@ -263,13 +246,6 @@ export class BotRepo {
            SET telegram_token = $4${extra}
            WHERE user_id = $1 AND platform_id = $2 AND session_id = $3`,
           [userId, platformId, sessionId, encrypt(credentials.telegramToken)],
-        );
-      } else if (credentials.platform === Platforms.Fluxer) {
-        await client.query(
-          `UPDATE bot_credential_fluxer
-           SET fluxer_token = $4
-           WHERE user_id = $1 AND platform_id = $2 AND session_id = $3`,
-          [userId, platformId, sessionId, encrypt(credentials.fluxerToken)],
         );
       } else {
         throw new Error(`Unknown platform: ${JSON.stringify(credentials)}`);
@@ -503,10 +479,6 @@ export class BotRepo {
       );
       await client.query(
         `DELETE FROM bot_credential_telegram WHERE user_id = $1 AND session_id = $2`,
-        [userId, sessionId],
-      );
-      await client.query(
-        `DELETE FROM bot_credential_fluxer WHERE user_id = $1 AND session_id = $2`,
         [userId, sessionId],
       );
       // Parent session row last.

@@ -1,0 +1,244 @@
+/* ============================================================
+   "JASPER" THEME — warm rust-red gemstone on warm ink.
+
+   Mood: jasper stone. Warm ink paper (#110E0C) with visible
+   hairline rules (#29221D) and a single jasper accent (#D3714C)
+   for primary actions, active states, links, and focus rings.
+   Supporting neutrals stay warm (R >= G >= B) so the page reads
+   as warm stone rather than cold gray.
+
+   Palette strategy:
+   • Surfaces: warm ink, each elevation step a shade lighter
+   • Primary: jasper rust, the only saturated accent
+   • Secondary/tertiary: warm ash neutral for supporting actions
+   • Status colors stay legible against warm ink (green/amber/blue)
+   • Finish is flat: no gradients, frosted glass, ambient glow,
+     specular highlight, elevation shadows, or avatar glow. Gradient
+     tokens are kept by name but carry FLAT colors.
+
+   Gentle eye-friendly pass: inks sit one step lighter than pure ink
+   so standard dark-mode contrast stops glaring; accents keep the
+   gemstone hue at reduced neon.
+
+   Shape tokens (--radius-card, --radius-button, etc.) live once
+   in tokens.css, not here — so sizing never drifts between themes.
+   ============================================================ */
+
+html[data-theme='jasper'] {
+  /* ==================== PRIMARY (jasper rust) ==================== */
+  --jasper-color-primary: 211 113 76;
+  --jasper-color-on-primary: 26 10 5;
+  --jasper-color-primary-container: 64 28 18;
+  --jasper-color-on-primary-container: 246 186 160;
+
+  /* ==================== SECONDARY (warm ash neutral) ==================== */
+  --jasper-color-secondary: 164 149 137;
+  --jasper-color-on-secondary: 16 12 10;
+  --jasper-color-secondary-container: 32 27 23;
+  --jasper-color-on-secondary-container: 231 226 220;
+
+  /* ==================== TERTIARY (warm ash — data/code accent) ==================== */
+  --jasper-color-tertiary: 164 149 137;
+  --jasper-color-on-tertiary: 16 12 10;
+  --jasper-color-tertiary-container: 32 27 23;
+  --jasper-color-on-tertiary-container: 231 226 220;
+
+  /* ==================== SURFACE SYSTEM (warm ink) ==================== */
+  /* Base paper: #110E0C */
+  --jasper-color-surface: 17 14 12;
+  --jasper-color-on-surface: 231 226 220;
+  --jasper-color-surface-variant: 126 114 105;
+  --jasper-color-on-surface-variant: 171 159 149;
+  --jasper-color-surface-container-lowest: 12 10 9;
+  --jasper-color-surface-container-low: 21 18 15;
+  /* Card/surface background */
+  --jasper-color-surface-container: 21 18 15;
+  --jasper-color-surface-container-high: 29 25 21;
+  --jasper-color-surface-container-highest: 38 33 28;
+  --jasper-color-surface-bright: 231 226 220;
+  --jasper-color-surface-dim: 17 14 12;
+
+  /* ==================== INVERSE ==================== */
+  --jasper-color-inverse-surface: 231 226 220;
+  --jasper-color-inverse-on-surface: 17 14 12;
+  --jasper-color-inverse-primary: 211 113 76;
+
+  /* ==================== OUTLINE ====================
+     Kept bright enough that hairlines and dividers stay defined
+     against warm ink instead of disappearing into it. */
+  --jasper-color-outline: 66 57 50;
+  --jasper-color-outline-variant: 42 36 31;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --jasper-color-scrim: 0 0 0;
+  --jasper-color-shadow: 0 0 0;
+
+  /* ==================== ERROR (jasper red) ==================== */
+  --jasper-color-error: 235 116 106;
+  --jasper-color-on-error: 24 6 6;
+  --jasper-color-error-container: 50 20 18;
+  --jasper-color-on-error-container: 248 174 166;
+
+  /* ==================== SUCCESS (green signal) ==================== */
+  --jasper-color-success: 96 196 140;
+  --jasper-color-on-success: 6 22 12;
+  --jasper-color-success-container: 14 42 26;
+  --jasper-color-on-success-container: 140 224 178;
+
+  /* ==================== WARNING (amber signal) ==================== */
+  --jasper-color-warning: 226 176 84;
+  --jasper-color-on-warning: 26 16 4;
+  --jasper-color-warning-container: 46 34 12;
+  --jasper-color-on-warning-container: 238 200 134;
+
+  /* ==================== INFO (cold blue signal) ==================== */
+  --jasper-color-info: 128 172 232;
+  --jasper-color-on-info: 6 15 24;
+  --jasper-color-info-container: 14 34 52;
+  --jasper-color-on-info-container: 178 214 244;
+
+  /* ==================== GRADIENTS ====================
+     Token names retained for existing consumers, but every value is
+     a FLAT color: there is no gradient anywhere in this design. */
+  --jasper-color-gradient-primary: rgb(211 113 76);
+  --jasper-color-gradient-secondary: rgb(164 149 137);
+  --jasper-color-gradient-tertiary: rgb(211 113 76);
+  --jasper-color-gradient-error: rgb(235 116 106);
+  --jasper-color-gradient-success: rgb(96 196 140);
+  --jasper-color-gradient-warning: rgb(226 176 84);
+  --jasper-color-gradient-info: rgb(211 113 76);
+
+  /* ==================== HAIRLINE BORDERS ====================
+     Solid 1px structural rule shared by shells, cards, and tables */
+  --color-hairline-border: #29221d;
+
+  /* ==================== HEADER SEPARATOR ====================
+     The sidebar header's 1px line style — every page header uses
+     this same token so all top bars divide with identical weight */
+  --color-separator: rgba(43, 36, 31, 0.55);
+
+  /* ==================== FLAT SURFACES (no frosted glass) ==================== */
+  --glass-bg: #15120f;
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-border: #29221d;
+
+  /* ==================== HEADER SURFACE ====================
+     Page-header fill = the sidebar's own fill (--glass-bg), so every
+     header except the public landing header reads as part of the rail. */
+  --color-header-surface: var(--glass-bg);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: #191512;
+  --color-input-border: #332b25;
+
+  /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
+  --shadow-soft-sm: none;
+  --shadow-soft-md: none;
+  --shadow-soft-lg: none;
+
+  --shadow-card-rest: none;
+  --shadow-card-hover: none;
+
+  /* Tight accent focus ring for inputs — outline, not bloom */
+  --shadow-focus-ring: 0 0 0 2px rgba(211, 113, 76, 0.45);
+
+  /* No avatar glow in the printout finish */
+  --shadow-avatar-glow: none;
+
+  /* ==================== TYPOGRAPHY ====================
+     Barlow Condensed is the signage/display face and is aliased
+     through --font-family-brand, so brand marks and h1–h3 resolve
+     to the same stack as --font-family-display in tokens.css.
+     Barlow drives body/UI, JetBrains Mono drives data. Identical
+     faces to Emerald and Amethyst; only font-family lives in this block:
+     no size, line-height, letter-spacing, or weight token is
+     defined here — those live in tokens.css, shared by all themes. */
+  --font-family-brand: var(--font-family-display);
+  --font-family-plain: 'Barlow', sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ==================== AMBIENT BACKGROUND GLOW ====================
+     Disabled in the flat finish — transparent everywhere. */
+  --ambient-glow-opacity: 0;
+  --ambient-glow-primary: transparent;
+  --ambient-glow-secondary: transparent;
+
+  /* ==================== SCROLLBAR ====================
+     Faint at rest, solid while actively scrolling */
+  --scrollbar-idle-opacity: 0.35;
+
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     Disabled in the flat finish. */
+  --specular-highlight: transparent;
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--jasper-color-primary);
+  --color-on-primary: var(--jasper-color-on-primary);
+  --color-primary-container: var(--jasper-color-primary-container);
+  --color-on-primary-container: var(--jasper-color-on-primary-container);
+
+  --color-secondary: var(--jasper-color-secondary);
+  --color-on-secondary: var(--jasper-color-on-secondary);
+  --color-secondary-container: var(--jasper-color-secondary-container);
+  --color-on-secondary-container: var(--jasper-color-on-secondary-container);
+
+  --color-tertiary: var(--jasper-color-tertiary);
+  --color-on-tertiary: var(--jasper-color-on-tertiary);
+  --color-tertiary-container: var(--jasper-color-tertiary-container);
+  --color-on-tertiary-container: var(--jasper-color-on-tertiary-container);
+
+  --color-surface: var(--jasper-color-surface);
+  --color-on-surface: var(--jasper-color-on-surface);
+  --color-surface-variant: var(--jasper-color-surface-variant);
+  --color-on-surface-variant: var(--jasper-color-on-surface-variant);
+  --color-surface-container-lowest: var(--jasper-color-surface-container-lowest);
+  --color-surface-container-low: var(--jasper-color-surface-container-low);
+  --color-surface-container: var(--jasper-color-surface-container);
+  --color-surface-container-high: var(--jasper-color-surface-container-high);
+  --color-surface-container-highest: var(
+    --jasper-color-surface-container-highest
+  );
+  --color-surface-bright: var(--jasper-color-surface-bright);
+  --color-surface-dim: var(--jasper-color-surface-dim);
+
+  --color-inverse-surface: var(--jasper-color-inverse-surface);
+  --color-inverse-on-surface: var(--jasper-color-inverse-on-surface);
+  --color-inverse-primary: var(--jasper-color-inverse-primary);
+
+  --color-outline: var(--jasper-color-outline);
+  --color-outline-variant: var(--jasper-color-outline-variant);
+
+  --color-scrim: var(--jasper-color-scrim);
+  --color-shadow: var(--jasper-color-shadow);
+
+  --color-error: var(--jasper-color-error);
+  --color-on-error: var(--jasper-color-on-error);
+  --color-error-container: var(--jasper-color-error-container);
+  --color-on-error-container: var(--jasper-color-on-error-container);
+
+  --color-success: var(--jasper-color-success);
+  --color-on-success: var(--jasper-color-on-success);
+  --color-success-container: var(--jasper-color-success-container);
+  --color-on-success-container: var(--jasper-color-on-success-container);
+
+  --color-warning: var(--jasper-color-warning);
+  --color-on-warning: var(--jasper-color-on-warning);
+  --color-warning-container: var(--jasper-color-warning-container);
+  --color-on-warning-container: var(--jasper-color-on-warning-container);
+
+  --color-info: var(--jasper-color-info);
+  --color-on-info: var(--jasper-color-on-info);
+  --color-info-container: var(--jasper-color-info-container);
+  --color-on-info-container: var(--jasper-color-on-info-container);
+
+  --color-gradient-primary: var(--jasper-color-gradient-primary);
+  --color-gradient-secondary: var(--jasper-color-gradient-secondary);
+  --color-gradient-tertiary: var(--jasper-color-gradient-tertiary);
+  --color-gradient-error: var(--jasper-color-gradient-error);
+  --color-gradient-success: var(--jasper-color-gradient-success);
+  --color-gradient-warning: var(--jasper-color-gradient-warning);
+  --color-gradient-info: var(--jasper-color-gradient-info);
+
+  color-scheme: dark;
+}

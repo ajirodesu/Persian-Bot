@@ -57,7 +57,7 @@ export const meta: CommandMeta = {
   usage: '<url | on | off | status>',
   cooldown: 8,
   hasPrefix: true,
-  platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
+  platform: [Platforms.Discord, Platforms.Telegram],
   options: [
     {
       type: OptionType.string,

@@ -9,7 +9,6 @@ import { asyncHandler } from '@/server/middleware/async-handler.middleware.js';
 import {
   validateDiscord,
   validateTelegram,
-  validateFluxer,
   validateEmailForPasswordReset,
   requestPasswordResetCustom,
   verifyResetCodeCustom,
@@ -26,9 +25,6 @@ validationRouter.post('/discord', asyncHandler(validateDiscord));
 
 // POST /api/v1/validate/telegram — verify Telegram bot token via getMe
 validationRouter.post('/telegram', asyncHandler(validateTelegram));
-
-// POST /api/v1/validate/fluxer — verify Fluxer bot token via /users/@me
-validationRouter.post('/fluxer', asyncHandler(validateFluxer));
 
 // POST /api/v1/validate/email-reset — check email existence + optional admin-role filter
 validationRouter.post('/email-reset', asyncHandler(validateEmailForPasswordReset));

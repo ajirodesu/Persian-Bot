@@ -70,6 +70,8 @@ interface EnvConfig {
   // BREVO_API_KEY is the API key generated at app.brevo.com → API Keys.
   readonly BREVO_SENDER_EMAIL?: string | undefined;
   readonly BREVO_API_KEY?: string | undefined;
+  /** Optional Reply-To address; defaults to the verified sender. */
+  readonly BREVO_REPLY_TO?: string | undefined;
 
   // GitHub — optional; powers the Admin dashboard's File Manager (a GitHub-native
   // repository browser/editor). The GitHub TOKEN is no longer read from the
@@ -316,6 +318,7 @@ export const env: EnvConfig = {
   // Brevo transactional email — read at startup; absent vars produce undefined without throwing
   BREVO_SENDER_EMAIL: getOptionalEnv('BREVO_SENDER_EMAIL'),
   BREVO_API_KEY: getOptionalEnv('BREVO_API_KEY'),
+  BREVO_REPLY_TO: getOptionalEnv('BREVO_REPLY_TO'),
 
   // GitHub — the token is set through the dashboard (Files → Git → GitHub
   // identity) and stored encrypted in the DB; only repo targeting stays here.

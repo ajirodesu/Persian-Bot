@@ -386,7 +386,7 @@ export const commands: CommandEntry[] = YT_CONFIGS.map((config) => ({
     usage: '<YouTube URL> [-d]',
     cooldown: 10,
     hasPrefix: true,
-    platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
+    platform: [Platforms.Discord, Platforms.Telegram],
     options: [
       {
         type: OptionType.string,

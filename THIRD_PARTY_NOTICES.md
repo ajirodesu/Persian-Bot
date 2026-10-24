@@ -56,7 +56,7 @@ registry with validation, deterministic prefetch, budgeted prompt assembly,
 conversation memory with summarisation, JSON agents with reasoning-tag
 sanitisation, editor/moderation/policy agents, confidence gating, second-opinion
 consensus, and the multi-agent graph runtime — in Persian-Bot's own engine
-idioms (Fluxer/Discord/Telegram/WebChat platforms, `CommandMeta` module
+idioms (Discord/Telegram/WebChat platforms, `CommandMeta` module
 contract, `Role` permission levels, `db.users`/`db.threads`/`db.bot`
 collections, Winston logging, Express dashboard API, and the Aqua/Burnt/Indigo
 dashboard design system).

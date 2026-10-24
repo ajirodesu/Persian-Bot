@@ -47,11 +47,11 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 export const meta: EventMeta = {
   name: 'log',
   type: ['log:subscribe', 'log:unsubscribe'],
-  platform: ['discord', 'telegram', 'fluxer'],
+  platform: ['discord', 'telegram'],
   version: '1.1.0',
   author: 'AjiroDesu',
   description:
-    'Sends a bot membership update log to bot admins when the bot is added to or removed from a group (Discord, Telegram & Fluxer), and deletes the chat/guild database record on removal.',
+    'Sends a bot membership update log to bot admins when the bot is added to or removed from a group (Discord & Telegram), and deletes the chat/guild database record on removal.',
 };
 
 // Discord audit log event type IDs (AuditLogEvent from discord-api-types):
@@ -171,48 +171,6 @@ async function resolveDiscordActor(
 }
 
 /**
- * Fluxer: like Discord, fetch the guild audit log and find the entry whose target
- * is the bot. The actor id is `entry.userId` and its identity is hydrated in the
- * `users` array returned by the SDK. Best-effort — any failure returns null.
- */
-async function resolveFluxerActor(
-  native: NativeContext,
-  botId: string,
-): Promise<ResolvedActor | null> {
-  const member = native['member'] as
-    | { guild?: { fetchAuditLogs?: (opts?: unknown) => Promise<unknown> } }
-    | undefined;
-  const guild = member?.guild;
-  if (!guild?.fetchAuditLogs) return null;
-
-  try {
-    const audit = (await guild.fetchAuditLogs({
-      limit: 10,
-    })) as {
-      entries?: Array<{
-        targetId: string | null;
-        userId: string | null;
-      }>;
-      users?: Array<{ id: string; username: string; globalName?: string | null }>;
-    };
-    const entry = (audit?.entries ?? []).find((e) => e.targetId === botId);
-    const actorId = entry?.userId;
-    if (!actorId) return null;
-    const actorUser = (audit?.users ?? []).find((u) => u.id === actorId);
-    return {
-      id: actorId,
-      label: formatActorLabel(
-        actorUser?.username ?? '',
-        actorUser?.globalName ?? actorUser?.username ?? '',
-        actorId,
-      ),
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Resolves the actor who added/removed the bot. Returns a ResolvedActor with a
  * real display label, or throws so the caller can log an explicit error — the
  * "unknown" placeholder is never produced.
@@ -232,9 +190,6 @@ async function resolveActor(
     if (inline) return inline;
   } else if (platform === Platforms.Discord) {
     const inline = await resolveDiscordActor(event, native, botId);
-    if (inline) return inline;
-  } else if (platform === Platforms.Fluxer) {
-    const inline = await resolveFluxerActor(native, botId);
     if (inline) return inline;
   }
 
@@ -265,7 +220,7 @@ async function resolveActor(
 
 /**
  * Resolves the database record to delete when the bot leaves a chat/guild.
- * Server-hierarchy events (Discord/Fluxer) carry a channel id in threadID, but
+ * Server-hierarchy events (Discord) carry a channel id in threadID, but
  * the record lives under the guild (server) id — prefer native.member.guild.id
  * when present.
  */
@@ -274,10 +229,7 @@ function resolveRemovalTarget(
   native: NativeContext,
   threadID: string,
 ): string {
-  if (
-    native.platform === Platforms.Discord ||
-    native.platform === Platforms.Fluxer
-  ) {
+  if (native.platform === Platforms.Discord) {
     const guildId = (native['member'] as NativeDiscordMember | undefined)?.guild
       ?.id;
     if (guildId) return guildId;

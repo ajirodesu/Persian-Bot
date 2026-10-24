@@ -13,7 +13,7 @@
  *   1  discord
  *   2  telegram
  *   3  webchat
- *   4  fluxer
+ *   4  RETIRED (legacy platform, removed) — never reuse this id.
  */
 
 // Single source of truth for platform string literals
@@ -24,38 +24,32 @@ export const Platforms = {
   // packages/cat-bot/src/server/socket/chat-room.socket.ts (WebChatApi).
   // Added as id 3 per the APPEND-only contract above; never reuse/renumber.
   Webchat: 'webchat',
-  // Fluxer platform — @fluxerjs/core SDK. Added as id 4 per the APPEND-only
-  // contract above; never reuse/renumber.
-  Fluxer: 'fluxer',
+  // NOTE: id 4 belonged to a retired platform that has been removed. The id
+  // remains retired per the APPEND-only contract above — never reuse/renumber it.
 } as const;
 
 export const PLATFORM_TO_ID = {
   [Platforms.Discord]: 1,
   [Platforms.Telegram]: 2,
   [Platforms.Webchat]: 3,
-  [Platforms.Fluxer]: 4,
 } as const;
 
 export const ID_TO_PLATFORM = {
   1: Platforms.Discord,
   2: Platforms.Telegram,
   3: Platforms.Webchat,
-  4: Platforms.Fluxer,
 } as const;
 
 /**
  * Platforms whose groups are modelled as a server → channel hierarchy
  * (guild + channels), exactly like Discord guilds.
  *
- * Discord and Fluxer both expose server/guild + channel containment, so the
+ * Currently Discord-only: it exposes server/guild + channel containment, so the
  * engine's server-scoped persistence (bot_discord_server / bot_discord_channel),
  * server-scoped ban enforcement, and the dashboard's server → channels group
- * panel apply to both. Change here to add/remove platforms from that model.
+ * panel apply to it. Change here to add/remove platforms from that model.
  */
-export const SERVER_HIERARCHY_PLATFORMS: readonly string[] = [
-  Platforms.Discord,
-  Platforms.Fluxer,
-];
+export const SERVER_HIERARCHY_PLATFORMS: readonly string[] = [Platforms.Discord];
 
 /** True when `platform` stores groups as a server → channel hierarchy. */
 export function isServerHierarchyPlatform(platform: string): boolean {

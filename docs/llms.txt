@@ -7,8 +7,7 @@
   - Command/event modules use `export const meta: CommandMeta/EventMeta`
     from `@/engine/types/module-meta.types.js` (NOT `config` / `module-config`).
     Event subscription field is `type:` (NOT `eventType:`).
-  - Platforms are discord + telegram (grammy, NOT Telegraf) + fluxer
-    (@fluxerjs/core, replaces facebook-messenger/facebook-page) + webchat
+  - Platforms are discord + telegram (grammy, NOT Telegraf) + webchat
     (Socket.IO in-app chat). See docs/cat-bot/adapters/.
   - Database adapters here are mongodb + neondb (default) + turso
     (upstream json + prisma-sqlite were removed).
@@ -153,7 +152,7 @@ packages/cat-bot/src/
 │   └── events/            ← Auto-loaded event modules (e.g., join.ts)
 └── engine/                ← THE ENGINE: Abstracted runtime
     ├── app.ts             ← Core Orchestrator (bootstraps listeners, loads modules)
-    ├── adapters/          ← Normalizes Discord, Telegram, Fluxer, WebChat into `UnifiedEvent`
+    ├── adapters/          ← Normalizes Discord, Telegram, WebChat into `UnifiedEvent`
     ├── middleware/        ← Pipeline guards (auth, rate limits, option parsing)
     ├── controllers/       ← Dispatches events to your `app/` handlers
     ├── lib/               ← In-memory utilities (state flows, cooldowns, caches)
@@ -162,7 +161,7 @@ packages/cat-bot/src/
 
 **How it relates to your code:**
 
-1. **Adapters** catch raw events from Discord/Telegram/Fluxer/WebChat and convert them into a single format.
+1. **Adapters** catch raw events from Discord/Telegram/WebChat and convert them into a single format.
 2. **Middleware** checks if the user is banned, on cooldown, or lacks permissions before your command ever runs.
 3. **Controllers** look at the event type and route it to the exact `onCommand`, `onEvent`, or `onReact` function in your `app/` modules.
 4. You use **Lib** and **Database** utilities (injected via `AppCtx`) to build your logic without worrying about the underlying database or server details.
@@ -256,7 +255,7 @@ When a user sends a message or triggers an event, it travels through this fixed 
 
 ### Stage 1 — Platform Transport
 
-Platform adapters (Discord, Telegram, Fluxer, Fluxer/WebChat) receive native SDK events and normalise them into the unified `UnifiedEvent` contract before emitting on the shared `EventEmitter`. Your command and event modules never import `discord.js`, `grammy`, or `@fluxerjs/core` — the adapter layer absorbs every platform difference.
+Platform adapters (Discord, Telegram, WebChat) receive native SDK events and normalise them into the unified `UnifiedEvent` contract before emitting on the shared `EventEmitter`. Your command and event modules never import `discord.js` or `grammy` — the adapter layer absorbs every platform difference.
 
 The payload emitted to `app.ts` always has three fields:
 
@@ -361,7 +360,7 @@ Called when a user sends a message starting with the prefix followed by `config.
 export const onCommand = async ({ chat, args, event, native }: AppCtx): Promise<void> => {
   // args[0] is the first token after the command name
   // event['senderID'] is the platform user ID of the invoker
-  // native.platform is 'discord' | 'telegram' | 'fluxer' | 'fluxer'
+  // native.platform is 'discord' | 'telegram' | 'webchat'
 }
 ```
 
@@ -651,7 +650,7 @@ button: [
 ]
 ```
 
-> **PLATFORM LIMITS:** Discord — max 5 buttons per `ActionRow`, max 5 rows; Telegram — no hard per-row button limit; Fluxer — all buttons are flattened to a numbered text menu regardless of row structure; Fluxer/WebChat — max 3 buttons per Button Template row.
+> **PLATFORM LIMITS:** Discord — max 5 buttons per `ActionRow`, max 5 rows; Telegram — no hard per-row button limit; WebChat — max 3 buttons per Button Template row.
 
 #### chat.editMessage
 
@@ -762,7 +761,7 @@ state.delete(session.id)    // session.id is the matched key, auto-provided in o
 
 ### Button API — Interactive Buttons
 
-Buttons work similarly to states but are embedded in a message as clickable components on Discord, Telegram, and Fluxer/WebChat. On Fluxer (which has no native button components), the engine automatically renders a numbered text menu and routes the user's numeric reply to the appropriate `onClick` handler — your code stays identical across all platforms.
+Buttons work similarly to states but are embedded in a message as clickable components on Discord, Telegram, and WebChat — your code stays identical across all platforms.
 
 > **NOTE — Buttons vs. Conversation State:**
 > Buttons are natively embedded in the platform's UI and do not use the conversation state store (`ctx.state`). Unlike `onReply` and `onReact`, which require the bot to actively track state keys, the platform handles button rendering and routes the click back to the bot automatically.
@@ -954,8 +953,7 @@ export const onCommand = async ({ chat, button: btn }: AppCtx) => {
 |---|---|
 | Discord | Each inner array is one `ActionRow`; max 5 buttons per row, max 5 rows total per message |
 | Telegram | Each inner array is one inline keyboard row; no hard per-row button limit |
-| Fluxer | Row structure is ignored; all buttons are flattened to a numbered text menu appended to the message body |
-| Fluxer/WebChat | Each inner array is one Button Template row; max 3 buttons per row |
+| WebChat | Each inner array is one Button Template row; max 3 buttons per row |
 
 ---
 
@@ -1214,7 +1212,7 @@ export const onCommand = async ({ options, args, usage, native }: AppCtx) => {
   let action = args[0]
   let uid = args[1]
   // options.get() resolves Discord slash inputs via the native interaction API;
-  // on all other platforms (Telegram, Fluxer, WebChat) key:value body scanning
+  // on all other platforms (Telegram, WebChat) key:value body scanning
   // is less predictable than positional args — guard explicitly to avoid silent failures
   if (native.platform === Platforms.Discord) {
     action = options.get('action') ?? action
@@ -1274,7 +1272,7 @@ await bot.leave(targetThreadID)
 
 Makes the bot exit a thread or group. Omitting `threadID` falls back to the current event's thread. The bot sends any farewell message **before** calling `leave` so delivery is attempted while it is still a member. Used by the `/out` command for bot self-eject.
 
-> **PLATFORM NOTES:** Discord — leaves the entire guild (channel ID resolved to server ID via `getDiscordServerIdByChannel`). Telegram — calls `leaveChat(chatId)`. Fluxer — removes itself via `removeUserFromGroup(botId, threadID)`. Fluxer/WebChat — not applicable (always 1:1 DM).
+> **PLATFORM NOTES:** Discord — leaves the entire guild (channel ID resolved to server ID via `getDiscordServerIdByChannel`). Telegram — calls `leaveChat(chatId)`. WebChat — not applicable (always 1:1 DM).
 
 #### db.users.getAll / db.threads.getGroupIds
 
@@ -1332,7 +1330,7 @@ This is the better-auth account ID of the person who registered this bot session
 
 A lowercase string identifying which messaging platform delivered this event.
 
-**VALID VALUES:** `'discord'` | `'telegram'` | `'fluxer'` | `'fluxer'`
+**VALID VALUES:** `'discord'` | `'telegram'` | `'webchat'`
 
 Use it to branch on platform-specific behaviour at runtime. For commands that only support certain platforms, declare `meta.platform` in the module meta instead and let the engine enforce it automatically — no manual runtime check needed.
 
@@ -1408,7 +1406,7 @@ Controls how message text is rendered on each platform.
 
 **Import path:** `import { MessageStyle } from '@/engine/constants/message-style.constants.js'`
 
-| Value | Discord | Telegram | Fluxer / WebChat |
+| Value | Discord | Telegram | WebChat |
 |---|---|---|---|
 | `MessageStyle.MARKDOWN` | Renders natively | `MarkdownV2` parse mode | Converts `**bold**`, `_italic_`, `` `code` `` → Unicode styled text |
 | `MessageStyle.TEXT` | Markdown syntax is escaped — displays literally | No parse mode | Raw text sent as-is |
@@ -1428,7 +1426,7 @@ await chat.replyMessage({
 
 ### ButtonStyle
 
-Visual hint for button appearance. Only meaningful on Discord; Telegram and Fluxer/WebChat use the label exclusively.
+Visual hint for button appearance. Only meaningful on Discord; Telegram and WebChat use the label exclusively.
 
 **Import path:** `import { ButtonStyle } from '@/engine/constants/button-style.constants.js'`
 
@@ -1474,7 +1472,6 @@ export const meta = {
 |---|---|---|
 | `Platforms.Discord` | `'discord'` | |
 | `Platforms.Telegram` | `'telegram'` | |
-| `Platforms.Fluxer` | `'fluxer'` | @fluxerjs/core guild/chat |
 | `Platforms.Webchat` | `'webchat'` | Socket.IO in-app chat — no credentials to verify |
 
 > **DEFAULT:** When `platform` is absent or an empty array, the command runs on all platforms.
@@ -1483,8 +1480,8 @@ export const meta = {
 
 ```ts
 export const onCommand = async ({ native, chat }: AppCtx) => {
-  if (native.platform === Platforms.Fluxer) {
-    await chat.replyMessage({ message: 'This feature is not available on Fluxer.' })
+  if (native.platform === Platforms.Webchat) {
+    await chat.replyMessage({ message: 'This feature is not available in the in-app chat.' })
     return
   }
   // platform-specific code
@@ -1493,7 +1490,7 @@ export const onCommand = async ({ native, chat }: AppCtx) => {
 
 **Checking whether a platform supports native button components:**
 
-> **Why use `hasNativeButtons`?** Platforms like Fluxer do not support native UI buttons. If you provide a `button` array without conditionally checking `hasNativeButtons`, the engine (specifically inside `createChatContext` in `packages/cat-bot/src/engine/adapters/models/context.model.ts`) automatically falls back to generating a numbered text menu appended to your message and registers an internal `onReply` fallback state to route the user's numeric choice. Conditionally omitting the `button` array using `hasNativeButtons(native.platform)` ensures this text menu fallback isn't rendered, keeping standard text responses clean when native buttons are unsupported.
+> **Why use `hasNativeButtons`?** If a platform does not support native UI buttons, and you provide a `button` array without conditionally checking `hasNativeButtons`, the engine (specifically inside `createChatContext` in `packages/cat-bot/src/engine/adapters/models/context.model.ts`) automatically falls back to generating a numbered text menu appended to your message and registers an internal `onReply` fallback state to route the user's numeric choice. Conditionally omitting the `button` array using `hasNativeButtons(native.platform)` ensures this text menu fallback isn't rendered, keeping standard text responses clean when native buttons are unsupported.
 
 ```ts
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js'
@@ -1716,44 +1713,6 @@ export const onEvent = async ({ native }: AppCtx) => {
 
 ---
 
-#### Fluxer
-
-The Fluxer adapter uses **`@fluxerjs/core`** with a persistent gateway connection
-(`src/engine/adapters/platform/fluxer/client.ts` — `new Client()`,
-`client.login(token)`, wait `Events.Ready`). The session is verified at boot the
-same way Discord is (no webhook handshake — there is no `webhooks.repo.ts` in
-this fork). Every event delivers the session identity plus one per-event extra.
-
-| Event | Native fields |
-|---|---|
-| `message`, `message_reply`, `message_unsend` | `platform`, `userId`, `sessionId`, `message` (raw SDK message) |
-| `event` (join / leave) | `platform`, `userId`, `sessionId`, `member` (raw SDK member) |
-| `message_reaction` | `platform`, `userId`, `sessionId` |
-
-**`message` / `member`** — The raw `@fluxerjs/core` SDK objects before
-normalisation (`src/engine/adapters/platform/fluxer/event-handlers.ts:46-49,
-79-82,146-149`). Useful for fields the normaliser strips. The `UnifiedApi`
-instance on `ctx.api` already wraps the resolved channel/guild, so most code
-should prefer `ctx.chat` / `ctx.thread` over reaching into these.
-
-```ts
-import { Platforms } from '@/engine/modules/platform/platform.constants.js'
-
-export const onCommand = async ({ event, native }: AppCtx) => {
-  if (native.platform === Platforms.Fluxer) {
-    // Raw SDK message before normalisation (fields the normaliser strips)
-    const { message } = native as { message?: Record<string, unknown> }
-    const rawTimestamp = message?.['timestamp']
-
-    const threadID = event['threadID'] as string
-    void threadID
-  }
-}
-```
-
-> ⚠️ Always wrap native calls in `try/catch` — native errors are not absorbed by
-> the engine's error pipeline. See `docs/cat-bot/adapters/FLUXER_ARCHITECTURE.md`.
-
 #### WebChat
 
 WebChat is the Socket.IO in-app chat (`src/engine/adapters/platform/webchat/api.ts`
@@ -1799,11 +1758,6 @@ export const onCommand = async ({ native, chat }: AppCtx) => {
       if (message?.guild) {
         // Discord guild-specific code here
       }
-      break
-    }
-    case Platforms.Fluxer: {
-      // native: { platform, userId, sessionId } + per-event extras
-      // (message on message events, member on join/leave)
       break
     }
     case Platforms.Webchat: {
@@ -1975,7 +1929,7 @@ import {
   // Credentials
   findDiscordCredentialState, updateDiscordCredentialCommandHash, findAllDiscordCredentials,
   findTelegramCredentialState, updateTelegramCredentialCommandHash, findAllTelegramCredentials,
-  findAllFluxerCredentials, findAllBotSessions,
+  findAllBotSessions,
   // Bot admins
   isBotAdmin, addBotAdmin, removeBotAdmin, listBotAdmins,
   // Premium
@@ -1997,7 +1951,6 @@ import {
 | `findTelegramCredentialState(userId, sessionId)` | RETURNS: `{ isCommandRegister, commandHash } \| null`; cache-first |
 | `updateTelegramCredentialCommandHash(userId, sessionId, data)` | Updates command hash; clears telegram state + all-telegram list from cache |
 | `findAllTelegramCredentials()` | All Telegram credentials; cached under a singleton key |
-| `findAllFluxerCredentials()` | All Fluxer credentials; cached under a singleton key |
 | `findAllBotSessions()` | All bot sessions across all platforms; cached under `SESSIONS_ALL_KEY` |
 
 **Bot Admin Management:**
@@ -2132,13 +2085,13 @@ import {
 
 ### Webhook verification — removed in this fork
 
-Upstream kept a `webhooks.repo.ts` (Fluxer/WebChat handshake verification). This
-repo has **no `webhooks.repo.ts`**: Fluxer verifies its token at boot via
-`client.login(token)` + `Events.Ready`
-(`src/engine/adapters/platform/fluxer/client.ts`), Telegram verifies via
+Upstream kept a `webhooks.repo.ts` (handshake verification). This
+repo has **no `webhooks.repo.ts`**: Discord verifies its token at boot via
+`client.login(token)` + `Events.ClientReady`
+(`src/engine/adapters/platform/discord/client.ts`), Telegram verifies via
 `getMe` (`src/engine/adapters/platform/telegram/listener.ts`), and the
-dashboard validates all three credential types over REST
-(`POST /api/v1/validate/discord|telegram|fluxer` —
+dashboard validates the discord and telegram credentials over REST
+(`POST /api/v1/validate/discord|telegram` —
 `src/server/controllers/v1/validation.controller.ts`). WebChat needs no
 verification (socket session is the identity).
 
@@ -2161,7 +2114,7 @@ Discriminant values for the top-level `type` field on every event object.
 | `EventType.MESSAGE_REACTION` | `'message_reaction'` | Emoji reaction added to a message |
 | `EventType.MESSAGE_UNSEND` | `'message_unsend'` | A sent message was retracted by its sender |
 | `EventType.EVENT` | `'event'` | Thread-level administrative event; narrowed further by `logMessageType` |
-| `EventType.BUTTON_ACTION` | `'button_action'` | A user clicked an interactive button (Discord, Telegram, Fluxer/WebChat) |
+| `EventType.BUTTON_ACTION` | `'button_action'` | A user clicked an interactive button (Discord, Telegram, WebChat) |
 
 ---
 
@@ -2216,7 +2169,7 @@ Emitted for every standard chat message. Routed to `onChat` (all messages) and t
 | `messageID` | `string` | Platform-assigned message ID; use as the key for `state.create()` and `button.createContext()` |
 | `attachments` | `unknown[]` | Array of attachment objects — may be empty; narrow each item on `(att as {type:string}).type` (see [Attachment Data Shapes](#attachment-data-shapes)) |
 | `mentions` | `Record<string, string>` | Map of `userID → mentionedText` (e.g. `{ '12345': '@Alice' }`) |
-| `timestamp` | `string \| number \| null` | @fluxerjs/core sends a string ms timestamp; Discord/Telegram send a number; `null` when unavailable |
+| `timestamp` | `string \| number \| null` | Number ms timestamp; `null` when unavailable |
 | `isGroup` | `boolean` | `false` in 1:1 DMs; `true` in group chats, channels, and servers |
 
 #### Event Shape: `message_reply`
@@ -2249,7 +2202,7 @@ Emitted when a user sends a quote-reply to a specific earlier message. Checked a
 | `message` | `string` | Original message body text |
 | `isGroup` | `boolean` | |
 | `mentions` | `Record<string, string>` | |
-| `timestamp` | `number` | Number ms — @fluxerjs/core uses a number here, unlike the outer event which uses a string |
+| `timestamp` | `number` | Unix ms when the original message was sent |
 
 #### Event Shape: `message_reaction`
 
@@ -2276,7 +2229,7 @@ Emitted when a sender retracts a previously sent message.
 | `messageID` | `string` | ID of the retracted message |
 | `senderID` | `string` | Who retracted the message |
 | `deletionTimestamp` | `number` | Unix ms when the deletion occurred |
-| `timestamp` | `number \| undefined` | Original send timestamp — `undefined` (not `null`) intentionally preserves the @fluxerjs/core sentinel so consumers can distinguish "timestamp not present" from `timestamp === 0` |
+| `timestamp` | `number \| undefined` | Original send timestamp — `undefined` (not `null`) distinguishes "timestamp not present" from `timestamp === 0` |
 
 #### Event Shape: `event` — Thread Administrative Events
 

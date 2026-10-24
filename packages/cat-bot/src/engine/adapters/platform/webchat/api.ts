@@ -403,8 +403,7 @@ export class WebChatApi extends UnifiedApi {
 
   /**
    * Records a bot reaction on a chat-room message and pushes it live to the
-   * client — the webchat equivalent of Discord/Telegram/Fluxer's
-   * reactToMessage. The engine's command dispatcher fires this automatically
+   * client — the webchat equivalent of Discord/Telegram's reactToMessage. The engine's command dispatcher fires this automatically
    * after every successfully executed command (react-on-success, using the
    * session's configured emoji or the platform default), so web users get the
    * exact same automatic acknowledgement reactions as every other platform.

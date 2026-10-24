@@ -73,7 +73,7 @@ function isImageAttachment(att: RawAttachment): boolean {
  *      final fallback, so the command basically never comes up empty
  *
  * Avatar lookups (steps 3-4) only run on platforms whose UnifiedApi actually
- * implements getAvatarUrl() (Discord/Telegram/Fluxer) — on platforms that don't
+ * implements getAvatarUrl() (Discord/Telegram) — on platforms that don't
  * (e.g. Webchat), getAvatarUrl() throws rather than returning null, so those
  * are skipped and the command simply asks for an image instead.
  */
@@ -97,8 +97,7 @@ async function resolveImageUrl(ctx: AppCtx): Promise<string | null> {
   const platform = ctx.native.platform;
   if (
     platform !== Platforms.Discord &&
-    platform !== Platforms.Telegram &&
-    platform !== Platforms.Fluxer
+    platform !== Platforms.Telegram
   ) {
     // No image was attached/replied, and avatar lookups aren't supported on
     // this platform — nothing left to fall back to.
@@ -296,7 +295,7 @@ export const commands: CommandEntry[] = EFFECT_CONFIGS.map((config) => ({
     usage: ['(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)'],
     cooldown: 8,
     hasPrefix: true,
-    platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
+    platform: [Platforms.Discord, Platforms.Telegram],
   },
   onCommand: async (ctx: AppCtx) => runEffect(ctx, config),
 }));

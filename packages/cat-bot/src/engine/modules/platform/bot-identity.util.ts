@@ -9,7 +9,6 @@
  * - Discord stores its client (application) ID in plaintext.
  * - Telegram embeds the numeric bot ID in the token prefix (`<id>:<secret>`);
  *   tokens are encrypted at rest, so decryption happens in-process here.
- * - Fluxer tokens are opaque — no ID is derivable; returns undefined.
  *
  * Usernames are not persisted anywhere, so callers leave botUsername absent
  * (the UI renders an "Unknown" placeholder) until identity is stored at

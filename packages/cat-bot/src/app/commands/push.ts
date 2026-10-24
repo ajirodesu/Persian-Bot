@@ -32,7 +32,7 @@
  *   when no local checkout is resolvable the wrapper stripping is skipped.
  *
  * Attachment detection note:
- *   Discord and Fluxer attachments always carry a real `filename`, so a
+ *   Discord attachments always carry a real `filename`, so a
  *   `.zip` name match is reliable there. Telegram is different — its event
  *   normalizer (`extractAttachments` in the Telegram helper.util.ts) only
  *   ever produces `{ type: 'file', ID, url }` for documents; the original
@@ -89,7 +89,7 @@ function looksLikeZipName(name: string | null | undefined): boolean {
  * Finds the attachment that is (or is most likely) the .zip the admin meant
  * to push.
  *
- * Discord/Fluxer attachments carry a real `filename`/`name`, so those are
+ * Discord attachments carry a real `filename`/`name`, so those are
  * matched directly. Telegram documents never carry a filename at all — only
  * `{ type: 'file', ID, url }` survives event normalization — so as a second
  * pass this also checks the resolved CDN url's extension, and if that's
@@ -227,7 +227,7 @@ export const meta: CommandMeta = {
   cooldown: 10,
   hasPrefix: true,
   // Real commits against the live repo — never expose this to the in-app Chat Room.
-  platform: [Platforms.Discord, Platforms.Telegram, Platforms.Fluxer],
+  platform: [Platforms.Discord, Platforms.Telegram],
 };
 
 // ── Command Entry Point — single step: reply → unzip → push via GitHub API ────

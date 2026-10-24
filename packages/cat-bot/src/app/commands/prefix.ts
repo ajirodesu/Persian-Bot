@@ -58,7 +58,6 @@ export const meta: CommandMeta = {
   platform: [
     Platforms.Discord,
     Platforms.Telegram,
-    Platforms.Fluxer,
   ],
   options: [
     {

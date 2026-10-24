@@ -68,8 +68,7 @@ export async function isSystemAdmin(adminId: string): Promise<boolean> {
 /**
  * Permanently deletes a user account and all associated data.
  * Tables with an ON DELETE CASCADE foreign key to "user" (session, account, bot_session,
- * bot_admin, bot_premium, bot_credential_discord, bot_credential_telegram, and
- * bot_credential_fluxer) are cleaned up
+ * bot_admin, bot_premium, bot_credential_discord, and bot_credential_telegram) are cleaned up
  * automatically by Postgres when the user row is deleted below. Tables below carry a
  * user_id column but no FK constraint, so they're purged explicitly first.
  */
@@ -108,7 +107,7 @@ export async function deleteUser(userId: string): Promise<void> {
     );
 
     // Cascades to session, account, bot_session, bot_admin, bot_premium,
-    // bot_credential_discord, bot_credential_telegram, bot_credential_fluxer
+    // bot_credential_discord, bot_credential_telegram
     // via ON DELETE CASCADE.
     await client.query(`DELETE FROM "user" WHERE id = $1`, [userId]);
 
@@ -135,7 +134,7 @@ export async function deleteUser(userId: string): Promise<void> {
  *      relationship to "user", scoped to everyone EXCEPT excludeUserId.
  *   2. Delete every "user" row except excludeUserId — Postgres cascades this to
  *      session, account, bot_session, bot_admin, bot_premium, bot_credential_discord,
- *      bot_credential_telegram, and bot_credential_fluxer automatically via their
+ *      and bot_credential_telegram automatically via their
  *      ON DELETE CASCADE FKs.
  *   3. Fully clear global, non-owner-scoped bot-identity/system tables (bot_users,
  *      bot_threads, Discord server/channel mappings, system_admin, verification) —
@@ -173,7 +172,7 @@ export async function resetAllDatabase(excludeUserId: string): Promise<void> {
 
     // ── Step 2: every other user account — cascades to session, account,
     // bot_session, bot_admin, bot_premium, bot_credential_discord,
-    // bot_credential_telegram, bot_credential_fluxer
+    // bot_credential_telegram
     await client.query(`DELETE FROM "user" WHERE id <> $1`, [excludeUserId]);
 
     // ── Step 3: global bot-identity + system tables, no owner scoping ──────────

@@ -1,0 +1,254 @@
+/* ============================================================
+   "EMERALD" THEME — deep gemstone green on ink.
+
+   Mood: emerald on charcoal. A flat technical printout — charcoal
+   paper (#0F1112) with visible hairline rules (#262A2B) and one
+   gemstone-green accent (#10B981) reserved for primary actions,
+   active states, links, and focus rings.
+
+   Palette strategy:
+   • Surfaces: charcoal, each elevation step a shade lighter
+   • Primary: gemstone green, the only saturated accent
+   • Secondary/tertiary: neutral gray for supporting actions
+   • Status colors stay legible against charcoal (green/amber/blue)
+
+   This is the DEFAULT theme and the visual source of truth for the
+   Bot Manager look. Values live on `:root` (unscoped) so they apply
+   before the theme switcher JS has a chance to run, and are
+   re-stated under the explicit attribute selector for clarity once
+   the switcher sets it.
+
+   Finish is deliberately flat: no gradients, no frosted glass, no
+   ambient glow, no specular highlight, no elevation shadows
+   (--shadow-soft-* and --shadow-card-* are `none`), no avatar glow.
+   Gradients tokens are kept as token names but carry FLAT colors so
+   any legacy consumer paints solid ink instead of a ramp.
+
+   Gentle eye-friendly pass: inks sit one step lighter than pure ink
+   so standard dark-mode contrast stops glaring; accents keep the
+   gemstone hue at reduced neon.
+
+   NOTE: Shape tokens (--radius-card, --radius-button, etc.) are NOT
+   defined per-theme — they live once in tokens.css so every theme
+   renders identically-sized cards, buttons, and text. Only color
+   values vary by theme.
+   ============================================================ */
+
+:root,
+html[data-theme='emerald'] {
+  /* ==================== PRIMARY (gemstone green) ==================== */
+  --emerald-color-primary: 16 185 129;
+  --emerald-color-on-primary: 3 22 14;
+  --emerald-color-primary-container: 12 46 34;
+  --emerald-color-on-primary-container: 178 240 204;
+
+  /* ==================== SECONDARY (neutral gray — supporting actions) ==================== */
+  --emerald-color-secondary: 140 147 140;
+  --emerald-color-on-secondary: 12 14 13;
+  --emerald-color-secondary-container: 27 30 29;
+  --emerald-color-on-secondary-container: 227 230 223;
+
+  /* ==================== TERTIARY (neutral gray — data/code accent) ==================== */
+  --emerald-color-tertiary: 140 147 140;
+  --emerald-color-on-tertiary: 12 14 13;
+  --emerald-color-tertiary-container: 27 30 29;
+  --emerald-color-on-tertiary-container: 227 230 223;
+
+  /* ==================== SURFACE SYSTEM ==================== */
+  /* Base paper: charcoal #0F1112 */
+  --emerald-color-surface: 15 17 18;
+  --emerald-color-on-surface: 227 230 223;
+  --emerald-color-surface-variant: 106 112 106;
+  --emerald-color-on-surface-variant: 158 165 156;
+  --emerald-color-surface-container-lowest: 11 13 14;
+  /* Card/elevated background — one step of ink, no shadow */
+  --emerald-color-surface-container-low: 19 21 22;
+  /* Secondary background */
+  --emerald-color-surface-container: 19 21 22;
+  --emerald-color-surface-container-high: 26 29 30;
+  --emerald-color-surface-container-highest: 35 39 40;
+  --emerald-color-surface-bright: 227 230 223;
+  --emerald-color-surface-dim: 15 17 18;
+
+  /* ==================== INVERSE ==================== */
+  --emerald-color-inverse-surface: 227 230 223;
+  --emerald-color-inverse-on-surface: 15 17 18;
+  --emerald-color-inverse-primary: 16 185 129;
+
+  /* ==================== OUTLINE ==================== */
+  --emerald-color-outline: 60 66 67;
+  --emerald-color-outline-variant: 40 44 45;
+
+  /* ==================== SCRIM & SHADOW ==================== */
+  --emerald-color-scrim: 0 0 0;
+  --emerald-color-shadow: 0 0 0;
+
+  /* ==================== DANGER / ERROR (red ink) ==================== */
+  --emerald-color-error: 233 121 115;
+  --emerald-color-on-error: 24 8 8;
+  --emerald-color-error-container: 46 18 18;
+  --emerald-color-on-error-container: 244 172 170;
+
+  /* ==================== SUCCESS (green signal) ==================== */
+  --emerald-color-success: 88 199 148;
+  --emerald-color-on-success: 6 22 13;
+  --emerald-color-success-container: 12 42 26;
+  --emerald-color-on-success-container: 136 226 186;
+
+  /* ==================== WARNING (amber signal) ==================== */
+  --emerald-color-warning: 226 175 88;
+  --emerald-color-on-warning: 26 16 4;
+  --emerald-color-warning-container: 46 32 10;
+  --emerald-color-on-warning-container: 238 198 132;
+
+  /* ==================== INFO (cold blue signal) ==================== */
+  --emerald-color-info: 130 176 232;
+  --emerald-color-on-info: 6 16 24;
+  --emerald-color-info-container: 14 36 50;
+  --emerald-color-on-info-container: 178 210 244;
+
+  /* ==================== GRADIENTS ====================
+     Token names retained for existing consumers, but every value is
+     a FLAT color: there is no gradient anywhere in this design. */
+  --emerald-color-gradient-primary: rgb(16 185 129);
+  --emerald-color-gradient-secondary: rgb(140 147 140);
+  --emerald-color-gradient-tertiary: rgb(16 185 129);
+  --emerald-color-gradient-error: rgb(233 121 115);
+  --emerald-color-gradient-success: rgb(16 185 129);
+  --emerald-color-gradient-warning: rgb(226 175 88);
+  --emerald-color-gradient-info: rgb(16 185 129);
+
+  /* ==================== HAIRLINE BORDERS ====================
+     Solid 1px structural rule shared by shells, cards, and tables */
+  --color-hairline-border: #262a2b;
+
+  /* ==================== HEADER SEPARATOR ====================
+     The sidebar header's 1px line style — every page header uses
+     this same token so all top bars divide with identical weight */
+  --color-separator: rgba(42, 46, 47, 0.55);
+
+  /* ==================== FLAT SURFACES (no frosted glass) ==================== */
+  --glass-bg: #131516;
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-border: #262a2b;
+
+  /* ==================== HEADER SURFACE ====================
+     Page-header fill = the sidebar's own fill (--glass-bg), so every
+     header except the public landing header reads as part of the rail. */
+  --color-header-surface: var(--glass-bg);
+
+  /* ==================== INPUT SURFACES ==================== */
+  --color-input-bg: #171a1b;
+  --color-input-border: #2c3132;
+
+  /* ==================== SHADOW SCALE (flat — no elevation at rest) ==================== */
+  --shadow-soft-sm: none;
+  --shadow-soft-md: none;
+  --shadow-soft-lg: none;
+
+  --shadow-card-rest: none;
+  --shadow-card-hover: none;
+
+  /* Tight accent focus ring for inputs — outline, not bloom */
+  --shadow-focus-ring: 0 0 0 2px rgba(16, 185, 129, 0.45);
+
+  /* No avatar glow in the printout finish */
+  --shadow-avatar-glow: none;
+
+  /* ==================== TYPOGRAPHY ====================
+     Barlow Condensed is the signage/display face and is aliased
+     through --font-family-brand, so brand marks and h1–h3 resolve
+     to the same stack as --font-family-display in tokens.css.
+     Barlow drives all body/UI text (--font-family-plain).
+     JetBrains Mono drives code/data/labels (--font-family-mono).
+     Only font-family lives here; every size/line-height/spacing
+     token stays in tokens.css, shared and untouched by any theme. */
+  --font-family-brand: var(--font-family-display);
+  --font-family-plain: 'Barlow', sans-serif;
+  --font-family-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ==================== AMBIENT BACKGROUND GLOW ====================
+     Disabled in the flat finish — transparent everywhere. */
+  --ambient-glow-opacity: 0;
+  --ambient-glow-primary: transparent;
+  --ambient-glow-secondary: transparent;
+
+  /* ==================== SCROLLBAR ====================
+      Faint at rest, solid while actively scrolling */
+  --scrollbar-idle-opacity: 0.35;
+
+  /* ==================== SPECULAR HIGHLIGHT ====================
+     Disabled in the flat finish. */
+  --specular-highlight: transparent;
+
+  /* -------- Reference layer -------- */
+  --color-primary: var(--emerald-color-primary);
+  --color-on-primary: var(--emerald-color-on-primary);
+  --color-primary-container: var(--emerald-color-primary-container);
+  --color-on-primary-container: var(--emerald-color-on-primary-container);
+
+  --color-secondary: var(--emerald-color-secondary);
+  --color-on-secondary: var(--emerald-color-on-secondary);
+  --color-secondary-container: var(--emerald-color-secondary-container);
+  --color-on-secondary-container: var(--emerald-color-on-secondary-container);
+
+  --color-tertiary: var(--emerald-color-tertiary);
+  --color-on-tertiary: var(--emerald-color-on-tertiary);
+  --color-tertiary-container: var(--emerald-color-tertiary-container);
+  --color-on-tertiary-container: var(--emerald-color-on-tertiary-container);
+
+  --color-surface: var(--emerald-color-surface);
+  --color-on-surface: var(--emerald-color-on-surface);
+  --color-surface-variant: var(--emerald-color-surface-variant);
+  --color-on-surface-variant: var(--emerald-color-on-surface-variant);
+  --color-surface-container-lowest: var(--emerald-color-surface-container-lowest);
+  --color-surface-container-low: var(--emerald-color-surface-container-low);
+  --color-surface-container: var(--emerald-color-surface-container);
+  --color-surface-container-high: var(--emerald-color-surface-container-high);
+  --color-surface-container-highest: var(
+    --emerald-color-surface-container-highest
+  );
+  --color-surface-bright: var(--emerald-color-surface-bright);
+  --color-surface-dim: var(--emerald-color-surface-dim);
+
+  --color-inverse-surface: var(--emerald-color-inverse-surface);
+  --color-inverse-on-surface: var(--emerald-color-inverse-on-surface);
+  --color-inverse-primary: var(--emerald-color-inverse-primary);
+
+  --color-outline: var(--emerald-color-outline);
+  --color-outline-variant: var(--emerald-color-outline-variant);
+
+  --color-scrim: var(--emerald-color-scrim);
+  --color-shadow: var(--emerald-color-shadow);
+
+  --color-error: var(--emerald-color-error);
+  --color-on-error: var(--emerald-color-on-error);
+  --color-error-container: var(--emerald-color-error-container);
+  --color-on-error-container: var(--emerald-color-on-error-container);
+
+  --color-success: var(--emerald-color-success);
+  --color-on-success: var(--emerald-color-on-success);
+  --color-success-container: var(--emerald-color-success-container);
+  --color-on-success-container: var(--emerald-color-on-success-container);
+
+  --color-warning: var(--emerald-color-warning);
+  --color-on-warning: var(--emerald-color-on-warning);
+  --color-warning-container: var(--emerald-color-warning-container);
+  --color-on-warning-container: var(--emerald-color-on-warning-container);
+
+  --color-info: var(--emerald-color-info);
+  --color-on-info: var(--emerald-color-on-info);
+  --color-info-container: var(--emerald-color-info-container);
+  --color-on-info-container: var(--emerald-color-on-info-container);
+
+  --color-gradient-primary: var(--emerald-color-gradient-primary);
+  --color-gradient-secondary: var(--emerald-color-gradient-secondary);
+  --color-gradient-tertiary: var(--emerald-color-gradient-tertiary);
+  --color-gradient-error: var(--emerald-color-gradient-error);
+  --color-gradient-success: var(--emerald-color-gradient-success);
+  --color-gradient-warning: var(--emerald-color-gradient-warning);
+  --color-gradient-info: var(--emerald-color-gradient-info);
+
+  color-scheme: dark;
+}
