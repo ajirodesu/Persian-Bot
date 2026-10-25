@@ -7,7 +7,6 @@
 
 import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
-import { OptionType } from '@/engine/modules/command/command-option.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import {
   createPeriodicTableButton,

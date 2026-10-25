@@ -1,9 +1,6 @@
 import React from 'react'
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 /**
  * Link visual style variants
@@ -52,17 +49,6 @@ export type LinkOwnProps = {
   disabled?: boolean
 }
 
-/**
- * Polymorphic Link props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <Link href="/home">Internal Link</Link>
- * <Link as={RouterLink} to="/about">Router Link</Link>
- * <Link href="https://example.com" external>External Link</Link>
- * ```
- */
-export type LinkProps<T extends React.ElementType = 'a'> =
-  PolymorphicComponentPropsWithRef<T, LinkOwnProps>
 
 /**
  * Size classes for typography

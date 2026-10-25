@@ -484,24 +484,6 @@ export async function getTrackedSha(repoPath: string): Promise<string | null> {
   return res.code === 0 ? res.stdout.trim() || null : null;
 }
 
-/** Best-effort latest commit touching a path (null when none/unavailable). */
-export async function getPathLastCommit(
-  repoPath: string,
-): Promise<{ message: string; author: string; date: string } | null> {
-  const path = normalizeRepoPath(repoPath);
-  const res = await runGitProbe([
-    ...NO_QUOTE_CONFIG,
-    'log',
-    '-1',
-    '--format=%s%x1f%an%x1f%aI',
-    '--',
-    path,
-  ]);
-  if (res.code !== 0) return null;
-  const [message = '', author = '', date = ''] = res.stdout.trim().split('\x1f');
-  return message === '' ? null : { message, author, date };
-}
-
 /**
  * Batched blob SHAs for a directory's immediate children — ONE `ls-tree`
  * instead of one `rev-parse` subprocess per file. Map keys are repo-rooted

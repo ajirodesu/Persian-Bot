@@ -20,6 +20,15 @@ import type { UnifiedUserInfo } from './user.model.js';
 import type { UnifiedApi } from './api.model.js';
 import type { ButtonItem } from './interfaces/index.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+
+// The context factories run several times per command. Winston's debug calls
+// were allocating meta objects on every dispatch even when debug is filtered
+// out (the normal production level). Bind the check once per process.
+const debugEnabled = logger.isLevelEnabled('debug');
+const debug: (message: string, meta?: Record<string, unknown>) => void =
+  debugEnabled
+    ? (message, meta) => debug(message, meta)
+    : () => undefined;
 import { ButtonStyle, type ButtonStyleValue } from '@/engine/constants/button-style.constants.js';
 import { type UnifiedThreadInfo } from './thread.model.js';
 
@@ -46,7 +55,7 @@ export function createThreadContext(
   native?: { userId?: string; platform?: string; sessionId?: string },
 ): import('./interfaces/index.js').ThreadContext {
   const defaultThreadID = event['threadID'] as string;
-  logger.debug('[context.model] createThreadContext called', { threadID: defaultThreadID });
+  debug('[context.model] createThreadContext called', { threadID: defaultThreadID });
 
   function getThreadID(opts: unknown): string {
     if (typeof opts === 'object' && opts !== null) {
@@ -62,7 +71,7 @@ export function createThreadContext(
         ? (nameOrOpts as unknown as Record<string, unknown>).name
         : nameOrOpts;
       const targetThreadID = getThreadID(nameOrOpts);
-      logger.debug('[context.model] ThreadContext.setName called', { threadID: targetThreadID, name });
+      debug('[context.model] ThreadContext.setName called', { threadID: targetThreadID, name });
       return api.setGroupName(targetThreadID, name as string);
     },
     setImage: (sourceOrOpts) => {
@@ -70,12 +79,12 @@ export function createThreadContext(
         && !Buffer.isBuffer(sourceOrOpts) && !('pipe' in sourceOrOpts);
       const imageSource = isObj ? (sourceOrOpts as unknown as Record<string, unknown>).imageSource : sourceOrOpts;
       const targetThreadID = getThreadID(isObj ? sourceOrOpts : null);
-      logger.debug('[context.model] ThreadContext.setImage called', { threadID: targetThreadID });
+      debug('[context.model] ThreadContext.setImage called', { threadID: targetThreadID });
       return api.setGroupImage(targetThreadID, imageSource as Buffer | import('stream').Readable | string);
     },
     removeImage: (opts) => {
       const targetThreadID = getThreadID(opts);
-      logger.debug('[context.model] ThreadContext.removeImage called', { threadID: targetThreadID });
+      debug('[context.model] ThreadContext.removeImage called', { threadID: targetThreadID });
       return api.removeGroupImage(targetThreadID);
     },
     addUser: (userOrOpts) => {
@@ -83,7 +92,7 @@ export function createThreadContext(
         ? (userOrOpts as unknown as Record<string, unknown>).userID
         : userOrOpts;
       const targetThreadID = getThreadID(userOrOpts);
-      logger.debug('[context.model] ThreadContext.addUser called', { threadID: targetThreadID, userID });
+      debug('[context.model] ThreadContext.addUser called', { threadID: targetThreadID, userID });
       return api.addUserToGroup(targetThreadID, userID as string);
     },
     removeUser: (userOrOpts) => {
@@ -91,7 +100,7 @@ export function createThreadContext(
         ? (userOrOpts as unknown as Record<string, unknown>).userID
         : userOrOpts;
       const targetThreadID = getThreadID(userOrOpts);
-      logger.debug('[context.model] ThreadContext.removeUser called', { threadID: targetThreadID, userID });
+      debug('[context.model] ThreadContext.removeUser called', { threadID: targetThreadID, userID });
       return api.removeUserFromGroup(targetThreadID, userID as string);
     },
     setReaction: (emojiOrOpts) => {
@@ -99,19 +108,19 @@ export function createThreadContext(
         ? (emojiOrOpts as unknown as Record<string, unknown>).emoji
         : emojiOrOpts;
       const targetThreadID = getThreadID(emojiOrOpts);
-      logger.debug('[context.model] ThreadContext.setReaction called', { threadID: targetThreadID, emoji });
+      debug('[context.model] ThreadContext.setReaction called', { threadID: targetThreadID, emoji });
       return api.setGroupReaction(targetThreadID, emoji as string);
     },
     setNickname: (options) => {
       const targetThreadID = getThreadID(options);
-      logger.debug('[context.model] ThreadContext.setNickname called', { threadID: targetThreadID, user_id: options.user_id, nickname: options.nickname });
+      debug('[context.model] ThreadContext.setNickname called', { threadID: targetThreadID, user_id: options.user_id, nickname: options.nickname });
       return api.setNickname(targetThreadID, options.user_id, options.nickname);
     },
     getInfo: async (targetThreadID): Promise<UnifiedThreadInfo> => {
       const target = typeof targetThreadID === 'object' && targetThreadID !== null
         ? getThreadID(targetThreadID)
         : targetThreadID || defaultThreadID;
-      logger.debug('[context.model] ThreadContext.getInfo called', { threadID: target });
+      debug('[context.model] ThreadContext.getInfo called', { threadID: target });
       const nativeUserId = native?.userId ?? '';
       const nativePlatform = native?.platform ?? api.platform;
       const nativeSessionId = native?.sessionId ?? '';
@@ -136,14 +145,14 @@ export function createThreadContext(
       const target = typeof targetThreadID === 'object' && targetThreadID !== null
         ? getThreadID(targetThreadID)
         : targetThreadID || defaultThreadID;
-      logger.debug('[context.model] ThreadContext.getName called', { threadID: target });
+      debug('[context.model] ThreadContext.getName called', { threadID: target });
       return api.getThreadName(target as string);
     },
     getMemberCount: (targetThreadID) => {
       const target = typeof targetThreadID === 'object' && targetThreadID !== null
         ? getThreadID(targetThreadID)
         : targetThreadID || defaultThreadID;
-      logger.debug('[context.model] ThreadContext.getMemberCount called', { threadID: target });
+      debug('[context.model] ThreadContext.getMemberCount called', { threadID: target });
       // Use event-provided participantIDs when querying the current thread (zero API cost).
       if (target === defaultThreadID) {
         const participantIDs = event['participantIDs'] as string[] | undefined;
@@ -165,7 +174,7 @@ export function createChatContext(
 ): import('./interfaces/index.js').ChatContext {
   const defaultThreadID = event['threadID'] as string;
   const defaultMessageID = event['messageID'] as string;
-  logger.debug('[context.model] createChatContext called', { threadID: defaultThreadID, messageID: defaultMessageID });
+  debug('[context.model] createChatContext called', { threadID: defaultThreadID, messageID: defaultMessageID });
 
   // In DM/PM chats (Discord/Telegram), send as plain new messages instead of reply threads.
   const isDmOrPm =
@@ -217,7 +226,7 @@ export function createChatContext(
   }
 
   function resolveButtons(buttonIds: string[] | string[][]): ButtonItem[][] {
-    logger.debug('[context.model] resolveButtons called', { count: buttonIds.length });
+    debug('[context.model] resolveButtons called', { count: buttonIds.length });
     if (!buttonIds.length) return [];
     return normalizeRows(buttonIds).map((row) =>
       row.map((id) => {
@@ -246,7 +255,7 @@ export function createChatContext(
       const targetThreadID = getThreadID(opts);
       const customMessageID = opts.messageID || opts.reply_to_message_id;
       const sendAsNewMessage = shouldSendAsNewMessage(opts);
-      logger.debug('[context.model] ChatContext.reply called', { threadID: targetThreadID, hasMessage: !!message, buttonCount: button.length });
+      debug('[context.model] ChatContext.reply called', { threadID: targetThreadID, hasMessage: !!message, buttonCount: button.length });
       // Make the live typing indicator match what's about to be delivered: a photo/video/
       // audio reply switches the notice to "sending photo…/video…/audio…" right before the
       // upload starts (no-op when no indicator is active — text replies keep "typing…").
@@ -277,7 +286,7 @@ export function createChatContext(
       const targetThreadID = getThreadID(opts);
       const targetMessageID = getMessageID(opts);
       const sendAsNewMessage = shouldSendAsNewMessage(opts);
-      logger.debug('[context.model] ChatContext.replyMessage called', { threadID: targetThreadID, messageID: targetMessageID, hasMessage: !!message, buttonCount: button.length, sendAsNewMessage });
+      debug('[context.model] ChatContext.replyMessage called', { threadID: targetThreadID, messageID: targetMessageID, hasMessage: !!message, buttonCount: button.length, sendAsNewMessage });
       // Same media-aware indicator switch as chat.reply — see comment there.
       const mediaAction = actionFromAttachments(attachment, attachment_url);
       if (mediaAction) switchTypingIndicator(targetThreadID, mediaAction);
@@ -299,21 +308,21 @@ export function createChatContext(
       const emoji = isObj ? (options as unknown as Record<string, unknown>).emoji : options;
       const targetThreadID = getThreadID(isObj ? options : null);
       const targetMessageID = getMessageID(isObj ? options : null);
-      logger.debug('[context.model] ChatContext.reactMessage called', { threadID: targetThreadID, messageID: targetMessageID, emoji });
+      debug('[context.model] ChatContext.reactMessage called', { threadID: targetThreadID, messageID: targetMessageID, emoji });
       return api.reactToMessage(targetThreadID, targetMessageID, emoji as string);
     },
 
     unsendMessage: (options) => {
       const isObj = typeof options === 'object' && options !== null;
       const targetMessageID = isObj ? getMessageID(options) : options;
-      logger.debug('[context.model] ChatContext.unsendMessage called', { targetMessageID });
+      debug('[context.model] ChatContext.unsendMessage called', { targetMessageID });
       return api.unsendMessage(targetMessageID as string);
     },
 
     editMessage: async (options: import('./interfaces/index.js').EditOptions) => {
       const targetMessageID = options.message_id_to_edit || getMessageID({ messageID: undefined });
       const targetThreadID = getThreadID(options);
-      logger.debug('[context.model] ChatContext.editMessage called', { targetMessageID });
+      debug('[context.model] ChatContext.editMessage called', { targetMessageID });
       const finalMessage = options.message;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { message, button, ...restOpts } = options;
@@ -331,15 +340,15 @@ export function createBotContext(
   api: UnifiedApi,
   event?: Record<string, unknown>,
 ): import('./interfaces/index.js').BotContext {
-  logger.debug('[context.model] createBotContext called');
+  debug('[context.model] createBotContext called');
   return {
     getID: () => {
-      logger.debug('[context.model] BotContext.getID called');
+      debug('[context.model] BotContext.getID called');
       return api.getBotID();
     },
     leave: async (threadID?: string): Promise<void> => {
       const targetThread = threadID ?? (event?.['threadID'] as string | undefined) ?? '';
-      logger.debug('[context.model] BotContext.leave called', { targetThread });
+      debug('[context.model] BotContext.leave called', { targetThread });
       return api.leaveThread(targetThread);
     },
   };
@@ -349,10 +358,10 @@ export function createUserContext(
   api: UnifiedApi,
   native?: { userId?: string; platform?: string; sessionId?: string },
 ): import('./interfaces/index.js').UserContext {
-  logger.debug('[context.model] createUserContext called');
+  debug('[context.model] createUserContext called');
   return {
     getInfo: async (userID): Promise<UnifiedUserInfo> => {
-      logger.debug('[context.model] UserContext.getInfo called', { userID });
+      debug('[context.model] UserContext.getInfo called', { userID });
       const nativeUserId = native?.userId ?? '';
       const nativePlatform = native?.platform ?? api.platform;
       const nativeSessionId = native?.sessionId ?? '';
@@ -373,11 +382,11 @@ export function createUserContext(
       return info;
     },
     getName: (userID) => {
-      logger.debug('[context.model] UserContext.getName called', { userID });
+      debug('[context.model] UserContext.getName called', { userID });
       return api.getUserName(userID);
     },
     getAvatarUrl: (userID) => {
-      logger.debug('[context.model] UserContext.getAvatarUrl called', { userID });
+      debug('[context.model] UserContext.getAvatarUrl called', { userID });
       return api.getAvatarUrl(userID);
     },
   };
@@ -387,7 +396,7 @@ export function createStateContext(
   commandName: string,
   event: Record<string, unknown>,
 ): import('./interfaces/index.js').StateContext {
-  logger.debug('[context.model] createStateContext called', { commandName });
+  debug('[context.model] createStateContext called', { commandName });
   return {
     state: {
       /**
@@ -396,18 +405,18 @@ export function createStateContext(
        * Public: `${id}:${threadID}` — any group member can advance (polls, shared flows).
        */
       generateID({ id, public: isPublic = false }) {
-        logger.debug('[context.model] state.generateID called', { id, isPublic });
+        debug('[context.model] state.generateID called', { id, isPublic });
         if (event['type'] === 'message_reaction') {
           return isPublic ? `${id}:${event['threadID'] as string}` : `${id}:${event['userID'] as string}`;
         }
         return isPublic ? `${id}:${event['threadID'] as string}` : `${id}:${event['senderID'] as string}`;
       },
       create({ id, state, context }) {
-        logger.debug('[context.model] state.create called', { id, state });
+        debug('[context.model] state.create called', { id, state });
         stateStore.create(id, { command: commandName, state, context });
       },
       delete(id) {
-        logger.debug('[context.model] state.delete called', { id });
+        debug('[context.model] state.delete called', { id });
         stateStore.delete(id);
       },
     },
@@ -418,29 +427,29 @@ export function createButtonContext(
   commandName: string,
   event: Record<string, unknown>,
 ): import('./interfaces/index.js').ButtonContext {
-  logger.debug('[context.model] createButtonContext called', { commandName });
+  debug('[context.model] createButtonContext called', { commandName });
   return {
     button: {
       generateID({ id, public: isPublic = false }) {
-        logger.debug('[context.model] button.generateID called', { id, isPublic });
+        debug('[context.model] button.generateID called', { id, isPublic });
         const instanceId = Math.random().toString(36).substring(2, 8);
         const baseWithInstance = `${id}#${instanceId}`;
         if (isPublic) return baseWithInstance;
         return `${baseWithInstance}~${event['senderID'] as string}`;
       },
       createContext({ id, context }) {
-        logger.debug('[context.model] button.createContext called', { id });
+        debug('[context.model] button.createContext called', { id });
         buttonContextLib.create(`${commandName}:${id}`, context);
       },
       getContext(id) {
         return buttonContextLib.get(`${commandName}:${id}`);
       },
       deleteContext(id) {
-        logger.debug('[context.model] button.deleteContext called', { id });
+        debug('[context.model] button.deleteContext called', { id });
         buttonContextLib.delete(`${commandName}:${id}`);
       },
       update(options) {
-        logger.debug('[context.model] button.update called', { id: options.id });
+        debug('[context.model] button.update called', { id: options.id });
         const key = `${commandName}:${options.id}`;
         const existing = buttonContextLib.getOverride(key) || {};
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -448,7 +457,7 @@ export function createButtonContext(
         buttonContextLib.setOverride(key, { ...existing, ...payload });
       },
       create(options) {
-        logger.debug('[context.model] button.create called', { id: options.id });
+        debug('[context.model] button.create called', { id: options.id });
         const key = `${commandName}:${options.id}`;
         const existing = buttonContextLib.getOverride(key) || {};
         // eslint-disable-next-line @typescript-eslint/no-unused-vars

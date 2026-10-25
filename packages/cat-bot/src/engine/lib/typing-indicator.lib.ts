@@ -58,14 +58,6 @@ function registerActionSwitch(
   };
 }
 
-/**
- * Registers a stop callback under threadID so stopTypingIndicator() can tear it down.
- * Exported so rich-message draft senders can plug their own refresh into the same mechanism.
- */
-export function registerTypingStopper(threadID: string, stop: () => void): () => void {
-  return registerStopper(threadID, stop);
-}
-
 /** Immediately halts every typing/thinking indicator active on threadID. No-op if none. */
 export function stopTypingIndicator(threadID: string): void {
   if (!threadID) return;

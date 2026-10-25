@@ -375,12 +375,9 @@ interface MergeBaseResult {
  */
 async function findMergeBase(
   forkApi: AxiosInstance,
-  forkOwner: string,
-  forkRepo: string,
   forkBranch: string,
   upstreamApi: AxiosInstance,
   upstreamOwner: string,
-  upstreamRepo: string,
   upstreamBranch: string,
 ): Promise<MergeBaseResult> {
   try {
@@ -507,12 +504,9 @@ export async function planForkUpdate(config: GitHubConfig): Promise<ForkUpdatePl
 
   const mergeBase = await findMergeBase(
     forkApi,
-    config.owner,
-    config.repo,
     forkBranch,
     upstreamApi,
     UPSTREAM_OWNER,
-    UPSTREAM_REPO,
     upstreamBranch,
   );
 

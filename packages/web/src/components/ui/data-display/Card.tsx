@@ -1,8 +1,5 @@
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 // ============================================================================
 // Types
@@ -118,17 +115,6 @@ export type CardRootOwnProps = {
     | 'info'
 }
 
-/**
- * Polymorphic Card.Root props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <Card.Root as="article">Article content</Card.Root>
- * <Card.Root as="section">Section content</Card.Root>
- * <Card.Root as="a" href="/details">Clickable card</Card.Root>
- * ```
- */
-export type CardRootProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, CardRootOwnProps>
 
 /**
  * Surface level to Tailwind class mapping
@@ -339,11 +325,6 @@ export type CardHeaderOwnProps = {
   withDivider?: boolean
 }
 
-/**
- * Polymorphic Card.Header props
- */
-export type CardHeaderProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, CardHeaderOwnProps>
 
 /**
  * Card.Header - Header section for card title and actions
@@ -377,17 +358,6 @@ CardHeader.displayName = 'Card.Header'
  */
 export type CardTitleOwnProps = object
 
-/**
- * Polymorphic Card.Title props
- * @example
- * ```tsx
- * <Card.Title as="h1">Main Title</Card.Title>
- * <Card.Title as="h2">Section Title</Card.Title>
- * <Card.Title as="span">Inline Title</Card.Title>
- * ```
- */
-export type CardTitleProps<T extends React.ElementType = 'h3'> =
-  PolymorphicComponentPropsWithRef<T, CardTitleOwnProps>
 
 /**
  * Card.Title - Title text for the card
@@ -422,11 +392,6 @@ CardTitle.displayName = 'Card.Title'
  */
 export type CardDescriptionOwnProps = object
 
-/**
- * Polymorphic Card.Description props
- */
-export type CardDescriptionProps<T extends React.ElementType = 'p'> =
-  PolymorphicComponentPropsWithRef<T, CardDescriptionOwnProps>
 
 /**
  * Card.Description - Subtitle or description text
@@ -462,11 +427,6 @@ CardDescription.displayName = 'Card.Description'
  */
 export type CardBodyOwnProps = object
 
-/**
- * Polymorphic Card.Body props
- */
-export type CardBodyProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, CardBodyOwnProps>
 
 /**
  * Card.Body - Main content area of the card
@@ -507,11 +467,6 @@ export type CardFooterOwnProps = {
   align?: 'left' | 'center' | 'right' | 'between'
 }
 
-/**
- * Polymorphic Card.Footer props
- */
-export type CardFooterProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, CardFooterOwnProps>
 
 const alignClasses: Record<NonNullable<CardFooterOwnProps['align']>, string> = {
   left: 'justify-start',

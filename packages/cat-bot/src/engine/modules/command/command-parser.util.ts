@@ -85,25 +85,27 @@ export function parseCommand(
 ): ParsedCommand | null {
   if (!args.length) return null;
 
-  const tokens = [...args];
+  const head = args[0]!;
   let commandName: string;
+  let bodyStart: number;
 
-  if (tokens[0] === prefix) {
+  if (head === prefix) {
     // Edge case: prefix sent as a standalone token (some platforms split differently)
-    if (tokens.length === 1) return null;
-    tokens.shift();
-    commandName = (tokens.shift() ?? '').toLowerCase();
-  } else if (tokens[0]!.startsWith(prefix)) {
-    const head = tokens.shift()!;
+    if (args.length === 1) return null;
+    commandName = (args[1] ?? '').toLowerCase();
+    bodyStart = 2;
+  } else if (head.startsWith(prefix)) {
     commandName = head.slice(prefix.length).toLowerCase();
     if (!commandName) return null;
+    bodyStart = 1;
   } else {
     return null;
   }
 
   const resolved = stripBotMention(commandName, botUsername);
   if (!resolved) return null;
-  commandName = resolved;
 
-  return { name: commandName, args: tokens };
+  // One slice instead of copying the whole array and shifting twice. Handlers
+  // only read `args`, so the caller's array is never mutated.
+  return { name: resolved, args: args.slice(bodyStart) };
 }

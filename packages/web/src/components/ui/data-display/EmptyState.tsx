@@ -1,9 +1,6 @@
 import Button from '@/components/ui/buttons/Button'
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 type EmptyStateSize = 'sm' | 'md'
 
@@ -22,16 +19,6 @@ export type EmptyStateOwnProps = {
   size?: EmptyStateSize
 }
 
-/**
- * Polymorphic EmptyState props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <EmptyState as="section" title="No items" />
- * <EmptyState as="article" title="Nothing found" />
- * ```
- */
-export type EmptyStateProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, EmptyStateOwnProps>
 
 /**
  * Size configuration for EmptyState variants

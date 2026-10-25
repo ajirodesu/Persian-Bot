@@ -67,9 +67,6 @@ export const APIs = {
   },
 } as const satisfies Record<string, ApiDefinition>;
 
-/** Union of every registered provider key, e.g. 'popcat' | 'betadash' | ... */
-export type ApiName = keyof typeof APIs;
-
 // ── URL Builder ───────────────────────────────────────────────────────────────
 
 /**

@@ -38,6 +38,22 @@ const commandsListKey = (
 // structural typing they had before caching was introduced.
 type SessionCommandRows = Awaited<ReturnType<typeof _findSessionCommands>>;
 
+// Built once per cached row array. The previous implementation ran
+// Array.find() over every session command row (one row per registered
+// command) for every dispatched command.
+const enabledIndex = new WeakMap<SessionCommandRows, Map<string, boolean>>();
+
+function indexFor(rows: SessionCommandRows): Map<string, boolean> {
+  const cached = enabledIndex.get(rows);
+  if (cached) return cached;
+  const index = new Map<string, boolean>();
+  for (const row of rows) {
+    index.set(row.commandName, row.isEnable);
+  }
+  enabledIndex.set(rows, index);
+  return index;
+}
+
 async function findSessionCommandsCached(
   userId: string,
   platform: string,
@@ -72,13 +88,9 @@ export async function isCommandEnabled(
 ): Promise<boolean> {
   try {
     const rows = await findSessionCommandsCached(userId, platform, sessionId);
-    const row = rows.find(
-      (r: { commandName: string; isEnable: boolean }) =>
-        r.commandName === commandName,
-    );
     // Fail-open when the command was never synced into the DB — matches the previous
     // adapter behaviour where an absent row defaulted to enabled.
-    return row ? row.isEnable : true;
+    return indexFor(rows).get(commandName) ?? true;
   } catch {
     // Fail-open on any cache/DB error so a transient failure never blocks command execution.
     return _isCommandEnabled(userId, platform, sessionId, commandName);

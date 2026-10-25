@@ -38,12 +38,6 @@ export const prefetchDashboardSettings = (): void =>
 export const prefetchNewBot = (): void =>
   prefetchChunk('new-bot', () => import('@/pages/dashboard/create-new-bot'))
 
-export const prefetchBotConsole = (): void =>
-  prefetchChunk('bot-console', () => import('@/pages/dashboard/bot/index'))
-
-export const prefetchBotCommands = (): void =>
-  prefetchChunk('bot-commands', () => import('@/pages/dashboard/bot/commands'))
-
 /**
  * Fires a prefetch loader once when the referenced element scrolls within
  * ~200px of the viewport — covers touch users (no hover) and below-fold

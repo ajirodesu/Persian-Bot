@@ -62,9 +62,23 @@ export function runMiddlewareChain<TCtx>(
     if (i <= index) return Promise.reject(new Error('next() called multiple times'));
     index = i;
     const mw = middlewares[i];
+    if (mw === undefined) return Promise.resolve(finalHandler());
+
+    // A synchronous fast-path middleware may call next() without returning its
+    // promise. Track it so the chain still waits for downstream work instead of
+    // resolving early (the old async-only contract made this impossible).
+    let nextPromise: Promise<void> | undefined;
+    const next = (): Promise<void> => {
+      nextPromise = dispatch(i + 1);
+      return nextPromise;
+    };
+
     try {
-      if (mw !== undefined) return Promise.resolve(mw(ctx, () => dispatch(i + 1)));
-      else return Promise.resolve(finalHandler());
+      const result = mw(ctx, next);
+      if (result === undefined) {
+        return nextPromise ?? Promise.resolve();
+      }
+      return Promise.resolve(result);
     } catch (err) {
       return Promise.reject(err);
     }

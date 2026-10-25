@@ -23,14 +23,3 @@ export function getPlatformIcon(platform: string, className = 'h-5 w-5') {
   const Icon = getPlatformIconComponent(platform)
   return <Icon className={className} />
 }
-
-export function getPlatformColors(platform: string): string {
-  switch (platform) {
-    case Platforms.Discord:
-      return 'platform-tile-discord border'
-    case Platforms.Telegram:
-      return 'platform-tile-telegram border'
-    default:
-      return 'bg-primary-container text-on-primary-container border border-primary/20'
-  }
-}

@@ -30,6 +30,8 @@ export interface OptionDef {
  * Constructed once per command dispatch and passed as `options` on the ctx object.
  * Command modules never construct this directly — `dispatchCommand` builds it.
  */
+let emptyOptions: OptionsMap | null = null;
+
 export class OptionsMap {
   readonly #data: Map<string, string>;
 
@@ -61,9 +63,11 @@ export class OptionsMap {
 
   /**
    * Canonical empty OptionsMap for commands that define no options.
-   * Returned as a singleton to avoid unnecessary allocations.
+   * A real singleton: OptionsMap is immutable, so sharing one instance is safe
+   * and removes a Map allocation from every command that takes no options.
    */
   static empty(): OptionsMap {
-    return new OptionsMap({});
+    emptyOptions ??= new OptionsMap({});
+    return emptyOptions;
   }
 }

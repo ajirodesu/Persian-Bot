@@ -1,8 +1,5 @@
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 /**
  * Skeleton shape variants
@@ -94,16 +91,6 @@ export type SkeletonOwnProps = {
   gap?: string | number
 }
 
-/**
- * Polymorphic Skeleton props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <Skeleton as="span" />
- * <Skeleton as="li" />
- * ```
- */
-export type SkeletonProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, SkeletonOwnProps>
 
 /**
  * Text size to height mapping based on typography scale

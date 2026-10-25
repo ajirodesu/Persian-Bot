@@ -23,7 +23,10 @@ import {
 } from 'database';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 import { dbChangeEmitter } from '@/engine/lib/db-change-emitter.lib.js';
-import { getDiscordServerIdByChannel } from '@/engine/repos/threads.repo.js';
+import {
+  getDiscordServerIdByChannel,
+  peekDiscordServerIdByChannel,
+} from '@/engine/repos/threads.repo.js';
 import {
   Platforms,
   isServerHierarchyPlatform,
@@ -140,6 +143,48 @@ export async function isUserBanned(
   const result = await _isUserBanned(userId, platform, sessionId, botUserId);
   lruCache.set(key, result);
   return result;
+}
+
+/**
+ * Synchronous cache peek for the hot-path ban gate.
+ *
+ * Returns the cached ban verdict without allocating a promise. `undefined`
+ * means "not warm yet" and callers must fall back to the async check.
+ * Discord server-hierarchy bans resolve a channel → server id, which is async,
+ * so that platform intentionally returns undefined here.
+ */
+export function peekUserBanned(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botUserId: string,
+): boolean | undefined {
+  return lruCache.get<boolean>(userBanKey(userId, platform, sessionId, botUserId));
+}
+
+export function peekThreadBanned(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  botThreadId: string,
+): boolean | undefined {
+  if (isServerHierarchyPlatform(platform)) {
+    // Discord enforces bans at server level: resolve the cached channel →
+    // server mapping synchronously. Unknown mapping or unknown server-ban
+    // verdict falls back to the async path.
+    const serverId = peekDiscordServerIdByChannel(botThreadId);
+    if (serverId === undefined) return undefined;
+    if (serverId !== null) {
+      return lruCache.get<boolean>(
+        discordServerBanKey(userId, platform, sessionId, serverId),
+      );
+    }
+    // No server record (e.g. a DM/channel-only event): the async checker falls
+    // through to the direct thread-ban key, so peek the same key here.
+  }
+  return lruCache.get<boolean>(
+    threadBanKey(userId, platform, sessionId, botThreadId),
+  );
 }
 
 /**

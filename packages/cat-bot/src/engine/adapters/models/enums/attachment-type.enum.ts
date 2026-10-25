@@ -42,6 +42,3 @@ export const AttachmentType = Object.freeze({
   /** Catch-all for attachments that threw during _formatAttachment(). */
   UNKNOWN: 'unknown',
 } as const);
-
-export type AttachmentTypeValue =
-  (typeof AttachmentType)[keyof typeof AttachmentType];

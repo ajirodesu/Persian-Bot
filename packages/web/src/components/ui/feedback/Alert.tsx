@@ -1,9 +1,6 @@
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 /**
  * Alert visual style variants
@@ -61,16 +58,6 @@ export type AlertOwnProps = {
   actions?: AlertAction[]
 }
 
-/**
- * Polymorphic Alert props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <Alert as="section" title="Info" />
- * <Alert as="article" title="News" />
- * ```
- */
-export type AlertProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, AlertOwnProps>
 
 /**
  * Default icons for each color

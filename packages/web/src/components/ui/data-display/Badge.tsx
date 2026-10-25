@@ -1,10 +1,7 @@
 import React from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 /**
  * Badge visual style variants
@@ -59,16 +56,6 @@ export type BadgeOwnProps = {
   pill?: boolean
 }
 
-/**
- * Polymorphic Badge props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <Badge as="button" onClick={handleClick}>Clickable</Badge>
- * <Badge as="a" href="/tags/react">React</Badge>
- * ```
- */
-export type BadgeProps<T extends React.ElementType = 'span'> =
-  PolymorphicComponentPropsWithRef<T, BadgeOwnProps>
 
 /**
  * Size styles for padding and typography

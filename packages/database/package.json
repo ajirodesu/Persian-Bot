@@ -7,7 +7,7 @@
   "types": "./dist/database/src/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc --noCheck && tsc-alias",
+    "build": "npm run clean && tsc --noCheck && tsc-alias",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "migrate:mongodb-to-neondb": "tsx scripts/migrate-mongodb-to-neondb.ts",
@@ -15,7 +15,8 @@
     "migrate:neondb-to-turso": "tsx scripts/migrate-neondb-to-turso.ts",
     "migrate:turso-to-neondb": "tsx scripts/migrate-turso-to-neondb.ts",
     "migrate:mongodb-to-turso": "tsx scripts/migrate-mongodb-to-turso.ts",
-    "migrate:turso-to-mongodb": "tsx scripts/migrate-turso-to-mongodb.ts"
+    "migrate:turso-to-mongodb": "tsx scripts/migrate-turso-to-mongodb.ts",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "keywords": [],
   "author": "",

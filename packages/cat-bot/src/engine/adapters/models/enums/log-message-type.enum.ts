@@ -56,6 +56,3 @@ export const LogMessageType = Object.freeze({
   JOINABLE_GROUP_LINK_MODE_CHANGE: 'joinable_group_link_mode_change',
   GENERIC_ADMIN_TEXT: 'log:generic-admin-text',
 } as const);
-
-export type LogMessageTypeValue =
-  (typeof LogMessageType)[keyof typeof LogMessageType];

@@ -28,7 +28,7 @@ import type { StateEntry } from '@/engine/lib/state.lib.js';
 export type MiddlewareFn<TCtx = BaseCtx> = (
   ctx: TCtx,
   next: () => Promise<void>,
-) => Promise<void>;
+) => Promise<void> | void;
 
 // ── Per-lifecycle context extensions ─────────────────────────────────────────
 

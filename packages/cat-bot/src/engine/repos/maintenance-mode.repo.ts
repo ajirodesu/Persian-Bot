@@ -28,6 +28,11 @@ export async function getMaintenanceModeEnabled(): Promise<boolean> {
   return enabled;
 }
 
+/** Synchronous cache peek; undefined until the global flag is first read. */
+export function peekMaintenanceModeEnabled(): boolean | undefined {
+  return lruCache.get<boolean>(MAINTENANCE_MODE_KEY);
+}
+
 /**
  * Enables/disables global Maintenance Mode, then updates the cached flag
  * immediately so the very next command dispatch sees the fresh value.

@@ -1,8 +1,5 @@
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 export type DividerOrientation = 'horizontal' | 'vertical'
 export type DividerVariant = 'solid' | 'dashed' | 'dotted'
@@ -35,16 +32,6 @@ export type DividerOwnProps = {
   thick?: boolean
 }
 
-/**
- * Polymorphic Divider props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <Divider as="hr" />
- * <Divider as="span" orientation="vertical" />
- * ```
- */
-export type DividerProps<T extends React.ElementType = 'div'> =
-  PolymorphicComponentPropsWithRef<T, DividerOwnProps>
 
 /**
  * Color classes for the divider line

@@ -1,92 +1,121 @@
 /**
  * Command Suggestion Utility — "Did You Mean?" Bigram Matcher (Dice's Coefficient)
  *
- * Provides a suggestion when a user types an unrecognised command.
- * Algorithm: Dice's Coefficient (bigram overlap) — scores similarity from 0.0 to 1.0.
+ * Runs only on the unknown/disabled-command path, but that path used to rebuild
+ * bigram maps for every registered command on every typo and then sort all
+ * ratings. The command map is immutable after startup, so the canonical name
+ * list and each name's bigram profile are now computed once per CommandMap and
+ * reused. Scoring is a single pass with a running maximum instead of
+ * allocate-all-then-sort.
  *
- * Why Dice's Coefficient?
- *   - Handles transpositions better than prefix-overlap (e.g. "hle" -> "help").
- *   - Evaluates the whole string rather than bailing out on the first mismatch.
- *   - We evaluate all commands, sort by score highest-to-lowest, and return the
- *     top match, provided it meets a minimum threshold to avoid nonsensical suggestions.
+ * Behaviour is unchanged: aliases are not suggested, disabled names are
+ * skipped, 0.3 remains the minimum score, and the first name wins ties (same
+ * as the previous stable descending sort).
  *
- * Dependency direction: utils/command-suggest.util.ts → types/controller.types.ts
- * Zero runtime state — pure functions, safe to import from any layer.
+ * Dependency direction: modules/command → types/controller.types.ts
+ * Zero observable state — the WeakMap cache is keyed by the live CommandMap.
  */
 
-import type { CommandMap } from '@/engine/types/controller.types.js';
+import type { CommandMap, CommandModule } from '@/engine/types/controller.types.js';
+
+const MIN_THRESHOLD = 0.3;
+
+interface NameProfile {
+  name: string;
+  length: number;
+  bigrams: Map<string, number>;
+}
+
+interface SuggestionIndex {
+  profiles: NameProfile[];
+}
+
+// A CommandMap is built once at boot and never re-keyed, so a WeakMap keeps
+// the index alive exactly as long as the map and lets it be collected with it.
+const indexCache = new WeakMap<CommandMap, SuggestionIndex>();
+
+function bigramProfile(value: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (let i = 0; i < value.length - 1; i += 1) {
+    const bigram = value.substring(i, i + 2);
+    counts.set(bigram, (counts.get(bigram) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function buildIndex(commands: CommandMap): SuggestionIndex {
+  const seen = new Set<string>();
+  const profiles: NameProfile[] = [];
+
+  for (const mod of commands.values()) {
+    const cfg = (mod as CommandModule)['meta'] as
+      | { name?: string }
+      | undefined;
+    const name = cfg?.name?.toLowerCase();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    profiles.push({
+      name,
+      length: name.length,
+      bigrams: bigramProfile(name),
+    });
+  }
+
+  return { profiles };
+}
+
+function indexFor(commands: CommandMap): SuggestionIndex {
+  const cached = indexCache.get(commands);
+  if (cached) return cached;
+  const built = buildIndex(commands);
+  indexCache.set(commands, built);
+  return built;
+}
 
 /**
- * Returns the canonical command name (meta.name) most similar to `unknown`,
- * or null when no candidate shares even a single leading character.
- *
- * Aliases are deduplicated — only the canonical meta.name is considered so the
- * suggestion text matches the name the user would actually see in /help output.
- *
- * @param unknown  - The lowercased unrecognised command name (prefix already stripped)
- * @param commands - The live CommandMap loaded by app.ts
+ * Returns the canonical command name most similar to `unknown`, or null when
+ * no candidate meets the 0.3 threshold.
  */
 export function findSimilarCommand(
   unknown: string,
   commands: CommandMap,
   skipNames?: Set<string>,
 ): string | null {
-  const seen = new Set<string>();
-  const ratings: { target: string; rating: number }[] = [];
+  if (!unknown || commands.size === 0) return null;
 
-  for (const mod of commands.values()) {
-    const cfg = mod['meta'] as { name?: string } | undefined;
-    const canonical = cfg?.name?.toLowerCase();
-    if (!canonical || seen.has(canonical)) continue;
-    // Disabled commands are non-existent from the user's perspective — never surface them as suggestions
-    if (skipNames?.has(canonical)) continue;
-    seen.add(canonical);
+  const index = indexFor(commands);
+  if (index.profiles.length === 0) return null;
 
-    const score = compareTwoStrings(unknown, canonical);
-    ratings.push({ target: canonical, rating: score });
-  }
+  // Whitespace is meaningless in a command token; normalise once, not per name.
+  const query = unknown.replace(/\s+/g, '');
+  if (query.length < 2) return null;
+  const queryLength = query.length;
+  const queryBigrams = bigramProfile(query);
 
-  // Sort highest to lowest to find the best match
-  ratings.sort((a, b) => b.rating - a.rating);
+  let bestName: string | null = null;
+  let bestScore = 0;
 
-  // A minimum threshold prevents completely unrelated strings from being suggested
-  // e.g. "x" should not suggest "help". 0.3 is a standard baseline for bigram matching.
-  const MIN_THRESHOLD = 0.3;
+  for (const profile of index.profiles) {
+    if (skipNames?.has(profile.name)) continue;
 
-  if (ratings.length > 0 && ratings[0]!.rating >= MIN_THRESHOLD) {
-    return ratings[0]!.target;
-  }
+    if (profile.name === query) return profile.name;
 
-  return null;
-}
+    // Dice's coefficient: 2 × |intersection| / (|A| + |B|).
+    let intersection = 0;
+    for (const [bigram, count] of profile.bigrams) {
+      const queryCount = queryBigrams.get(bigram);
+      if (queryCount === undefined) continue;
+      intersection += Math.min(count, queryCount);
+    }
+    const score = (2 * intersection) / (queryLength + profile.length - 2);
 
-/**
- * Compares two strings using Dice's Coefficient (bigram overlap).
- * Returns a similarity score between 0.0 (no match) and 1.0 (identical).
- */
-function compareTwoStrings(first: string, second: string): number {
-  const f = first.replace(/\s+/g, '');
-  const s = second.replace(/\s+/g, '');
-
-  if (f === s) return 1;
-  if (f.length < 2 || s.length < 2) return 0;
-
-  const firstBigrams = new Map<string, number>();
-  for (let i = 0; i < f.length - 1; i++) {
-    const bigram = f.substring(i, i + 2);
-    firstBigrams.set(bigram, (firstBigrams.get(bigram) ?? 0) + 1);
-  }
-
-  let intersectionSize = 0;
-  for (let i = 0; i < s.length - 1; i++) {
-    const bigram = s.substring(i, i + 2);
-    const count = firstBigrams.get(bigram) ?? 0;
-
-    if (count > 0) {
-      firstBigrams.set(bigram, count - 1);
-      intersectionSize++;
+    // Strict `>` keeps the first registration on ties, matching the previous
+    // stable descending sort.
+    if (score > bestScore) {
+      bestScore = score;
+      bestName = profile.name;
     }
   }
 
-  return (2.0 * intersectionSize) / (f.length + s.length - 2);
+  return bestScore >= MIN_THRESHOLD ? bestName : null;
 }

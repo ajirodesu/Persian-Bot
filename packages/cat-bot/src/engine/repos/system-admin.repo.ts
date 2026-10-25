@@ -61,6 +61,11 @@ async function getOrLoadSet(): Promise<Set<string>> {
   return set;
 }
 
+/** Synchronous cache peek; undefined until the admin set is first loaded. */
+export function peekSystemAdmin(adminId: string): boolean | undefined {
+  return lruCache.get<Set<string>>(SYSTEM_ADMIN_SET_KEY)?.has(adminId);
+}
+
 // ── addSystemAdmin / removeSystemAdmin ──────────────────────────────────────────
 
 /**

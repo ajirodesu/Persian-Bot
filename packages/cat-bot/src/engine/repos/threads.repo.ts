@@ -113,6 +113,16 @@ export async function linkDiscordChannel(
   lruCache.set(`discord:channel:${threadId}`, serverId);
 }
 
+/**
+ * Synchronous cache peek for the Discord channel → server mapping.
+ * `undefined` means the mapping has not been resolved yet this process.
+ */
+export function peekDiscordServerIdByChannel(
+  threadId: string,
+): string | null | undefined {
+  return lruCache.get<string | null>(`discord:channel:${threadId}`);
+}
+
 export async function getDiscordServerIdByChannel(
   threadId: string,
 ): Promise<string | null> {

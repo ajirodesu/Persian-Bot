@@ -59,18 +59,6 @@ export async function getStoredGitHubConfig(): Promise<StoredGitHubConfig | null
   return config;
 }
 
-/** The stored GitHub identity only (no token) — used to author commits. */
-export async function getStoredGitHubIdentity(): Promise<StoredGitHubIdentity | null> {
-  const config = await getStoredGitHubConfig();
-  if (!config) return null;
-  return {
-    login: config.login,
-    name: config.name,
-    email: config.email,
-    avatarUrl: config.avatarUrl,
-  };
-}
-
 /**
  * Persists a newly verified GitHub token + identity. `token` must already be a
  * verified classic PAT (the caller checks it against GitHub GET /user).

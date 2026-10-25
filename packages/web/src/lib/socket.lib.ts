@@ -45,12 +45,3 @@ export function connectSocket(): Socket {
   if (!instance.connected && !instance.active) instance.connect()
   return instance
 }
-
-/** Closes the transport but keeps the singleton + all listeners intact. */
-export function disconnectSocket(): void {
-  socket?.disconnect()
-}
-
-export function isSocketConnected(): boolean {
-  return socket?.connected ?? false
-}

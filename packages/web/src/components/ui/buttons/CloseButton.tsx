@@ -3,10 +3,7 @@ import { X } from 'lucide-react'
 import IconButton, {
   type IconButtonOwnProps,
 } from '@/components/ui/buttons/IconButton'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 /**
  * Base props for CloseButton component
@@ -21,16 +18,6 @@ export type CloseButtonOwnProps = Omit<
   'aria-label'?: string
 }
 
-/**
- * Polymorphic CloseButton props - inherits polymorphism from IconButton
- * @example
- * ```tsx
- * <CloseButton onClick={handleClose} />
- * <CloseButton as="a" href="#" aria-label="Close" />
- * ```
- */
-export type CloseButtonProps<T extends React.ElementType = 'button'> =
-  PolymorphicComponentPropsWithRef<T, CloseButtonOwnProps>
 
 /**
  * CloseButton component - specialized IconButton for closing UI elements

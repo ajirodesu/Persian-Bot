@@ -125,9 +125,6 @@ export const H_CHEVRON = 'h-4 w-4 3xl:h-5 3xl:w-5' as const
 export const H_SIDEBAR_NAV =
   'group relative flex items-center gap-2.5 h-10 pl-2.5 pr-2 border-l-2 border-transparent text-body-sm transition-colors duration-fast' as const
 
-/** Icon size inside sidebar nav items — 20px standard. */
-export const H_SIDEBAR_ICON = 'h-5 w-5 shrink-0' as const
-
 /**
  * Ordinal column — two-digit mono index ("01", "02") right-aligned in a fixed
  * 20px gutter so every label in the rail starts on the same vertical line.

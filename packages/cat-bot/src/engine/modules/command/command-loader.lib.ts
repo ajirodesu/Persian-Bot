@@ -2,15 +2,26 @@
  * Command Directory Loader
  *
  * Imports every command module in a directory and registers it in the
- * canonical command map. Two module shapes are supported for backwards
- * compatibility:
+ * canonical command map. Two module shapes are supported:
  *
  *   1. Single command — exports `meta`, `onCommand`/`onChat`, and optional
- *      lifecycle hooks/buttons.
+ *      lifecycle hooks/buttons. This is the only shape used in production;
+ *      every file under `src/app/commands` registers exactly one command.
  *   2. Command family — exports `commands: Array<{ meta, onCommand, ... }>`.
+ *      Retained for older/third-party command packs; never used by this repo.
  *
- * The live bot uses the single-command shape for every file. The family shape
- * remains supported so third-party or older command packs keep loading.
+ * Registration rules:
+ * - Files are scanned in sorted order and modules are registered after the
+ *   concurrent import batch, so the registry (and any duplicate/alias error)
+ *   is deterministic across filesystems and runs.
+ * - Names, aliases and option names are normalised once at load time.
+ * - A duplicate canonical name or alias never silently overwrites the first
+ *   registration: the collision is logged with both file names and the later
+ *   entry is skipped.
+ * - Malformed modules are skipped with an actionable file + reason log; one
+ *   bad file cannot abort the rest of the directory.
+ * - Imported metadata is cloned rather than mutated, so the module's own
+ *   exports stay immutable and a second loader call sees the original casing.
  */
 
 import fs from 'fs';
@@ -19,124 +30,203 @@ import { pathToFileURL } from 'url';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
 import { commandRegistry } from '@/engine/lib/module-registry.lib.js';
 
-/** Imports every command file in `dir`; broken files are skipped with a warning. */
-export async function loadCommandsFromDirectory(
+type RawModule = Record<string, unknown>;
+type RawMeta = Record<string, unknown> & {
+  name?: unknown;
+  aliases?: unknown;
+  options?: unknown;
+};
+
+export interface CommandLoadResult {
+  commands: Map<string, RawModule>;
+  /** Non-fatal problems discovered while loading (duplicates, bad metadata). */
+  errors: string[];
+}
+
+function isCommandHandler(mod: RawModule): boolean {
+  return (
+    typeof mod['onCommand'] === 'function' ||
+    typeof mod['onChat'] === 'function'
+  );
+}
+
+function normalizeMeta(
+  rawMeta: unknown,
+  file: string,
+  errors: string[],
+): { meta: RawMeta; aliases: string[] } | null {
+  if (typeof rawMeta !== 'object' || rawMeta === null) {
+    errors.push(`${file}: missing meta object`);
+    return null;
+  }
+  const meta = rawMeta as RawMeta;
+  if (typeof meta.name !== 'string' || meta.name.trim() === '') {
+    errors.push(`${file}: meta.name must be a non-empty string`);
+    return null;
+  }
+
+  const aliases = Array.isArray(meta.aliases)
+    ? meta.aliases
+        .filter((alias): alias is string => typeof alias === 'string')
+        .map((alias) => alias.trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+
+  const options = Array.isArray(meta.options)
+    ? meta.options.map((option) => {
+        if (typeof option !== 'object' || option === null) return option;
+        const typed = option as { name?: unknown };
+        return typeof typed.name === 'string'
+          ? { ...typed, name: typed.name.toLowerCase() }
+          : option;
+      })
+    : meta.options;
+
+  return {
+    meta: {
+      ...meta,
+      name: meta.name.trim().toLowerCase(),
+      aliases,
+      ...(options !== undefined ? { options } : {}),
+    },
+    aliases,
+  };
+}
+
+/** Registers one loaded module under its canonical name and aliases. */
+function registerModule(
+  commands: Map<string, RawModule>,
+  owners: Map<string, string>,
+  mod: RawModule,
+  file: string,
+  errors: string[],
+): void {
+  const normalized = normalizeMeta(mod['meta'], file, errors);
+  if (!normalized) return;
+  if (!isCommandHandler(mod)) {
+    errors.push(`${file}: missing onCommand/onChat handler`);
+    return;
+  }
+
+  const { meta, aliases } = normalized;
+  const canonical = meta.name as string;
+  const keys = [canonical, ...aliases];
+
+  for (const key of keys) {
+    const existing = owners.get(key);
+    if (existing) {
+      errors.push(
+        `${file}: "${key}" is already registered by ${existing}; skipping this module`,
+      );
+      return;
+    }
+  }
+
+  // Clone so the registered module owns its normalised metadata without
+  // mutating the imported ES module namespace.
+  const registered: RawModule = { ...mod, meta };
+
+  for (const key of keys) {
+    commands.set(key, registered);
+    owners.set(key, file);
+    if (key === canonical) {
+      commandRegistry.set(key, registered);
+      logger.info(`Loaded command: ${key} (${file})`);
+    } else {
+      logger.info(`  ↳ Alias: ${key} → ${canonical}`);
+    }
+  }
+}
+
+/** Sorted, filtered list of command source files in `dir`. */
+export async function listCommandFiles(dir: string): Promise<string[]> {
+  const files = await fs.promises.readdir(dir);
+  return files
+    .filter(
+      (file) =>
+        (file.endsWith('.js') || file.endsWith('.ts')) &&
+        !file.endsWith('.d.ts'),
+    )
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Imports every command file in `dir` and registers it. Broken files are
+ * skipped with an actionable error; the returned map is keyed by every
+ * canonical name and alias for O(1) dispatch lookup.
+ */
+export async function loadCommandsWithDiagnostics(
   dir: string,
-): Promise<Map<string, Record<string, unknown>>> {
-  const commands = new Map<string, Record<string, unknown>>();
+): Promise<CommandLoadResult> {
+  const commands = new Map<string, RawModule>();
+  const errors: string[] = [];
 
   if (!fs.existsSync(dir)) {
     logger.warn(`⚠️  Commands directory not found: ${dir}`);
-    return commands;
+    return { commands, errors: [`Commands directory not found: ${dir}`] };
   }
 
-  const files = (await fs.promises.readdir(dir)).filter(
-    (f) => (f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
-  );
+  const files = await listCommandFiles(dir);
 
-  await Promise.allSettled(
+  // Import concurrently (I/O bound) but register in sorted order so aliases,
+  // duplicate detection and log order never depend on import timing.
+  const imported = await Promise.all(
     files.map(async (file) => {
       try {
         const mod = (await import(
           pathToFileURL(path.join(dir, file)).href
-        )) as Record<string, unknown>;
-
-        // Multi-command files export `commands: Array<{ meta, onCommand, ... }>`.
-        if (Array.isArray(mod['commands'])) {
-          for (const rawEntry of mod['commands'] as Array<
-            Record<string, unknown>
-          >) {
-            const entryCfg = rawEntry['meta'] as
-              | {
-                  name?: string;
-                  aliases?: string[];
-                  options?: Array<{ name?: string }>;
-                }
-              | undefined;
-
-            if (!entryCfg?.name) {
-              logger.warn(
-                `⚠️  Skipping an entry in ${file}: missing meta.name`,
-              );
-              continue;
-            }
-            if (
-              typeof rawEntry['onCommand'] !== 'function' &&
-              typeof rawEntry['onChat'] !== 'function'
-            ) {
-              logger.warn(
-                `⚠️  Skipping "${entryCfg.name}" in ${file}: missing onCommand/onChat`,
-              );
-              continue;
-            }
-
-            entryCfg.name = entryCfg.name.toLowerCase();
-            if (Array.isArray(entryCfg.options)) {
-              for (const opt of entryCfg.options) {
-                if (opt && typeof opt.name === 'string') {
-                  opt.name = opt.name.toLowerCase();
-                }
-              }
-            }
-
-            commands.set(entryCfg.name, rawEntry);
-            commandRegistry.set(entryCfg.name, rawEntry);
-            logger.info(`Loaded command: ${entryCfg.name} (from ${file})`);
-
-            if (Array.isArray(entryCfg.aliases)) {
-              for (const alias of entryCfg.aliases) {
-                commands.set(String(alias).toLowerCase(), rawEntry);
-                logger.info(`  ↳ Alias: ${String(alias).toLowerCase()}`);
-              }
-            }
-          }
-          return;
-        }
-
-        const cfg = mod['meta'] as
-          { name?: string; aliases?: string[] } | undefined;
-
-        if (!cfg?.name) {
-          logger.warn(`⚠️  Skipping ${file}: missing meta.name`);
-          return;
-        }
-        if (
-          typeof mod['onCommand'] !== 'function' &&
-          typeof mod['onChat'] !== 'function'
-        ) {
-          logger.warn(`⚠️  Skipping ${file}: missing onStart/onChat`);
-          return;
-        }
-
-        // Discord requires lowercase command/option names — normalise at load time.
-        cfg.name = cfg.name.toLowerCase();
-        const rawCfg = mod['meta'] as {
-          options?: Array<{ name?: string }>;
-        };
-        if (Array.isArray(rawCfg.options)) {
-          for (const opt of rawCfg.options) {
-            if (opt && typeof opt.name === 'string') {
-              opt.name = opt.name.toLowerCase();
-            }
-          }
-        }
-
-        commands.set(cfg.name.toLowerCase(), mod);
-        commandRegistry.set(cfg.name.toLowerCase(), mod);
-        logger.info(`Loaded command: ${cfg.name}`);
-
-        if (Array.isArray(cfg.aliases)) {
-          for (const alias of cfg.aliases) {
-            commands.set(String(alias).toLowerCase(), mod);
-            logger.info(`  ↳ Alias: ${String(alias).toLowerCase()}`);
-          }
-        }
+        )) as RawModule;
+        return { file, mod };
       } catch (err) {
+        errors.push(
+          `${file}: failed to import — ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
         logger.error(`❌ Failed to load command ${file}`, { error: err });
+        return null;
       }
     }),
   );
 
-  logger.info(`Loaded ${commands.size} command(s)`);
+  const owners = new Map<string, string>();
+
+  for (const entry of imported) {
+    if (!entry) continue;
+    const { file, mod } = entry;
+
+    if (Array.isArray(mod['commands'])) {
+      const family = mod['commands'] as RawModule[];
+      if (family.length === 0) {
+        errors.push(`${file}: commands array is empty`);
+        continue;
+      }
+      for (const rawEntry of family) {
+        if (typeof rawEntry !== 'object' || rawEntry === null) {
+          errors.push(`${file}: commands entry is not an object`);
+          continue;
+        }
+        registerModule(commands, owners, rawEntry, file, errors);
+      }
+      continue;
+    }
+
+    registerModule(commands, owners, mod, file, errors);
+  }
+
+  for (const message of errors) logger.error(`[commands] ${message}`);
+  logger.info(`Loaded ${commands.size} command key(s) from ${files.length} file(s)`);
+  return { commands, errors };
+}
+
+/**
+ * Backwards-compatible entry point used by app.ts and the loader tests.
+ * Diagnostics are logged; call `loadCommandsWithDiagnostics` when the caller
+ * also needs the structured error list.
+ */
+export async function loadCommandsFromDirectory(
+  dir: string,
+): Promise<Map<string, Record<string, unknown>>> {
+  const { commands } = await loadCommandsWithDiagnostics(dir);
   return commands;
 }

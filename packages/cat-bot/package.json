@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch --conditions source src/engine/app.ts",
-    "build": "npm run build --prefix ../database && tsc && tsc-alias",
+    "build": "npm run clean && npm run build --prefix ../database && tsc && tsc-alias",
     "lint": "eslint .",
     "format": "prettier --write .",
     "start": "node dist/engine/app.js",
@@ -16,8 +16,9 @@
     "bench": "tsx --conditions source scripts/bench/latency-bench.ts",
     "reset:password": "tsx scripts/reset-password.ts",
     "preview:emails": "tsx scripts/preview-emails.ts",
-    "preview:emails:shots": "node scripts/email-screenshots.mjs"
-
+    "preview:emails:shots": "node scripts/email-screenshots.mjs",
+    "bench:startup": "node scripts/bench/startup-probe.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "keywords": [],
   "author": "",
@@ -39,6 +40,7 @@
   "dependencies": {
     "@getbrevo/brevo": "^6.0.3",
     "@grammyjs/runner": "^2.0.3",
+    "@libsql/kysely-libsql": "^0.4.1",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",

@@ -58,5 +58,3 @@ export const EventType = Object.freeze({
    */
   BUTTON_ACTION: 'button_action',
 } as const);
-
-export type EventTypeValue = (typeof EventType)[keyof typeof EventType];

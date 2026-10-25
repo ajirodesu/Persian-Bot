@@ -157,6 +157,21 @@ export async function isBotAdmin(
   return admins.includes(adminId);
 }
 
+/**
+ * Synchronous cache peek for the command hot path. Returns undefined until
+ * the admin list has been loaded once, so callers can fall back to the async
+ * `isBotAdmin` without changing behaviour.
+ */
+export function peekBotAdmin(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  adminId: string,
+): boolean | undefined {
+  const admins = lruCache.get<string[]>(adminListKey(userId, platform, sessionId));
+  return admins?.includes(adminId);
+}
+
 export async function addBotAdmin(
   userId: string,
   platform: string,

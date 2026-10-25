@@ -10,7 +10,7 @@
  * lookup → handler → dispatch). Platform network/API time is OUT of scope
  * here and is measured separately (see EXTERNAL section below).
  *
- * Steady-state methodology: 30 warmup events per case fill every LRU
+ * Steady-state methodology: 200 warmup events per case fill every LRU
  * (command enables, session data, reaction emoji) exactly as production
  * traffic does, then N timed iterations run. A separate COLD reading shows
  * the first-event cost (cache misses → real DB round-trips).
@@ -26,11 +26,16 @@
  * Exit code is 1 when any steady-state ping p99 exceeds the 10ms budget —
  * this doubles as the latency regression gate.
  */
-import { performance } from 'node:perf_hooks';
+import { performance, monitorEventLoopDelay } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
+import { loadCommandsWithDiagnostics } from '@/engine/modules/command/command-loader.lib.js';
 import { handleMessage } from '@/engine/controllers/handlers/message.handler.js';
 import { parseCommand } from '@/engine/modules/command/command-parser.util.js';
 import { buildBaseCtx } from '@/engine/controllers/factories/ctx.factory.js';
 import { findSimilarCommand } from '@/engine/modules/command/command-suggest.util.js';
+import { runMiddlewareChain, middlewareRegistry } from '@/engine/lib/middleware.lib.js';
+import { dispatchCommand } from '@/engine/controllers/dispatchers/command.dispatcher.js';
+import { OptionsMap } from '@/engine/modules/options/options-map.lib.js';
 import type {
   CommandMap,
   CommandModule,
@@ -41,8 +46,10 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import '@/engine/middleware/index.js';
 
 const P99_BUDGET_MS = 10;
-const WARMUP = 20;
-const ITERATIONS = 100;
+// 200 warmups fill every LRU; 1000 samples keep p95 stable at sub-ms
+// latencies where a single outlier used to move the percentile.
+const WARMUP = 200;
+const ITERATIONS = 1000;
 // Pause between case blocks so detached background syncs (DB upserts the
 // engine fires per message) drain instead of piling into a rate-limit
 // storm that would pollute the next block's event loop.
@@ -119,8 +126,9 @@ function createMockApi(platform: string): { api: UnifiedApi; sent: string[] } {
 }
 
 // ── Synthetic command table ─────────────────────────────────────────────────
-// One real handler (ping) plus 348 filler entries so the suggestion scan and
-// registry walk the same shape as production (348 real commands).
+// One real handler (ping) plus 348 filler keys so lookup/suggestion walk a
+// runtime-sized namespace: production registers 156 canonical commands plus
+// 192 aliases = 348 keys.
 
 function buildCommands(): CommandMap {
   const map: CommandMap = new Map<string, CommandModule>();
@@ -245,6 +253,35 @@ async function measureExternal(): Promise<void> {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  // Wait for the active adapter's schema bootstrap. Production awaits this at
+  // boot; without it the first query races the DDL and the cold case fails
+  // with "no such table" on a fresh database.
+  const { dbReady } = await import('database');
+  await dbReady;
+
+  // ── Startup: real command discovery + registration ───────────────────────
+  console.log('--- Command registration (real src/app/commands) ---');
+  {
+    const dir = fileURLToPath(new URL('../../src/app/commands', import.meta.url));
+    const heapBefore = process.memoryUsage().heapUsed;
+    const coldStart = performance.now();
+    const first = await loadCommandsWithDiagnostics(dir);
+    const coldMs = performance.now() - coldStart;
+    const warmStart = performance.now();
+    const second = await loadCommandsWithDiagnostics(dir);
+    const warmMs = performance.now() - warmStart;
+    const heapAfter = process.memoryUsage().heapUsed;
+    const canonical = new Set(first.commands.values()).size;
+    console.log(
+      `canonical=${canonical} keys=${first.commands.size} cold=${coldMs.toFixed(1)}ms ` +
+        `warm=${warmMs.toFixed(1)}ms stable=${second.commands.size === first.commands.size} ` +
+        `errors=${first.errors.length} heapDelta=${((heapAfter - heapBefore) / 1024 / 1024).toFixed(1)}MB`,
+    );
+    if (first.errors.length > 0) {
+      console.log(`registration errors: ${first.errors.slice(0, 5).join(' | ')}`);
+    }
+  }
+
   // Cold (first-event) cost is measured FIRST in a fresh process while the
   // LRUs are still empty — cache misses here mean real DB round-trips.
   console.log('--- COLD first-event cost (cache misses, includes DB I/O) ---');
@@ -267,6 +304,9 @@ async function main(): Promise<void> {
   console.log('Cat-Bot internal latency benchmark (mock network, steady-state)');
   console.log(`warmup=${WARMUP} iterations=${ITERATIONS} per case per platform\n`);
 
+  const loopDelay = monitorEventLoopDelay({ resolution: 10 });
+  loopDelay.enable();
+
   let failed = false;
 
   const sleep = (ms: number): Promise<void> =>
@@ -286,12 +326,20 @@ async function main(): Promise<void> {
       const stats = summarize(samples);
       const gate = kase.name.startsWith('ping') && stats.p99 > P99_BUDGET_MS;
       if (gate) failed = true;
+      const opsPerSecond = stats.mean > 0 ? Math.round(1000 / stats.mean) : 0;
       console.log(
-        `${platform.padEnd(9)} ${kase.name.padEnd(27)} ${fmt(stats)}${gate ? '  <-- OVER BUDGET' : ''}`,
+        `${platform.padEnd(9)} ${kase.name.padEnd(27)} ${fmt(stats)}  ~${opsPerSecond} ops/s${gate ? '  <-- OVER BUDGET' : ''}`,
       );
       await sleep(DRAIN_MS);
     }
   }
+
+  loopDelay.disable();
+  console.log(
+    `event-loop delay  : p50 ${(loopDelay.percentile(50) / 1e6).toFixed(3)}ms  ` +
+      `p95 ${(loopDelay.percentile(95) / 1e6).toFixed(3)}ms  ` +
+      `max ${(loopDelay.max / 1e6).toFixed(3)}ms`,
+  );
 
   // Stage micro-benchmarks (bottleneck ranking).
   console.log('\n--- Stage micro-benchmarks ---');
@@ -313,7 +361,38 @@ async function main(): Promise<void> {
     t0 = performance.now();
     const SUG = 500;
     for (let i = 0; i < SUG; i += 1) findSimilarCommand('pnigxqzv', commands, new Set<string>());
-    console.log(`findSimilarCommand : ${((performance.now() - t0) / SUG).toFixed(4)} ms/op (n=${SUG}, 349 entries)`);
+    console.log(`findSimilarCommand : ${((performance.now() - t0) / SUG).toFixed(4)} ms/op (n=${SUG}, ${commands.size} entries)`);
+
+    // End-to-end local floor without platform I/O: the same middleware chain
+    // and dispatcher used in production, with a no-op command handler.
+    const base = buildBaseCtx(api, event, commands, native, '/');
+    const parsed = { name: 'ping', args: [] };
+    const mod = {
+      meta: { name: 'ping', role: 0, cooldown: 0, hasPrefix: true },
+      onCommand: async (): Promise<void> => undefined,
+    };
+    const commandCtx = {
+      ...base,
+      parsed,
+      prefix: '/',
+      mod,
+      options: OptionsMap.empty(),
+    };
+    const LOOP = 3000;
+    t0 = performance.now();
+    for (let i = 0; i < LOOP; i += 1) {
+      await runMiddlewareChain(
+        middlewareRegistry.getOnCommand(),
+        commandCtx,
+        async () => undefined,
+      );
+    }
+    console.log(`onCommand chain    : ${((performance.now() - t0) / LOOP).toFixed(4)} ms/op (n=${LOOP})`);
+    t0 = performance.now();
+    for (let i = 0; i < LOOP; i += 1) {
+      await dispatchCommand(parsed, commandCtx, api, 'bench-thread', '/');
+    }
+    console.log(`dispatchCommand    : ${((performance.now() - t0) / LOOP).toFixed(4)} ms/op (n=${LOOP})`);
   }
 
   await measureExternal();

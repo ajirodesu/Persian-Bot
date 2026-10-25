@@ -1,9 +1,6 @@
 import React from 'react'
 import { cn } from '@/utils/cn.util'
-import {
-  forwardRefWithAs,
-  type PolymorphicComponentPropsWithRef,
-} from '@/utils/polymorphic.util'
+import { forwardRefWithAs } from '@/utils/polymorphic.util'
 
 type Variant =
   | 'primary'
@@ -25,15 +22,6 @@ export type IconButtonOwnProps = {
   'aria-label': string
 }
 
-/**
- * Polymorphic IconButton props - supports `as` prop for rendering as different elements
- * @example
- * ```tsx
- * <IconButton as="a" href="/settings" icon={<Settings />} aria-label="Settings" />
- * ```
- */
-export type IconButtonProps<T extends React.ElementType = 'button'> =
-  PolymorphicComponentPropsWithRef<T, IconButtonOwnProps>
 
 /**
  * Base icon button styles

@@ -31,7 +31,11 @@
  * every message before any prefix check or command guard.
  */
 
-import type { BaseCtx, CommandMap } from '@/engine/types/controller.types.js';
+import type {
+  BaseCtx,
+  CommandMap,
+  CommandModule,
+} from '@/engine/types/controller.types.js';
 // Platform filter — respects config.platform[] declared by each command module
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
 // Ban enforcement — silently skip banned senders and threads in the onChat fan-out
@@ -50,14 +54,50 @@ import { logger } from '@/engine/modules/logger/logger.lib.js';
  * All three guards are silent — no reply is sent, consistent with the
  * passive-observer contract of onChat handlers.
  */
+/**
+ * Per-CommandMap, per-platform list of modules that actually implement onChat.
+ *
+ * The command map stores one entry per name AND per alias, so the previous
+ * implementation walked every key on every message just to discover the small
+ * handful of passive handlers. This index is built once per loaded map and
+ * reused; aliases cannot duplicate a module because registration de-duplicates
+ * by object identity.
+ */
+const onChatIndex = new WeakMap<
+  CommandMap,
+  Map<string, CommandModule[]>
+>();
+
+export function getOnChatModules(
+  commands: CommandMap,
+  platform: string,
+): CommandModule[] {
+  let perPlatform = onChatIndex.get(commands);
+  if (!perPlatform) {
+    perPlatform = new Map<string, CommandModule[]>();
+    onChatIndex.set(commands, perPlatform);
+  }
+
+  const cached = perPlatform.get(platform);
+  if (cached) return cached;
+
+  const seen = new Set<CommandModule>();
+  const modules: CommandModule[] = [];
+  for (const mod of commands.values()) {
+    if (seen.has(mod)) continue;
+    seen.add(mod);
+    if (typeof mod['onChat'] !== 'function') continue;
+    if (!isPlatformAllowed(mod, platform)) continue;
+    modules.push(mod);
+  }
+  perPlatform.set(platform, modules);
+  return modules;
+}
+
 export async function runOnChat(
   commands: CommandMap,
   ctx: BaseCtx,
 ): Promise<void> {
-  // Deduplicate by module reference before fan-out — loadCommands() registers one Map key
-  // per command name AND one per alias, all pointing to the same module object. Without
-  // this guard, a module with N aliases would fire onChat N+1 times per message.
-  const seen = new Set<Record<string, unknown>>();
 
   // Resolve session identity once — shared across all module guards in this fan-out.
   // Avoids repeating the same native context reads inside each module iteration.
@@ -92,30 +132,27 @@ export async function runOnChat(
     }
   }
 
+  // Nothing to fan out on this platform: skip the ban DB reads entirely.
+  const eligible = getOnChatModules(commands, ctx.native.platform);
+  if (eligible.length === 0) return;
+
+  // Silently skip banned senders and threads — no reply sent, passive-observer contract.
+  if (userBanned || threadBanned) return;
+
   // Collect all onChat promises before awaiting so every eligible module starts
   // immediately — no module waits for the previous module's onChat to resolve.
   const tasks: Promise<void>[] = [];
-  for (const [, mod] of commands) {
-    if (seen.has(mod)) continue;
-    seen.add(mod);
-    if (typeof mod['onChat'] === 'function') {
-      // Skip modules that explicitly exclude this platform via config.platform[]
-      if (!isPlatformAllowed(mod, ctx.native.platform)) continue;
-
-      // Silently skip banned senders and threads — no reply sent, passive-observer contract.
-      if (userBanned || threadBanned) continue;
-
-      tasks.push(
-        (mod['onChat'] as (ctx: BaseCtx) => Promise<void>)(ctx).catch(
-          (err: unknown) => {
-            logger.debug('[on-chat] onChat handler error', {
-              command: (mod['meta'] as { name?: string } | undefined)?.name,
-              error: err,
-            });
-          },
-        ),
-      );
-    }
+  for (const mod of eligible) {
+    tasks.push(
+      (mod['onChat'] as (ctx: BaseCtx) => Promise<void>)(ctx).catch(
+        (err: unknown) => {
+          logger.debug('[on-chat] onChat handler error', {
+            command: (mod['meta'] as { name?: string } | undefined)?.name,
+            error: err,
+          });
+        },
+      ),
+    );
   }
   // allSettled (not all) as belt-and-suspenders: individual .catch() handlers above absorb
   // per-module errors, but allSettled guarantees we wait for every task even if one throws

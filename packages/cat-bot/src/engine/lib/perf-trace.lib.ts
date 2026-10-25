@@ -14,10 +14,6 @@
  */
 const TRACE_ENABLED: boolean = process.env['CATBOT_PERF_TRACE'] === '1';
 
-export function perfTraceEnabled(): boolean {
-  return TRACE_ENABLED;
-}
-
 /** Monotonic nanosecond clock. Call once per stage boundary. */
 export function perfNow(): bigint {
   return process.hrtime.bigint();
