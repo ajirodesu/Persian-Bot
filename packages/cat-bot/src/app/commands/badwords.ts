@@ -57,9 +57,8 @@ import { kickRegistry } from '@/engine/lib/kick-registry.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
+import { isPrivilegedUser } from '@/engine/services/commands/thread-privileges.service.js';
 
 export const meta: CommandMeta = {
   name: 'badwords',
@@ -79,10 +78,7 @@ export const meta: CommandMeta = {
   ],
   cooldown: 5,
   hasPrefix: true,
-  platform: [
-    Platforms.Discord,
-    Platforms.Telegram,
-  ],
+  platform: [Platforms.Discord, Platforms.Telegram],
   options: [
     {
       type: OptionType.string,
@@ -129,49 +125,15 @@ function buildWordPattern(word: string): RegExp {
   } catch {
     // Fallback for runtimes without Unicode property escape support
     try {
-      return new RegExp(`(?<![A-Za-z0-9À-ÖØ-öø-ÿ])${escaped}(?![A-Za-z0-9À-ÖØ-öø-ÿ])`, 'gi');
+      return new RegExp(
+        `(?<![A-Za-z0-9À-ÖØ-öø-ÿ])${escaped}(?![A-Za-z0-9À-ÖØ-öø-ÿ])`,
+        'gi',
+      );
     } catch {
       // Last resort: simple case-insensitive search (no boundary)
       return new RegExp(escaped, 'gi');
     }
   }
-}
-
-/** Best-effort thread-admin check via thread.getInfo(). */
-async function isThreadAdmin(
-  thread: AppCtx['thread'],
-  senderID: string,
-): Promise<boolean> {
-  try {
-    const info = (await thread.getInfo()) as unknown as Record<string, unknown>;
-    const adminIDs = info['adminIDs'] as
-      | Array<string | { uid: string }>
-      | undefined;
-    if (!Array.isArray(adminIDs)) return false;
-    return adminIDs.some(
-      (a) => (typeof a === 'string' ? a : a.uid) === senderID,
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Returns true if the sender is a thread admin, bot admin, OR system admin.
- * This is the preferred gate for moderation subcommands — it grants full access
- * to privileged bot/system roles without requiring them to be group admins.
- */
-async function isPrivilegedUser(
-  thread: AppCtx['thread'],
-  native: AppCtx['native'],
-  senderID: string,
-): Promise<boolean> {
-  if (await isSystemAdmin(senderID)) return true;
-  const { userId, platform, sessionId } = native;
-  if (userId && platform && sessionId) {
-    if (await isBotAdmin(userId, platform, sessionId, senderID)) return true;
-  }
-  return isThreadAdmin(thread, senderID);
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -413,8 +375,7 @@ export const onCommand = async ({
       (event['mentions'] as Record<string, string> | undefined) ?? {};
     const mentionIDs = Object.keys(mentions);
     const replyEvent = event['messageReply'] as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     let targetUID: string | undefined;
     if (mentionIDs[0]) targetUID = mentionIDs[0];
@@ -487,7 +448,8 @@ export const onChat = async ({
   // Reactions, unsend notifications, and log events can reach onChat; they
   // carry no body text and must be skipped before any DB access.
   const eventType = event['type'] as string | undefined;
-  if (eventType && eventType !== 'message' && eventType !== 'message_reply') return;
+  if (eventType && eventType !== 'message' && eventType !== 'message_reply')
+    return;
 
   const message = event['message'] as string | undefined;
   const threadID = event['threadID'] as string;
@@ -558,7 +520,8 @@ export const onChat = async ({
       // when kickSucceeded is true.
       await chat.replyMessage({
         style: MessageStyle.MARKDOWN,
-        message: '⚠️ Bot needs admin privileges to kick this member. Violation count has been preserved.',
+        message:
+          '⚠️ Bot needs admin privileges to kick this member. Violation count has been preserved.',
       });
       // Note: the kickRegistry entry registered above will auto-expire after its
       // built-in TTL (30 s) without being consumed, so no cleanup call is needed.

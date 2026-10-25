@@ -34,9 +34,8 @@ import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { getUserTimezoneOrDefault } from '@/engine/repos/timezone.repo.js';
+import { isPrivilegedUser } from '@/engine/services/commands/thread-privileges.service.js';
 
 // ─── Data shapes ─────────────────────────────────────────────────────────────
 
@@ -73,15 +72,13 @@ export const meta: CommandMeta = {
     '',
     '⚠️ Bot must be a group admin to auto-kick banned members.',
   ],
-  platform: [
-    Platforms.Discord,
-    Platforms.Telegram,
-  ],
+  platform: [Platforms.Discord, Platforms.Telegram],
   options: [
     {
       type: OptionType.string,
       name: 'action',
-      description: 'Subcommand: list, listban, info, unban, unwarn, reset, or @tag to warn',
+      description:
+        'Subcommand: list, listban, info, unban, unwarn, reset, or @tag to warn',
       required: false,
     },
     {
@@ -107,8 +104,9 @@ function getDateTime(timeZone: string): string {
     second: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(new Date());
-  const pick = (type: 'day' | 'month' | 'year' | 'hour' | 'minute' | 'second') =>
-    parts.find((p) => p.type === type)?.value ?? '';
+  const pick = (
+    type: 'day' | 'month' | 'year' | 'hour' | 'minute' | 'second',
+  ) => parts.find((p) => p.type === type)?.value ?? '';
   return (
     `${pick('day')}/${pick('month')}/${pick('year')} ` +
     `${pick('hour')}:${pick('minute')}:${pick('second')}`
@@ -140,47 +138,6 @@ async function saveWarnList(
   await warn.set('list', list);
 }
 
-/**
- * Checks whether senderID is a thread admin via thread.getInfo().
- * ⚠️ UnifiedThreadInfo.adminIDs shape is undocumented — handled defensively.
- * Returns false on any error (safe default for a moderation action).
- */
-async function isThreadAdmin(
-  thread: AppCtx['thread'],
-  senderID: string,
-): Promise<boolean> {
-  try {
-    const info = (await thread.getInfo()) as unknown as Record<string, unknown>;
-    const adminIDs = info['adminIDs'] as
-      | Array<string | { uid: string }>
-      | undefined;
-    if (!Array.isArray(adminIDs)) return false;
-    return adminIDs.some(
-      (a) => (typeof a === 'string' ? a : a.uid) === senderID,
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Returns true if the sender is a thread admin, bot admin, OR system admin.
- * Bot admins and system admins inherit all moderation privileges even when
- * they are not group/thread admins.
- */
-async function isPrivilegedUser(
-  thread: AppCtx['thread'],
-  native: AppCtx['native'],
-  senderID: string,
-): Promise<boolean> {
-  if (await isSystemAdmin(senderID)) return true;
-  const { userId, platform, sessionId } = native;
-  if (userId && platform && sessionId) {
-    if (await isBotAdmin(userId, platform, sessionId, senderID)) return true;
-  }
-  return isThreadAdmin(thread, senderID);
-}
-
 // ─── Command handler ─────────────────────────────────────────────────────────
 
 export const onCommand = async ({
@@ -199,9 +156,7 @@ export const onCommand = async ({
   const mentions =
     (event['mentions'] as Record<string, string> | undefined) ?? {};
   const msgReply = event['messageReply'] as
-    | Record<string, unknown>
-    | null
-    | undefined;
+    Record<string, unknown> | null | undefined;
 
   if (!event['isGroup']) {
     await chat.replyMessage({

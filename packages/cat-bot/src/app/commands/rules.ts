@@ -22,9 +22,8 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
+import { isPrivilegedUser } from '@/engine/services/commands/thread-privileges.service.js';
 
 // ─── State labels ─────────────────────────────────────────────────────────────
 
@@ -81,15 +80,13 @@ export const meta: CommandMeta = {
     'delete <n> — Delete rule #n (admin only)',
     'remove — Remove ALL rules with confirmation (admin only)',
   ],
-  platform: [
-    Platforms.Discord,
-    Platforms.Telegram,
-  ],
+  platform: [Platforms.Discord, Platforms.Telegram],
   options: [
     {
       type: OptionType.string,
       name: 'action',
-      description: 'Subcommand or rule number: add, edit, move, delete, remove, or <n>',
+      description:
+        'Subcommand or rule number: add, edit, move, delete, remove, or <n>',
       required: false,
     },
     {
@@ -133,40 +130,6 @@ async function saveRulesList(
 }
 
 // ─── Admin check ─────────────────────────────────────────────────────────────
-
-async function isThreadAdmin(
-  thread: AppCtx['thread'],
-  senderID: string,
-): Promise<boolean> {
-  try {
-    const info = (await thread.getInfo()) as unknown as Record<string, unknown>;
-    const adminIDs = info['adminIDs'] as
-      | Array<string | { uid: string }>
-      | undefined;
-    if (!Array.isArray(adminIDs)) return false;
-    return adminIDs.some(
-      (a) => (typeof a === 'string' ? a : a.uid) === senderID,
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Returns true if the sender is a thread admin, bot admin, OR system admin.
- */
-async function isPrivilegedUser(
-  thread: AppCtx['thread'],
-  native: AppCtx['native'],
-  senderID: string,
-): Promise<boolean> {
-  if (await isSystemAdmin(senderID)) return true;
-  const { userId, platform, sessionId } = native;
-  if (userId && platform && sessionId) {
-    if (await isBotAdmin(userId, platform, sessionId, senderID)) return true;
-  }
-  return isThreadAdmin(thread, senderID);
-}
 
 // ─── Button definitions (Discord & Telegram: remove confirmation) ─────────────
 

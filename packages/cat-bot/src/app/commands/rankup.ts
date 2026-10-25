@@ -26,30 +26,21 @@ import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
-import { fetchRankupCanvas, normalizeCanvasPlatform } from '@/engine/lib/aqua-canvas.lib.js';
+import {
+  fetchRankupCanvas,
+  normalizeCanvasPlatform,
+} from '@/engine/lib/aqua-canvas.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
+import { expToLevel, levelToExp } from '@/engine/utils/levels.util.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Must match the constant in rank.ts — controls EXP-to-level curve. */
-const DELTA_NEXT = 5;
 
 /** Name of the collection inside bot_threads_session.data for rankup settings. */
 const SETTINGS_COLLECTION = 'rankup_settings';
 
 // ─── Level Maths ──────────────────────────────────────────────────────────────
-
-/** Converts raw EXP to a level number. Mirrors rank.ts implementation. */
-function expToLevel(exp: number): number {
-  if (exp <= 0) return 0;
-  return Math.floor((1 + Math.sqrt(1 + (8 * exp) / DELTA_NEXT)) / 2);
-}
-
-/** Minimum EXP required to reach a specific level. Mirrors rank.ts implementation. */
-function levelToExp(level: number): number {
-  if (level <= 0) return 0;
-  return Math.floor(((level * level - level) * DELTA_NEXT) / 2);
-}
 
 /**
  * Computes a user's 1-indexed leaderboard position by EXP. Mirrors rank.ts's
@@ -67,7 +58,9 @@ async function getLeaderboardRank(
       .map(({ botUserId, data }) => {
         const xpData = data?.['xp'] as Record<string, unknown> | undefined;
         const userExp =
-          xpData && typeof xpData['exp'] === 'number' ? (xpData['exp'] as number) : 0;
+          xpData && typeof xpData['exp'] === 'number'
+            ? (xpData['exp'] as number)
+            : 0;
         return { botUserId, exp: userExp };
       })
       .sort((a, b) => b.exp - a.exp);
@@ -112,7 +105,13 @@ export const meta: CommandMeta = {
  * level boundary AND rankup notifications are enabled for this thread, sends a
  * plain congratulation text message.
  */
-export const onChat = async ({ event, db, chat, api, native }: AppCtx): Promise<void> => {
+export const onChat = async ({
+  event,
+  db,
+  chat,
+  api,
+  native,
+}: AppCtx): Promise<void> => {
   const senderID = event['senderID'] as string | undefined;
   const threadID = event['threadID'] as string | undefined;
   if (!senderID || !threadID) return;
@@ -141,7 +140,8 @@ export const onChat = async ({ event, db, chat, api, native }: AppCtx): Promise<
       const threadColl = db.threads.collection(threadID);
       if (await threadColl.isCollectionExist(SETTINGS_COLLECTION)) {
         const settings = await threadColl.getCollection(SETTINGS_COLLECTION);
-        rankupEnabled = ((await settings.get('enabled')) as boolean | undefined) ?? true;
+        rankupEnabled =
+          ((await settings.get('enabled')) as boolean | undefined) ?? true;
       }
     } catch {
       rankupEnabled = true;
@@ -305,7 +305,8 @@ export const onCommand = async ({
     const threadColl = db.threads.collection(threadID);
     if (await threadColl.isCollectionExist(SETTINGS_COLLECTION)) {
       const settings = await threadColl.getCollection(SETTINGS_COLLECTION);
-      current = ((await settings.get('enabled')) as boolean | undefined) ?? true;
+      current =
+        ((await settings.get('enabled')) as boolean | undefined) ?? true;
     }
   } catch {
     current = true;

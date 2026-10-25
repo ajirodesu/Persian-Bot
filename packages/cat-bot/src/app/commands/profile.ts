@@ -17,19 +17,9 @@ import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { isUserBanned } from '@/engine/repos/banned.repo.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { formatCoins } from '@/engine/lib/currencies.lib.js';
+import { expToLevel, levelToExp } from '@/engine/utils/levels.util.js';
 
 // ── Level formula ─────────────────────────────────────────────────────────────
-const DELTA_NEXT = 5;
-
-function expToLevel(exp: number): number {
-  if (exp <= 0) return 0;
-  return Math.floor((1 + Math.sqrt(1 + (8 * exp) / DELTA_NEXT)) / 2);
-}
-
-function levelToExp(level: number): number {
-  if (level <= 0) return 0;
-  return Math.floor(((level * level - level) * DELTA_NEXT) / 2);
-}
 
 // ── Utility helpers ────────────────────────────────────────────────────────────
 
@@ -66,15 +56,13 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Display a complete profile — identity, role, economy, and progression',
+  description:
+    'Display a complete profile — identity, role, economy, and progression',
   category: 'Utility',
   usage: '[@mention]',
   cooldown: 5,
   hasPrefix: true,
-  platform: [
-    Platforms.Discord,
-    Platforms.Telegram,
-  ],
+  platform: [Platforms.Discord, Platforms.Telegram],
   options: [
     {
       type: OptionType.user,
@@ -101,7 +89,8 @@ export const onCommand = async ({
   const mentionIDs = Object.keys(mentions ?? {});
   const senderID = event['senderID'] as string | undefined;
 
-  const targetID: string | undefined = mentionIDs.length > 0 ? mentionIDs[0] : senderID;
+  const targetID: string | undefined =
+    mentionIDs.length > 0 ? mentionIDs[0] : senderID;
 
   if (!targetID) {
     await chat.replyMessage({
@@ -119,7 +108,9 @@ export const onCommand = async ({
     const info = await user.getInfo(targetID);
     displayName = info.name || '';
     username = info.username ?? null;
-  } catch { /* Fallback handled below */ }
+  } catch {
+    /* Fallback handled below */
+  }
 
   if (mentionIDs.length > 0 && mentions?.[targetID]) {
     displayName = mentions[targetID].replace(/^@/, '');
@@ -147,7 +138,9 @@ export const onCommand = async ({
       else if (premium) roleLabel = 'Premium Member';
 
       if (banned) statusLabel = '🔴 Banned';
-    } catch { /* Fail-open */ }
+    } catch {
+      /* Fail-open */
+    }
   }
 
   // ── Economy data ──
@@ -169,7 +162,9 @@ export const onCommand = async ({
         lastClaimLabel = relativeTime(Date.now() - rawLastClaim);
       }
     }
-  } catch { /* Fail-open */ }
+  } catch {
+    /* Fail-open */
+  }
 
   // ── Progression data ──
   let exp = 0;
@@ -189,7 +184,8 @@ export const onCommand = async ({
     const leaderboard = allSessions
       .map(({ botUserId, data }) => {
         const xpData = data?.['xp'] as Record<string, unknown> | undefined;
-        const userExp = xpData && typeof xpData['exp'] === 'number' ? xpData['exp'] : 0;
+        const userExp =
+          xpData && typeof xpData['exp'] === 'number' ? xpData['exp'] : 0;
         return { botUserId, exp: userExp };
       })
       .sort((a, b) => b.exp - a.exp);
@@ -197,14 +193,17 @@ export const onCommand = async ({
     totalRanked = Math.max(1, leaderboard.length);
     const pos = leaderboard.findIndex((entry) => entry.botUserId === targetID);
     if (pos !== -1) leaderboardRank = pos + 1;
-  } catch { /* Fail-open */ }
+  } catch {
+    /* Fail-open */
+  }
 
   const level = expToLevel(exp);
   const currentBase = levelToExp(level);
   const nextBase = levelToExp(level + 1);
   const progressExp = exp - currentBase;
   const expNeeded = nextBase - currentBase;
-  const progressPct = expNeeded > 0 ? Math.round((progressExp / expNeeded) * 100) : 100;
+  const progressPct =
+    expNeeded > 0 ? Math.round((progressExp / expNeeded) * 100) : 100;
 
   // ── Compose final message ──
   const platformLabel = platform ? formatPlatformLabel(platform) : 'Unknown';

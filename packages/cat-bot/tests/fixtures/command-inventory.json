@@ -1,0 +1,4323 @@
+[
+  {
+    "file": "accounts.ts",
+    "meta": {
+      "name": "accounts",
+      "aliases": [
+        "acc"
+      ],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "AjiroDesu",
+      "description": "List all bot accounts currently connected in.",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "admin-only-mode.ts",
+    "meta": {
+      "name": "adminonly",
+      "aliases": [
+        "adonly",
+        "onlyad",
+        "onlyadmin"
+      ],
+      "version": "1.5.0",
+      "role": 3,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Turn on/off the mode where only bot admins can use the bot (session-wide).",
+      "category": "Bot Admin",
+      "usage": [
+        "[on | off] — Enable/disable admin-only mode mode for this session",
+        "noti [on | off] — Enable/disable the blocked-user notification"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "toggle",
+          "description": "on or off — enable/disable admin-only mode mode",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "noti",
+          "description": "noti on | noti off — toggle blocked-user notification",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "admin-only-mode.ts",
+    "meta": {
+      "name": "onlyadminbox",
+      "aliases": [
+        "onlyadbox",
+        "adboxonly",
+        "adminboxonly"
+      ],
+      "version": "1.3.0",
+      "role": 1,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Turn on/off the mode where only group admins can use the bot in this thread.",
+      "category": "Thread Admin",
+      "usage": [
+        "[on | off] — Enable/disable admin-only mode mode for this thread",
+        "noti [on | off] — Enable/disable the blocked-user notification"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "toggle",
+          "description": "on or off — enable/disable admin-only mode mode",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "noti",
+          "description": "noti on | noti off — toggle blocked-user notification",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "admin-premium.ts",
+    "meta": {
+      "name": "admin",
+      "aliases": [],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Manage bot admins for this session: add, list, or remove by user ID",
+      "category": "Bot Admin",
+      "usage": "<add|list|remove> [uid]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Action to perform: add, list, delete, or remove",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "uid",
+          "description": "Platform user ID for add/delete/remove — omit and reply to the target user's message instead",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "admin-premium.ts",
+    "meta": {
+      "name": "premium",
+      "aliases": [
+        "vip"
+      ],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Manage premium (VIP) users for this session: add, list, or remove by user ID",
+      "category": "Bot Admin",
+      "usage": "<add|list|remove> [uid]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Action to perform: add, list, delete, or remove",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "uid",
+          "description": "Platform user ID for add/delete/remove — omit and reply to the target user's message instead",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "afk.ts",
+    "meta": {
+      "name": "afk",
+      "aliases": [
+        "away"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Mark yourself as AFK with an optional reason. Auto-clears when you next send a message.",
+      "category": "utility",
+      "usage": [
+        "[reason] — go AFK with an optional reason",
+        "— run again while AFK to manually clear your status"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "animal-photos.ts",
+    "meta": {
+      "name": "cat",
+      "aliases": [
+        "catpic",
+        "catimage",
+        "meow"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random cat image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "animal-photos.ts",
+    "meta": {
+      "name": "fox",
+      "aliases": [
+        "foxpic",
+        "foximage",
+        "floof"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random fox image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "animal-photos.ts",
+    "meta": {
+      "name": "duck",
+      "aliases": [
+        "duckpic",
+        "duckimage",
+        "quack"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random duck image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "animal-photos.ts",
+    "meta": {
+      "name": "dog",
+      "aliases": [
+        "dogpic",
+        "dogimage",
+        "woof"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random dog image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "animal-photos.ts",
+    "meta": {
+      "name": "lizard",
+      "aliases": [
+        "lizardpic",
+        "lizardimage",
+        "gecko"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random lizard image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "animal-photos.ts",
+    "meta": {
+      "name": "goose",
+      "aliases": [
+        "goosepic",
+        "gooseimage",
+        "honk"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random goose image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "anime.ts",
+    "meta": {
+      "name": "anime",
+      "aliases": [
+        "ani"
+      ],
+      "version": "1.0.1",
+      "role": 0,
+      "author": "MrkimstersDev, Fixed",
+      "description": "Search for anime information using the Jikan API.",
+      "category": "Anime",
+      "usage": "<anime title>",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "onReply"
+    ]
+  },
+  {
+    "file": "antispam.ts",
+    "meta": {
+      "name": "antispam",
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Auto-kick members who send too many messages in a short time (10s window).",
+      "category": "Thread Admin",
+      "usage": [
+        "set <count> — Set the message-flood threshold (3-100, admin only)",
+        "on — Enable spam enforcement (admin only)",
+        "off — Disable spam enforcement (admin only)"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Subcommand: set, on, off",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Threshold count (only used with \"set\")",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "apilist.ts",
+    "meta": {
+      "name": "apilist",
+      "aliases": [
+        "apis"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Lists all registered free API providers and their base URLs.",
+      "category": "Utility",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "autoban.ts",
+    "meta": {
+      "name": "autoban",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "AjiroDesu",
+      "description": "Manage a keyword trigger list — any user whose message matches a keyword is immediately banned from using the bot.",
+      "category": "Bot Admin",
+      "usage": [
+        "add <word[,word|word]> — Add trigger word(s) (bot admin only)",
+        "delete <word[,word|word]> — Remove trigger word(s)",
+        "list [hide] — Show trigger keywords",
+        "on — Enable auto-ban enforcement for this session",
+        "off — Disable auto-ban enforcement for this session"
+      ],
+      "cooldown": 3,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Subcommand: add, delete, list, on, off",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Word(s) to add/delete (comma-separated) or 'hide' for list",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "autotrans.ts",
+    "meta": {
+      "name": "autotrans",
+      "aliases": [
+        "autotranslate",
+        "autotr"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Auto-translate any language into a chosen target language for this chat.",
+      "category": "Utility",
+      "usage": "[on | off | set <lang>]",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "badwords.ts",
+    "meta": {
+      "name": "badwords",
+      "aliases": [
+        "badword"
+      ],
+      "version": "1.4.1",
+      "role": 0,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Manage and enforce a bad-words filter for this group.",
+      "category": "Thread",
+      "usage": [
+        "add <word[,word|word]> — Add banned word(s) (admin only)",
+        "delete <word[,word|word]> — Remove banned word(s) (admin only)",
+        "list [hide] — Show banned words",
+        "on — Enable enforcement (admin only)",
+        "off — Disable enforcement (admin only)",
+        "unwarn [@mention | uid] — Remove one warning from a user (admin only)"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Subcommand: add, delete, list, on, off, unwarn",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Word(s) or user to act on (context-dependent)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "balance.ts",
+    "meta": {
+      "name": "balance",
+      "aliases": [
+        "bal"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "View your dollar balance, or the balance of a @mentioned user",
+      "category": "Economy",
+      "usage": "[@mention]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "User to view balance",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "bank.ts",
+    "meta": {
+      "name": "bank",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Deposit dollars into or withdraw dollars from your bank account. Withdrawals have a 5% tax.",
+      "category": "Economy",
+      "usage": "<deposit | withdraw> <amount>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "deposit or withdraw",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "amount",
+          "description": "Amount to deposit or withdraw (e.g. 100, 1k, all)",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "bible.ts",
+    "meta": {
+      "name": "bible",
+      "aliases": [
+        "verse",
+        "scripture",
+        "gospel"
+      ],
+      "version": "1.2.1",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Fetch Bible passages or random verses.",
+      "category": "random",
+      "usage": "[passage] [--version=<ver>]",
+      "cooldown": 3,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "passage",
+          "description": "Bible passage (e.g. John 3:16) or search text",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "version",
+          "description": "Bible version code (e.g. kjv, niv) — use --version or -v flag",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "callad.ts",
+    "meta": {
+      "name": "callad",
+      "aliases": [
+        "calladmin"
+      ],
+      "version": "2.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Send a message or report to the bot admins. Replies are relayed bidirectionally.",
+      "category": "Bot Admin",
+      "usage": "<message>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "message",
+          "description": "Your message report",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onReply"
+    ]
+  },
+  {
+    "file": "cointoss.ts",
+    "meta": {
+      "name": "cointoss",
+      "aliases": [
+        "ct",
+        "coinflip",
+        "cf"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Toss a coin and bet some of your dollars on the outcome.",
+      "category": "Economy",
+      "usage": "<bet> <heads | tails>",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "bet",
+          "description": "Amount to bet (e.g. 100, 1k, all)",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "side",
+          "description": "heads or tails",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "colorgame.ts",
+    "meta": {
+      "name": "colorgame",
+      "aliases": [
+        "cg",
+        "color"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Bet on a color and win based on payout multipliers. Separate multiple bets with commas.",
+      "category": "Economy",
+      "usage": "<bet> <color> [, <bet> <color> ...] | --list",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "bet",
+          "description": "Bet amount followed by color, e.g. 100 red — or --list to see colors",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "connect.ts",
+    "meta": {
+      "name": "connect",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "Cat-Bot",
+      "description": "Create or connect a new bot on the current platform (private chats only).",
+      "category": "Bot Admin",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "onReply"
+    ]
+  },
+  {
+    "file": "cosplay.ts",
+    "meta": {
+      "name": "cosplay",
+      "aliases": [
+        "cs"
+      ],
+      "version": "1.2.0",
+      "role": 0,
+      "author": "AjiroDesu (ported to Cat-Bot)",
+      "description": "Get a random cosplay video from the archive.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "daily.ts",
+    "meta": {
+      "name": "daily",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Claim your daily reward (resets every 24 hours)",
+      "category": "Economy",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "detect.ts",
+    "meta": {
+      "name": "detect",
+      "aliases": [],
+      "version": "2.0.0",
+      "role": 3,
+      "author": "AjiroDesu",
+      "description": "Manage a persistent keyword watch-list and silently notify bot admins via DM on match.",
+      "category": "Hidden",
+      "usage": [
+        "add <word[,word|word]> — Add target word(s) (bot admin only)",
+        "delete <word[,word|word]> — Remove target word(s)",
+        "list [hide] — Show watched keywords",
+        "on — Enable detection for this session",
+        "off — Disable detection for this session"
+      ],
+      "cooldown": 3,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Subcommand: add, delete, list, on, off",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Word(s) to add/delete (comma-separated) or 'hide' for list",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "download.ts",
+    "meta": {
+      "name": "download",
+      "aliases": [
+        "fb",
+        "fbdl",
+        "facebook",
+        "facebookdl",
+        "ig",
+        "igdl",
+        "instagram",
+        "instagramdl",
+        "pin",
+        "pindl",
+        "pinterestdl",
+        "x",
+        "xdl",
+        "tw",
+        "twdl",
+        "tiktok",
+        "tiktokdl",
+        "vt",
+        "vtdl"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Downloads media from a Facebook, Instagram, Pinterest, X, or TikTok link — platform is auto-detected from the URL.",
+      "category": "Downloader",
+      "usage": "<url | on | off | status>",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "url",
+          "description": "Link to download, or a subcommand: on / off / status",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "duckduckgo.ts",
+    "meta": {
+      "name": "duckduckgo",
+      "aliases": [
+        "ddg"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "Cat-Bot",
+      "description": "Search with DuckDuckGo and get an instant answer.",
+      "category": "search",
+      "usage": "<query>",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "fish.ts",
+    "meta": {
+      "name": "fish",
+      "aliases": [
+        "fishing",
+        "cast",
+        "reel"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Cast your line and earn dollars based on what you catch.",
+      "category": "Economy",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "fork.ts",
+    "meta": {
+      "name": "fork",
+      "aliases": [
+        "sourcecode",
+        "repo",
+        "source"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Shows the Cat-Bot source repository and how to fork it.",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "gojo.ts",
+    "meta": {
+      "name": "gojo",
+      "aliases": [
+        "bratgojo"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Generate a brat-style Gojo image with custom text.",
+      "category": "Canvas",
+      "usage": "<text>",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "help.ts",
+    "meta": {
+      "name": "help",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Shows all available commands or detailed info for a specific command",
+      "category": "Info",
+      "usage": "[command | page]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "noReactOnSuccess": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "query",
+          "description": "Command name for details or page number",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "icosplay.ts",
+    "meta": {
+      "name": "icosplay",
+      "aliases": [
+        "icoplay",
+        "acpl",
+        "acosplay"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random Asian woman anime cosplay photo from Pinterest.",
+      "category": "Anime",
+      "usage": "[search terms]",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "ignore-admin-only.ts",
+    "meta": {
+      "name": "ignoreonlyad",
+      "aliases": [
+        "ignoreadonly",
+        "ignoreonlyadmin",
+        "ignoreadminonly"
+      ],
+      "version": "1.2.0",
+      "role": 3,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Manage commands exempt from the session-wide admin-only restriction.",
+      "category": "Bot Admin",
+      "usage": [
+        "add <commandName> — Add a command to the session ignore list",
+        "del <commandName> — Remove a command from the session ignore list",
+        "list — View the current ignore list"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "add, del, or list",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "command",
+          "description": "Command name to add or remove from the session ignore list",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "ignore-admin-only.ts",
+    "meta": {
+      "name": "ignoreonlyadbox",
+      "aliases": [
+        "ignoreadboxonly",
+        "ignoreadminboxonly"
+      ],
+      "version": "1.2.0",
+      "role": 3,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Manage commands exempt from the per-thread admin-only restriction.",
+      "category": "Thread Admin",
+      "usage": [
+        "add <commandName> — Add a command to the thread ignore list",
+        "del <commandName> — Remove a command from the thread ignore list",
+        "list — View the current ignore list"
+      ],
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "add, del, or list",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "command",
+          "description": "Command name to add or remove from the thread ignore list",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "installer.ts",
+    "meta": {
+      "name": "installer",
+      "aliases": [
+        "install",
+        "getcmd"
+      ],
+      "version": "2.1.0",
+      "role": 4,
+      "author": "AjiroDesu",
+      "description": "Installs a command module from a file link (Pastebin / GitHub) via an onReply flow.",
+      "category": "system",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "onReply"
+    ]
+  },
+  {
+    "file": "kick.ts",
+    "meta": {
+      "name": "kick",
+      "aliases": [
+        "remove"
+      ],
+      "version": "1.0.0",
+      "role": 1,
+      "author": "System",
+      "description": "Remove a user from the current group. Provide a user ID, mention them, or reply to their message.",
+      "category": "Thread Admin",
+      "usage": "[uid | @mention | reply]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "User to kick",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "lifeinfo.ts",
+    "meta": {
+      "name": "lifeinfo",
+      "aliases": [
+        "lifefact",
+        "life"
+      ],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get lifetime body statistics. Reply to the bot with your birthdate (YYYY-MM-DD).",
+      "category": "Utility",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "onReply"
+    ]
+  },
+  {
+    "file": "megaslot.ts",
+    "meta": {
+      "name": "megaslot",
+      "aliases": [
+        "megaspin",
+        "ms"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Spin the 5-reel mega slot machine for massive payouts.",
+      "category": "Economy",
+      "usage": "<bet>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "bet",
+          "description": "Amount to bet (e.g. 100, 1k, all)",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "memes.ts",
+    "meta": {
+      "name": "meme",
+      "aliases": [
+        "memes",
+        "randommeme"
+      ],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "ShawnDesu",
+      "description": "Sends a random meme.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "memes.ts",
+    "meta": {
+      "name": "animeme",
+      "aliases": [
+        "anime-meme"
+      ],
+      "version": "1.2.0",
+      "role": 0,
+      "author": "ShawnDesu",
+      "description": "Fetch a random anime meme from Reddit.",
+      "category": "Anime",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "menu.ts",
+    "meta": {
+      "name": "menu",
+      "aliases": [
+        "commands",
+        "cmds"
+      ],
+      "version": "2.1.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Browse all commands by category.",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "morse.ts",
+    "meta": {
+      "name": "morseencode",
+      "aliases": [
+        "morseincode",
+        "tomorse",
+        "encodemorse"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert text into Morse code.",
+      "category": "converter",
+      "usage": "<text>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Input to convert (e.g. \"hello world\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "morse.ts",
+    "meta": {
+      "name": "morsedecode",
+      "aliases": [
+        "frommorse",
+        "decodemorse"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert Morse code back into text.",
+      "category": "converter",
+      "usage": "<morse>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "morse",
+          "description": "Input to convert (e.g. \".... . .-.. .-.. --- / .-- --- .-. .-.. -..\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "movies.ts",
+    "meta": {
+      "name": "movies",
+      "aliases": [
+        "mov"
+      ],
+      "version": "1.0.1",
+      "role": 0,
+      "author": "rifat, fixed by liane and symer and convert by AjiroDesu",
+      "description": "Search movie details using the OMDB API.",
+      "category": "Media",
+      "usage": "<movie title>",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "nasa.ts",
+    "meta": {
+      "name": "nasa",
+      "aliases": [
+        "boardingnasa"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "Cat-Bot",
+      "description": "Generate a NASA-style boarding pass image with your name.",
+      "category": "Canvas",
+      "usage": "<name>",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "notif.ts",
+    "meta": {
+      "name": "notif",
+      "aliases": [],
+      "version": "1.2.0",
+      "role": 4,
+      "author": "AjiroDesu",
+      "description": "Pushes a notification to the Aqua APIs dashboard notification feed, or resets the notification feed entirely.",
+      "category": "System Admin",
+      "usage": "<message> | reset",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "npm.ts",
+    "meta": {
+      "name": "npm",
+      "aliases": [
+        "npmsearch"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Search for npm package information.",
+      "category": "search",
+      "usage": "<package-name>",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "package",
+          "description": "npm package name to look up",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "out.ts",
+    "meta": {
+      "name": "out",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "John Lester",
+      "description": "Make the bot leave the current or a specified thread",
+      "category": "System",
+      "usage": "<threadID>",
+      "cooldown": 3,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "threadid",
+          "description": "Thread/group ID to leave",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "owner.ts",
+    "meta": {
+      "name": "owner",
+      "aliases": [
+        "ownerinfo",
+        "admininfo"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Shows the owner and admin information for this bot session.",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "periodic-table.ts",
+    "meta": {
+      "name": "periodictable",
+      "aliases": [
+        "pt",
+        "element"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Look up a chemical element by name or symbol.",
+      "category": "image",
+      "usage": "<element>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "element",
+          "description": "Element name or symbol (e.g. \"bohrium\" or \"Bh\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "periodic-table.ts",
+    "meta": {
+      "name": "randomperiodictable",
+      "aliases": [
+        "ptrandom",
+        "randomelement"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random chemical element from the periodic table.",
+      "category": "image",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": []
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "ping.ts",
+    "meta": {
+      "name": "ping",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Check if bot is alive",
+      "category": "info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "play.ts",
+    "meta": {
+      "name": "music",
+      "aliases": [
+        "play",
+        "song"
+      ],
+      "version": "3.1.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Download audio from a YouTube URL or search query. Sends the top result as a playable MP3.",
+      "category": "Media",
+      "usage": "<YouTube URL | search query>",
+      "cooldown": 15,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "query",
+          "description": "YouTube URL or search query",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "play.ts",
+    "meta": {
+      "name": "video",
+      "aliases": [
+        "vid",
+        "mp4"
+      ],
+      "version": "3.1.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Download video from a YouTube URL or search query. Sends the top result as an MP4 file.",
+      "category": "Media",
+      "usage": "<YouTube URL | search query>",
+      "cooldown": 15,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "query",
+          "description": "YouTube URL or search query",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "ad",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Turn a photo into a fake advertisement billboard meme.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "blur",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Apply a blur effect to a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "clown",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay a clown filter on a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "communism",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Apply the \"communism\" meme filter to a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "drip",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay a \"drip\" gold-chain meme filter on a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "greyscale",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert a photo to greyscale.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "invert",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Invert the colors of a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "jail",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay jail bars on a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "jokeoverhead",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay the \"joke went over their head\" meme on a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "mnm",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay the M&M meme filter on a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "nokia",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay the indestructible Nokia phone meme on a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "pet",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Turn a photo into the animated \"petpet\" meme.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "uncover",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Apply the \"uncover\" meme filter to a photo.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-avatar.ts",
+    "meta": {
+      "name": "wanted",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Turn a photo into an old-west \"wanted\" poster.",
+      "category": "image",
+      "usage": [
+        "(send a photo, reply to one, reply to a user, or leave blank to use your own avatar)"
+      ],
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-converter.ts",
+    "meta": {
+      "name": "encode",
+      "aliases": [
+        "tobinary"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert text into binary code.",
+      "category": "converter",
+      "usage": "<text>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Input to convert (e.g. \"hello\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-converter.ts",
+    "meta": {
+      "name": "decode",
+      "aliases": [
+        "frombinary"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert binary code back into text.",
+      "category": "converter",
+      "usage": "<binary>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "binary",
+          "description": "Input to convert (e.g. \"0110100001100101011011000110110001101111\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-converter.ts",
+    "meta": {
+      "name": "doublestruck",
+      "aliases": [
+        "blackboardbold"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert text into double-struck (blackboard bold) unicode text.",
+      "category": "converter",
+      "usage": "<text>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Input to convert (e.g. \"query\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-converter.ts",
+    "meta": {
+      "name": "emojipasta",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Turn text into an emoji-laden \"emojipasta\".",
+      "category": "converter",
+      "usage": "<text>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Input to convert (e.g. \"I love using the Pop Cat API. It's so cool!\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-converter.ts",
+    "meta": {
+      "name": "mock",
+      "aliases": [
+        "mockingcase",
+        "spongebob"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert text into SpOnGeBoB mOcKiNg-cAsE text.",
+      "category": "converter",
+      "usage": "<text>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Input to convert (e.g. \"hello\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-converter.ts",
+    "meta": {
+      "name": "lulcat",
+      "aliases": [
+        "lolcat"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Convert text into LOLcat-speak.",
+      "category": "converter",
+      "usage": "<text>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Input to convert (e.g. \"hello\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-media.ts",
+    "meta": {
+      "name": "caption",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay caption text on a photo (attach, reply, or avatar).",
+      "category": "image",
+      "usage": "<text>",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"Zero Two Caption\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-media.ts",
+    "meta": {
+      "name": "discordmessage",
+      "aliases": [
+        "dmsg"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render a fake Discord message screenshot. If only content is given (no \"username | content\" pair), your own display name is used as the username.",
+      "category": "image",
+      "usage": "[username |] <content> [--avatar=<value>] [--color=<value>] [--timestamp=<value>]",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "username",
+          "description": "Username value (defaults to your display name if omitted)",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "content",
+          "description": "Content value",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "flags",
+          "description": "Optional: --avatar=<value>, --color=<value>, --timestamp=<value>",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-media.ts",
+    "meta": {
+      "name": "opinion",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Overlay \"opinion\" meme text on a photo (attach, reply, or avatar).",
+      "category": "image",
+      "usage": "<text>",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"popcatdev api sucks\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-meme.ts",
+    "meta": {
+      "name": "drake",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render the Drake disapprove/approve meme.",
+      "category": "image",
+      "usage": "<text1> | <text2> (or reply for text2)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text1",
+          "description": "First panel text (e.g. \"amongus\")",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "text2",
+          "description": "Second panel text (e.g. \"amogus\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-meme.ts",
+    "meta": {
+      "name": "pooh",
+      "aliases": [
+        "poohmeme"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render the regular Pooh / fancy Pooh meme.",
+      "category": "image",
+      "usage": "<text1> | <text2> (or reply for text2)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "text1",
+          "description": "First panel text (e.g. \"making a discord bot\")",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "text2",
+          "description": "Second panel text (e.g. \"making an api\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-random-text.ts",
+    "meta": {
+      "name": "8ball",
+      "aliases": [
+        "eightball",
+        "ball"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Ask the magic 8-ball a yes/no question (or just roll one blind).",
+      "category": "random",
+      "usage": "[question]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "question",
+          "description": "Optional input for Magic 8-Ball",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "popcat-random-text.ts",
+    "meta": {
+      "name": "fact",
+      "aliases": [
+        "randomfact"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random fact.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "popcat-random-text.ts",
+    "meta": {
+      "name": "wyr",
+      "aliases": [
+        "wouldyourather"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random \"Would You Rather\" question.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "popcat-random-text.ts",
+    "meta": {
+      "name": "pickupline",
+      "aliases": [
+        "pickuplines",
+        "pickup"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random pickup line.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "popcat-search.ts",
+    "meta": {
+      "name": "steam",
+      "aliases": [
+        "steamsearch"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Look up a Steam game or app by name.",
+      "category": "search",
+      "usage": "<query>",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "q",
+          "description": "Search query (e.g. \"minecraft\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "alert",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render text as an iOS-style alert popup.",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"Something happened\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "biden",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render text as a Joe Biden tweet meme.",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"pop cat is horni\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "caution",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render text on a yellow caution sign.",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"Wet floor\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "couldread",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render text as a \"bet you could read that\" meme.",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"Never Gonna Give You Up\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "facts",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render text as a \"facts\" meme card.",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"Cats are liquid\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "pikachu",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Render text as the surprised Pikachu meme caption.",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"hello\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "popcat-text.ts",
+    "meta": {
+      "name": "sadcat",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Make a Sad Cat Meme!",
+      "category": "image",
+      "usage": "<text> (or reply to a message)",
+      "cooldown": 8,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text to render (e.g. \"hello\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "prefix.ts",
+    "meta": {
+      "name": "prefix",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 1,
+      "author": "John Lester",
+      "description": "View or change the bot command prefix for this thread or the entire system",
+      "category": "System",
+      "usage": "<new_prefix | reset> [-g]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "prefix",
+          "description": "New prefix to set, or \"reset\" to restore the system default",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "profile.ts",
+    "meta": {
+      "name": "profile",
+      "aliases": [
+        "me",
+        "userinfo"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Display a complete profile — identity, role, economy, and progression",
+      "category": "Utility",
+      "usage": "[@mention]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "User whose profile to view (defaults to yourself)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "push.ts",
+    "meta": {
+      "name": "push",
+      "aliases": [
+        "gitpush"
+      ],
+      "version": "2.0.0",
+      "role": 4,
+      "author": "AjiroDesu",
+      "description": "Reply to a .zip message and push it: unzips the replied .zip into the repo and commits + pushes with your message.",
+      "category": "System Admin",
+      "usage": "[message]",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "qrcode.ts",
+    "meta": {
+      "name": "qrcode",
+      "aliases": [
+        "qr"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Generate a QR code from the provided text.",
+      "category": "Utility",
+      "usage": "<text or link>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "text",
+          "description": "Text or URL to encode into a QR code",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "quiz.ts",
+    "meta": {
+      "name": "quiz",
+      "aliases": [
+        "trivia"
+      ],
+      "version": "2.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Answer a True/False trivia question and earn dollars for correct answers. Stats are tracked per user.",
+      "category": "Economy",
+      "usage": "[easy | medium | hard]",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "difficulty",
+          "description": "Question difficulty: easy, medium, or hard (random if omitted)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-photos.ts",
+    "meta": {
+      "name": "coffee",
+      "aliases": [
+        "coffeepic",
+        "coffeeimage",
+        "brew"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random coffee image.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-photos.ts",
+    "meta": {
+      "name": "ba",
+      "aliases": [
+        "bluearchive"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Fetches a random Blue Archive image.",
+      "category": "anime",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-photos.ts",
+    "meta": {
+      "name": "wallpaper",
+      "aliases": [
+        "wp",
+        "wall",
+        "background"
+      ],
+      "version": "1.5.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random wallpaper (optionally specify size/topic).",
+      "category": "random",
+      "usage": "[query] [WxH]",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-text-facts.ts",
+    "meta": {
+      "name": "advice",
+      "aliases": [
+        "tips"
+      ],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "AjiroDesu (ported to Cat-Bot)",
+      "description": "Get random life advice.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-text-facts.ts",
+    "meta": {
+      "name": "catfact",
+      "aliases": [
+        "catfacts",
+        "meowfact"
+      ],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "AjiroDesu (ported to Cat-Bot)",
+      "description": "Get a random interesting fact about cats.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-text-facts.ts",
+    "meta": {
+      "name": "dogfact",
+      "aliases": [
+        "df",
+        "dogfacts"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random fun fact about dogs.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-text-facts.ts",
+    "meta": {
+      "name": "funfact",
+      "aliases": [],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "FunFactBotDev (ported to Cat-Bot)",
+      "description": "Get a random fun fact to brighten your day.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-text-facts.ts",
+    "meta": {
+      "name": "joke",
+      "aliases": [
+        "telljoke",
+        "haha",
+        "funny"
+      ],
+      "version": "1.2.0",
+      "role": 0,
+      "author": "JokeBotDev (ported to Cat-Bot)",
+      "description": "Get a random joke to lighten the mood.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 3,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "random-text-facts.ts",
+    "meta": {
+      "name": "quote",
+      "aliases": [
+        "inspire",
+        "motivation"
+      ],
+      "version": "1.1.0",
+      "role": 0,
+      "author": "AjiroDesu (ported to Cat-Bot)",
+      "description": "Get a random inspirational quote.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "rank.ts",
+    "meta": {
+      "name": "rank",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "View your level, EXP, and leaderboard rank",
+      "category": "Economy",
+      "usage": "[@mention]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "User to view rank",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "rankup.ts",
+    "meta": {
+      "name": "rankup",
+      "aliases": [],
+      "version": "1.1.0",
+      "role": 1,
+      "author": "John Lester",
+      "description": "Toggle level-up notifications for this thread (on/off). Gains EXP passively on every message.",
+      "category": "Economy",
+      "usage": "[on | off]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Toggle state: \"on\" or \"off\"",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat",
+      "button"
+    ]
+  },
+  {
+    "file": "recipe.ts",
+    "meta": {
+      "name": "recipe",
+      "aliases": [
+        "meal",
+        "food",
+        "cook"
+      ],
+      "version": "1.2.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a random recipe suggestion.",
+      "category": "random",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "remind.ts",
+    "meta": {
+      "name": "remind",
+      "aliases": [
+        "reminder",
+        "remindme"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Set a reminder. Supports natural language too.",
+      "category": "tools",
+      "usage": "<5s|10m|2h|1d> <message>",
+      "cooldown": 3,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "time",
+          "description": "Time duration (e.g. 5s, 10m, 2h, 1d)",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "message",
+          "description": "Reminder message text",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onChat"
+    ]
+  },
+  {
+    "file": "restart.ts",
+    "meta": {
+      "name": "restart",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "John Lester",
+      "description": "Restarts the specific bot listener session seamlessly.",
+      "category": "system",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "restrict.ts",
+    "meta": {
+      "name": "restrict",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 1,
+      "author": "AjiroDesu",
+      "description": "Mute a member so they cannot send messages or media, without removing them from the group. Provide a user ID, mention them, or reply to their message. Optionally add a duration (e.g. 10m, 2h, 1d) — omit it to restrict indefinitely.",
+      "category": "Thread Admin",
+      "usage": "<uid | @mention | reply> [duration]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "User to restrict",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "duration",
+          "description": "Optional duration (e.g. 10m, 2h, 1d) — omit for indefinite",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "restrict.ts",
+    "meta": {
+      "name": "unrestrict",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 1,
+      "author": "AjiroDesu",
+      "description": "Lift a restriction on a member, restoring their default ability to send messages and media. Provide a user ID, mention them, or reply to their message.",
+      "category": "Thread Admin",
+      "usage": "<uid | @mention | reply>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "User to unrestrict",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "richdemo.ts",
+    "meta": {
+      "name": "richdemo",
+      "version": "1.0.0",
+      "role": 0,
+      "author": "System",
+      "description": "Demo of Telegram Rich Messages (InputRichMessage) — tables, task lists, footnotes, code blocks, spoilers, and collapsible sections.",
+      "category": "Info",
+      "usage": "[html]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "mode",
+          "description": "\"html\" for the Rich HTML variant; omit for Rich Markdown (default)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "roulette.ts",
+    "meta": {
+      "name": "roulette",
+      "aliases": [
+        "rl"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Spin the roulette wheel. Bet on red/black/green and optionally an exact number.",
+      "category": "Economy",
+      "usage": "<bet> <red | black | green> [0-36]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "bet",
+          "description": "Amount to bet (e.g. 100, 1k, all)",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "color",
+          "description": "red, black, or green",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "number",
+          "description": "Specific number to bet on (0-36, optional)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "rps.ts",
+    "meta": {
+      "name": "rps",
+      "aliases": [
+        "rockpaperscissors",
+        "janken"
+      ],
+      "version": "2.0.0",
+      "role": 0,
+      "author": "JohnDev19",
+      "description": "Play Rock, Paper, Scissors. Optionally wager coins and build a win streak for bonus payouts. Stats are tracked per user.",
+      "category": "Economy",
+      "usage": "[bet amount]",
+      "cooldown": 3,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "bet",
+          "description": "Amount to bet (optional, e.g. 100, 1k, all)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "rules.ts",
+    "meta": {
+      "name": "rules",
+      "version": "1.7.0",
+      "role": 0,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Create/view/add/edit/move/delete group rules",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "category": "thread",
+      "usage": [
+        "— View all group rules (reply with # to zoom in)",
+        "<n> — View rule #n directly",
+        "add <rule text> — Add a new rule (admin only)",
+        "edit <n> <new content> — Edit rule #n (admin only)",
+        "move <n1> <n2> — Swap rules #n1 and #n2 (admin only)",
+        "delete <n> — Delete rule #n (admin only)",
+        "remove — Remove ALL rules with confirmation (admin only)"
+      ],
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Subcommand or rule number: add, edit, move, delete, remove, or <n>",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Rule text, rule number, or user (context-dependent)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "onReply",
+      "onReact",
+      "button"
+    ]
+  },
+  {
+    "file": "safebooru.ts",
+    "meta": {
+      "name": "safebooru",
+      "aliases": [
+        "sb"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get a single random (SFW) image from Safebooru. Optional tags to filter.",
+      "category": "Anime",
+      "usage": "[tags]",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "say.ts",
+    "meta": {
+      "name": "say",
+      "aliases": [
+        "tts"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Converts text into Google TTS audio",
+      "category": "Media",
+      "usage": "<text> | <lang> (or reply: | <lang>)",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "input",
+          "description": "Text and language code separated by | (e.g., \"Konnichiwa | ja\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "sendnoti.ts",
+    "meta": {
+      "name": "sendnoti",
+      "aliases": [
+        "broadcast"
+      ],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "John Lester",
+      "description": "Broadcast a notification message to all group threads in this session",
+      "category": "Bot Admin",
+      "usage": "<message>",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "message",
+          "description": "Notification text to broadcast",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "set-stats.ts",
+    "meta": {
+      "name": "setmoney",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "System",
+      "description": "Set the dollar balance of yourself, a @mentioned user, or a user by ID. Use \"infinity\" for ∞ dollars.",
+      "category": "Bot Admin",
+      "usage": "me <amount|infinity> | del me | del @mention | @mention <amount|infinity> | uid <id> <amount|infinity>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "me <amount> | del me | del @mention | @mention <amount> | uid <id> <amount>",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Amount or target user ID (context-dependent)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "set-stats.ts",
+    "meta": {
+      "name": "setexp",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 3,
+      "author": "System",
+      "description": "Set the EXP of yourself, a @mentioned user, or a user by ID",
+      "category": "Bot Admin",
+      "usage": "me <amount> | del me | del @mention | @mention <amount> | uid <id> <amount>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "me <amount> | del me | del @mention | @mention <amount> | uid <id> <amount>",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "value",
+          "description": "Amount or target user ID (context-dependent)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "shell.ts",
+    "meta": {
+      "name": "shell",
+      "aliases": [
+        "terminal"
+      ],
+      "version": "1.0.0",
+      "role": 4,
+      "author": "AjiroDesu",
+      "description": "Execute a shell command and return the output.",
+      "category": "system",
+      "usage": "<command>",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "shoti.ts",
+    "meta": {
+      "name": "shoti",
+      "aliases": [
+        "ea"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Sends a random TikTok video.",
+      "category": "Media",
+      "usage": "",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "shoti2.ts",
+    "meta": {
+      "name": "shotiv2",
+      "aliases": [
+        "shoti2"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Sends a random TikTok video (Aqua API).",
+      "category": "Media",
+      "usage": "",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "shoti3.ts",
+    "meta": {
+      "name": "shotiv3",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Sends a random TikTok video (Aqua API). `add <url>` (system admin only) adds one to the pool.",
+      "category": "Media",
+      "usage": [
+        "",
+        "[add <tiktok url>]"
+      ],
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "siesta.ts",
+    "meta": {
+      "name": "siesta",
+      "aliases": [
+        "siestapic"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Send a random photo of Siesta.",
+      "category": "Anime",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "slot.ts",
+    "meta": {
+      "name": "slot",
+      "aliases": [
+        "spin",
+        "sl"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Spin the standard 3-reel slot machine.",
+      "category": "Economy",
+      "usage": "<bet>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "bet",
+          "description": "Amount to bet (e.g. 100, 1k, all)",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "spotify.ts",
+    "meta": {
+      "name": "spotify",
+      "aliases": [
+        "sp",
+        "spdl",
+        "spotifydl"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Search Spotify and download the top matching track as an MP3.",
+      "category": "Downloader",
+      "usage": "<song title | artist - title>",
+      "cooldown": 10,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "stalker.ts",
+    "meta": {
+      "name": "github",
+      "aliases": [
+        "gh"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Stalk a GitHub user profile.",
+      "category": "Utility",
+      "usage": "<username>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "username",
+          "description": "GitHub username to look up",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "stalker.ts",
+    "meta": {
+      "name": "threadsstalk",
+      "aliases": [
+        "threads"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Stalk a Threads (Instagram) user profile.",
+      "category": "Utility",
+      "usage": "<username>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "username",
+          "description": "Threads username to look up",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "stalker.ts",
+    "meta": {
+      "name": "xstalk",
+      "aliases": [
+        "twitter",
+        "x"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Stalk an X (Twitter) user profile.",
+      "category": "Utility",
+      "usage": "<username>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "username",
+          "description": "X / Twitter username to look up",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "stalker.ts",
+    "meta": {
+      "name": "ytstalk",
+      "aliases": [
+        "youtube",
+        "yt"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Stalk a YouTube channel profile.",
+      "category": "Utility",
+      "usage": "<username>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "username",
+          "description": "YouTube username to look up",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "start.ts",
+    "meta": {
+      "name": "start",
+      "aliases": [
+        "begin",
+        "welcome"
+      ],
+      "version": "1.2.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Welcomes you to the bot and shows what it can do and how to use it.",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "steal.ts",
+    "meta": {
+      "name": "steal",
+      "aliases": [
+        "rob"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Steal coins from another user. High chance of failure — and a penalty if caught!",
+      "category": "Economy",
+      "usage": "@user <amount>",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "user",
+          "name": "target",
+          "description": "@mention or reply to the user to steal from",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "amount",
+          "description": "Amount to steal (e.g. 100, 1k, all)",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "system.ts",
+    "meta": {
+      "name": "system",
+      "aliases": [
+        "sysinfo"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Displays host hardware and OS information using built-in Node.js APIs",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "thread.ts",
+    "meta": {
+      "name": "thread",
+      "aliases": [],
+      "version": "1.1.0",
+      "role": 3,
+      "author": "John Lester",
+      "description": "Manage session threads: ban, unban, list all group threads, or search by name/ID",
+      "category": "Bot Admin",
+      "usage": "<ban|unban|list|search> [tid|page|query]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Action to perform: ban, unban, list, or search",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "target",
+          "description": "Thread ID, page number, or search query depending on action",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "tid.ts",
+    "meta": {
+      "name": "tid",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Replies with the current thread / group / channel ID",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "top.ts",
+    "meta": {
+      "name": "top",
+      "aliases": [
+        "leaderboard",
+        "lb"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "View top users by dollar balance or EXP level",
+      "category": "Economy",
+      "usage": "<money|level> [limit]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "type",
+          "description": "Leaderboard type: \"money\" or \"level\"",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "limit",
+          "description": "Number of entries to show (1–20, default 10)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "trans.ts",
+    "meta": {
+      "name": "trans",
+      "aliases": [
+        "translate"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Translate text to a specific language",
+      "category": "Media",
+      "usage": "<text> | <lang> (or reply: | <lang>)",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "string",
+          "name": "input",
+          "description": "Text and language code separated by | (e.g., \"Ciao | en\")",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "transfer.ts",
+    "meta": {
+      "name": "transfer",
+      "aliases": [
+        "tf"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Transfer dollars to another user via reply, @mention, or user ID.",
+      "category": "Economy",
+      "usage": "[@mention | uid] <amount>",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "options": [
+        {
+          "type": "user",
+          "name": "user",
+          "description": "Target user to send dollars to",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "troll.ts",
+    "meta": {
+      "name": "troll",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "@lianecagarah convert by AjiroDesu",
+      "description": "Risk your money with this stupid game.",
+      "category": "Economy",
+      "usage": "",
+      "cooldown": 20,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "uid.ts",
+    "meta": {
+      "name": "uid",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Replies with the sender's platform user ID, or the replied user's ID",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "unsend.ts",
+    "meta": {
+      "name": "unsend",
+      "version": "1.0.2",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Unsend a message — bot-only on FB Messenger, any message on Discord/Telegram (if bot has delete permission)",
+      "category": "system",
+      "usage": "<reply to message>",
+      "cooldown": 3,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "update.ts",
+    "meta": {
+      "name": "update",
+      "aliases": [
+        "updatefork",
+        "sync"
+      ],
+      "version": "1.0.0",
+      "role": 4,
+      "author": "AjiroDesu",
+      "description": "Updates your forked repository with the latest changes from the main Cat-Bot repository, preserving your custom modifications.",
+      "category": "system",
+      "usage": "",
+      "cooldown": 30,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram",
+        "webchat"
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "uptime.ts",
+    "meta": {
+      "name": "uptime",
+      "aliases": [],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "John Lester",
+      "description": "Shows how long the bot has been running and a live resource snapshot",
+      "category": "Info",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "user.ts",
+    "meta": {
+      "name": "user",
+      "aliases": [],
+      "version": "1.2.0",
+      "role": 3,
+      "author": "John Lester",
+      "description": "Manage session users: ban, unban, list all, or search by name/ID",
+      "category": "Bot Admin",
+      "usage": "<ban|unban|list|search> [uid|page|query]",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Action to perform: ban, unban, list, or search",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "target",
+          "description": "User ID, page number, or search query depending on action",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "waifu.ts",
+    "meta": {
+      "name": "waifu",
+      "aliases": [
+        "waifus"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "Winter Lance",
+      "description": "Send a random waifu image.",
+      "category": "anime",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "warn.ts",
+    "meta": {
+      "name": "warn",
+      "version": "1.8.0",
+      "role": 0,
+      "author": "NTKhang (Cat-Bot port)",
+      "description": "Warn group members — 3 warnings results in a ban",
+      "cooldown": 5,
+      "hasPrefix": true,
+      "category": "thread",
+      "usage": [
+        "@tag <reason> — Warn a member (admin only)",
+        "list — List warned members",
+        "listban — List members banned via warns (≥3)",
+        "info [@tag | <uid>] — View warning details (self if blank)",
+        "unban [@tag | <uid>] — Unban a member (admin only)",
+        "unwarn [@tag | <uid>] [#] — Remove a specific warning (admin only)",
+        "reset — Reset all warn data (admin only)",
+        "",
+        "⚠️ Bot must be a group admin to auto-kick banned members."
+      ],
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "action",
+          "description": "Subcommand: list, listban, info, unban, unwarn, reset, or @tag to warn",
+          "required": false
+        },
+        {
+          "type": "string",
+          "name": "reason",
+          "description": "Reason for warning (used when warning a member)",
+          "required": false
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "weather.ts",
+    "meta": {
+      "name": "weather",
+      "aliases": [
+        "wthr",
+        "temp"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Get the current weather for a given location.",
+      "category": "Utility",
+      "usage": "<location>",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "wiki.ts",
+    "meta": {
+      "name": "wiki",
+      "aliases": [
+        "wikipedia"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "Cat-Bot",
+      "description": "Get a summary of a Wikipedia article.",
+      "category": "Utility",
+      "usage": "<article title>",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "work.ts",
+    "meta": {
+      "name": "work",
+      "aliases": [
+        "job",
+        "earn"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Work a random job and earn dollars once per hour.",
+      "category": "Economy",
+      "usage": "",
+      "cooldown": 5,
+      "hasPrefix": true
+    },
+    "hooks": [
+      "onCommand",
+      "button"
+    ]
+  },
+  {
+    "file": "youtube.ts",
+    "meta": {
+      "name": "youtubeaudio",
+      "aliases": [
+        "yta",
+        "ytaudio",
+        "ytmp3"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Downloads a YouTube video as MP3 audio.",
+      "category": "Downloader",
+      "usage": "<YouTube URL> [-d]",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "url",
+          "description": "YouTube link, plus optional -d flag",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  },
+  {
+    "file": "youtube.ts",
+    "meta": {
+      "name": "youtubevideo",
+      "aliases": [
+        "ytmp4",
+        "ytv",
+        "ytvideo"
+      ],
+      "version": "1.0.0",
+      "role": 0,
+      "author": "AjiroDesu",
+      "description": "Downloads a YouTube video as MP4.",
+      "category": "Downloader",
+      "usage": "<YouTube URL> [-d]",
+      "cooldown": 10,
+      "hasPrefix": true,
+      "platform": [
+        "discord",
+        "telegram"
+      ],
+      "options": [
+        {
+          "type": "string",
+          "name": "url",
+          "description": "YouTube link, plus optional -d flag",
+          "required": true
+        }
+      ]
+    },
+    "hooks": [
+      "onCommand"
+    ]
+  }
+]

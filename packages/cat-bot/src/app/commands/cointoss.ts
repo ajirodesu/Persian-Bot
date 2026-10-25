@@ -15,6 +15,7 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
+import { parseBetAmount } from '@/engine/utils/bet.util.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -48,21 +49,6 @@ export const meta: CommandMeta = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-
-function parseBet(raw: string, balance: number): number {
-  const v = raw.trim().toLowerCase().replace(/,/g, '');
-  if (v === 'all' || v === 'max') return Math.floor(balance);
-  if (v === 'half') return Math.floor(balance / 2);
-
-  const m = v.match(/^(\d+(?:\.\d+)?)([kmb])?$/i);
-  if (!m) return NaN;
-
-  const amount = Number(m[1]);
-  const suffix = m[2]?.toLowerCase();
-  const mult =
-    suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : suffix === 'b' ? 1_000_000_000 : 1;
-  return Math.floor(amount * mult);
-}
 
 // ── Button definitions ────────────────────────────────────────────────────────
 
@@ -105,7 +91,9 @@ export const button = {
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
         message: ctx.resultMessage,
-        ...(hasNativeButtons(native.platform) ? { button: [ctx.balanceId] } : {}),
+        ...(hasNativeButtons(native.platform)
+          ? { button: [ctx.balanceId] }
+          : {}),
       });
     },
   },
@@ -148,7 +136,7 @@ export const onCommand = async ({
   }
 
   const balance = await currencies.getMoney(senderID);
-  const bet = parseBet(rawBet, balance);
+  const bet = parseBetAmount(rawBet, balance);
 
   if (isNaN(bet) || bet <= 0) {
     await chat.replyMessage({
@@ -170,8 +158,12 @@ export const onCommand = async ({
   const won = result === rawSide;
   const profit = won ? r2(bet * 0.5) : 0;
   const newBalance = won
-    ? await currencies.increaseMoney({ user_id: senderID, money: profit }).then(() => balance + profit)
-    : await currencies.decreaseMoney({ user_id: senderID, money: bet }).then(() => balance - bet);
+    ? await currencies
+        .increaseMoney({ user_id: senderID, money: profit })
+        .then(() => balance + profit)
+    : await currencies
+        .decreaseMoney({ user_id: senderID, money: bet })
+        .then(() => balance - bet);
 
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const coinEmoji = result === 'heads' ? '🟡' : '⚫';
@@ -211,8 +203,14 @@ export const onCommand = async ({
   const ctx: CtxData = { resultMessage, balanceId, backId };
 
   // Cast context payloads to expected generic Record<string, unknown> to resolve TS2322
-  btn.createContext({ id: balanceId, context: ctx as unknown as Record<string, unknown> });
-  btn.createContext({ id: backId, context: ctx as unknown as Record<string, unknown> });
+  btn.createContext({
+    id: balanceId,
+    context: ctx as unknown as Record<string, unknown>,
+  });
+  btn.createContext({
+    id: backId,
+    context: ctx as unknown as Record<string, unknown>,
+  });
 
   await chat.replyMessage({
     style: MessageStyle.MARKDOWN,

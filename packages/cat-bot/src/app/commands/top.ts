@@ -31,6 +31,7 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { INFINITY_SENTINEL, formatCoins } from '@/engine/lib/currencies.lib.js';
+import { expToLevel } from '@/engine/utils/levels.util.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,6 @@ import { INFINITY_SENTINEL, formatCoins } from '@/engine/lib/currencies.lib.js';
  * Changing this alone would reorder leaderboard entries relative to what /rank
  * displays for individual users, breaking user expectations.
  */
-const DELTA_NEXT = 5;
 
 /** Default leaderboard length when no limit argument is provided. */
 const DEFAULT_LIMIT = 10;
@@ -52,12 +52,6 @@ const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 20;
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
-
-/** Converts raw EXP to a level number. Mirrors rank.ts implementation exactly. */
-function expToLevel(exp: number): number {
-  if (exp <= 0) return 0;
-  return Math.floor((1 + Math.sqrt(1 + (8 * exp) / DELTA_NEXT)) / 2);
-}
 
 /**
  * Parses and clamps the user-supplied limit string.
@@ -128,8 +122,7 @@ export const button = {
         .map(({ botUserId, data }) => {
           // Coins live in data['money']['coins'] — written by /daily via currencies.lib
           const moneyData = data?.['money'] as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
           const rawCoins = moneyData?.['coins'];
           // Infinity is persisted as the sentinel string; convert back to JS Infinity
           const coins =
@@ -154,11 +147,9 @@ export const button = {
         const entry = ranked[i]!; // safe: i is always < ranked.length
         // getUserName is LRU-cached — repeated calls here hit memory, not the DB
         const name = await user.getName(entry.botUserId);
-        lines.push(
-`${position(i)} **${name}** — ${formatCoins(entry.coins)}`,
-        );
+        lines.push(`${position(i)} **${name}** — ${formatCoins(entry.coins)}`);
       }
-if (ranked.length === 0) lines.push('No users have earned dollars yet.');
+      if (ranked.length === 0) lines.push('No users have earned dollars yet.');
 
       await chat.editMessage({
         style: MessageStyle.MARKDOWN,
@@ -246,8 +237,7 @@ export const onCommand = async ({
     const ranked = allSessions
       .map(({ botUserId, data }) => {
         const moneyData = data?.['money'] as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
         const rawCoins = moneyData?.['coins'];
         // Infinity is persisted as the sentinel string; convert back to JS Infinity
         const coins =
@@ -268,9 +258,7 @@ export const onCommand = async ({
     for (let i = 0; i < ranked.length; i++) {
       const entry = ranked[i]!; // safe: i is always < ranked.length
       const name = await user.getName(entry.botUserId);
-      lines.push(
-        `${position(i)} **${name}** — ${formatCoins(entry.coins)}`,
-      );
+      lines.push(`${position(i)} **${name}** — ${formatCoins(entry.coins)}`);
     }
     if (ranked.length === 0) lines.push('No users have earned coins yet.');
 

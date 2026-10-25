@@ -26,21 +26,9 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { INFINITY_SENTINEL, formatCoins } from '@/engine/lib/currencies.lib.js';
+import { expToLevel, levelToExp } from '@/engine/utils/levels.util.js';
 
 /** Controls how quickly users level up — higher = slower progression. */
-const DELTA_NEXT = 5;
-
-/** Converts raw EXP to a level number. */
-function expToLevel(exp: number): number {
-  if (exp <= 0) return 0;
-  return Math.floor((1 + Math.sqrt(1 + (8 * exp) / DELTA_NEXT)) / 2);
-}
-
-/** Minimum EXP required to reach a specific level. */
-function levelToExp(level: number): number {
-  if (level <= 0) return 0;
-  return Math.floor(((level * level - level) * DELTA_NEXT) / 2);
-}
 
 export const meta: CommandMeta = {
   name: 'rank',

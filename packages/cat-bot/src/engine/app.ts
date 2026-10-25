@@ -22,10 +22,8 @@ import '@/engine/middleware/index.js';
 import { sessionManager } from '@/engine/modules/session/session-manager.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { upsertSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
-import {
-  commandRegistry,
-  eventRegistry,
-} from '@/engine/lib/module-registry.lib.js';
+import { eventRegistry } from '@/engine/lib/module-registry.lib.js';
+import { loadCommandsFromDirectory } from '@/engine/modules/command/command-loader.lib.js';
 import { upsertSessionEvents } from '@/engine/modules/session/bot-session-events.repo.js';
 import type { SessionConfigs } from '@/engine/modules/session/session-loader.util.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
@@ -34,7 +32,10 @@ import {
   createBotCollectionManager,
 } from '@/engine/lib/db-collection.lib.js';
 import { dbReady } from 'database';
-import { listBotAdmins, listBotPremiums } from '@/engine/repos/credentials.repo.js';
+import {
+  listBotAdmins,
+  listBotPremiums,
+} from '@/engine/repos/credentials.repo.js';
 import {
   getBotSessionData,
   getBotNickname,
@@ -50,104 +51,15 @@ const __dirname = path.dirname(__filename);
 
 /** Imports every command file concurrently; broken files are skipped with a warning. */
 async function loadCommands(): Promise<Map<string, Record<string, unknown>>> {
-  const commands = new Map<string, Record<string, unknown>>();
-  const dir = path.join(__dirname, '..', 'app', 'commands');
-
-  if (!fs.existsSync(dir)) {
-    logger.warn(`⚠️  Commands directory not found: ${dir}`);
-    return commands;
-  }
-
-  const files = (await fs.promises.readdir(dir)).filter(
-    (f) => (f.endsWith('.js') || f.endsWith('.ts')) && !f.endsWith('.d.ts'),
+  return loadCommandsFromDirectory(
+    path.join(__dirname, '..', 'app', 'commands'),
   );
-
-  await Promise.allSettled(
-    files.map(async (file) => {
-      try {
-        const mod = (await import(
-          pathToFileURL(path.join(dir, file)).href
-        )) as Record<string, unknown>;
-
-        // Multi-command files export `commands: Array<{ meta, onCommand, ... }>`.
-        if (Array.isArray(mod['commands'])) {
-          for (const rawEntry of mod['commands'] as Array<Record<string, unknown>>) {
-            const entryCfg = rawEntry['meta'] as
-              | { name?: string; aliases?: string[]; options?: Array<{ name?: string }> }
-              | undefined;
-
-            if (!entryCfg?.name) {
-              logger.warn(`⚠️  Skipping an entry in ${file}: missing meta.name`);
-              continue;
-            }
-            if (
-              typeof rawEntry['onCommand'] !== 'function' &&
-              typeof rawEntry['onChat'] !== 'function'
-            ) {
-              logger.warn(`⚠️  Skipping "${entryCfg.name}" in ${file}: missing onCommand/onChat`);
-              continue;
-            }
-
-            entryCfg.name = entryCfg.name.toLowerCase();
-            if (Array.isArray(entryCfg.options)) {
-              for (const opt of entryCfg.options) {
-                if (opt && typeof opt.name === 'string') opt.name = opt.name.toLowerCase();
-              }
-            }
-
-            commands.set(entryCfg.name, rawEntry);
-            commandRegistry.set(entryCfg.name, rawEntry);
-            logger.info(`Loaded command: ${entryCfg.name} (from ${file})`);
-
-            if (Array.isArray(entryCfg.aliases)) {
-              for (const alias of entryCfg.aliases) {
-                commands.set(String(alias).toLowerCase(), rawEntry);
-                logger.info(`  ↳ Alias: ${String(alias).toLowerCase()}`);
-              }
-            }
-          }
-          return;
-        }
-
-        const cfg = mod['meta'] as { name?: string; aliases?: string[] } | undefined;
-
-        if (!cfg?.name) { logger.warn(`⚠️  Skipping ${file}: missing meta.name`); return; }
-        if (typeof mod['onCommand'] !== 'function' && typeof mod['onChat'] !== 'function') {
-          logger.warn(`⚠️  Skipping ${file}: missing onStart/onChat`);
-          return;
-        }
-
-        // Discord requires lowercase command/option names — normalise at load time.
-        if (cfg.name) cfg.name = cfg.name.toLowerCase();
-        const rawCfg = mod['meta'] as { options?: Array<{ name?: string }> };
-        if (Array.isArray(rawCfg.options)) {
-          for (const opt of rawCfg.options) {
-            if (opt && typeof opt.name === 'string') opt.name = opt.name.toLowerCase();
-          }
-        }
-
-        commands.set(cfg.name.toLowerCase(), mod);
-        commandRegistry.set(cfg.name.toLowerCase(), mod);
-        logger.info(`Loaded command: ${cfg.name}`);
-
-        if (Array.isArray(cfg.aliases)) {
-          for (const alias of cfg.aliases) {
-            commands.set(String(alias).toLowerCase(), mod);
-            logger.info(`  ↳ Alias: ${String(alias).toLowerCase()}`);
-          }
-        }
-      } catch (err) {
-        logger.error(`❌ Failed to load command ${file}`, { error: err });
-      }
-    }),
-  );
-
-  logger.info(`Loaded ${commands.size} command(s)`);
-  return commands;
 }
 
 /** Imports every event file concurrently; one file may register multiple event types. */
-async function loadEventModules(): Promise<Map<string, Array<Record<string, unknown>>>> {
+async function loadEventModules(): Promise<
+  Map<string, Array<Record<string, unknown>>>
+> {
   const events = new Map<string, Array<Record<string, unknown>>>();
   const dir = path.join(__dirname, '..', 'app', 'events');
 
@@ -167,7 +79,11 @@ async function loadEventModules(): Promise<Map<string, Array<Record<string, unkn
           pathToFileURL(path.join(dir, file)).href
         )) as Record<string, unknown>;
         const cfg = mod['meta'] as
-          | { name?: string; type?: string[]; onEvent?: (...args: unknown[]) => unknown }
+          | {
+              name?: string;
+              type?: string[];
+              onEvent?: (...args: unknown[]) => unknown;
+            }
           | undefined;
 
         if (!cfg?.name || !Array.isArray(cfg.type)) return;
@@ -242,16 +158,28 @@ async function syncCommandsAndEvents(
 
       await Promise.all([
         cmdArr.length > 0
-          ? upsertSessionCommands(sess.userId, sess.platform, sess.sessionId, cmdArr)
+          ? upsertSessionCommands(
+              sess.userId,
+              sess.platform,
+              sess.sessionId,
+              cmdArr,
+            )
           : Promise.resolve(),
         evtArr.length > 0
-          ? upsertSessionEvents(sess.userId, sess.platform, sess.sessionId, evtArr)
+          ? upsertSessionEvents(
+              sess.userId,
+              sess.platform,
+              sess.sessionId,
+              evtArr,
+            )
           : Promise.resolve(),
       ]);
     }),
   );
 
-  logger.info(`[app] Synced commands and events for ${allSessions.length} session(s)`);
+  logger.info(
+    `[app] Synced commands and events for ${allSessions.length} session(s)`,
+  );
 }
 
 // ── LRU pre-warm ──────────────────────────────────────────────────────────────
@@ -274,9 +202,15 @@ async function warmSessionAdminOnly(
     if (await botColl.isCollectionExist('session_settings')) {
       const h = await botColl.getCollection('session_settings');
       const settings = await h.getAll();
-      const enabled = settings['adminOnlyEnabled'] as boolean | null | undefined;
+      const enabled = settings['adminOnlyEnabled'] as
+        boolean | null | undefined;
       if (enabled !== null && enabled !== undefined) {
-        setCachedSessionAdminOnly(userId, platform, sessionId, enabled === true);
+        setCachedSessionAdminOnly(
+          userId,
+          platform,
+          sessionId,
+          enabled === true,
+        );
       }
     } else {
       setCachedSessionAdminOnly(userId, platform, sessionId, false);
@@ -405,17 +339,23 @@ async function main(): Promise<void> {
   const prewarmPromise = prewarmCache(sessionConfigs);
 
   // Warn about Telegram-incompatible command meta once at startup.
-  const hasTelegramSlashSession = sessionConfigs.telegram.some((c) => c.prefix === '/');
+  const hasTelegramSlashSession = sessionConfigs.telegram.some(
+    (c) => c.prefix === '/',
+  );
   if (hasTelegramSlashSession) {
     for (const [, mod] of commands) {
-      const cfg = mod['meta'] as { name?: string; description?: string } | undefined;
+      const cfg = mod['meta'] as
+        { name?: string; description?: string } | undefined;
       if (!cfg?.name) continue;
       if (cfg.name.includes('-')) {
         logger.warn(
           `[app] Telegram command name "${cfg.name}" contains hyphens — not supported, will be registered as "${cfg.name.replace(/-/g, '_')}"`,
         );
       }
-      if (cfg.description && /\p{Extended_Pictographic}/u.test(cfg.description)) {
+      if (
+        cfg.description &&
+        /\p{Extended_Pictographic}/u.test(cfg.description)
+      ) {
         logger.warn(
           `[app] Telegram command "${cfg.name}" description contains emoji — not supported, emoji will be stripped`,
         );
@@ -474,9 +414,11 @@ async function main(): Promise<void> {
       sessionPrefix === '/' &&
       threadPrefix !== undefined &&
       threadPrefix !== '/' &&
-      (native.platform === Platforms.Discord || native.platform === Platforms.Telegram)
+      (native.platform === Platforms.Discord ||
+        native.platform === Platforms.Telegram)
     ) {
-      const body = ((payload.event as Record<string, unknown>)['message'] ?? '') as string;
+      const body = ((payload.event as Record<string, unknown>)['message'] ??
+        '') as string;
       if (body.startsWith('/')) return '/';
     }
     return threadPrefix ?? sessionPrefix;
@@ -485,31 +427,61 @@ async function main(): Promise<void> {
   // ── Event routing ─────────────────────────────────────────────────────────
 
   platform.on('message', async (payload: Record<string, unknown>) => {
-    const native = payload.native as import('@/engine/types/controller.types.js').NativeContext;
-    const threadID = (payload.event as Record<string, unknown>)['threadID'] as string | undefined;
+    const native =
+      payload.native as import('@/engine/types/controller.types.js').NativeContext;
+    const threadID = (payload.event as Record<string, unknown>)['threadID'] as
+      string | undefined;
     const sessionPrefix = prefixManager.getPrefix(
       native.userId ?? '',
       native.platform,
       native.sessionId ?? '',
     );
     if (threadID) await restoreThreadPrefix(threadID, native);
-    const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
-    const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
-    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, livePrefix, native);
+    const threadPrefix = threadID
+      ? prefixManager.getThreadPrefix(threadID)
+      : undefined;
+    const livePrefix = resolveLivePrefix(
+      payload,
+      native,
+      sessionPrefix,
+      threadPrefix,
+    );
+    await handleMessage(
+      payload.api as UnifiedApi,
+      payload.event as Record<string, unknown>,
+      commands,
+      livePrefix,
+      native,
+    );
   });
 
   platform.on('message_reply', async (payload: Record<string, unknown>) => {
-    const native = payload.native as import('@/engine/types/controller.types.js').NativeContext;
-    const threadID = (payload.event as Record<string, unknown>)['threadID'] as string | undefined;
+    const native =
+      payload.native as import('@/engine/types/controller.types.js').NativeContext;
+    const threadID = (payload.event as Record<string, unknown>)['threadID'] as
+      string | undefined;
     const sessionPrefix = prefixManager.getPrefix(
       native.userId ?? '',
       native.platform,
       native.sessionId ?? '',
     );
     if (threadID) await restoreThreadPrefix(threadID, native);
-    const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
-    const livePrefix = resolveLivePrefix(payload, native, sessionPrefix, threadPrefix);
-    await handleMessage(payload.api as UnifiedApi, payload.event as Record<string, unknown>, commands, livePrefix, native);
+    const threadPrefix = threadID
+      ? prefixManager.getThreadPrefix(threadID)
+      : undefined;
+    const livePrefix = resolveLivePrefix(
+      payload,
+      native,
+      sessionPrefix,
+      threadPrefix,
+    );
+    await handleMessage(
+      payload.api as UnifiedApi,
+      payload.event as Record<string, unknown>,
+      commands,
+      livePrefix,
+      native,
+    );
   });
 
   platform.on('event', async (payload: Record<string, unknown>) => {
@@ -541,14 +513,18 @@ async function main(): Promise<void> {
   });
 
   platform.on('button_action', async (payload: Record<string, unknown>) => {
-    const native = payload.native as import('@/engine/types/controller.types.js').NativeContext;
-    const threadID = (payload.event as Record<string, unknown>)['threadID'] as string | undefined;
+    const native =
+      payload.native as import('@/engine/types/controller.types.js').NativeContext;
+    const threadID = (payload.event as Record<string, unknown>)['threadID'] as
+      string | undefined;
     const sessionPrefix = prefixManager.getPrefix(
       native.userId ?? '',
       native.platform,
       native.sessionId ?? '',
     );
-    const threadPrefix = threadID ? prefixManager.getThreadPrefix(threadID) : undefined;
+    const threadPrefix = threadID
+      ? prefixManager.getThreadPrefix(threadID)
+      : undefined;
     await handleButtonAction(
       payload.api as UnifiedApi,
       payload.event as Record<string, unknown>,
@@ -575,7 +551,10 @@ async function main(): Promise<void> {
   // Sync command/event names to the DB for dashboard display — runs in the
   // background so the bot starts accepting messages without waiting for DB writes.
   void syncCommandsAndEvents(commands, eventModules, sessionConfigs).catch(
-    (err) => logger.warn('[app] Background syncCommandsAndEvents failed', { error: err }),
+    (err) =>
+      logger.warn('[app] Background syncCommandsAndEvents failed', {
+        error: err,
+      }),
   );
 
   // Start the webhook/API server lazily in the background. Loading the server
@@ -593,22 +572,31 @@ async function main(): Promise<void> {
   // round-trips. Refreshing on a 10-min cadence — below the TTL — guarantees a
   // warm cache for the first command after any downtime. unref() so the timer
   // never keeps the process alive on its own.
-  setInterval(() => {
-    void prewarmCache(sessionConfigs);
-  }, 10 * 60 * 1000).unref();
+  setInterval(
+    () => {
+      void prewarmCache(sessionConfigs);
+    },
+    10 * 60 * 1000,
+  ).unref();
 }
 
 // ── Signal handlers ───────────────────────────────────────────────────────────
 // Registered once here so N platform sessions never stack duplicate listeners.
 
 async function handleShutdown(signal: string, exitCode: number): Promise<void> {
-  logger.info(`🛑 [app] Received ${signal} — stopping all platform sessions...`);
+  logger.info(
+    `🛑 [app] Received ${signal} — stopping all platform sessions...`,
+  );
   await sessionManager.stopAll(signal);
   process.exit(exitCode);
 }
 
-process.once('SIGINT', () => { void handleShutdown('SIGINT', 0); });
-process.once('SIGTERM', () => { void handleShutdown('SIGTERM', 0); });
+process.once('SIGINT', () => {
+  void handleShutdown('SIGINT', 0);
+});
+process.once('SIGTERM', () => {
+  void handleShutdown('SIGTERM', 0);
+});
 // NOTE: `on`, not `once` — a one-shot listener silently disarms after the
 // first event, and the *second* unhandled rejection then kills the process
 // with no log line at all.

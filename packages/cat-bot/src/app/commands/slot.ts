@@ -19,12 +19,26 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
+import { parseBetAmount } from '@/engine/utils/bet.util.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SLOT_EMOJIS = [
-  '🍒', '🍋', '🍇', '🍉', '🍀', '⭐', '🌙', '🔔',
-  '💰', '💎', '🍍', '🍓', '🎰', '🪙', '🍊',
+  '🍒',
+  '🍋',
+  '🍇',
+  '🍉',
+  '🍀',
+  '⭐',
+  '🌙',
+  '🔔',
+  '💰',
+  '💎',
+  '🍍',
+  '🍓',
+  '🎰',
+  '🪙',
+  '🍊',
 ];
 const REEL_COUNT = 3;
 
@@ -55,23 +69,10 @@ export const meta: CommandMeta = {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-function parseBet(raw: string, balance: number): number {
-  const v = raw.trim().toLowerCase().replace(/,/g, '');
-  if (v === 'all' || v === 'max') return Math.floor(balance);
-  if (v === 'half') return Math.floor(balance / 2);
-
-  const m = v.match(/^(\d+(?:\.\d+)?)([kmb])?$/i);
-  if (!m) return NaN;
-  const amount = Number(m[1]);
-  const suffix = m[2]?.toLowerCase();
-  const mult =
-    suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : suffix === 'b' ? 1_000_000_000 : 1;
-  return Math.floor(amount * mult);
-}
-
 function spinReels(): string[] {
-  return Array.from({ length: REEL_COUNT }, () =>
-    SLOT_EMOJIS[Math.floor(Math.random() * SLOT_EMOJIS.length)]!,
+  return Array.from(
+    { length: REEL_COUNT },
+    () => SLOT_EMOJIS[Math.floor(Math.random() * SLOT_EMOJIS.length)]!,
   );
 }
 
@@ -128,7 +129,11 @@ async function getStats(db: AppCtx['db'], uid: string): Promise<SlotStats> {
   };
 }
 
-async function saveStats(db: AppCtx['db'], uid: string, stats: SlotStats): Promise<void> {
+async function saveStats(
+  db: AppCtx['db'],
+  uid: string,
+  stats: SlotStats,
+): Promise<void> {
   const userColl = db.users.collection(uid);
   if (!(await userColl.isCollectionExist('slot'))) {
     await userColl.createCollection('slot');
@@ -182,7 +187,9 @@ export const button = {
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
         message: ctx.resultMessage,
-        ...(hasNativeButtons(native.platform) ? { button: [ctx.balanceId] } : {}),
+        ...(hasNativeButtons(native.platform)
+          ? { button: [ctx.balanceId] }
+          : {}),
       });
     },
   },
@@ -216,7 +223,7 @@ export const onCommand = async ({
   }
 
   const balance = await currencies.getMoney(senderID);
-  const bet = parseBet(rawBet, balance);
+  const bet = parseBetAmount(rawBet, balance);
 
   if (isNaN(bet) || bet <= 0) {
     await chat.replyMessage({
@@ -246,7 +253,8 @@ export const onCommand = async ({
   const newStats: SlotStats = {
     totalSpins: stats.totalSpins + 1,
     totalEarned: stats.totalEarned + (isWin ? coinDelta : 0),
-    totalLost: stats.totalLost + (!isWin && !isBreakEven ? Math.abs(coinDelta) : 0),
+    totalLost:
+      stats.totalLost + (!isWin && !isBreakEven ? Math.abs(coinDelta) : 0),
     jackpots: stats.jackpots + (matches === 3 ? 1 : 0),
   };
 
@@ -254,7 +262,10 @@ export const onCommand = async ({
   if (isWin) {
     await currencies.increaseMoney({ user_id: senderID, money: coinDelta });
   } else if (!isBreakEven) {
-    await currencies.decreaseMoney({ user_id: senderID, money: Math.abs(coinDelta) });
+    await currencies.decreaseMoney({
+      user_id: senderID,
+      money: Math.abs(coinDelta),
+    });
   }
   await saveStats(db, senderID, newStats);
 
@@ -294,8 +305,14 @@ export const onCommand = async ({
   const ctx: CtxData = { resultMessage, balanceId, backId };
 
   // Cast context payloads to expected generic Record<string, unknown>
-  btn.createContext({ id: balanceId, context: ctx as unknown as Record<string, unknown> });
-  btn.createContext({ id: backId, context: ctx as unknown as Record<string, unknown> });
+  btn.createContext({
+    id: balanceId,
+    context: ctx as unknown as Record<string, unknown>,
+  });
+  btn.createContext({
+    id: backId,
+    context: ctx as unknown as Record<string, unknown>,
+  });
 
   await chat.replyMessage({
     style: MessageStyle.MARKDOWN,

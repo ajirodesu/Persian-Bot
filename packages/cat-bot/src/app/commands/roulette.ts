@@ -22,10 +22,13 @@ import { ButtonStyle } from '@/engine/constants/button-style.constants.js';
 import { hasNativeButtons } from '@/engine/utils/ui-capabilities.util.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
+import { parseBetAmount } from '@/engine/utils/bet.util.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const REDS = new Set([
+  1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
+]);
 
 type RouletteColor = 'red' | 'black' | 'green';
 
@@ -72,20 +75,6 @@ export const meta: CommandMeta = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function parseBet(raw: string, balance: number): number {
-  const v = raw.trim().toLowerCase().replace(/,/g, '');
-  if (v === 'all' || v === 'max') return Math.floor(balance);
-  if (v === 'half') return Math.floor(balance / 2);
-
-  const m = v.match(/^(\d+(?:\.\d+)?)([kmb])?$/i);
-  if (!m) return NaN;
-  const amount = Number(m[1]);
-  const suffix = m[2]?.toLowerCase();
-  const mult =
-    suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : suffix === 'b' ? 1_000_000_000 : 1;
-  return Math.floor(amount * mult);
-}
 
 function rollWheel(): { color: RouletteColor; number: number } {
   const num = Math.floor(Math.random() * 37); // 0–36
@@ -151,7 +140,9 @@ export const button = {
         style: MessageStyle.MARKDOWN,
         message_id_to_edit: event['messageID'] as string,
         message: ctx.resultMessage,
-        ...(hasNativeButtons(native.platform) ? { button: [ctx.balanceId] } : {}),
+        ...(hasNativeButtons(native.platform)
+          ? { button: [ctx.balanceId] }
+          : {}),
       });
     },
   },
@@ -208,7 +199,7 @@ export const onCommand = async ({
   }
 
   const balance = await currencies.getMoney(senderID);
-  const bet = parseBet(rawBet, balance);
+  const bet = parseBetAmount(rawBet, balance);
 
   if (isNaN(bet) || bet <= 0) {
     await chat.replyMessage({
@@ -242,7 +233,9 @@ export const onCommand = async ({
   const resultEmoji = COLOR_EMOJIS[result.color];
   const guessEmoji = COLOR_EMOJIS[rawColor];
   const guessDisplay = `${guessEmoji} **${rawColor}**${guessNumber !== null ? ` (${guessNumber})` : ''}`;
-  const balSign = won ? `+${(payout - bet).toLocaleString()}` : `-${bet.toLocaleString()}`;
+  const balSign = won
+    ? `+${(payout - bet).toLocaleString()}`
+    : `-${bet.toLocaleString()}`;
 
   const resultMessage = [
     `🎰 **Roulette**`,
@@ -264,8 +257,14 @@ export const onCommand = async ({
   const ctx: CtxData = { resultMessage, balanceId, backId };
 
   // Cast context payloads to expected generic Record<string, unknown>
-  btn.createContext({ id: balanceId, context: ctx as unknown as Record<string, unknown> });
-  btn.createContext({ id: backId, context: ctx as unknown as Record<string, unknown> });
+  btn.createContext({
+    id: balanceId,
+    context: ctx as unknown as Record<string, unknown>,
+  });
+  btn.createContext({
+    id: backId,
+    context: ctx as unknown as Record<string, unknown>,
+  });
 
   await chat.replyMessage({
     style: MessageStyle.MARKDOWN,

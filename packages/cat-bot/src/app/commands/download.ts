@@ -16,11 +16,10 @@ import { OptionType } from '@/engine/modules/command/command-option.constants.js
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import { createUrl } from '@/engine/lib/apis.lib.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import { withTypingIndicator } from '@/engine/lib/typing-indicator.lib.js';
 import { withRetry, isNetworkError } from '@/engine/lib/retry.lib.js';
 import { lruCache } from '@/engine/lib/lru-cache.lib.js';
+import { isPrivilegedUser } from '@/engine/services/commands/thread-privileges.service.js';
 
 /**
  * Command metadata for the unified downloader command.
@@ -149,7 +148,9 @@ function isFacebookLink(url: URL): boolean {
   if (host === 'fb.watch') return true;
   if (host !== 'facebook.com' && !host.endsWith('.facebook.com')) return false;
   if (url.pathname === '/watch') return true;
-  return /\/(reel|reels|videos|story\.php|share\/[rv])(\/|$)/i.test(url.pathname);
+  return /\/(reel|reels|videos|story\.php|share\/[rv])(\/|$)/i.test(
+    url.pathname,
+  );
 }
 
 /**
@@ -160,7 +161,8 @@ function isFacebookLink(url: URL): boolean {
  */
 function isInstagramLink(url: URL): boolean {
   const host = stripLeadingSubdomains(url.hostname.toLowerCase());
-  if (host !== 'instagram.com' && !host.endsWith('.instagram.com')) return false;
+  if (host !== 'instagram.com' && !host.endsWith('.instagram.com'))
+    return false;
   return /\/(p|reel|reels|tv)\//i.test(url.pathname);
 }
 
@@ -199,7 +201,10 @@ function isTikTokLink(url: URL): boolean {
   const host = url.hostname.toLowerCase();
   if (host === 'vt.tiktok.com' || host === 'vm.tiktok.com') return true;
   if (!host.endsWith('tiktok.com')) return false;
-  return /\/video\//i.test(url.pathname) || /\/@[^/]+\/(video|photo)\//i.test(url.pathname);
+  return (
+    /\/video\//i.test(url.pathname) ||
+    /\/@[^/]+\/(video|photo)\//i.test(url.pathname)
+  );
 }
 
 /**
@@ -221,8 +226,10 @@ function matchSupportedPlatform(rawCandidate: string): MatchedLink | null {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
 
   if (isFacebookLink(url)) return { platform: 'facebook', url: url.toString() };
-  if (isInstagramLink(url)) return { platform: 'instagram', url: url.toString() };
-  if (isPinterestLink(url)) return { platform: 'pinterest', url: url.toString() };
+  if (isInstagramLink(url))
+    return { platform: 'instagram', url: url.toString() };
+  if (isPinterestLink(url))
+    return { platform: 'pinterest', url: url.toString() };
   if (isXLink(url)) return { platform: 'x', url: url.toString() };
   if (isTikTokLink(url)) return { platform: 'tiktok', url: url.toString() };
   return null;
@@ -236,7 +243,9 @@ const URL_TOKEN_RE = /https?:\/\/[^\s<>"'()[\]]+/gi;
  * @param text - Message or quoted text to scan.
  * @returns The first matched supported link, or null if none found.
  */
-function extractSupportedLink(text: string | null | undefined): MatchedLink | null {
+function extractSupportedLink(
+  text: string | null | undefined,
+): MatchedLink | null {
   if (!text) return null;
   const tokens = text.match(URL_TOKEN_RE);
   if (!tokens) return null;
@@ -300,7 +309,10 @@ const NEXRAY_HEADERS = {
  * @returns Parsed JSON response body.
  * @throws When the request ultimately fails, or the API reports `status: false`.
  */
-async function requestJson<T>(platform: PlatformId, sourceUrl: string): Promise<T> {
+async function requestJson<T>(
+  platform: PlatformId,
+  sourceUrl: string,
+): Promise<T> {
   const cacheKey = `download:${platform}:${sourceUrl}`;
   const cached = lruCache.get<T>(cacheKey);
   if (cached !== undefined) return cached;
@@ -316,17 +328,25 @@ async function requestJson<T>(platform: PlatformId, sourceUrl: string): Promise<
       });
 
       if (res.status >= 400) {
-        const err = new Error(`Nexray API returned HTTP ${res.status}`) as Error & {
+        const err = new Error(
+          `Nexray API returned HTTP ${res.status}`,
+        ) as Error & {
           status?: number;
         };
         err.status = res.status;
         throw err;
       }
 
-      const body = res.data as { status?: boolean; message?: string; error?: string };
+      const body = res.data as {
+        status?: boolean;
+        message?: string;
+        error?: string;
+      };
       if (body?.status === false) {
         throw new Error(
-          body.message || body.error || 'The API reported that this link could not be processed.',
+          body.message ||
+            body.error ||
+            'The API reported that this link could not be processed.',
         );
       }
 
@@ -352,12 +372,16 @@ async function requestJson<T>(platform: PlatformId, sourceUrl: string): Promise<
  * @returns Normalized media items ready for attachments.
  * @throws When the remote API does not return downloadable media.
  */
-async function fetchMedia(platform: PlatformId, sourceUrl: string): Promise<MediaItem[]> {
+async function fetchMedia(
+  platform: PlatformId,
+  sourceUrl: string,
+): Promise<MediaItem[]> {
   if (platform === 'facebook') {
     const data = await requestJson<any>(platform, sourceUrl);
     const result = data?.result;
     const videoUrl = result?.video_hd || result?.video_sd;
-    if (!videoUrl) throw new Error('No downloadable video found for this Facebook link.');
+    if (!videoUrl)
+      throw new Error('No downloadable video found for this Facebook link.');
     return [{ type: 'video', url: videoUrl }];
   }
 
@@ -367,7 +391,11 @@ async function fetchMedia(platform: PlatformId, sourceUrl: string): Promise<Medi
     // (one entry per video/image — carousels return multiple entries), but
     // defensively accept a single object too in case the shape ever changes.
     const rawResult = data?.result;
-    const result: any[] = Array.isArray(rawResult) ? rawResult : rawResult ? [rawResult] : [];
+    const result: any[] = Array.isArray(rawResult)
+      ? rawResult
+      : rawResult
+        ? [rawResult]
+        : [];
 
     const items: MediaItem[] = result
       .map((entry: any) => ({
@@ -376,13 +404,22 @@ async function fetchMedia(platform: PlatformId, sourceUrl: string): Promise<Medi
         // or `video`/`image` instead — fall back through the common variants.
         url: entry?.url || entry?.download_url || entry?.video || entry?.image,
       }))
-      .filter((entry): entry is { type: unknown; url: string } => typeof entry.url === 'string' && entry.url.length > 0)
+      .filter(
+        (entry): entry is { type: unknown; url: string } =>
+          typeof entry.url === 'string' && entry.url.length > 0,
+      )
       .map((entry) => ({
-        type: entry.type === 'video' ? 'video' : entry.type === 'audio' ? 'audio' : 'image',
+        type:
+          entry.type === 'video'
+            ? 'video'
+            : entry.type === 'audio'
+              ? 'audio'
+              : 'image',
         url: entry.url,
       }));
 
-    if (!items.length) throw new Error('No downloadable media found for this Instagram link.');
+    if (!items.length)
+      throw new Error('No downloadable media found for this Instagram link.');
     return items;
   }
 
@@ -418,11 +455,15 @@ async function fetchMedia(platform: PlatformId, sourceUrl: string): Promise<Medi
 
   const data = await requestJson<any>(platform, sourceUrl);
   const result = data?.result;
-  if (!result) throw new Error('No downloadable media found for this TikTok link.');
+  if (!result)
+    throw new Error('No downloadable media found for this TikTok link.');
 
   if (result.data) return [{ type: 'video', url: result.data }];
   if (Array.isArray(result.images) && result.images.length) {
-    return result.images.map((imageUrl: string) => ({ type: 'image', url: imageUrl }));
+    return result.images.map((imageUrl: string) => ({
+      type: 'image',
+      url: imageUrl,
+    }));
   }
 
   throw new Error('No downloadable media found for this TikTok link.');
@@ -488,7 +529,9 @@ async function downloadAttachment(
     return { name, stream: buffer };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.warn(`[download] failed to fetch media binary for "${name}": ${message}`);
+    logger.warn(
+      `[download] failed to fetch media binary for "${name}": ${message}`,
+    );
     return null;
   }
 }
@@ -508,7 +551,9 @@ async function runDownload(
   const label = PLATFORM_LABELS[matched.platform];
 
   const isButtonAction = ctx.event['type'] === 'button_action';
-  const loadingId = isButtonAction ? (ctx.event['messageID'] as string | undefined) : undefined;
+  const loadingId = isButtonAction
+    ? (ctx.event['messageID'] as string | undefined)
+    : undefined;
 
   /**
    * Delivers the final payload, editing the triggering message when possible.
@@ -530,7 +575,10 @@ async function runDownload(
   };
 
   try {
-    const media = (await fetchMedia(matched.platform, matched.url)).slice(0, 10);
+    const media = (await fetchMedia(matched.platform, matched.url)).slice(
+      0,
+      10,
+    );
 
     const downloaded = await Promise.all(
       media.map((item, index) =>
@@ -546,7 +594,9 @@ async function runDownload(
     );
 
     if (!attachment.length) {
-      throw new Error('The media link(s) could not be downloaded — the source may be unavailable.');
+      throw new Error(
+        'The media link(s) could not be downloaded — the source may be unavailable.',
+      );
     }
 
     await deliver({
@@ -619,45 +669,6 @@ async function getAutoDetectHandle(db: AppCtx['db'], threadID: string) {
     return fresh;
   }
   return coll.getCollection('download_autodetect');
-}
-
-/**
- * Best-effort thread admin check using thread.getInfo().
- *
- * @param thread - Thread context.
- * @param senderID - Sender to validate.
- * @returns True when the sender is an admin in the thread.
- */
-async function isThreadAdmin(thread: AppCtx['thread'], senderID: string): Promise<boolean> {
-  try {
-    const info = (await thread.getInfo()) as unknown as Record<string, unknown>;
-    const adminIDs = info['adminIDs'] as Array<string | { uid: string }> | undefined;
-    if (!Array.isArray(adminIDs)) return false;
-    return adminIDs.some((a) => (typeof a === 'string' ? a : a.uid) === senderID);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Checks whether a user may change thread-level downloader settings.
- *
- * @param thread - Thread context.
- * @param native - Native platform context.
- * @param senderID - Sender to validate.
- * @returns True when the sender is privileged.
- */
-async function isPrivilegedUser(
-  thread: AppCtx['thread'],
-  native: AppCtx['native'],
-  senderID: string,
-): Promise<boolean> {
-  if (await isSystemAdmin(senderID)) return true;
-  const { userId, platform, sessionId } = native;
-  if (userId && platform && sessionId) {
-    if (await isBotAdmin(userId, platform, sessionId, senderID)) return true;
-  }
-  return isThreadAdmin(thread, senderID);
 }
 
 /**
@@ -757,7 +768,8 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
   }
 
   if (!matched) {
-    const messageReply = event['messageReply'] as Record<string, unknown> | undefined;
+    const messageReply = event['messageReply'] as
+      Record<string, unknown> | undefined;
     const quotedBody = messageReply?.['message'] as string | undefined;
     const fromQuoted = extractSupportedLink(quotedBody);
     if (fromQuoted) {
@@ -768,7 +780,10 @@ export const onCommand = async (ctx: AppCtx): Promise<void> => {
 
   if (!matched) {
     if (hadUrlLikeInput) {
-      await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: UNSUPPORTED_LINK_MESSAGE });
+      await chat.replyMessage({
+        style: MessageStyle.MARKDOWN,
+        message: UNSUPPORTED_LINK_MESSAGE,
+      });
       return;
     }
 
@@ -791,7 +806,8 @@ export const onChat = async (ctx: AppCtx): Promise<void> => {
   const { event, db, prefix, bot, commands } = ctx;
 
   const eventType = event['type'] as string | undefined;
-  if (eventType && eventType !== 'message' && eventType !== 'message_reply') return;
+  if (eventType && eventType !== 'message' && eventType !== 'message_reply')
+    return;
 
   const message = (event['message'] as string | undefined)?.trim();
   if (!message) return;

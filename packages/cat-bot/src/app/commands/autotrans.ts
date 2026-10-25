@@ -31,8 +31,7 @@ import type { AppCtx } from '@/engine/types/controller.types.js';
 import { Role } from '@/engine/constants/role.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
+import { isPrivilegedUser } from '@/engine/services/commands/thread-privileges.service.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +41,8 @@ export const meta: CommandMeta = {
   version: '1.0.0',
   role: Role.ANYONE,
   author: 'AjiroDesu',
-  description: 'Auto-translate any language into a chosen target language for this chat.',
+  description:
+    'Auto-translate any language into a chosen target language for this chat.',
   category: 'Utility',
   usage: '[on | off | set <lang>]',
   cooldown: 5,
@@ -97,7 +97,10 @@ async function getAutoTranslateHandle(db: AppCtx['db'], threadID: string) {
  * @param threadID - Thread ID used as the collection namespace.
  * @returns True when auto-translate is enabled for the thread.
  */
-async function isAutoTransEnabled(db: AppCtx['db'], threadID: string): Promise<boolean> {
+async function isAutoTransEnabled(
+  db: AppCtx['db'],
+  threadID: string,
+): Promise<boolean> {
   const handle = await getAutoTranslateHandle(db, threadID);
   const enabled = (await handle.get('enabled')) as boolean | null;
   return enabled === true;
@@ -110,55 +113,25 @@ async function isAutoTransEnabled(db: AppCtx['db'], threadID: string): Promise<b
  * @param threadID - Thread ID used as the collection namespace.
  * @returns The target language code to translate into.
  */
-async function getTargetLang(db: AppCtx['db'], threadID: string): Promise<string> {
+async function getTargetLang(
+  db: AppCtx['db'],
+  threadID: string,
+): Promise<string> {
   const handle = await getAutoTranslateHandle(db, threadID);
   const stored = (await handle.get('targetLang')) as string | null;
-  return stored && stored.trim() ? stored.trim().toLowerCase() : DEFAULT_TARGET_LANG;
-}
-
-/**
- * Best-effort thread admin check using thread.getInfo().
- *
- * @param thread - Thread context.
- * @param senderID - Sender to validate.
- * @returns True when the sender is an admin in the thread.
- */
-async function isThreadAdmin(thread: AppCtx['thread'], senderID: string): Promise<boolean> {
-  try {
-    const info = (await thread.getInfo()) as unknown as Record<string, unknown>;
-    const adminIDs = info['adminIDs'] as Array<string | { uid: string }> | undefined;
-    if (!Array.isArray(adminIDs)) return false;
-    return adminIDs.some((a) => (typeof a === 'string' ? a : a.uid) === senderID);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Checks whether a user may change thread-level auto-translate settings.
- *
- * @param thread - Thread context.
- * @param native - Native platform context.
- * @param senderID - Sender to validate.
- * @returns True when the sender is privileged.
- */
-async function isPrivilegedUser(
-  thread: AppCtx['thread'],
-  native: AppCtx['native'],
-  senderID: string,
-): Promise<boolean> {
-  if (await isSystemAdmin(senderID)) return true;
-  const { userId, platform, sessionId } = native;
-  if (userId && platform && sessionId) {
-    if (await isBotAdmin(userId, platform, sessionId, senderID)) return true;
-  }
-  return isThreadAdmin(thread, senderID);
+  return stored && stored.trim()
+    ? stored.trim().toLowerCase()
+    : DEFAULT_TARGET_LANG;
 }
 
 // ── Google Translate helper ───────────────────────────────────────────────────
 
 /** Translates `text` from `source` to `target`; null on any error / odd shape. */
-async function translate(text: string, source: string, target: string): Promise<string | null> {
+async function translate(
+  text: string,
+  source: string,
+  target: string,
+): Promise<string | null> {
   try {
     const { data } = await axios.get<unknown>(GTX_ENDPOINT, {
       timeout: REQUEST_TIMEOUT,
@@ -175,7 +148,10 @@ async function translate(text: string, source: string, target: string): Promise<
 }
 
 /** Detects the source language code via a cheap auto→target call. */
-async function detectLanguage(text: string, target: string): Promise<string | null> {
+async function detectLanguage(
+  text: string,
+  target: string,
+): Promise<string | null> {
   try {
     const { data } = await axios.get<unknown>(GTX_ENDPOINT, {
       timeout: REQUEST_TIMEOUT,
@@ -217,7 +193,8 @@ export const onCommand = async ({
       if (!(await isPrivilegedUser(thread, native, senderID))) {
         await chat.replyMessage({
           style: MessageStyle.MARKDOWN,
-          message: '⚠️ Only admins can change auto-translate settings in a group.',
+          message:
+            '⚠️ Only admins can change auto-translate settings in a group.',
         });
         return;
       }
@@ -259,7 +236,8 @@ export const onCommand = async ({
       if (!(await isPrivilegedUser(thread, native, senderID))) {
         await chat.replyMessage({
           style: MessageStyle.MARKDOWN,
-          message: '⚠️ Only admins can change auto-translate settings in a group.',
+          message:
+            '⚠️ Only admins can change auto-translate settings in a group.',
         });
         return;
       }
@@ -277,7 +255,8 @@ export const onCommand = async ({
       if (!(await isPrivilegedUser(thread, native, senderID))) {
         await chat.replyMessage({
           style: MessageStyle.MARKDOWN,
-          message: '⚠️ Only admins can change auto-translate settings in a group.',
+          message:
+            '⚠️ Only admins can change auto-translate settings in a group.',
         });
         return;
       }
@@ -309,7 +288,9 @@ export const onCommand = async ({
 export const onChat = async (ctx: AppCtx): Promise<void> => {
   const text = ((ctx.event['message'] as string | undefined) || '').trim();
   const threadID = (ctx.event['threadID'] ?? '') as string;
-  const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
+  const senderID = (ctx.event['senderID'] ??
+    ctx.event['userID'] ??
+    '') as string;
   if (!text || !threadID || !HAS_TEXT.test(text)) return;
 
   if (!(await isAutoTransEnabled(ctx.db, threadID))) return;

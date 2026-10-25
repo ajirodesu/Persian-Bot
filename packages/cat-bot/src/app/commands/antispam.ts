@@ -37,14 +37,13 @@ import { kickRegistry } from '@/engine/lib/kick-registry.lib.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import { MessageStyle } from '@/engine/constants/message-style.constants.js';
 import { OptionType } from '@/engine/modules/command/command-option.constants.js';
-import { isBotAdmin } from '@/engine/repos/credentials.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
 import type { CommandMeta } from '@/engine/types/module-meta.types.js';
 import {
   recordMessageAndCheckSpam,
   resetSpamTracking,
   ANTISPAM_WINDOW_MS,
 } from '@/engine/lib/antispam-tracker.lib.js';
+import { isPrivilegedUser } from '@/engine/services/commands/thread-privileges.service.js';
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -88,39 +87,6 @@ export const meta: CommandMeta = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Best-effort thread-admin check via thread.getInfo(). */
-async function isThreadAdmin(
-  thread: AppCtx['thread'],
-  senderID: string,
-): Promise<boolean> {
-  try {
-    const info = (await thread.getInfo()) as unknown as Record<string, unknown>;
-    const adminIDs = info['adminIDs'] as
-      | Array<string | { uid: string }>
-      | undefined;
-    if (!Array.isArray(adminIDs)) return false;
-    return adminIDs.some(
-      (a) => (typeof a === 'string' ? a : a.uid) === senderID,
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** True if the sender is a thread admin, bot admin, OR system admin. */
-async function isPrivilegedUser(
-  thread: AppCtx['thread'],
-  native: AppCtx['native'],
-  senderID: string,
-): Promise<boolean> {
-  if (await isSystemAdmin(senderID)) return true;
-  const { userId, platform, sessionId } = native;
-  if (userId && platform && sessionId) {
-    if (await isBotAdmin(userId, platform, sessionId, senderID)) return true;
-  }
-  return isThreadAdmin(thread, senderID);
-}
 
 /** Returns (and lazily creates) the 'antispam' collection handle for a thread. */
 async function getAntispamHandle(db: AppCtx['db'], threadID: string) {

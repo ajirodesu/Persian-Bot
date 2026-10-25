@@ -1,0 +1,63 @@
+/**
+ * /adminonly — session-wide admin-only mode.
+ *
+ * Thin command module: metadata and registration only. The toggle flow lives
+ * in the shared admin-only settings service.
+ */
+
+import type { AppCtx } from '@/engine/types/controller.types.js';
+import { Role } from '@/engine/constants/role.constants.js';
+import { OptionType } from '@/engine/modules/command/command-option.constants.js';
+import { Platforms } from '@/engine/modules/platform/platform.constants.js';
+import type { CommandMeta } from '@/engine/types/module-meta.types.js';
+import {
+  runAdminOnlyToggle,
+  type AdminOnlyToggleConfig,
+} from '@/engine/services/commands/admin-only-settings.service.js';
+
+const config = {
+  scope: 'session',
+  enabledField: 'adminOnlyEnabled',
+  hideNotiField: 'adminOnlyHideNoti',
+  ignoreListField: 'adminOnlyIgnoreList',
+  scopeLabel: 'session',
+  enabledLabel: 'Admin-only mode',
+  audienceLabel: 'across all threads',
+  requiresGroup: false,
+  adminKind: 'bot',
+} satisfies AdminOnlyToggleConfig;
+
+export const meta: CommandMeta = {
+  name: 'adminonly',
+  aliases: ['adonly', 'onlyad', 'onlyadmin'],
+  version: '1.5.0',
+  role: Role.BOT_ADMIN,
+  author: 'NTKhang (Cat-Bot port)',
+  description:
+    'Turn on/off the mode where only bot admins can use the bot (session-wide).',
+  category: 'Bot Admin',
+  usage: [
+    '[on | off] — Enable/disable admin-only mode mode for this session',
+    'noti [on | off] — Enable/disable the blocked-user notification',
+  ],
+  cooldown: 5,
+  hasPrefix: true,
+  platform: [Platforms.Discord, Platforms.Telegram],
+  options: [
+    {
+      type: OptionType.string,
+      name: 'toggle',
+      description: 'on or off — enable/disable admin-only mode mode',
+      required: false,
+    },
+    {
+      type: OptionType.string,
+      name: 'noti',
+      description: 'noti on | noti off — toggle blocked-user notification',
+      required: false,
+    },
+  ],
+};
+
+export const onCommand = async (ctx: AppCtx): Promise<void> =>
+  runAdminOnlyToggle(ctx, config);
