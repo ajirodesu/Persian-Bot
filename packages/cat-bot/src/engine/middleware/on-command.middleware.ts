@@ -22,6 +22,7 @@ import {
   getCachedThreadAdminBox,
   setCachedThreadAdminBox,
 } from '@/engine/lib/admin-only-state.lib.js';
+import type { BaseCtx } from '@/engine/types/controller.types.js';
 import {
   getMaintenanceModeEnabled,
   peekMaintenanceModeEnabled,
@@ -255,10 +256,10 @@ export const enforcePermission: MiddlewareFn<OnCommandCtx> = function (
  * Both support an ignoreList and optional hideNoti. Fail-open on any DB error.
  * Uses a fast-path LRU cache to skip DB reads when both modes are known-off.
  */
-export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = function (
+export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = async function (
   ctx,
   next,
-): Promise<void> | void {
+): Promise<void> {
   const sessionUserId = ctx.native.userId ?? '';
   const sessionId = ctx.native.sessionId ?? '';
   const platform = ctx.native.platform;
@@ -272,9 +273,14 @@ export const enforceAdminOnly: MiddlewareFn<OnCommandCtx> = function (
   // Fast-path: skip all async reads when both modes are known-off for Role.ANYONE commands.
   const cmdRole = (cfg?.['role'] as number | undefined) ?? Role.ANYONE;
   if (cmdRole === Role.ANYONE && sessionUserId && sessionId) {
-    const sessOff = getCachedSessionAdminOnly(sessionUserId, platform, sessionId) === false;
-    const threadOff = !threadID || getCachedThreadAdminBox(sessionUserId, platform, sessionId, threadID) === false;
-    if (sessOff && threadOff) return next();
+    const sessOff =
+      getCachedSessionAdminOnly(sessionUserId, platform, sessionId) === false;
+    if (sessOff) {
+      if (!threadID) return next();
+      const known = await awaitThreadAdminBox(ctx, threadID);
+      if (known === false) return next();
+      // Unknown or enabled: fall through to the authoritative full check.
+    }
   }
 
   return (async (): Promise<void> => {
@@ -416,6 +422,79 @@ export const enforceMaintenanceMode: MiddlewareFn<OnCommandCtx> = function (
  * Bot admins and system admins bypass the check. Fail-open on DB errors.
  * Both ban checks run in parallel to save one DB round-trip.
  */
+// ── Thread admin-box prefetch ────────────────────────────────────────────────
+// The ban gate and the admin-only gate both need a DB read on a cold thread.
+// Start the admin-box read at the top of the ban gate so the two round-trips
+// overlap instead of running back-to-back. In-flight reads are shared, so
+// enforceAdminOnly awaits the same promise rather than issuing a duplicate.
+
+const threadBoxInflight = new Map<string, Promise<boolean>>()
+
+function threadBoxKey(
+  userId: string,
+  platform: string,
+  sessionId: string,
+  threadId: string,
+): string {
+  return `${userId}:${platform}:${sessionId}:${threadId}`
+}
+
+function prefetchThreadAdminBox(
+  ctx: BaseCtx,
+  threadID: string,
+): Promise<boolean> {
+  const userId = ctx.native.userId ?? ''
+  const platform = ctx.native.platform
+  const sessionId = ctx.native.sessionId ?? ''
+  const cached = getCachedThreadAdminBox(userId, platform, sessionId, threadID)
+  if (cached !== undefined) return Promise.resolve(cached)
+
+  const key = threadBoxKey(userId, platform, sessionId, threadID)
+  const existing = threadBoxInflight.get(key)
+  if (existing) return existing
+
+  const task = (async (): Promise<boolean> => {
+    try {
+      const coll = ctx.db.threads.collection(threadID)
+      if (await coll.isCollectionExist('adminbox_settings')) {
+        const h = await coll.getCollection('adminbox_settings')
+        const settings = await h.getAll()
+        const enabled = settings['enabled'] as boolean | null | undefined
+        const value = enabled === true
+        if (enabled !== null && enabled !== undefined) {
+          setCachedThreadAdminBox(userId, platform, sessionId, threadID, value)
+        }
+        return value
+      }
+      setCachedThreadAdminBox(userId, platform, sessionId, threadID, false)
+      return false
+    } catch {
+      // Fail-open: do not cache, so the next dispatch retries the read.
+      return false
+    } finally {
+      threadBoxInflight.delete(key)
+    }
+  })()
+
+  threadBoxInflight.set(key, task)
+  return task
+}
+
+async function awaitThreadAdminBox(
+  ctx: BaseCtx,
+  threadID: string,
+): Promise<boolean | undefined> {
+  const userId = ctx.native.userId ?? ''
+  const platform = ctx.native.platform
+  const sessionId = ctx.native.sessionId ?? ''
+  const cached = getCachedThreadAdminBox(userId, platform, sessionId, threadID)
+  if (cached !== undefined) return cached
+  const key = threadBoxKey(userId, platform, sessionId, threadID)
+  const pending = threadBoxInflight.get(key)
+  if (pending) return pending
+  return undefined
+}
+
 export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = function (
   ctx,
   next,
@@ -428,6 +507,9 @@ export const enforceNotBanned: MiddlewareFn<OnCommandCtx> = function (
 
   const senderID = (ctx.event['senderID'] ?? ctx.event['userID'] ?? '') as string;
   const threadID = (ctx.event['threadID'] ?? '') as string;
+
+  // Fire-and-forget: overlaps this thread's settings read with the ban read.
+  if (threadID) void prefetchThreadAdminBox(ctx, threadID);
 
   // Synchronous warm-cache fast path: a sender who is not banned and a thread
   // that is not banned cannot be affected by the admin bypass, so the admin

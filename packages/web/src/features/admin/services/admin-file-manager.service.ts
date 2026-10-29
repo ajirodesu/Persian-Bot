@@ -66,6 +66,8 @@ export interface RepoMutationResultDto {
    *  mutations; true reports for git operations. */
   synced: boolean
   commitSha?: string
+  /** Content sha after the write (disk mutations only). */
+  sha?: string
 }
 
 export type GitChangeStatus =
@@ -137,6 +139,28 @@ function clearListingCache(): void {
   listingCache.clear()
 }
 
+/** Rejects when `signal` aborts; the underlying shared request keeps running. */
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException('Aborted', 'AbortError'))
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void =>
+      reject(new DOMException('Aborted', 'AbortError'))
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
 class AdminFileManagerService {
   // GET /api/v1/admin/files/meta — repo identity + branch + configured
   async getMeta(): Promise<RepoMetaDto> {
@@ -206,21 +230,52 @@ class AdminFileManagerService {
 
   // GET /api/v1/admin/files/content?path=README.md — read a file.
   // Consults the prefetch cache first (hover-prefetched rows open instantly).
-  async getFileContent(path: string): Promise<RepoReadFileDto> {
-    const hit = contentCache.get(path)
-    if (hit && Date.now() - hit.at < CONTENT_TTL_MS) return hit.data
-    if (inflightReads.has(path)) return inflightReads.get(path) as Promise<RepoReadFileDto>
-    const req = apiClient
-      .get<RepoReadFileDto>('/api/v1/admin/files/content', { params: { path } })
-      .then((response) => {
-        contentCache.set(path, { at: Date.now(), data: response.data })
-        return response.data
-      })
-      .finally(() => {
-        inflightReads.delete(path)
-      })
-    inflightReads.set(path, req)
-    return req
+  // `force` bypasses the TTL cache for an explicit refresh; `signal` lets a
+  // route change/unmount stop waiting without cancelling another caller's
+  // shared read.
+  async getFileContent(
+    path: string,
+    opts: { signal?: AbortSignal; force?: boolean } = {},
+  ): Promise<RepoReadFileDto> {
+    if (!opts.force) {
+      const hit = contentCache.get(path)
+      if (hit && Date.now() - hit.at < CONTENT_TTL_MS) return hit.data
+    }
+    let request = inflightReads.get(path)
+    if (!request) {
+      request = apiClient
+        .get<RepoReadFileDto>('/api/v1/admin/files/content', {
+          params: { path },
+        })
+        .then((response) => {
+          contentCache.set(path, { at: Date.now(), data: response.data })
+          return response.data
+        })
+        .finally(() => {
+          inflightReads.delete(path)
+        })
+      inflightReads.set(path, request)
+    }
+    return opts.signal ? abortable(request, opts.signal) : request
+  }
+
+  /** Replaces the cached copy after a successful save (no refetch on reopen). */
+  rememberFileContent(
+    path: string,
+    content: string,
+    language: string | null,
+    sha = '',
+  ): void {
+    const size = content.length
+    contentCache.set(path, {
+      at: Date.now(),
+      data: { path, content, language, size, sha },
+    })
+  }
+
+  /** Drops a cached read (explicit reload, external change). */
+  invalidateFileContent(path: string): void {
+    contentCache.delete(path)
   }
 
   /**
@@ -252,10 +307,15 @@ class AdminFileManagerService {
   }
 
   // PUT /api/v1/admin/files — overwrite a file (working tree only)
-  async saveFile(path: string, content: string): Promise<RepoMutationResultDto> {
+  async saveFile(
+    path: string,
+    content: string,
+    opts: { expectedSha?: string; signal?: AbortSignal } = {},
+  ): Promise<RepoMutationResultDto> {
     const response = await apiClient.put<RepoMutationResultDto>(
       '/api/v1/admin/files',
-      { path, content },
+      { path, content, ...(opts.expectedSha ? { expectedSha: opts.expectedSha } : {}) },
+      opts.signal ? { signal: opts.signal } : undefined,
     )
     clearListingCache()
     contentCache.delete(path)

@@ -73,6 +73,36 @@ export function usePrefetchOnVisible(
  * Warms both the bot console chunk and the bot's detail query for a
  * hovered/visible Bot Manager row — opening it then renders instantly.
  */
+export const prefetchFileEditor = (): void =>
+  prefetchChunk('admin-file-editor', () =>
+    import('@/pages/admin/dashboard/file-editor'),
+  )
+
+/**
+ * Admin navigation chunk warmers. The admin shell is lazy per page; hovering
+ * or focusing a sidebar row resolves its chunk before the click lands.
+ */
+const ADMIN_PREFETCH: Record<string, () => void> = {
+  '/admin/dashboard': () =>
+    prefetchChunk('admin-overview', () => import('@/pages/admin/dashboard')),
+  '/admin/dashboard/users': () =>
+    prefetchChunk('admin-users', () => import('@/pages/admin/dashboard/users')),
+  '/admin/dashboard/bots': () =>
+    prefetchChunk('admin-bots', () => import('@/pages/admin/dashboard/bots')),
+  '/admin/dashboard/git': () =>
+    prefetchChunk('admin-git', () => import('@/pages/admin/dashboard/git')),
+  '/admin/dashboard/files': () =>
+    prefetchChunk('admin-files', () => import('@/pages/admin/dashboard/files')),
+  '/admin/dashboard/settings': () =>
+    prefetchChunk('admin-settings', () =>
+      import('@/pages/admin/dashboard/settings'),
+    ),
+}
+
+export const prefetchAdminRoute = (path: string): void => {
+  ADMIN_PREFETCH[path]?.()
+}
+
 export const prefetchBotDetail = (sessionId: string): void => {
   prefetchChunk(`bot-console-${sessionId}`, () => import('@/pages/dashboard/bot/index'))
   void queryClient.prefetchQuery({

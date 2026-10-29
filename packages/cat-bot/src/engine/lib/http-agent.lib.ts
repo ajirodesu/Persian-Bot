@@ -67,3 +67,68 @@ type MutableAgentOptions = { keepAlive: boolean; maxSockets: number };
 (http.globalAgent as unknown as MutableAgentOptions).maxSockets = 256;
 (https.globalAgent as unknown as MutableAgentOptions).keepAlive = true;
 (https.globalAgent as unknown as MutableAgentOptions).maxSockets = 256;
+
+// ── Platform connection pre-warm ─────────────────────────────────────────────
+// The first message after a restart or a long idle period otherwise pays the
+// DNS + TCP + TLS handshake for the reply call. A single unauthenticated HEAD
+// through the same keep-alive agent establishes the socket early; the response
+// body is irrelevant (401/404 still means the transport is ready).
+
+export interface PlatformConnectionTargets {
+  discord: boolean
+  telegram: boolean
+}
+
+const PRECONNECT_TIMEOUT_MS = 2_500
+
+function preconnect(hostname: string, requestPath: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const done = (): void => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+
+    const req = https.request(
+      {
+        hostname,
+        path: requestPath,
+        method: 'HEAD',
+        agent: keepAliveHttpsAgent,
+        timeout: PRECONNECT_TIMEOUT_MS,
+        headers: {
+          'user-agent': 'Cat-Bot/1.0 (+warmup)',
+          connection: 'keep-alive',
+        },
+      },
+      (res) => {
+        res.resume()
+        res.once('end', done)
+        res.once('error', done)
+      },
+    )
+    req.once('error', done)
+    req.once('timeout', () => {
+      req.destroy()
+      done()
+    })
+    req.once('close', done)
+    req.end()
+  })
+}
+
+/**
+ * Best-effort transport warm-up. Never awaited by boot; failures are benign.
+ * Safe to call on a timer to keep idle sockets fresh.
+ */
+export function warmPlatformConnections(
+  targets: PlatformConnectionTargets,
+): void {
+  if (targets.discord) {
+    void preconnect('discord.com', '/api/v10/gateway')
+  }
+  if (targets.telegram) {
+    void preconnect('api.telegram.org', '/')
+  }
+}

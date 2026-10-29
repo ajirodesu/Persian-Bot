@@ -1,10 +1,11 @@
 // Side-effect import — must run before any command module loads so all axios
 // calls share pooled keep-alive sockets from the start.
-import '@/engine/lib/http-agent.lib.js';
+import { warmPlatformConnections } from '@/engine/lib/http-agent.lib.js';
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { performance } from 'node:perf_hooks';
 
 import { env } from '@/engine/config/env.config.js';
 import { logger } from '@/engine/modules/logger/logger.lib.js';
@@ -27,22 +28,10 @@ import { loadCommandsFromDirectory } from '@/engine/modules/command/command-load
 import { upsertSessionEvents } from '@/engine/modules/session/bot-session-events.repo.js';
 import type { SessionConfigs } from '@/engine/modules/session/session-loader.util.js';
 import { isPlatformAllowed } from '@/engine/modules/platform/platform-filter.util.js';
-import {
-  createThreadCollectionManager,
-  createBotCollectionManager,
-} from '@/engine/lib/db-collection.lib.js';
+import { createThreadCollectionManager } from '@/engine/lib/db-collection.lib.js';
 import { dbReady } from 'database';
-import {
-  listBotAdmins,
-  listBotPremiums,
-} from '@/engine/repos/credentials.repo.js';
-import {
-  getBotSessionData,
-  getBotNickname,
-} from '@/engine/repos/session.repo.js';
-import { isSystemAdmin } from '@/engine/repos/system-admin.repo.js';
-import { findSessionCommands } from '@/engine/modules/session/bot-session-commands.repo.js';
-import { setCachedSessionAdminOnly } from '@/engine/lib/admin-only-state.lib.js';
+import { createWarmController } from '@/engine/lib/warm-controller.lib.js';
+import { prewarmSessions } from '@/engine/modules/session/session-prewarm.lib.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,105 +171,10 @@ async function syncCommandsAndEvents(
   );
 }
 
-// ── LRU pre-warm ──────────────────────────────────────────────────────────────
-
-/**
- * Warms the session-wide admin-only fast-path cache for a session. Mirrors the
- * read logic in enforceAdminOnly (on-command.middleware.ts) exactly so the
- * cached value is identical to what a real command dispatch would compute:
- * caches `false` only when no session_settings collection exists, and caches
- * the enabled flag only when the stored value is actually set. Once warmed,
- * the first command skips the session_settings DB read entirely.
- */
-async function warmSessionAdminOnly(
-  userId: string,
-  platform: string,
-  sessionId: string,
-): Promise<void> {
-  try {
-    const botColl = createBotCollectionManager(userId, platform, sessionId);
-    if (await botColl.isCollectionExist('session_settings')) {
-      const h = await botColl.getCollection('session_settings');
-      const settings = await h.getAll();
-      const enabled = settings['adminOnlyEnabled'] as
-        boolean | null | undefined;
-      if (enabled !== null && enabled !== undefined) {
-        setCachedSessionAdminOnly(
-          userId,
-          platform,
-          sessionId,
-          enabled === true,
-        );
-      }
-    } else {
-      setCachedSessionAdminOnly(userId, platform, sessionId, false);
-    }
-  } catch {
-    // fail-open — a cold cache on the first message is always safe
-  }
-}
-
-/**
- * Pre-populates the LRU cache for every active session immediately after
- * session configs are loaded. Loads admin lists, premium lists, bot session data,
- * the command enable-list, the bot nickname, the system-admin set, and the
- * session-wide admin-only flag so the very first command from any user finds
- * everything already in memory and makes zero DB round-trips through the
- * middleware chain.
- *
- * Runs in the background (fire-and-forget from main) — failures are logged and
- * swallowed; a cold cache miss on the first message is always safe.
- *
- * Also re-invoked on a fixed interval (see main) to keep the cache warm across
- * idle periods that would otherwise exceed the LRU TTL.
- */
-async function prewarmCache(sessionConfigs: SessionConfigs): Promise<void> {
-  try {
-    const allSessions = [
-      ...sessionConfigs.discord.map((s) => ({
-        userId: s.userId,
-        sessionId: s.sessionId,
-        platform: Platforms.Discord,
-      })),
-      ...sessionConfigs.telegram.map((s) => ({
-        userId: s.userId,
-        sessionId: s.sessionId,
-        platform: Platforms.Telegram,
-      })),
-    ];
-
-    await Promise.allSettled([
-      // Prime the system-admin Set — called on every command dispatch.
-      isSystemAdmin('__prewarm__'),
-      // Per-session hot-path data: admin list, premium list, bot session blob,
-      // the command enable-list (isCommandEnabled) and the bot nickname.
-      ...allSessions.flatMap((s) => [
-        listBotAdmins(s.userId, s.platform, s.sessionId),
-        listBotPremiums(s.userId, s.platform, s.sessionId),
-        getBotSessionData(s.userId, s.platform, s.sessionId),
-        findSessionCommands(s.userId, s.platform, s.sessionId),
-        getBotNickname(s.userId, s.platform, s.sessionId),
-      ]),
-      // Session-wide admin-only flag — warms enforceAdminOnly's fast-path so
-      // the first command skips the session_settings DB read.
-      ...allSessions.map((s) =>
-        warmSessionAdminOnly(s.userId, s.platform, s.sessionId),
-      ),
-    ]);
-
-    logger.info(
-      `[app] LRU cache pre-warmed for ${allSessions.length} session(s)`,
-    );
-  } catch (err) {
-    logger.warn('[app] LRU pre-warm encountered an error (non-fatal)', {
-      error: err,
-    });
-  }
-}
-
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  const bootStart = performance.now();
   logger.info('Cat-Bot - loading modules...');
   logger.info(`Environment: ${env.NODE_ENV}`);
 
@@ -329,14 +223,35 @@ async function main(): Promise<void> {
     loadSessionConfigs(),
   ]);
 
-  logger.info('Cat-Bot - creating platform listeners...');
+  // The warm-up runs alongside gateway connection instead of gating it. A
+  // message that arrives before it finishes waits for the same promise (bounded
+  // below), so the first command is still warm — but the bot is online sooner.
+  const warmController = createWarmController({
+    warm: async () => {
+      await prewarmSessions(sessionConfigs);
+    },
+    freshMs: 12 * 60 * 1000,
+    waitMs: 8_000,
+  });
+  const warmStart = performance.now();
+  void warmController.warm().then(() => {
+    if (warmController.isWarm()) {
+      logger.info(
+        `[app] Hot-path cache ready in ${(performance.now() - warmStart).toFixed(0)}ms (${sessionConfigs.discord.length + sessionConfigs.telegram.length} session(s))`,
+      );
+    } else {
+      logger.warn('[app] Hot-path warm-up failed — dispatching with a cold cache');
+    }
+  });
 
-  // Pre-warm the LRU cache BEFORE the platform listeners go live so the very
-  // first command after boot finds every hot-path key already in memory. The
-  // web/API server below still starts in parallel — only the platform gateway
-  // connect waits on the warm-up. Bounded: if the DB is slow to answer, give
-  // up after 8s and start with a cold cache (fail-open — a cold miss is safe).
-  const prewarmPromise = prewarmCache(sessionConfigs);
+  // Establish DNS/TLS/keep-alive sockets to the platform APIs before the first
+  // message needs them. Best-effort, never awaited.
+  warmPlatformConnections({
+    discord: sessionConfigs.discord.length > 0,
+    telegram: sessionConfigs.telegram.length > 0,
+  });
+
+  logger.info('Cat-Bot - creating platform listeners...');
 
   // Warn about Telegram-incompatible command meta once at startup.
   const hasTelegramSlashSession = sessionConfigs.telegram.some(
@@ -427,6 +342,7 @@ async function main(): Promise<void> {
   // ── Event routing ─────────────────────────────────────────────────────────
 
   platform.on('message', async (payload: Record<string, unknown>) => {
+    await warmController.ensureWarm();
     const native =
       payload.native as import('@/engine/types/controller.types.js').NativeContext;
     const threadID = (payload.event as Record<string, unknown>)['threadID'] as
@@ -436,10 +352,25 @@ async function main(): Promise<void> {
       native.platform,
       native.sessionId ?? '',
     );
-    if (threadID) await restoreThreadPrefix(threadID, native);
+    // Slash commands use the session prefix by definition, so a thread's
+    // (possibly custom) text prefix cannot change this message. Skip the
+    // first-message-per-thread DB read and resolve it in the background for
+    // the next text command instead.
+    const body =
+      ((payload.event as Record<string, unknown>)['message'] ??
+        (payload.event as Record<string, unknown>)['body'] ??
+        '') as string;
+    const slashFastPath =
+      sessionPrefix === '/' && body.startsWith('/');
+    if (threadID && !slashFastPath) {
+      await restoreThreadPrefix(threadID, native);
+    }
     const threadPrefix = threadID
       ? prefixManager.getThreadPrefix(threadID)
       : undefined;
+    if (threadID && slashFastPath) {
+      void restoreThreadPrefix(threadID, native);
+    }
     const livePrefix = resolveLivePrefix(
       payload,
       native,
@@ -456,6 +387,7 @@ async function main(): Promise<void> {
   });
 
   platform.on('message_reply', async (payload: Record<string, unknown>) => {
+    await warmController.ensureWarm();
     const native =
       payload.native as import('@/engine/types/controller.types.js').NativeContext;
     const threadID = (payload.event as Record<string, unknown>)['threadID'] as
@@ -513,6 +445,9 @@ async function main(): Promise<void> {
   });
 
   platform.on('button_action', async (payload: Record<string, unknown>) => {
+    // Discord requires an interaction acknowledgement within 3s; never let a
+    // cold cache consume that budget.
+    await warmController.ensureWarm(2_500);
     const native =
       payload.native as import('@/engine/types/controller.types.js').NativeContext;
     const threadID = (payload.event as Record<string, unknown>)['threadID'] as
@@ -539,14 +474,13 @@ async function main(): Promise<void> {
 
   logger.info('Cat-Bot - starting all platforms...');
 
-  // Bounded wait for the cache warm-up (8s cap) — the platform gateways won't
-  // accept the first message until the hot-path keys are in memory.
-  await Promise.race([
-    prewarmPromise,
-    new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
-  ]);
+  // Connect immediately; the first inbound message awaits `ensureWarm()` at
+  // dispatch time (bounded to 8s), so connection setup and cache warm-up overlap
+  // instead of adding up.
   platform.start(commands);
-  logger.info('Cat-Bot — all platform listeners wired');
+  logger.info(
+    `Cat-Bot — all platform listeners wired in ${(performance.now() - bootStart).toFixed(0)}ms (cache warm-up continues in background)`,
+  );
 
   // Sync command/event names to the DB for dashboard display — runs in the
   // background so the bot starts accepting messages without waiting for DB writes.
@@ -567,16 +501,19 @@ async function main(): Promise<void> {
       logger.error('[app] Failed to start web/API server', { error: err }),
     );
 
-  // Keep the LRU cache warm across idle periods. Entries expire after 15 min,
-  // so the first interaction after a long gap would otherwise pay cold DB
-  // round-trips. Refreshing on a 10-min cadence — below the TTL — guarantees a
-  // warm cache for the first command after any downtime. unref() so the timer
+  // Refresh below the 15-min LRU TTL. If the process was suspended/frozen for
+  // longer, `ensureWarm()` on the next message refreshes before dispatch — the
+  // cache is never trusted past its freshness window. unref() so the timer
   // never keeps the process alive on its own.
   setInterval(
     () => {
-      void prewarmCache(sessionConfigs);
+      void warmController.warm();
+      warmPlatformConnections({
+        discord: sessionConfigs.discord.length > 0,
+        telegram: sessionConfigs.telegram.length > 0,
+      });
     },
-    10 * 60 * 1000,
+    8 * 60 * 1000,
   ).unref();
 }
 

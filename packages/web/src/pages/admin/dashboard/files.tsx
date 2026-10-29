@@ -35,6 +35,7 @@ import Dialog from '@/components/ui/overlay/Dialog'
 import Skeleton from '@/components/ui/feedback/Skeleton'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useAdminFileManager } from '@/features/admin/hooks/useAdminFileManager'
+import { prefetchFileEditor } from '@/lib/route-prefetch.lib'
 import { adminFileManagerService } from '@/features/admin/services/admin-file-manager.service'
 import { useSnackbar } from '@/contexts/SnackbarContext'
 import { ROUTES } from '@/constants/routes.constants'
@@ -494,8 +495,14 @@ const TreeFileRow = memo(function TreeFileRow({
       onKeyDown={(e) => e.key === 'Enter' && onOpenFile(entry)}
       // Hover/focus intent prefetches the content so the editor opens
       // instantly on tap (best-effort, never throws).
-      onPointerEnter={() => adminFileManagerService.prefetchFileContent(entry.path)}
-      onFocus={() => adminFileManagerService.prefetchFileContent(entry.path)}
+      onPointerEnter={() => {
+        prefetchFileEditor()
+        adminFileManagerService.prefetchFileContent(entry.path)
+      }}
+      onFocus={() => {
+        prefetchFileEditor()
+        adminFileManagerService.prefetchFileContent(entry.path)
+      }}
       className={cn(
         'group flex w-full items-center gap-1.5 rounded-[var(--radius-input)] py-2 pr-1 text-left ' +
           'cursor-pointer transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
@@ -612,6 +619,23 @@ const SearchResultRow = memo(function SearchResultRow({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminFilesPage() {
+  // Warm the editor chunk while the listing is idle: opening a file then
+  // needs no extra module round-trip. Best-effort; never blocks the listing.
+  useEffect(() => {
+    const idle = window.requestIdleCallback?.(
+      () => prefetchFileEditor(),
+      { timeout: 2500 },
+    )
+    const timer =
+      idle === undefined
+        ? window.setTimeout(prefetchFileEditor, 1200)
+        : undefined
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback?.(idle)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [])
+
   const navigate = useNavigate()
   const { success, error } = useSnackbar()
 

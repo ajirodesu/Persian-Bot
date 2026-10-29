@@ -44,6 +44,9 @@ import type {
 import type { UnifiedApi } from '@/engine/adapters/models/api.model.js';
 import { Platforms } from '@/engine/modules/platform/platform.constants.js';
 import '@/engine/middleware/index.js';
+import { createWarmController } from '@/engine/lib/warm-controller.lib.js';
+import { prewarmSessionsFor } from '@/engine/modules/session/session-prewarm.lib.js';
+import { lruCache } from '@/engine/lib/lru-cache.lib.js';
 
 const P99_BUDGET_MS = 10;
 // 200 warmups fill every LRU; 1000 samples keep p95 stable at sub-ms
@@ -291,6 +294,46 @@ async function main(): Promise<void> {
     const t0 = performance.now();
     await handleMessage(api, makeEvent('/ping', 0), coldCommands, '/', makeNative(Platforms.Telegram));
     console.log(`cold /ping (telegram): ${(performance.now() - t0).toFixed(1)}ms (DB round-trips included)\n`);
+  }
+
+  // Production boots the gateway in parallel with a bounded cache warm-up.
+  // Measure the first command in that state: clear the LRUs (fresh process or
+  // expired idle cache), run the same prewarm the app runs, then dispatch.
+  console.log('--- WARM first-event cost (after boot/idle prewarm) ---');
+  {
+    // Let the detached on-chat sync from the cold run drain before clearing.
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    lruCache.clear();
+    const sessions = [
+      {
+        userId: 'bench-probe',
+        platform: Platforms.Telegram,
+        sessionId: 'bench-session',
+      },
+    ];
+    const { api } = createMockApi(Platforms.Telegram);
+    const warmCommands = buildCommands();
+    const controller = createWarmController({
+      warm: async () => {
+        await prewarmSessionsFor(sessions);
+      },
+    });
+    const prewarmStart = performance.now();
+    await controller.ensureWarm();
+    const prewarmMs = performance.now() - prewarmStart;
+    const t0 = performance.now();
+    await handleMessage(
+      api,
+      makeEvent('/ping', 0),
+      warmCommands,
+      '/',
+      makeNative(Platforms.Telegram),
+    );
+    const firstMs = performance.now() - t0;
+    console.log(
+      `prewarm=${prewarmMs.toFixed(1)}ms  first /ping after prewarm=${firstMs.toFixed(3)}ms  ` +
+        `(cache clear → ensureWarm → dispatch; remaining cost is the per-sender ban check)\n`,
+    );
   }
 
   const commands = buildCommands();

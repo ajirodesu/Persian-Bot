@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import ConnectionBanner from '@/components/ui/feedback/ConnectionBanner'
 import { useTimezone } from '@/contexts/TimezoneContext'
+import { prefetchAdminRoute } from '@/lib/route-prefetch.lib'
 import WidgetErrorBoundary from '@/components/ui/feedback/WidgetErrorBoundary'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -86,6 +87,7 @@ function NavRow({
   collapsed,
   onNavClick,
   onToggleCollapsed,
+  prefetch,
 }: {
   to: string
   label: string
@@ -95,10 +97,13 @@ function NavRow({
   collapsed?: boolean
   onNavClick?: () => void
   onToggleCollapsed?: () => void
+  prefetch?: () => void
 }) {
   return (
     <Link
       to={to}
+      onMouseEnter={prefetch}
+      onFocus={prefetch}
       onClick={(e) => {
         if (isActive) {
           // Desktop: tapping the current page collapses the sidebar
@@ -228,6 +233,7 @@ function SidebarNav({
             collapsed={collapsed}
             onNavClick={onNavClick}
             onToggleCollapsed={onToggleCollapsed}
+            prefetch={() => prefetchAdminRoute(path)}
           />
         ))}
       </nav>
@@ -432,6 +438,31 @@ export default function AdminSidebarLayout() {
   useEffect(() => {
     refreshTimezone()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Warm every admin route chunk after the first paint. Navigating between
+  // admin sections then resolves from the module cache instead of the network.
+  useEffect(() => {
+    const paths = [
+      ROUTES.ADMIN.DASHBOARD,
+      ROUTES.ADMIN.USERS,
+      ROUTES.ADMIN.BOTS,
+      ROUTES.ADMIN.GIT,
+      ROUTES.ADMIN.FILES,
+      ROUTES.ADMIN.SETTINGS,
+    ]
+    const idle = window.requestIdleCallback?.(
+      () => paths.forEach(prefetchAdminRoute),
+      { timeout: 3000 },
+    )
+    const timer =
+      idle === undefined
+        ? window.setTimeout(() => paths.forEach(prefetchAdminRoute), 1500)
+        : undefined
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback?.(idle)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
   }, [])
 
   const [prevPath, setPrevPath] = useState(activePath)

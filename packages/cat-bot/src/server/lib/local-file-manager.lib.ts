@@ -112,6 +112,8 @@ export interface RepoMutationResult {
   /** Always false — file-manager writes are working-tree changes, never commits. */
   synced: boolean;
   commitSha?: string | undefined;
+  /** New content sha, so the editor can save again without a re-read. */
+  sha?: string | undefined;
 }
 
 // ── Internals ─────────────────────────────────────────────────────────────────
@@ -321,6 +323,7 @@ export async function createFolder(raw: string): Promise<RepoMutationResult> {
 export async function saveFile(
   raw: string,
   content: string,
+  expectedSha?: string,
 ): Promise<RepoMutationResult> {
   const repoPath = normalizeRepoPath(raw);
   guardCriticalPath(repoPath);
@@ -330,9 +333,18 @@ export async function saveFile(
   } catch {
     throw new RepoFileManagerError(404, `File not found: ${repoPath}`);
   }
+  // Optimistic concurrency: the editor sends the sha it opened. If the file
+  // changed on disk meanwhile, refuse rather than silently overwriting it.
+  const currentSha = await entrySha(repoPath);
+  if (expectedSha !== undefined && expectedSha !== '' && expectedSha !== currentSha) {
+    throw new RepoFileManagerError(
+      409,
+      'File changed on disk since it was opened. Reload it before saving.',
+    );
+  }
   await fsp.writeFile(filePath, content, { encoding: 'utf8' });
   invalidateGitStatus();
-  return { synced: false };
+  return { synced: false, sha: await entrySha(repoPath) };
 }
 
 /** Renames/moves a file or folder within the working tree. */

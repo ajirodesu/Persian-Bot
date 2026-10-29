@@ -172,7 +172,11 @@ class AdminFileManagerController {
         res.status(400).json({ error: 'Missing path' });
         return;
       }
-      const result = await saveFile(path, content);
+      const expectedSha =
+        typeof req.body?.expectedSha === 'string'
+          ? req.body.expectedSha
+          : undefined;
+      const result = await saveFile(path, content, expectedSha);
       res.json({ path, ...result });
     } catch (err) {
       this.#handleError(res, err, 'Failed to save file');
